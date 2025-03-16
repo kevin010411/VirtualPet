@@ -1,0 +1,441 @@
+{
+    "version": 1,
+    "author": "kevin",
+    "editor": "wokwi",
+    "parts": [
+        {
+            "type": "wokwi-breadboard-mini",
+            "id": "bb1",
+            "top": -222.2,
+            "left": -194.4,
+            "attrs": {}
+        },
+        {
+            "type": "wokwi-arduino-mega",
+            "id": "nano",
+            "top": -14.4,
+            "left": -144.5,
+            "attrs": {}
+        },
+        {
+            "type": "wokwi-ili9341",
+            "id": "lcd1",
+            "top": -143.2,
+            "left": 287.7,
+            "attrs": {}
+        },
+        {
+            "type": "wokwi-pushbutton-6mm",
+            "id": "btn1",
+            "top": -171.8,
+            "left": -168.8,
+            "rotate": 90,
+            "attrs": {
+                "color": "green"
+            }
+        },
+        {
+            "type": "wokwi-pushbutton-6mm",
+            "id": "btn2",
+            "top": -171.8,
+            "left": -120.8,
+            "rotate": 90,
+            "attrs": {
+                "color": "green"
+            }
+        },
+        {
+            "type": "wokwi-pushbutton-6mm",
+            "id": "btn3",
+            "top": -171.8,
+            "left": -72.8,
+            "rotate": 90,
+            "attrs": {
+                "color": "green"
+            }
+        },
+        {
+            "type": "wokwi-resistor",
+            "id": "r1",
+            "top": -216.85,
+            "left": -172.8,
+            "attrs": {
+                "value": "1000"
+            }
+        },
+        {
+            "type": "wokwi-resistor",
+            "id": "r2",
+            "top": -207.25,
+            "left": -124.8,
+            "attrs": {
+                "value": "1000"
+            }
+        },
+        {
+            "type": "wokwi-resistor",
+            "id": "r3",
+            "top": -197.65,
+            "left": -144,
+            "attrs": {
+                "value": "1000"
+            }
+        },
+        {
+            "type": "wokwi-microsd-card",
+            "id": "sd1",
+            "top": 163.43,
+            "left": -307.13,
+            "attrs": {}
+        }
+    ],
+    "connections": [
+        [
+            "nano:8",
+            "lcd1:D/C",
+            "green",
+            [
+                "v76.8",
+                "h220.8"
+            ]
+        ],
+        [
+            "nano:3.3V",
+            "lcd1:LED",
+            "green",
+            [
+                "v67.2",
+                "h278.4"
+            ]
+        ],
+        [
+            "nano:5V",
+            "bb1:2t.b",
+            "red",
+            [
+                "v-28.8",
+                "h-153.6"
+            ]
+        ],
+        [
+            "nano:5V",
+            "bb1:11t.d",
+            "red",
+            [
+                "v-28.8",
+                "h48",
+                "v-201.6"
+            ]
+        ],
+        [
+            "nano:5V",
+            "bb1:7t.d",
+            "red",
+            [
+                "v-105.6",
+                "h-105.6"
+            ]
+        ],
+        [
+            "nano:GND.2",
+            "bb1:15t.a",
+            "black",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "bb1:15t.c",
+            "bb1:10t.d",
+            "green",
+            [
+                "v-38.4",
+                "h-57.6"
+            ]
+        ],
+        [
+            "bb1:5t.d",
+            "bb1:10t.d",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "nano:2",
+            "bb1:13b.j",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "nano:3",
+            "bb1:8b.i",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "nano:4",
+            "bb1:3b.h",
+            "green",
+            [
+                "v-115.2",
+                "h-115.2"
+            ]
+        ],
+        [
+            "nano:GND.1",
+            "sd1:GND",
+            "black",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "nano:10",
+            "sd1:CS",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "nano:9",
+            "lcd1:CS",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "sd1:VCC",
+            "nano:5V",
+            "red",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "lcd1:VCC",
+            "nano:5V",
+            "red",
+            [
+                "v-9.6",
+                "h-355.2"
+            ]
+        ],
+        [
+            "lcd1:GND",
+            "nano:GND.1",
+            "black",
+            [
+                "v-19.2",
+                "h-345.6"
+            ]
+        ],
+        [
+            "btn1:1.l",
+            "bb1:5t.e",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn1:2.l",
+            "bb1:3t.e",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn1:1.r",
+            "bb1:5b.f",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn1:2.r",
+            "bb1:3b.f",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn2:1.l",
+            "bb1:10t.e",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn2:2.l",
+            "bb1:8t.e",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn2:1.r",
+            "bb1:10b.f",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn2:2.r",
+            "bb1:8b.f",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn3:1.l",
+            "bb1:15t.e",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn3:2.l",
+            "bb1:13t.e",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn3:1.r",
+            "bb1:15b.f",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "btn3:2.r",
+            "bb1:13b.f",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "r1:1",
+            "bb1:2t.a",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "r1:2",
+            "bb1:8t.a",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "r2:1",
+            "bb1:7t.b",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "r2:2",
+            "bb1:13t.b",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "r3:1",
+            "bb1:5t.c",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "r3:2",
+            "bb1:11t.c",
+            "",
+            [
+                "$bb"
+            ]
+        ],
+        [
+            "sd1:SCK",
+            "nano:52",
+            "green",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "sd1:DI",
+            "nano:51",
+            "green",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "sd1:DO",
+            "nano:50",
+            "green",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "lcd1:MOSI",
+            "nano:51",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "lcd1:SCK",
+            "nano:52",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "lcd1:MISO",
+            "nano:50",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "lcd1:RST",
+            "nano:7",
+            "green",
+            [
+                "v0"
+            ]
+        ]
+    ],
+    "dependencies": {}
+}

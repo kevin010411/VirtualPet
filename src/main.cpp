@@ -3,15 +3,14 @@
 #include <SdFat.h>
 #include "Game.cpp"
 
-const int SD_CS = 10;
-// 定義 TFT 引腳
-const int TFT_CS = 9;
-const int TFT_DC = 8;
-const int TFT_RST = 7;
+const int SD_CS = PB4;   // SD 卡 CS
+const int TFT_CS = PB7;  // TFT CS
+const int TFT_DC = PB6;  // TFT DC
+const int TFT_RST = PB5; // TFT RST
 // 按鈕引腳設定
-const int NEXT_COMMAND_BUTTON = 2;
-const int CONFIRM_COMMAND_BUTTON = 3;
-const int PREVIOUS_COMMAND_BUTTON = 4;
+const int NEXT_COMMAND_BUTTON = PB4;
+const int CONFIRM_COMMAND_BUTTON = PB5;
+const int PREVIOUS_COMMAND_BUTTON = PB6;
 
 const unsigned long SPI_SPEED = 16000000; // 設定 SPI 速度
 
@@ -70,9 +69,8 @@ void setup()
   Serial.begin(115200);
 
   randomSeed(analogRead(0));
-
+  Serial.println("Init Done");
   SPI.begin();
-  SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
   // 初始化 TFT 螢幕
   tft.initR(INITR_BLACKTAB); // 初始化 ST7735，選擇黑底對應的設定
   tft.setRotation(2);        // 設置旋轉方向，0~3 分別對應四種方向

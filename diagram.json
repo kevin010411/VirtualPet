@@ -11,8 +11,8 @@
             "attrs": {}
         },
         {
-            "type": "wokwi-arduino-mega",
-            "id": "nano",
+            "type": "board-stm32-bluepill",
+            "id": "stm32",
             "top": -14.4,
             "left": -144.5,
             "attrs": {}
@@ -20,8 +20,8 @@
         {
             "type": "wokwi-ili9341",
             "id": "lcd1",
-            "top": -143.2,
-            "left": 287.7,
+            "top": -76,
+            "left": 38.1,
             "attrs": {}
         },
         {
@@ -84,158 +84,12 @@
         {
             "type": "wokwi-microsd-card",
             "id": "sd1",
-            "top": 163.43,
-            "left": -307.13,
+            "top": 19.43,
+            "left": -316.73,
             "attrs": {}
         }
     ],
     "connections": [
-        [
-            "nano:8",
-            "lcd1:D/C",
-            "green",
-            [
-                "v76.8",
-                "h220.8"
-            ]
-        ],
-        [
-            "nano:3.3V",
-            "lcd1:LED",
-            "green",
-            [
-                "v67.2",
-                "h278.4"
-            ]
-        ],
-        [
-            "nano:5V",
-            "bb1:2t.b",
-            "red",
-            [
-                "v-28.8",
-                "h-153.6"
-            ]
-        ],
-        [
-            "nano:5V",
-            "bb1:11t.d",
-            "red",
-            [
-                "v-28.8",
-                "h48",
-                "v-201.6"
-            ]
-        ],
-        [
-            "nano:5V",
-            "bb1:7t.d",
-            "red",
-            [
-                "v-105.6",
-                "h-105.6"
-            ]
-        ],
-        [
-            "nano:GND.2",
-            "bb1:15t.a",
-            "black",
-            [
-                "v0"
-            ]
-        ],
-        [
-            "bb1:15t.c",
-            "bb1:10t.d",
-            "green",
-            [
-                "v-38.4",
-                "h-57.6"
-            ]
-        ],
-        [
-            "bb1:5t.d",
-            "bb1:10t.d",
-            "green",
-            [
-                "v0"
-            ]
-        ],
-        [
-            "nano:2",
-            "bb1:13b.j",
-            "green",
-            [
-                "v0"
-            ]
-        ],
-        [
-            "nano:3",
-            "bb1:8b.i",
-            "green",
-            [
-                "v0"
-            ]
-        ],
-        [
-            "nano:4",
-            "bb1:3b.h",
-            "green",
-            [
-                "v-115.2",
-                "h-115.2"
-            ]
-        ],
-        [
-            "nano:GND.1",
-            "sd1:GND",
-            "black",
-            [
-                "v0"
-            ]
-        ],
-        [
-            "nano:10",
-            "sd1:CS",
-            "green",
-            [
-                "v0"
-            ]
-        ],
-        [
-            "nano:9",
-            "lcd1:CS",
-            "green",
-            [
-                "v0"
-            ]
-        ],
-        [
-            "sd1:VCC",
-            "nano:5V",
-            "red",
-            [
-                "h0"
-            ]
-        ],
-        [
-            "lcd1:VCC",
-            "nano:5V",
-            "red",
-            [
-                "v-9.6",
-                "h-355.2"
-            ]
-        ],
-        [
-            "lcd1:GND",
-            "nano:GND.1",
-            "black",
-            [
-                "v-19.2",
-                "h-345.6"
-            ]
-        ],
         [
             "btn1:1.l",
             "bb1:5t.e",
@@ -381,40 +235,8 @@
             ]
         ],
         [
-            "sd1:SCK",
-            "nano:52",
-            "green",
-            [
-                "h0"
-            ]
-        ],
-        [
-            "sd1:DI",
-            "nano:51",
-            "green",
-            [
-                "h0"
-            ]
-        ],
-        [
-            "sd1:DO",
-            "nano:50",
-            "green",
-            [
-                "h0"
-            ]
-        ],
-        [
             "lcd1:MOSI",
-            "nano:51",
-            "green",
-            [
-                "v0"
-            ]
-        ],
-        [
-            "lcd1:SCK",
-            "nano:52",
+            "stm32:A7",
             "green",
             [
                 "v0"
@@ -422,7 +244,47 @@
         ],
         [
             "lcd1:MISO",
-            "nano:50",
+            "stm32:A6",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "lcd1:SCK",
+            "stm32:A5",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "lcd1:D/C",
+            "stm32:A2",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "lcd1:VCC",
+            "stm32:3V3.1",
+            "red",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "lcd1:GND",
+            "stm32:GND.2",
+            "black",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "lcd1:LED",
+            "stm32:3V3.1",
             "green",
             [
                 "v0"
@@ -430,7 +292,124 @@
         ],
         [
             "lcd1:RST",
-            "nano:7",
+            "stm32:A1",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "lcd1:CS",
+            "stm32:A3",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "sd1:VCC",
+            "stm32:3V3.1",
+            "red",
+            [
+                "h19.2",
+                "v105.74"
+            ]
+        ],
+        [
+            "sd1:GND",
+            "stm32:GND.3",
+            "black",
+            [
+                "h48",
+                "v-47.89"
+            ]
+        ],
+        [
+            "sd1:SCK",
+            "stm32:A5",
+            "green",
+            [
+                "h153.6",
+                "v28.79"
+            ]
+        ],
+        [
+            "sd1:CS",
+            "stm32:A4",
+            "green",
+            [
+                "h144",
+                "v9.66"
+            ]
+        ],
+        [
+            "sd1:DO",
+            "stm32:A6",
+            "green",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "sd1:DI",
+            "stm32:A7",
+            "green",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "stm32:B4",
+            "bb1:3b.i",
+            "green",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "stm32:B5",
+            "bb1:8b.i",
+            "green",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "stm32:B6",
+            "bb1:13b.j",
+            "green",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "stm32:GND.2",
+            "bb1:17b.j",
+            "black",
+            [
+                "v-63.76",
+                "h42.94"
+            ]
+        ],
+        [
+            "bb1:17b.i",
+            "bb1:15b.i",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "bb1:15b.h",
+            "bb1:10b.h",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "bb1:10b.g",
+            "bb1:5b.g",
             "green",
             [
                 "v0"
