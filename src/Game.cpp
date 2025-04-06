@@ -1,5 +1,4 @@
-﻿#include <Adafruit_GFX.h>
-#include <Adafruit_ST7735.h>
+﻿#include <Adafruit_ST7735.h>
 #include "Renderer.cpp"
 
 class Pet
@@ -147,6 +146,7 @@ public:
 
     void setup_game()
     {
+        renderer.initAnimations();
         draw_all_layout();
         Serial.println("Welcome to the Virtual Pet Game!");
     }
