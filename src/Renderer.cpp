@@ -194,6 +194,7 @@ public:
             Serial.print("找不到指定的animationName:");
             Serial.println(animationName);
             ShowAnimationList();
+            DisplayAnimation();
         }
         else
         {
