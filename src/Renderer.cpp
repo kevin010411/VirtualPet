@@ -180,6 +180,7 @@ public:
 
         if (index == -1)
         {
+            tft->fillRect(0, 32, 32, 32, tft->color565(0, 255, 255));
             Serial.print("找不到指定的animationName:");
             Serial.println(animationName);
             ShowAnimationList();
