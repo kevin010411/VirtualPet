@@ -124,21 +124,22 @@ public:
         int rowSize = ((bmpWidth * 3 + 3) / 4) * 4;
 
         // Buffer for one row of RGB565 pixels
+        uint8_t rowBuffer[rowSize];
         uint16_t lineBuffer[bmpWidth];
 
         // === Draw BMP (bottom to top) ===
         for (int y = 0; y < bmpHeight; y++)
         {
             int pos = pixelDataOffset + (bmpHeight - 1 - y) * rowSize;
-            bmpFile.seek(pos);
+            bmpFile.read(rowBuffer, rowSize);
 
             for (int x = 0; x < bmpWidth; x++)
             {
-                uint8_t b = bmpFile.read();
-                uint8_t g = bmpFile.read();
-                uint8_t r = bmpFile.read();
+                int i = x * 3;
+                uint8_t b = rowBuffer[i];
+                uint8_t g = rowBuffer[i + 1];
+                uint8_t r = rowBuffer[i + 2];
 
-                // Convert 24-bit RGB to 16-bit RGB565
                 lineBuffer[x] = ((r & 0xF8) << 8) |
                                 ((g & 0xFC) << 3) |
                                 (b >> 3);
