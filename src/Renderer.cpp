@@ -9,8 +9,6 @@ class Renderer
     std::vector<String> now_animation_list;
     String now_animation_name;
 
-    // SdFat *SD;
-    // Adafruit_ImageReader reader = Adafruit_ImageReader(SD);
     Adafruit_ST7735 *tft;
     unsigned short animation_index;
     int max_animation_index;
@@ -46,14 +44,14 @@ public:
 
     void initAnimations()
     {
-        // tft->setCursor(0, 0);
+        tft->setCursor(0, 64);
         if (!SD.begin())
         { // ESP32 requires 25 MHz limit
-            // tft->print("SD initialization failed");
+            tft->println("SD initialization failed");
             Serial.println("SD initialization failed");
             return;
         }
-        tft->print("SD Init Success");
+        tft->println("SD Init Success");
         Serial.println("SD Init Success");
 
         SDLib::File root = SD.open("/animation");
@@ -70,6 +68,7 @@ public:
             if (!folder || !folder.isDirectory())
                 break;
             String fileName = fileNameAsString(folder);
+            tft->println(fileName);
             animation_list_name.push_back(fileName);
         }
         root.close();
@@ -198,6 +197,7 @@ public:
 
     void ShowAnimationList()
     {
+        tft->fillRect(0, 64, 80, 80, tft->color565(255, 255, 255));
         tft->setCursor(0, 64);
         for (unsigned short pos = 0; pos < animation_list_name.size(); ++pos)
         {
