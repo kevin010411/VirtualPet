@@ -172,39 +172,40 @@ public:
         String animation_name = "/animation/";
         animation_name += "idle";
         animation_name += "/";
-        animation_name += String(animation_index) + ".bmp";
+        animation_name += String(animation_index++) + ".bmp";
+        tft->println(animation_name);
         ShowSDCardImage(animation_name.c_str(), 0, 32);
     }
 
     void DisplayAnimation(String animationName)
     {
-        int index = -1;
-        for (size_t i = 0; i < animation_list_name.size(); ++i)
-        {
-            if (animation_list_name[i] == animationName)
-            {
-                index = i;
-                break;
-            }
-        }
+        // int index = -1;
+        // for (size_t i = 0; i < animation_list_name.size(); ++i)
+        // {
+        //     if (animation_list_name[i] == animationName)
+        //     {
+        //         index = i;
+        //         break;
+        //     }
+        // }
+        DisplayAnimation();
 
-        if (index == -1)
-        {
-            tft->fillRect(0, 32, 32, 32, tft->color565(0, 255, 255));
-            Serial.print("找不到指定的animationName:");
-            Serial.println(animationName);
-            ShowAnimationList();
-            DisplayAnimation();
-        }
-        else
-        {
-            if (animation_list_name[index] != now_animation_name)
-            {
-                now_animation_name = animation_list_name[index];
-                GetAnimationList(now_animation_name);
-            }
-            return DisplayAnimation();
-        }
+        // if (index == -1)
+        // {
+        //     tft->fillRect(0, 32, 32, 32, tft->color565(0, 255, 255));
+        //     Serial.print("找不到指定的animationName:");
+        //     Serial.println(animationName);
+        //     ShowAnimationList();
+        // }
+        // else
+        // {
+        //     if (animation_list_name[index] != now_animation_name)
+        //     {
+        //         now_animation_name = animation_list_name[index];
+        //         GetAnimationList(now_animation_name);
+        //     }
+        //     return DisplayAnimation();
+        // }
     }
 
     void ShowAnimationList()
