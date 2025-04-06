@@ -16,19 +16,21 @@ class Renderer
     int max_animation_index;
     void initAnimations()
     {
-
+        tft->setCursor(0, 0);
         if (!(*SD).begin(10, SD_SCK_MHZ(25)))
         { // ESP32 requires 25 MHz limit
             tft->print("SD initialization failed");
             Serial.println("SD initialization failed");
             return;
         }
+        tft->print("SD Init Success");
         Serial.println("SD Init Success");
 
         File root = SD->open("/animation");
         if (!root)
         {
-            Serial.println("Failed to open root directory.");
+            tft->print("Failed to open root directory");
+            Serial.println("Failed to open root directory");
             return;
         }
 
