@@ -68,6 +68,8 @@ void setup()
   randomSeed(analogRead(0));
   Serial.println("Init Done");
   SPI.begin();
+  SPI.setClockDivider(SPI_CLOCK_DIV2);
+  SPI.beginTransaction(SPISettings(36000000, MSBFIRST, SPI_MODE0));
   // 初始化 TFT 螢幕
   tft.initR(INITR_BLACKTAB); // 初始化 ST7735，選擇黑底對應的設定
   tft.setRotation(2);        // 設置旋轉方向，0~3 分別對應四種方向
