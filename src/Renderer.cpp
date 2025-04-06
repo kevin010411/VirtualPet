@@ -198,8 +198,10 @@ public:
 
     void ShowAnimationList()
     {
+        tft->setCursor(0, 64);
         for (unsigned short pos = 0; pos < animation_list_name.size(); ++pos)
         {
+            tft->print(animation_list_name[pos]);
             Serial.println(animation_list_name[pos]);
         }
     }
