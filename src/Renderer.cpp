@@ -81,6 +81,7 @@ public:
         SDLib::File bmpFile = SD.open(img_path);
         if (!bmpFile)
         {
+            tft->println("Failed to open BMP file");
             Serial.println("Failed to open BMP file");
             return;
         }
@@ -88,6 +89,7 @@ public:
         // === BMP Header Parsing ===
         if (bmpFile.read() != 'B' || bmpFile.read() != 'M')
         {
+            tft->println("Not a valid BMP file");
             Serial.println("Not a valid BMP file");
             bmpFile.close();
             return;
@@ -114,6 +116,7 @@ public:
 
         if (bitsPerPixel != 24)
         {
+            tft->println("Only 24-bit BMP supported");
             Serial.println("Only 24-bit BMP supported");
             bmpFile.close();
             return;
@@ -169,11 +172,8 @@ public:
         {
             animation_index = 0;
         }
-        String animation_name = "/animation/";
-        animation_name += "idle";
-        animation_name += "/";
+        String animation_name = "/animation/idle/";
         animation_name += String(animation_index++) + ".bmp";
-        tft->println(animation_name);
         ShowSDCardImage(animation_name.c_str(), 0, 32);
     }
 
