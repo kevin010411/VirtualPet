@@ -172,9 +172,9 @@ public:
         {
             animation_index = 0;
         }
-        String animation_name = "/animation/idle/";
-        animation_name += String(animation_index++) + ".bmp";
-        ShowSDCardImage(animation_name.c_str(), 0, 32);
+        char path[20]; // 緩衝區大小視需求調整
+        sprintf(path, "/animation/idle/%d.bmp", animation_index++);
+        ShowSDCardImage(path, 0, 32);
     }
 
     void DisplayAnimation(String animationName)
