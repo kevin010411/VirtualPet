@@ -172,7 +172,7 @@ public:
         {
             animation_index = 0;
         }
-        char path[20]; // 緩衝區大小視需求調整
+        char path[40]; // 緩衝區大小視需求調整
         sprintf(path, "/animation/idle/%d.bmp", animation_index++);
         ShowSDCardImage(path, 0, 32);
     }
