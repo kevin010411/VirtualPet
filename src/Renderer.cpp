@@ -44,7 +44,7 @@ public:
 
     void initAnimations()
     {
-        tft->fillRect(0, 64, 128, 80, tft->color565(0, 0, 0));
+        tft->fillRect(0, 64, 128, 128, tft->color565(0, 0, 0));
         tft->setCursor(0, 64);
         if (!SD.begin())
         { // ESP32 requires 25 MHz limit
