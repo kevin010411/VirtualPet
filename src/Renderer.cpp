@@ -172,7 +172,7 @@ public:
         String animation_name = "/animation/";
         animation_name += "idle";
         animation_name += "/";
-        animation_name += String(animation_index);
+        animation_name += String(animation_index) + ".bmp";
         ShowSDCardImage(animation_name.c_str(), 0, 32);
     }
 
