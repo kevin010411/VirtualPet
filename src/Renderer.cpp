@@ -56,7 +56,7 @@ public:
         Serial.println("SD Init Success");
 
         SDLib::File root = SD.open("/animation");
-        if (!root)
+        if (!root || !root.isDirectory())
         {
             tft->print("Failed to open root directory");
             Serial.println("Failed to open root directory");
@@ -71,6 +71,7 @@ public:
             String fileName = fileNameAsString(folder);
             tft->println(fileName);
             animation_list_name.push_back(fileName);
+            folder.close();
         }
         root.close();
     }
@@ -155,14 +156,23 @@ public:
 
     void DisplayAnimation()
     {
-        if (now_animation_list.size() <= animation_index)
+        // if (now_animation_list.size() <= animation_index)
+        // {
+        //     animation_index = 0;
+        // }
+        // String animation_name = "/animation/";
+        // animation_name += now_animation_name;
+        // animation_name += "/";
+        // animation_name += now_animation_list[animation_index++];
+        // ShowSDCardImage(animation_name.c_str(), 0, 32);
+        if (3 <= animation_index)
         {
             animation_index = 0;
         }
         String animation_name = "/animation/";
-        animation_name += now_animation_name;
+        animation_name += "idle";
         animation_name += "/";
-        animation_name += now_animation_list[animation_index++];
+        animation_name += String(animation_index);
         ShowSDCardImage(animation_name.c_str(), 0, 32);
     }
 
