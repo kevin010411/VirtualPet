@@ -1,16 +1,17 @@
 #include <vector>
 #include <SD.h>
-#include <Adafruit_ImageReader.h> // Image-reading functions
+// #include <Adafruit_ImageReader.h> // Image-reading functions
 #include <Adafruit_ST7735.h>
 
 class Renderer
 {
+
     std::vector<String> animation_list_name;
     std::vector<String> now_animation_list;
     String now_animation_name;
 
     // SdFat *SD;
-    Adafruit_ImageReader reader = Adafruit_ImageReader(SD);
+    // Adafruit_ImageReader reader = Adafruit_ImageReader(SD);
     Adafruit_ST7735 *tft;
     unsigned short animation_index;
     int max_animation_index;
@@ -26,7 +27,7 @@ class Renderer
         tft->print("SD Init Success");
         Serial.println("SD Init Success");
 
-        File root = SD.open("/animation");
+        SDLib::File root = SD.open("/animation");
         if (!root)
         {
             tft->print("Failed to open root directory");
@@ -36,7 +37,7 @@ class Renderer
 
         while (true)
         {
-            File folder = root.openNextFile();
+            SDLib::File folder = root.openNextFile();
             if (!folder || !folder.isDirectory())
                 break;
             String fileName = fileNameAsString(folder);
@@ -45,7 +46,7 @@ class Renderer
         root.close();
     }
 
-    String fileNameAsString(File activeFile)
+    String fileNameAsString(SDLib::File activeFile)
     {
         return String(activeFile.name());
     }
@@ -54,12 +55,12 @@ class Renderer
     {
         String animation_name = "/animation/";
         animation_name += now_animation_list_name;
-        File root = SD.open(animation_name);
+        SDLib::File root = SD.open(animation_name);
         now_animation_list.clear();
 
         while (true)
         {
-            File frameFile = root.openNextFile();
+            SDLib::File frameFile = root.openNextFile();
             if (!frameFile)
                 break;
             String fileName = fileNameAsString(frameFile);
@@ -77,7 +78,7 @@ public:
 
     void ShowSDCardImage(const char *img_path, int xmin = 0, int ymin = 0)
     {
-        reader.drawBMP(img_path, *tft, xmin, ymin);
+        // reader.drawBMP(img_path, *tft, xmin, ymin);
         // reader.printStatus(stat);
     }
 

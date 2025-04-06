@@ -1,6 +1,5 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
-#include <SdFat.h>
 #include "Game.cpp"
 
 const int SD_CS = PB4;   // SD 卡 CS
@@ -17,9 +16,7 @@ const unsigned long SPI_SPEED = 16000000; // 設定 SPI 速度
 // 建立 TFT 顯示物件
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
-SdFat SD;
-
-Game game(&tft, &SD);
+Game game(&tft);
 
 volatile bool PreviousButtonPressed = false;
 volatile bool ConfirmButtonPressed = false;
