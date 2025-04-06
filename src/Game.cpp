@@ -300,7 +300,7 @@ private:
         draw_select_layout();
     }
 
-        void draw_select_layout()
+    void draw_select_layout()
     {
         int y_start = 0;
         if (nowCommand >= 4)

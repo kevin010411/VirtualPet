@@ -1,5 +1,5 @@
 #include <vector>
-#include <SdFat.h>
+#include <SD.h>
 #include <Adafruit_ImageReader.h> // Image-reading functions
 #include <Adafruit_ST7735.h>
 
@@ -9,24 +9,24 @@ class Renderer
     std::vector<String> now_animation_list;
     String now_animation_name;
 
-    SdFat *SD;
-    Adafruit_ImageReader reader;
+    // SdFat *SD;
+    Adafruit_ImageReader reader = Adafruit_ImageReader(SD);
     Adafruit_ST7735 *tft;
     unsigned short animation_index;
     int max_animation_index;
     void initAnimations()
     {
-        tft->setCursor(0, 0);
-        if (!(*SD).begin(10, SD_SCK_MHZ(25)))
+        // tft->setCursor(0, 0);
+        if (!SD.begin())
         { // ESP32 requires 25 MHz limit
-            tft->print("SD initialization failed");
+            // tft->print("SD initialization failed");
             Serial.println("SD initialization failed");
             return;
         }
         tft->print("SD Init Success");
         Serial.println("SD Init Success");
 
-        File root = SD->open("/animation");
+        File root = SD.open("/animation");
         if (!root)
         {
             tft->print("Failed to open root directory");
@@ -47,23 +47,14 @@ class Renderer
 
     String fileNameAsString(File activeFile)
     {
-        char filename[20];
-        String fn = "";
-
-        activeFile.getName(filename, 20);
-
-        for (unsigned short i = 0; i < strlen(filename); i++)
-        {
-            fn = fn + filename[i];
-        }
-
-        return fn;
+        return String(activeFile.name());
     }
+
     void GetAnimationList(String now_animation_list_name)
     {
         String animation_name = "/animation/";
         animation_name += now_animation_list_name;
-        File root = SD->open(animation_name);
+        File root = SD.open(animation_name);
         now_animation_list.clear();
 
         while (true)
@@ -79,8 +70,7 @@ class Renderer
     }
 
 public:
-    Renderer(SdFat *sd, Adafruit_ST7735 *ref_tft) : SD(sd), reader(Adafruit_ImageReader(*sd)),
-                                                    tft(ref_tft), animation_index(0), max_animation_index(0)
+    Renderer(Adafruit_ST7735 *ref_tft) : tft(ref_tft), animation_index(0), max_animation_index(0)
     {
         initAnimations();
     }
