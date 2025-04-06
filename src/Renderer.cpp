@@ -82,6 +82,7 @@ public:
         if (!bmpFile)
         {
             tft->println("Failed to open BMP file");
+            tft->println(img_path);
             Serial.println("Failed to open BMP file");
             return;
         }
