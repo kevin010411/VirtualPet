@@ -169,9 +169,9 @@ public:
         // animation_name += "/";
         // animation_name += now_animation_list[animation_index++];
         // ShowSDCardImage(animation_name.c_str(), 0, 32);
-        if (3 <= animation_index)
+        if (4 <= animation_index)
         {
-            animation_index = 0;
+            animation_index = 1;
         }
         char path[40]; // 緩衝區大小視需求調整
         sprintf(path, "/animation/idle/%d.bmp", animation_index++);
