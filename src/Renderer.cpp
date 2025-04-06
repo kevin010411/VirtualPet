@@ -19,6 +19,7 @@ class Renderer
 
         if (!(*SD).begin(10, SD_SCK_MHZ(25)))
         { // ESP32 requires 25 MHz limit
+            tft->print("SD initialization failed");
             Serial.println("SD initialization failed");
             return;
         }
