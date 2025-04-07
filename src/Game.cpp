@@ -1,4 +1,5 @@
 ﻿#include <Adafruit_ST7735.h>
+#include <SdFat.h>
 #include "Renderer.cpp"
 
 class Pet
@@ -137,8 +138,8 @@ private:
 class Game
 {
 public:
-    Game(Adafruit_ST7735 *ref_tft, String name = "Mumei")
-        : pet(Pet(name, ref_tft)), renderer(Renderer(ref_tft)),
+    Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD, String name = "Mumei")
+        : pet(Pet(name, ref_tft)), renderer(Renderer(ref_tft, ref_SD)),
           tft(ref_tft), last_tick_time(0), environment_value(10), environment_cooldown(0),
           nowCommand(FEED_PET)
     {

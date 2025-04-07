@@ -1,6 +1,7 @@
 #include <vector>
-#include <SD.h>
+// #include <SD.h>
 #include <Adafruit_ST7735.h>
+#include <SdFat.h>
 
 class Renderer
 {
@@ -8,12 +9,13 @@ class Renderer
     std::vector<String> animation_list_name;
     std::vector<String> now_animation_list;
     String now_animation_name;
-
     Adafruit_ST7735 *tft;
+    SdFat *SD;
+
     unsigned short animation_index;
     int max_animation_index;
 
-    String fileNameAsString(SDLib::File activeFile)
+    String fileNameAsString(File activeFile)
     {
         return String(activeFile.name());
     }
@@ -22,12 +24,12 @@ class Renderer
     {
         String animation_name = "/animation/";
         animation_name += now_animation_list_name;
-        SDLib::File root = SD.open(animation_name);
+        File root = SD->open(animation_name);
         now_animation_list.clear();
 
         while (true)
         {
-            SDLib::File frameFile = root.openNextFile();
+            File frameFile = root.openNextFile();
             if (!frameFile)
                 break;
             String fileName = fileNameAsString(frameFile);
@@ -38,7 +40,7 @@ class Renderer
     }
 
 public:
-    Renderer(Adafruit_ST7735 *ref_tft) : tft(ref_tft), animation_index(0), max_animation_index(0)
+    Renderer(Adafruit_ST7735 *ref_tft, SdFat *red_SD) : tft(ref_tft), SD(red_SD), animation_index(0), max_animation_index(0)
     {
     }
 
@@ -46,7 +48,7 @@ public:
     {
         tft->fillRect(0, 64, 128, 128, tft->color565(0, 0, 0));
         tft->setCursor(0, 64);
-        if (!SD.begin())
+        if (!(*SD).begin(PA4))
         { // ESP32 requires 25 MHz limit
             tft->println("SD initialization failed");
             Serial.println("SD initialization failed");
@@ -55,7 +57,7 @@ public:
         tft->println("SD Init Success");
         Serial.println("SD Init Success");
 
-        SDLib::File root = SD.open("/animation");
+        File root = SD->open("/");
         if (!root || !root.isDirectory())
         {
             tft->print("Failed to open root directory");
@@ -65,7 +67,7 @@ public:
 
         while (true)
         {
-            SDLib::File folder = root.openNextFile();
+            File folder = root.openNextFile();
             if (!folder || !folder.isDirectory())
                 break;
             String fileName = fileNameAsString(folder);
@@ -78,7 +80,7 @@ public:
 
     void ShowSDCardImage(const char *img_path, int xmin = 0, int ymin = 0)
     {
-        SDLib::File bmpFile = SD.open(img_path);
+        File bmpFile = SD->open(img_path);
         if (!bmpFile)
         {
             tft->println("Failed to open BMP file");
