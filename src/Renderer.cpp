@@ -1,5 +1,4 @@
 #include <vector>
-// #include <SD.h>
 #include <Adafruit_ST7735.h>
 #include <SdFat.h>
 
@@ -17,7 +16,17 @@ class Renderer
 
     String fileNameAsString(File activeFile)
     {
-        return String(activeFile.name());
+        char filename[20];
+        String fn = "";
+
+        activeFile.getName(filename, 20);
+
+        for (unsigned short i = 0; i < strlen(filename); i++)
+        {
+            fn = fn + filename[i];
+        }
+
+        return fn;
     }
 
     void GetAnimationList(String now_animation_list_name)
@@ -48,16 +57,10 @@ public:
     {
         tft->fillRect(0, 64, 128, 128, tft->color565(0, 0, 0));
         tft->setCursor(0, 64);
-        if (!(*SD).begin(PA4))
-        { // ESP32 requires 25 MHz limit
-            tft->println("SD initialization failed");
-            Serial.println("SD initialization failed");
-            return;
-        }
         tft->println("SD Init Success");
         Serial.println("SD Init Success");
 
-        File root = SD->open("/");
+        File root = SD->open("/animation");
         if (!root || !root.isDirectory())
         {
             tft->print("Failed to open root directory");
@@ -71,7 +74,6 @@ public:
             if (!folder || !folder.isDirectory())
                 break;
             String fileName = fileNameAsString(folder);
-            tft->println(fileName);
             animation_list_name.push_back(fileName);
             folder.close();
         }
@@ -137,7 +139,6 @@ public:
         // === Draw BMP (bottom to top) ===
         for (int y = 0; y < bmpHeight; y++)
         {
-            int pos = pixelDataOffset + (bmpHeight - 1 - y) * rowSize;
             bmpFile.read(rowBuffer, rowSize);
 
             for (int x = 0; x < bmpWidth; x++)
@@ -162,53 +163,44 @@ public:
 
     void DisplayAnimation()
     {
-        // if (now_animation_list.size() <= animation_index)
-        // {
-        //     animation_index = 0;
-        // }
-        // String animation_name = "/animation/";
-        // animation_name += now_animation_name;
-        // animation_name += "/";
-        // animation_name += now_animation_list[animation_index++];
-        // ShowSDCardImage(animation_name.c_str(), 0, 32);
-        if (4 <= animation_index)
+        if (now_animation_list.size() <= animation_index)
         {
-            animation_index = 1;
+            animation_index = 0;
         }
-        char path[40]; // 緩衝區大小視需求調整
-        sprintf(path, "/animation/idle/%d.bmp", animation_index++);
-        ShowSDCardImage(path, 0, 32);
+        String animation_name = "/animation/";
+        animation_name += now_animation_name;
+        animation_name += "/";
+        animation_name += now_animation_list[animation_index++];
+        ShowSDCardImage(animation_name.c_str(), 0, 32);
     }
 
     void DisplayAnimation(String animationName)
     {
-        // int index = -1;
-        // for (size_t i = 0; i < animation_list_name.size(); ++i)
-        // {
-        //     if (animation_list_name[i] == animationName)
-        //     {
-        //         index = i;
-        //         break;
-        //     }
-        // }
-        DisplayAnimation();
+        int index = -1;
+        for (size_t i = 0; i < animation_list_name.size(); ++i)
+        {
+            if (animation_list_name[i] == animationName)
+            {
+                index = i;
+                break;
+            }
+        }
 
-        // if (index == -1)
-        // {
-        //     tft->fillRect(0, 32, 32, 32, tft->color565(0, 255, 255));
-        //     Serial.print("找不到指定的animationName:");
-        //     Serial.println(animationName);
-        //     ShowAnimationList();
-        // }
-        // else
-        // {
-        //     if (animation_list_name[index] != now_animation_name)
-        //     {
-        //         now_animation_name = animation_list_name[index];
-        //         GetAnimationList(now_animation_name);
-        //     }
-        //     return DisplayAnimation();
-        // }
+        if (index == -1)
+        {
+            Serial.print("找不到指定的animationName:");
+            Serial.println(animationName);
+            ShowAnimationList();
+        }
+        else
+        {
+            if (animation_list_name[index] != now_animation_name)
+            {
+                now_animation_name = animation_list_name[index];
+                GetAnimationList(now_animation_name);
+            }
+            return DisplayAnimation();
+        }
     }
 
     void ShowAnimationList()

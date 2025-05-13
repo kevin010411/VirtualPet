@@ -1,6 +1,5 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
-// #include <SD.h>
 #include "Game.cpp"
 #include <SdFat.h>
 
@@ -28,14 +27,20 @@ volatile bool NextButtonPressed = false;
 
 void handlePreviousButtonInterrupt()
 {
+  if (digitalRead(PREVIOUS_COMMAND_BUTTON) == HIGH)
+    return;
   PreviousButtonPressed = true;
 }
 void handleConfirmButtoInterrupt()
 {
+  if (digitalRead(CONFIRM_COMMAND_BUTTON) == HIGH)
+    return;
   ConfirmButtonPressed = true;
 }
 void handleNextButtonInterrupt()
 {
+  if (digitalRead(NEXT_COMMAND_BUTTON) == HIGH)
+    return;
   NextButtonPressed = true;
 }
 
@@ -47,7 +52,6 @@ void buttonDetect()
     game.PrevCommand();
     game.draw_all_layout();
     Serial.println(game.NowCommand());
-    tft.fillRect(0, 32, 32, 32, tft.color565(0, 255, 0));
     PreviousButtonPressed = false;
   }
   if (NextButtonPressed)
@@ -55,7 +59,6 @@ void buttonDetect()
     game.NextCommand();
     game.draw_all_layout();
     Serial.println(game.NowCommand());
-    tft.fillRect(0, 32, 32, 32, tft.color565(0, 0, 255));
 
     NextButtonPressed = false;
   }
@@ -63,7 +66,6 @@ void buttonDetect()
   {
     Serial.println(game.NowCommand());
     game.ExecuteCommand();
-    tft.fillRect(0, 32, 32, 32, tft.color565(255, 0, 0));
     ConfirmButtonPressed = false;
   }
 }
@@ -81,24 +83,27 @@ void setup()
   // 初始化 TFT 螢幕
   tft.initR(INITR_BLACKTAB); // 初始化 ST7735，選擇黑底對應的設定
   tft.setRotation(2);        // 設置旋轉方向，0~3 分別對應四種方向
-  tft.fillRect(0, 0, 180, 180, tft.color565(0, 0, 0));
-  if (SD.begin(SD_CS))
-    tft.print("init sucess");
-  // pinMode(PREVIOUS_COMMAND_BUTTON, INPUT_PULLUP);
-  // pinMode(CONFIRM_COMMAND_BUTTON, INPUT_PULLUP);
-  // pinMode(NEXT_COMMAND_BUTTON, INPUT_PULLUP);
 
-  // attachInterrupt(digitalPinToInterrupt(CONFIRM_COMMAND_BUTTON), handleConfirmButtoInterrupt, FALLING);
-  // attachInterrupt(digitalPinToInterrupt(NEXT_COMMAND_BUTTON), handleNextButtonInterrupt, FALLING);
-  // attachInterrupt(digitalPinToInterrupt(PREVIOUS_COMMAND_BUTTON), handlePreviousButtonInterrupt, FALLING);
+  pinMode(PREVIOUS_COMMAND_BUTTON, INPUT);
+  pinMode(CONFIRM_COMMAND_BUTTON, INPUT);
+  pinMode(NEXT_COMMAND_BUTTON, INPUT);
 
-  // game.setup_game();
-  // Serial.println("Init Done");
-  // delay(500);
+  attachInterrupt(digitalPinToInterrupt(CONFIRM_COMMAND_BUTTON), handleConfirmButtoInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(NEXT_COMMAND_BUTTON), handleNextButtonInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PREVIOUS_COMMAND_BUTTON), handlePreviousButtonInterrupt, FALLING);
+
+  if (!SD.begin(PA4, SD_SCK_MHZ(4)))
+  {
+    tft.print("init error");
+    return;
+  }
+  game.setup_game();
+  Serial.println("Init Done");
+  delay(500);
 }
 
 void loop()
 {
-  // buttonDetect();
-  // game.loop_game();
+  buttonDetect();
+  game.loop_game();
 }

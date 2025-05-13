@@ -1,5 +1,6 @@
 ﻿#include <Adafruit_ST7735.h>
 #include <SdFat.h>
+#include <vector>
 #include "Renderer.cpp"
 
 class Pet
@@ -9,39 +10,6 @@ public:
         : name(name), type(type), age(age), max_age(100), max_hungry(100),
           hungry_value(50), mood(50), max_mood(100), bad_heathly_duration(0),
           tft(ref_tft), status(Healthy) {}
-
-    void show_status()
-    {
-        tft->fillScreen(ST7735_BLACK);
-        tft->setCursor(35, 35);
-        tft->setTextSize(1);
-
-        // 儲存所有固定字串於 Flash
-        tft->println(F("Pet Status"));
-        tft->print(F("Type: "));
-        tft->println(type.c_str()); // 使用 c_str() 確保打印 C 字串格式
-
-        tft->print(F("Name: "));
-        tft->println(name.c_str());
-
-        tft->print(F("Age: "));
-        tft->print(age, 1); // 輸出浮點數，保留 1 位小數
-        tft->print(F(" / "));
-        tft->println(max_age);
-
-        tft->print(F("Mood: "));
-        tft->print(mood);
-        tft->print(F(" / "));
-        tft->println(max_mood);
-
-        tft->print(F("Satiety: "));
-        tft->print(hungry_value);
-        tft->print(F(" / "));
-        tft->println(max_hungry);
-
-        tft->print(F("Status: "));
-        tft->println(HealthStatusStr[status]); // 使用 c_str() 確保打印 C 字串格式
-    }
 
     void dayPassed()
     {
@@ -162,13 +130,20 @@ public:
             displayDuration -= current_time - last_tick_time;
             last_tick_time = current_time;
             if (displayDuration <= 0)
-                displayAnimationName = "idle";
+            {
+                if (animation_queue.back() != "idle")
+                {
+                    animation_queue.pop_back();
+                    animation_duration.pop_back();
+                }
+                displayDuration = animation_duration.back();
+            }
             if (environment_cooldown <= 0)
             {
-                environment_value = environment_value - 1;
+                environment_value = environment_value - 5;
                 if (environment_value < 0)
                     environment_value = 0;
-                environment_cooldown = random(300 * gameTick, 600 * gameTick);
+                environment_cooldown = random(3 * gameTick, 6 * gameTick);
             }
             roll_sick();
             pet.dayPassed();
@@ -215,7 +190,8 @@ private:
     Renderer renderer;
     Adafruit_ST7735 *tft;
     unsigned long last_tick_time;
-    String displayAnimationName = "idle";
+    std::vector<String> animation_queue = {"idle"};
+    std::vector<int> animation_duration = {1000000};
     int displayDuration = 0;
     bool isSelectButtonOn = true;
     bool isPredictTime = false;
@@ -228,7 +204,7 @@ private:
         HAVE_FUN,
         UNKNOWN,
         MEDICINE,
-        SHOWER,
+        CLEAN,
         PREDICT,
         GIFT,
         READ,
@@ -239,7 +215,7 @@ private:
         "HAVE_FUN",
         "UNKNOWN",
         "MEDICINE",
-        "SHOWER",
+        "CLEAN",
         "PREDICT",
         "GIFT",
         "READ",
@@ -253,8 +229,11 @@ private:
         {
         case FEED_PET:
             pet.feedPet(10);
+            animation_queue.push_back("happy");
+            animation_duration.push_back(gameTick * 3);
+            animation_queue.push_back("feed");
+            animation_duration.push_back(gameTick * 7);
             displayDuration = gameTick * 5;
-            displayAnimationName = "feed";
             Serial.println(F("Fed pet! Satiety increased."));
             break;
         case HAVE_FUN:
@@ -268,10 +247,13 @@ private:
             pet.medician();
             Serial.println(F("Pet Do MEDICINE"));
             break;
-        case SHOWER:
-            environment_value = environment_value + 1;
-            if (environment_value > 10)
-                environment_value = 10;
+        case CLEAN:
+            environment_value = 10;
+            animation_queue.push_back("happy");
+            animation_duration.push_back(gameTick * 3);
+            animation_queue.push_back("clean");
+            animation_duration.push_back(gameTick * 5);
+            displayDuration = gameTick * 5;
             Serial.println(F("Pet Do SHOWER"));
             break;
         case PREDICT:
@@ -296,7 +278,8 @@ private:
         {
             Serial.println("Good Predict😀");
         }
-        renderer.DisplayAnimation(displayAnimationName);
+        renderer.DisplayAnimation(animation_queue.back());
+        draw_background();
         draw_select_layout();
     }
 
@@ -313,6 +296,23 @@ private:
             renderer.ShowSDCardImage(path, nowCommand % 4 * 32, y_start);
         // Serial.println(path);
         isSelectButtonOn = !isSelectButtonOn;
+    }
+
+    void draw_background()
+    {
+        if (environment_value < 5)
+            draw_poop();
+    }
+
+    int poop_index = 1;
+    void draw_poop()
+    {
+        int x_start = 10;
+        int y_start = 94;
+        char path[20]; // 緩衝區大小視需求調整
+        sprintf(path, "/poop/%d.bmp", poop_index);
+        poop_index = 3 - poop_index; // 這樣才可以在1,2之間切換
+        renderer.ShowSDCardImage(path, x_start, y_start);
     }
 
     void roll_sick()
