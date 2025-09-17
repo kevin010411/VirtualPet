@@ -160,6 +160,7 @@ public:
         Serial.println("BMP render done (optimized).\n");
     }
 
+
     void DisplayAnimation()
     {
         if (now_animation_list.size() <= animation_index)

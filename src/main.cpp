@@ -11,12 +11,12 @@ const int TFT_DC  = PA8;
 const int TFT_RST = PB14;  
 const int TFT_BLK = PA9;
 
-const int NEXT_COMMAND_BUTTON    = PA10; 
-const int PREVIOUS_COMMAND_BUTTON= PA11; 
-const int CONFIRM_COMMAND_BUTTON = PA12; 
+const int NEXT_COMMAND_BUTTON    = PA12; 
+const int PREVIOUS_COMMAND_BUTTON= PA10; 
+const int CONFIRM_COMMAND_BUTTON = PA11; 
 
 // 建議頻率
-const uint32_t SD_SPI_MHZ = 12;         // 先用 12 MHz，穩定後可升到 18 MHz
+const uint32_t SD_SPI_MHZ = 16;
 
 // 建立 TFT 顯示物件
 // Adafruit_ST7735 tft(TFT_CS, TFT_DC, PB15 /*MOSI*/, PB13 /*SCLK*/, TFT_RST);
@@ -56,21 +56,15 @@ void buttonDetect()
   if (PreviousButtonPressed)
   {
     game.PrevCommand();
-    game.draw_all_layout();
-    Serial.println(game.NowCommand());
     PreviousButtonPressed = false;
   }
   if (NextButtonPressed)
   {
     game.NextCommand();
-    game.draw_all_layout();
-    Serial.println(game.NowCommand());
-
     NextButtonPressed = false;
   }
   if (ConfirmButtonPressed)
   {
-    Serial.println(game.NowCommand());
     game.ExecuteCommand();
     ConfirmButtonPressed = false;
   }
@@ -93,13 +87,13 @@ void setup()
   tft.initR(INITR_BLACKTAB); // 初始化 ST7735，選擇黑底對應的設定
   tft.setRotation(2);        // 設置旋轉方向，0~3 分別對應四種方向
 
-  pinMode(PREVIOUS_COMMAND_BUTTON, INPUT);
-  pinMode(CONFIRM_COMMAND_BUTTON, INPUT);
-  pinMode(NEXT_COMMAND_BUTTON, INPUT);
+  pinMode(PREVIOUS_COMMAND_BUTTON, INPUT_PULLUP);
+  pinMode(CONFIRM_COMMAND_BUTTON, INPUT_PULLUP);
+  pinMode(NEXT_COMMAND_BUTTON, INPUT_PULLUP);
 
-  attachInterrupt(digitalPinToInterrupt(CONFIRM_COMMAND_BUTTON), handleConfirmButtoInterrupt, RISING);
-  attachInterrupt(digitalPinToInterrupt(NEXT_COMMAND_BUTTON), handleNextButtonInterrupt, RISING);
-  attachInterrupt(digitalPinToInterrupt(PREVIOUS_COMMAND_BUTTON), handlePreviousButtonInterrupt, RISING);
+  attachInterrupt(digitalPinToInterrupt(CONFIRM_COMMAND_BUTTON), handleConfirmButtoInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(NEXT_COMMAND_BUTTON), handleNextButtonInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PREVIOUS_COMMAND_BUTTON), handlePreviousButtonInterrupt, FALLING);
 
   if (!SD.begin(SD_CS, SD_SCK_MHZ(SD_SPI_MHZ)))
   {

@@ -123,8 +123,10 @@ public:
     void setup_game()
     {
         renderer.initAnimations();
+        lastSelected = static_cast<int>(nowCommand);
         draw_all_layout();
-        Serial.println("Welcome to the Virtual Pet Game!");
+        dirty_select = true;        
+        dirty_animation = true;     
     }
 
     void loop_game()
@@ -153,7 +155,23 @@ public:
             }
             roll_sick();
             pet.dayPassed();
-            draw_scene();
+
+            // 動畫節拍：到時間才重畫下一幀
+            bool frame_due = (current_time - lastFrameTime >= frameInterval);
+            if (frame_due) lastFrameTime = current_time;
+
+            // === 最小重繪：只畫「髒」的部分 ===
+            if (dirty_animation || frame_due)
+            {
+                renderer.DisplayAnimation(animation_queue.back().name);
+                dirty_animation = false;
+            }
+
+            if (dirty_select)
+            {
+                draw_select_layout(); // 你原本就只畫 32x32 的選取格，保留這個最小重繪
+                dirty_select = false;
+            }
         }
     }
 
@@ -163,18 +181,23 @@ public:
     }
     void NextCommand()
     {
+        lastSelected = static_cast<int>(nowCommand);
         nowCommand = static_cast<CommandTable>((nowCommand + 1) % NUM_COMMANDS);
+        dirty_select = true;
     }
     void PrevCommand()
     {
+        lastSelected = static_cast<int>(nowCommand);
         if (nowCommand - 1 < 0)
             nowCommand = static_cast<CommandTable>(nowCommand - 1 + NUM_COMMANDS);
         else
             nowCommand = static_cast<CommandTable>(nowCommand - 1);
+        dirty_select = true;
     }
     void ExecuteCommand()
     {
         parse_command(nowCommand);
+        dirty_select = true;
     }
     void draw_all_layout()
     {
@@ -186,7 +209,6 @@ public:
             char path[20]; // 緩衝區大小視需求調整
             sprintf(path, "/layout/%d.bmp", i + 1);
             renderer.ShowSDCardImage(path, i % 4 * 32, y_start);
-            // Serial.println(path);
         }
     }
 
@@ -198,32 +220,26 @@ private:
     unsigned long last_tick_time;
     std::vector<Animation> animation_queue = {Animation("idle", 1000000)};
     int displayDuration = 0;
-    bool isSelectButtonOn = true;
     bool isPredictTime = false;
+    int lastSelected = 0; 
     int environment_value;
     int environment_cooldown;
 
+    // --- Dirty flags ---
+    bool dirty_select = true;      // 選取框 / 指令高亮
+    bool dirty_animation = true;   // 主動畫
+
+    // 動畫間隔
+    const unsigned long frameInterval = 100;  // 每幀 100ms，可自行調整
+    unsigned long lastFrameTime = 0;
+
     enum CommandTable
     {
-        FEED_PET,
-        HAVE_FUN,
-        UNKNOWN,
-        MEDICINE,
-        CLEAN,
-        PREDICT,
-        GIFT,
-        READ,
+        FEED_PET,HAVE_FUN,UNKNOWN,MEDICINE,CLEAN,PREDICT,GIFT,READ,
     };
 
     const String COMMANDS[8] = {
-        "FEED_PET",
-        "HAVE_FUN",
-        "UNKNOWN",
-        "MEDICINE",
-        "CLEAN",
-        "PREDICT",
-        "GIFT",
-        "READ",
+        "FEED_PET","HAVE_FUN","UNKNOWN","MEDICINE","CLEAN","PREDICT","GIFT","READ",
     };
     const int NUM_COMMANDS = sizeof(COMMANDS) / sizeof(COMMANDS[0]);
     CommandTable nowCommand = FEED_PET;
@@ -275,47 +291,22 @@ private:
             displayDuration = 0;
     }
 
-    void draw_scene()
-    {
-        if (isPredictTime)
-        {
-            Serial.println("Good Predict😀");
-        }
-        renderer.DisplayAnimation(animation_queue.back().name);
-        draw_background();
-        draw_select_layout();
-    }
-
     void draw_select_layout()
     {
-        int y_start = 0;
-        if (nowCommand >= 4)
-            y_start = 160 - 32;
-        char path[20]; // 緩衝區大小視需求調整
-        sprintf(path, "/layout/%d.bmp", nowCommand + 1);
-        if (!isSelectButtonOn)
-            tft->fillRect(nowCommand % 4 * 32, y_start, 32, 32, tft->color565(255, 255, 255));
-        else
-            renderer.ShowSDCardImage(path, nowCommand % 4 * 32, y_start);
-        // Serial.println(path);
-        isSelectButtonOn = !isSelectButtonOn;
-    }
+        // 還原上一個選擇
+        int prevIdx = lastSelected;
+        int y_prev = (prevIdx >= 4) ? 160 - 32 : 0;
+        char path_prev[24];
+        sprintf(path_prev, "/layout/%d.bmp", prevIdx + 1);
+        renderer.ShowSDCardImage(path_prev, (prevIdx % 4) * 32, y_prev);
+        
+        //改變現在選擇的內容
+        int curIdx  = static_cast<int>(nowCommand);
+        int y_cur = (curIdx >= 4) ? 160 - 32 : 0;
 
-    void draw_background()
-    {
-        if (environment_value < 5)
-            draw_poop();
-    }
-
-    int poop_index = 1;
-    void draw_poop()
-    {
-        int x_start = 10;
-        int y_start = 94;
-        char path[20]; // 緩衝區大小視需求調整
-        sprintf(path, "/poop/%d.bmp", poop_index);
-        poop_index = 3 - poop_index; // 這樣才可以在1,2之間切換
-        renderer.ShowSDCardImage(path, x_start, y_start);
+        char path_sel[28];
+        sprintf(path_sel, "/layout_sel/%d.bmp", curIdx + 1);
+        renderer.ShowSDCardImage(path_sel, (curIdx % 4) * 32, y_cur);
     }
 
     void roll_sick()
