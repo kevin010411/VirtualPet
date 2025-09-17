@@ -103,6 +103,13 @@ private:
     }
 };
 
+struct Animation
+{
+    String name;
+    int duration;
+    Animation(String animation_name, int D) : name(animation_name), duration(D) {}
+};
+
 class Game
 {
 public:
@@ -131,12 +138,11 @@ public:
             last_tick_time = current_time;
             if (displayDuration <= 0)
             {
-                if (animation_queue.back() != "idle")
+                if (animation_queue.back().name != "idle")
                 {
                     animation_queue.pop_back();
-                    animation_duration.pop_back();
                 }
-                displayDuration = animation_duration.back();
+                displayDuration = animation_queue.back().duration;
             }
             if (environment_cooldown <= 0)
             {
@@ -190,8 +196,7 @@ private:
     Renderer renderer;
     Adafruit_ST7735 *tft;
     unsigned long last_tick_time;
-    std::vector<String> animation_queue = {"idle"};
-    std::vector<int> animation_duration = {1000000};
+    std::vector<Animation> animation_queue = {Animation("idle", 1000000)};
     int displayDuration = 0;
     bool isSelectButtonOn = true;
     bool isPredictTime = false;
@@ -229,11 +234,8 @@ private:
         {
         case FEED_PET:
             pet.feedPet(10);
-            animation_queue.push_back("happy");
-            animation_duration.push_back(gameTick * 3);
-            animation_queue.push_back("feed");
-            animation_duration.push_back(gameTick * 7);
-            displayDuration = gameTick * 5;
+            animation_queue.push_back(Animation("happy", gameTick * 3));
+            animation_queue.push_back(Animation("feed", gameTick * 7));
             Serial.println(F("Fed pet! Satiety increased."));
             break;
         case HAVE_FUN:
@@ -249,11 +251,8 @@ private:
             break;
         case CLEAN:
             environment_value = 10;
-            animation_queue.push_back("happy");
-            animation_duration.push_back(gameTick * 3);
-            animation_queue.push_back("clean");
-            animation_duration.push_back(gameTick * 5);
-            displayDuration = gameTick * 5;
+            animation_queue.push_back(Animation("happy", gameTick * 3));
+            animation_queue.push_back(Animation("clean", gameTick * 5));
             Serial.println(F("Pet Do SHOWER"));
             break;
         case PREDICT:
@@ -270,6 +269,10 @@ private:
             Serial.println(F("指令錯誤"));
             break;
         }
+        if (!animation_queue.empty())
+            displayDuration = animation_queue.back().duration;
+        else
+            displayDuration = 0;
     }
 
     void draw_scene()
@@ -278,7 +281,7 @@ private:
         {
             Serial.println("Good Predict😀");
         }
-        renderer.DisplayAnimation(animation_queue.back());
+        renderer.DisplayAnimation(animation_queue.back().name);
         draw_background();
         draw_select_layout();
     }

@@ -80,33 +80,30 @@ public:
         root.close();
     }
 
-    void ShowSDCardImage(const char *img_path, int xmin = 0, int ymin = 0)
+    void ShowSDCardImage(const char *img_path, int xmin = 0, int ymin = 0, int batch_lines = 4)
     {
         File bmpFile = SD->open(img_path);
         if (!bmpFile)
         {
             tft->println("Failed to open BMP file");
-            tft->println(img_path);
             Serial.println("Failed to open BMP file");
             return;
         }
 
-        // === BMP Header Parsing ===
         if (bmpFile.read() != 'B' || bmpFile.read() != 'M')
         {
             tft->println("Not a valid BMP file");
-            Serial.println("Not a valid BMP file");
             bmpFile.close();
             return;
         }
 
-        bmpFile.seek(10); // Offset to pixel data
+        bmpFile.seek(10);
         uint32_t pixelDataOffset = bmpFile.read() |
                                    (bmpFile.read() << 8) |
                                    (bmpFile.read() << 16) |
                                    (bmpFile.read() << 24);
 
-        bmpFile.seek(18); // Width & Height
+        bmpFile.seek(18);
         int32_t bmpWidth = bmpFile.read() |
                            (bmpFile.read() << 8) |
                            (bmpFile.read() << 16) |
@@ -116,49 +113,51 @@ public:
                             (bmpFile.read() << 16) |
                             (bmpFile.read() << 24);
 
-        bmpFile.seek(28); // Bits per pixel
+        bmpFile.seek(28);
         uint16_t bitsPerPixel = bmpFile.read() | (bmpFile.read() << 8);
-
         if (bitsPerPixel != 24)
         {
             tft->println("Only 24-bit BMP supported");
-            Serial.println("Only 24-bit BMP supported");
             bmpFile.close();
             return;
         }
 
         bmpFile.seek(pixelDataOffset);
 
-        // BMP rows are padded to multiples of 4 bytes
         int rowSize = ((bmpWidth * 3 + 3) / 4) * 4;
+        uint8_t rowBuffer[rowSize * batch_lines];
+        uint16_t lineBuffer[bmpWidth * batch_lines];
 
-        // Buffer for one row of RGB565 pixels
-        uint8_t rowBuffer[rowSize];
-        uint16_t lineBuffer[bmpWidth];
-
-        // === Draw BMP (bottom to top) ===
-        for (int y = 0; y < bmpHeight; y++)
+        for (int y = 0; y < bmpHeight; y += batch_lines)
         {
-            bmpFile.read(rowBuffer, rowSize);
+            int actualLines = (y + batch_lines > bmpHeight) ? (bmpHeight - y) : batch_lines;
 
-            for (int x = 0; x < bmpWidth; x++)
+            for (int i = 0; i < actualLines; i++)
             {
-                int i = x * 3;
-                uint8_t b = rowBuffer[i];
-                uint8_t g = rowBuffer[i + 1];
-                uint8_t r = rowBuffer[i + 2];
-
-                lineBuffer[x] = ((r & 0xF8) << 8) |
-                                ((g & 0xFC) << 3) |
-                                (b >> 3);
+                bmpFile.read(&rowBuffer[i * rowSize], rowSize);
+                for (int x = 0; x < bmpWidth; x++)
+                {
+                    int j = x * 3;
+                    uint8_t b = rowBuffer[i * rowSize + j];
+                    uint8_t g = rowBuffer[i * rowSize + j + 1];
+                    uint8_t r = rowBuffer[i * rowSize + j + 2];
+                    int flipped_x = bmpWidth - 1 - x;
+                    lineBuffer[i * bmpWidth + flipped_x] = ((r & 0xF8) << 8) |
+                                                           ((g & 0xFC) << 3) |
+                                                           (b >> 3);
+                }
             }
 
-            // Draw this line in one shot
-            tft->drawRGBBitmap(xmin, ymin + y, lineBuffer, bmpWidth, 1);
+            for (int i = 0; i < actualLines; i++)
+            {
+                // 反轉上下順序
+                int flipped_y = ymin + (bmpHeight - 1 - (y + i));
+                tft->drawRGBBitmap(xmin, flipped_y, &lineBuffer[i * bmpWidth], bmpWidth, 1);
+            }
         }
 
         bmpFile.close();
-        Serial.println("BMP render done.");
+        Serial.println("BMP render done (optimized).\n");
     }
 
     void DisplayAnimation()
