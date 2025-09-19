@@ -35,9 +35,9 @@ static HealthStatus decide_state(
         return HealthStatus::Hungry;
     if (mood <= 30)
         return HealthStatus::Depressed;
-    if (env_value <= 30)
+    if (env_value <= 300)
         return HealthStatus::Poop;
-    if (clean_value <= 30)
+    if (clean_value <= 100)
         return HealthStatus::Dirty;
     return HealthStatus::Healthy;
 }
@@ -52,7 +52,7 @@ public:
 
     void dayPassed()
     {
-        hungry_value = clamp<int>(hungry_value + 1, 0, cfg.max_hunger);
+        hungry_value = clamp<int>(hungry_value - 1, 0, cfg.max_hunger);
         mood = clamp<int>(mood - 1, 0, cfg.max_mood);
         age = clamp<float>(age + cfg.age_per_tick, 0.0f, cfg.max_age);
         clean_value = clamp<int>(clean_value - 1, 0, cfg.max_clean);
