@@ -28,9 +28,11 @@ enum class HealthStatus
 };
 
 static HealthStatus decide_state(
-    uint8_t hunger, uint8_t mood, uint8_t env_value, uint8_t clean_value, const PetConfig &cfg)
+    uint8_t hunger, uint8_t mood, uint8_t env_value, uint8_t clean_value, bool hasSick, const PetConfig &cfg)
 {
     // 優先權：Sick > Hungry > Depressed > Poop >  Dirty > Healthy
+    if (hasSick)
+        return HealthStatus::Sick;
     if (hunger <= 30)
         return HealthStatus::Hungry;
     if (mood <= 30)
@@ -47,7 +49,7 @@ class Pet
 public:
     Pet(Adafruit_ST7735 *ref_tft, float age = 0)
         : age(age), hungry_value(50), mood(50),
-          env_value(1000), clean_value(300),
+          env_value(1000), clean_value(300), hasSick(false),
           tft(ref_tft), status(HealthStatus::Healthy) {}
 
     void dayPassed()
@@ -58,7 +60,7 @@ public:
         clean_value = clamp<int>(clean_value - 1, 0, cfg.max_clean);
         env_value = clamp<int>(env_value - 1, 0, cfg.max_env_clean);
 
-        status = decide_state(hungry_value, mood, env_value, clean_value, cfg);
+        status = decide_state(hungry_value, mood, env_value, clean_value, hasSick, cfg);
     }
 
     void feedPet(int add_satiety)
@@ -83,14 +85,14 @@ public:
 
     bool getSick()
     {
-        status = HealthStatus::Sick;
+        hasSick = true;
         return true;
     }
     bool medician()
     {
-        if (status != HealthStatus::Sick)
+        if (!hasSick)
             return false;
-        status = HealthStatus::Healthy;
+        hasSick = false;
         return true;
     }
 
@@ -116,6 +118,7 @@ public:
 
 private:
     PetConfig cfg;
+    bool hasSick;
     float age;
     int hungry_value;
     int mood;
@@ -363,7 +366,7 @@ private:
 
     void roll_sick()
     {
-        float probability = 1.0 - (float)environment_value / 10.0; // 機率函數 P(x)
+        float probability = 0.01; // 機率函數 P(x)
 
         // 生成 0 ~ 1 的隨機數
         float randValue = random(1001) / 1000.0; // 隨機數範圍 [0, 1]
