@@ -303,15 +303,16 @@ private:
         switch (command)
         {
         case FEED_PET:
-            pet.feedPet(10);
+            pet.feedPet(40);
             animationQueue.push_back(Animation("happy", gameTick * 3));
             animationQueue.push_back(Animation("feed", gameTick * 7));
             break;
         case HAVE_FUN:
-            pet.addPressure(10);
+            pet.addPressure(30);
             animationQueue.push_back(Animation("happy", gameTick * 3));
             break;
         case CLEAN:
+            pet.cleanEnv(300);
             animationQueue.push_back(Animation("happy", gameTick * 3));
             animationQueue.push_back(Animation("clean", gameTick * 5));
             break;
@@ -321,7 +322,7 @@ private:
             animationQueue.push_back(Animation("heal", gameTick * 5));
             break;
         case SHOWER:
-            environment_value += 10;
+            pet.takeShower(250);
             animationQueue.push_back(Animation("happy", gameTick * 3));
             animationQueue.push_back(Animation("shower", gameTick * 5));
             break;
