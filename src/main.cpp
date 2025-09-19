@@ -3,30 +3,34 @@
 #include "Game.cpp"
 #include <SdFat.h>
 
-const int SD_CS  = PB0;    // ← 經 74VHC125 緩衝到 CARD_CS
+const int SD_CS = PB0; // ← 經 74VHC125 緩衝到 CARD_CS
 
 // TFT (SPI2)
-const int TFT_CS  = PB12;  
-const int TFT_DC  = PA8;  
-const int TFT_RST = PB14;  
+const int TFT_CS = PB12;
+const int TFT_DC = PA8;
+const int TFT_RST = PB14;
 const int TFT_BLK = PA9;
 
-const int NEXT_COMMAND_BUTTON    = PA12; 
-const int PREVIOUS_COMMAND_BUTTON= PA10; 
-const int CONFIRM_COMMAND_BUTTON = PA11; 
+const int NEXT_COMMAND_BUTTON = PA12;
+const int PREVIOUS_COMMAND_BUTTON = PA10;
+const int CONFIRM_COMMAND_BUTTON = PA11;
 
 // 建議頻率
 const uint32_t SD_SPI_MHZ = 16;
 
 // 建立 TFT 顯示物件
 // Adafruit_ST7735 tft(TFT_CS, TFT_DC, PB15 /*MOSI*/, PB13 /*SCLK*/, TFT_RST);
-SPIClass SPI_2(PB15,TFT_RST,PB13);
+SPIClass SPI_2(PB15, TFT_RST, PB13);
 Adafruit_ST7735 tft(&SPI_2, TFT_CS, TFT_DC, TFT_RST);
 
 SdFat SD;
 
 Game game(&tft, &SD);
 
+const unsigned long BUTTON_COOLDOWN = 500; // 0.5 秒
+unsigned long lastPrevPressTime = 0;
+unsigned long lastNextPressTime = 0;
+unsigned long lastConfirmPressTime = 0;
 volatile bool PreviousButtonPressed = false;
 volatile bool ConfirmButtonPressed = false;
 volatile bool NextButtonPressed = false;
@@ -52,20 +56,35 @@ void handleNextButtonInterrupt()
 
 void buttonDetect()
 {
-  // 按鈕偵測
+  unsigned long now = millis();
+
   if (PreviousButtonPressed)
   {
-    game.PrevCommand();
+    if (now - lastPrevPressTime >= BUTTON_COOLDOWN)
+    {
+      game.PrevCommand();
+      lastPrevPressTime = now;
+    }
     PreviousButtonPressed = false;
   }
+
   if (NextButtonPressed)
   {
-    game.NextCommand();
+    if (now - lastNextPressTime >= BUTTON_COOLDOWN)
+    {
+      game.NextCommand();
+      lastNextPressTime = now;
+    }
     NextButtonPressed = false;
   }
+
   if (ConfirmButtonPressed)
   {
-    game.ExecuteCommand();
+    if (now - lastConfirmPressTime >= BUTTON_COOLDOWN)
+    {
+      game.ExecuteCommand();
+      lastConfirmPressTime = now;
+    }
     ConfirmButtonPressed = false;
   }
 }
@@ -78,14 +97,14 @@ void setup()
   randomSeed(analogRead(0));
   Serial.println("Init Done");
 
-  SPI.begin();     // SPI1
-  SPI_2.begin();   // SPI2
+  SPI.begin();   // SPI1
+  SPI_2.begin(); // SPI2
 
   // 初始化 TFT 螢幕
   pinMode(TFT_BLK, OUTPUT);
   digitalWrite(TFT_BLK, HIGH); // 打開背光
-  tft.initR(INITR_BLACKTAB); // 初始化 ST7735，選擇黑底對應的設定
-  tft.setRotation(2);        // 設置旋轉方向，0~3 分別對應四種方向
+  tft.initR(INITR_BLACKTAB);   // 初始化 ST7735，選擇黑底對應的設定
+  tft.setRotation(2);          // 設置旋轉方向，0~3 分別對應四種方向
 
   pinMode(PREVIOUS_COMMAND_BUTTON, INPUT_PULLUP);
   pinMode(CONFIRM_COMMAND_BUTTON, INPUT_PULLUP);

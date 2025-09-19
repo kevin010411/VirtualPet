@@ -3,104 +3,126 @@
 #include <vector>
 #include "Renderer.cpp"
 
+template <typename T>
+static inline T clamp(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+struct PetConfig
+{
+    float max_age = 100;               // 歲
+    uint8_t max_hunger = 100;          // 0=不餓, 100=超餓
+    uint8_t max_mood = 100;            // 0=極差, 100=極好
+    unsigned int max_clean = 300;      // 0=極差, 300=極好
+    unsigned int max_env_clean = 1000; // 0=極差, 1000=極好
+    float age_per_tick = 0.2f;         // 每 tick 增齡
+    uint16_t min_stay_ticks = 10;      // 任一狀態最短停留（避免抖動）
+};
+
+enum class HealthStatus
+{
+    Healthy,
+    Hungry,
+    Depressed,
+    Dirty,
+    Poop,
+    Sick,
+};
+
+static HealthStatus decide_state(
+    uint8_t hunger, uint8_t mood, uint8_t env_value, uint8_t clean_value, const PetConfig &cfg)
+{
+    // 優先權：Sick > Hungry > Depressed > Poop >  Dirty > Healthy
+    if (hunger <= 30)
+        return HealthStatus::Hungry;
+    if (mood <= 30)
+        return HealthStatus::Depressed;
+    if (env_value <= 30)
+        return HealthStatus::Poop;
+    if (clean_value <= 30)
+        return HealthStatus::Dirty;
+    return HealthStatus::Healthy;
+}
+
 class Pet
 {
 public:
-    Pet(String name, Adafruit_ST7735 *ref_tft, float age = 0, String type = "Chicken")
-        : name(name), type(type), age(age), max_age(100), max_hungry(100),
-          hungry_value(50), mood(50), max_mood(100), bad_heathly_duration(0),
-          tft(ref_tft), status(Healthy) {}
+    Pet(Adafruit_ST7735 *ref_tft, float age = 0)
+        : age(age), hungry_value(50), mood(50),
+          env_value(1000), clean_value(300),
+          tft(ref_tft), status(HealthStatus::Healthy) {}
 
     void dayPassed()
     {
-        if (hungry_value <= max_hungry)
-            hungry_value += 1;
-        if (mood > 0)
-            mood -= 1;
-        if (age < max_age)
-            age += 0.2f;
-        if (status != Healthy)
-            bad_heathly_duration += 1;
+        hungry_value = clamp<int>(hungry_value + 1, 0, cfg.max_hunger);
+        mood = clamp<int>(mood - 1, 0, cfg.max_mood);
+        age = clamp<float>(age + cfg.age_per_tick, 0.0f, cfg.max_age);
+        clean_value = clamp<int>(clean_value - 1, 0, cfg.max_clean);
+        env_value = clamp<int>(env_value - 1, 0, cfg.max_env_clean);
 
-        checkHeathStatus();
+        status = decide_state(hungry_value, mood, env_value, clean_value, cfg);
     }
 
     void feedPet(int add_satiety)
     {
-        hungry_value += add_satiety;
-        if (hungry_value > max_hungry)
-            hungry_value = max_hungry;
+        hungry_value = clamp<int>(hungry_value + add_satiety, 0, cfg.max_hunger);
     }
 
     void addPressure(int pressure)
     {
-        mood += pressure;
-        if (mood > max_mood)
-            mood = max_mood;
-        if (mood < 0)
-            mood = 0;
+        mood = clamp<int>(mood + pressure, 0, cfg.max_mood);
+    }
+
+    void takeShower(int value)
+    {
+        clean_value = clamp<int>(clean_value + value, 0, cfg.max_clean);
+    }
+
+    void cleanEnv(int value)
+    {
+        env_value = clamp<int>(env_value + value, 0, cfg.max_env_clean);
     }
 
     bool getSick()
     {
-        if (status == Death)
-            return false;
-        status = Sick;
+        status = HealthStatus::Sick;
         return true;
     }
     bool medician()
     {
-        if (status != Sick)
+        if (status != HealthStatus::Sick)
             return false;
-        status = Healthy;
+        status = HealthStatus::Healthy;
         return true;
     }
 
+    String animationForState() const
+    {
+        switch (status)
+        {
+        case HealthStatus::Healthy:
+            return "idle"; // 平時
+        case HealthStatus::Hungry:
+            return "hungry"; // 肚子餓
+        case HealthStatus::Depressed:
+            return "depress"; // 心情差
+        case HealthStatus::Sick:
+            return "sick"; // 生病
+        case HealthStatus::Dirty:
+            return "dirty"; // 臭臭
+        case HealthStatus::Poop:
+            return "poop"; // 大便
+        }
+        return "idle";
+    }
+
 private:
-    const int death_limit = 200;
-    String name;
-    String type;
+    PetConfig cfg;
     float age;
-    int max_age;
-    int max_hungry;
     int hungry_value;
     int mood;
-    int max_mood;
-    int bad_heathly_duration;
+    int clean_value;
+    int env_value;
     Adafruit_ST7735 *tft;
-    enum HealthStatus
-    {
-        Healthy,
-        Hungry,
-        Depressed,
-        Sick,
-        Death,
-    };
-    String HealthStatusStr[5] = {
-        "Healthy",
-        "Hungry",
-        "Depressed",
-        "Sick",
-        "Death",
-    };
     HealthStatus status;
-    void checkHeathStatus()
-    {
-        if (bad_heathly_duration >= death_limit)
-            status = Death;
-        else if (status == Healthy)
-        {
-            if (mood <= 0)
-                status = Depressed;
-            else if (hungry_value >= max_hungry)
-                status = Hungry;
-        }
-        else if (mood > 0 && hungry_value < max_hungry)
-        {
-            status = Healthy;
-            bad_heathly_duration = 0;
-        }
-    }
 };
 
 struct Animation
@@ -113,8 +135,8 @@ struct Animation
 class Game
 {
 public:
-    Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD, String name = "Mumei")
-        : pet(Pet(name, ref_tft)), renderer(Renderer(ref_tft, ref_SD)),
+    Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
+        : pet(Pet(ref_tft)), renderer(Renderer(ref_tft, ref_SD)),
           tft(ref_tft), last_tick_time(0), environment_value(10), environment_cooldown(0),
           nowCommand(FEED_PET)
     {
@@ -125,27 +147,20 @@ public:
         renderer.initAnimations();
         lastSelected = static_cast<int>(nowCommand);
         draw_all_layout();
-        dirty_select = true;        
-        dirty_animation = true;     
+        dirty_select = true;
+        dirtyAnimation = true;
     }
 
     void loop_game()
     {
         unsigned long current_time = millis();
-        // 每秒更新一次
-        if (current_time - last_tick_time >= gameTick)
+        unsigned long time_comsumed = current_time - last_tick_time;
+        // 每一個game tick更新一天的狀態
+        if (time_comsumed >= gameTick)
         {
-            environment_cooldown -= current_time - last_tick_time;
-            displayDuration -= current_time - last_tick_time;
+            environment_cooldown -= time_comsumed;
             last_tick_time = current_time;
-            if (displayDuration <= 0)
-            {
-                if (animation_queue.back().name != "idle")
-                {
-                    animation_queue.pop_back();
-                }
-                displayDuration = animation_queue.back().duration;
-            }
+            control_pet_animation(time_comsumed);
             if (environment_cooldown <= 0)
             {
                 environment_value = environment_value - 5;
@@ -156,22 +171,46 @@ public:
             roll_sick();
             pet.dayPassed();
 
-            // 動畫節拍：到時間才重畫下一幀
-            bool frame_due = (current_time - lastFrameTime >= frameInterval);
-            if (frame_due) lastFrameTime = current_time;
+            baseAnimationName = pet.animationForState();
+        }
+        // 時間到或有dirty_animation或dirty select才重畫
+        render_game(current_time);
+    }
 
-            // === 最小重繪：只畫「髒」的部分 ===
-            if (dirty_animation || frame_due)
-            {
-                renderer.DisplayAnimation(animation_queue.back().name);
-                dirty_animation = false;
-            }
+    void control_pet_animation(unsigned long time_comsumed)
+    {
+        displayDuration -= time_comsumed;
+        if (displayDuration > 0)
+            return;
 
-            if (dirty_select)
-            {
-                draw_select_layout(); // 你原本就只畫 32x32 的選取格，保留這個最小重繪
-                dirty_select = false;
-            }
+        if (!animationQueue.empty())
+            animationQueue.pop_back();
+
+        if (!animationQueue.empty())
+            displayDuration = animationQueue.back().duration;
+    }
+
+    void render_game(unsigned long current_time)
+    {
+        bool frame_due = (current_time - lastFrameTime >= frameInterval);
+        if (frame_due)
+            lastFrameTime = current_time;
+
+        // === 最小重繪：只畫「髒」的部分 ===
+        if (dirtyAnimation || frame_due)
+        {
+            const String &toShow = (!animationQueue.empty())
+                                       ? animationQueue.back().name
+                                       : baseAnimationName;
+
+            renderer.DisplayAnimation(toShow);
+            dirtyAnimation = false;
+        }
+
+        if (dirty_select)
+        {
+            draw_select_layout(); // 你原本就只畫 32x32 的選取格，保留這個最小重繪
+            dirty_select = false;
         }
     }
 
@@ -218,28 +257,43 @@ private:
     Renderer renderer;
     Adafruit_ST7735 *tft;
     unsigned long last_tick_time;
-    std::vector<Animation> animation_queue = {Animation("idle", 1000000)};
+    std::vector<Animation> animationQueue = {};
+    String baseAnimationName;
     int displayDuration = 0;
     bool isPredictTime = false;
-    int lastSelected = 0; 
+    int lastSelected = 0;
     int environment_value;
     int environment_cooldown;
 
     // --- Dirty flags ---
-    bool dirty_select = true;      // 選取框 / 指令高亮
-    bool dirty_animation = true;   // 主動畫
+    bool dirty_select = true;   // 選取框 / 指令高亮
+    bool dirtyAnimation = true; // 主動畫
 
     // 動畫間隔
-    const unsigned long frameInterval = 100;  // 每幀 100ms，可自行調整
+    const unsigned long frameInterval = 100; // 每幀 100ms，可自行調整
     unsigned long lastFrameTime = 0;
 
     enum CommandTable
     {
-        FEED_PET,HAVE_FUN,UNKNOWN,MEDICINE,CLEAN,PREDICT,GIFT,READ,
+        FEED_PET,
+        HAVE_FUN,
+        CLEAN,
+        MEDICINE,
+        SHOWER,
+        PREDICT,
+        GIFT,
+        READ,
     };
 
     const String COMMANDS[8] = {
-        "FEED_PET","HAVE_FUN","UNKNOWN","MEDICINE","CLEAN","PREDICT","GIFT","READ",
+        "FEED_PET",
+        "HAVE_FUN",
+        "CLEAN",
+        "MEDICINE",
+        "SHOWER",
+        "PREDICT",
+        "GIFT",
+        "READ",
     };
     const int NUM_COMMANDS = sizeof(COMMANDS) / sizeof(COMMANDS[0]);
     CommandTable nowCommand = FEED_PET;
@@ -250,43 +304,40 @@ private:
         {
         case FEED_PET:
             pet.feedPet(10);
-            animation_queue.push_back(Animation("happy", gameTick * 3));
-            animation_queue.push_back(Animation("feed", gameTick * 7));
-            Serial.println(F("Fed pet! Satiety increased."));
+            animationQueue.push_back(Animation("happy", gameTick * 3));
+            animationQueue.push_back(Animation("feed", gameTick * 7));
             break;
         case HAVE_FUN:
             pet.addPressure(10);
-            Serial.println(F("Pet had fun! Mood increased."));
+            animationQueue.push_back(Animation("happy", gameTick * 3));
             break;
-        case UNKNOWN:
-            Serial.println(F("Pet Do Unknown"));
+        case CLEAN:
+            animationQueue.push_back(Animation("happy", gameTick * 3));
+            animationQueue.push_back(Animation("clean", gameTick * 5));
             break;
         case MEDICINE:
             pet.medician();
-            Serial.println(F("Pet Do MEDICINE"));
+            animationQueue.push_back(Animation("happy", gameTick * 3));
+            animationQueue.push_back(Animation("heal", gameTick * 5));
             break;
-        case CLEAN:
-            environment_value = 10;
-            animation_queue.push_back(Animation("happy", gameTick * 3));
-            animation_queue.push_back(Animation("clean", gameTick * 5));
-            Serial.println(F("Pet Do SHOWER"));
+        case SHOWER:
+            environment_value += 10;
+            animationQueue.push_back(Animation("happy", gameTick * 3));
+            animationQueue.push_back(Animation("shower", gameTick * 5));
             break;
         case PREDICT:
-            Serial.println(F("Pet Do PREDICT"));
             break;
         case GIFT:
-            Serial.println(F("Pet Do GIFT"));
             break;
         case READ:
-            Serial.println(F("Pet Do READ"));
             break;
         default:
             Serial.println(command);
             Serial.println(F("指令錯誤"));
             break;
         }
-        if (!animation_queue.empty())
-            displayDuration = animation_queue.back().duration;
+        if (!animationQueue.empty())
+            displayDuration = animationQueue.back().duration;
         else
             displayDuration = 0;
     }
@@ -299,9 +350,9 @@ private:
         char path_prev[24];
         sprintf(path_prev, "/layout/%d.bmp", prevIdx + 1);
         renderer.ShowSDCardImage(path_prev, (prevIdx % 4) * 32, y_prev);
-        
-        //改變現在選擇的內容
-        int curIdx  = static_cast<int>(nowCommand);
+
+        // 改變現在選擇的內容
+        int curIdx = static_cast<int>(nowCommand);
         int y_cur = (curIdx >= 4) ? 160 - 32 : 0;
 
         char path_sel[28];
