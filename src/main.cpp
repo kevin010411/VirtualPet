@@ -1,6 +1,5 @@
-#include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
-#include "Game.cpp"
+#include "Game.h"
 #include <SdFat.h>
 
 const int SD_CS = PB0; // ← 經 74VHC125 緩衝到 CARD_CS
@@ -41,7 +40,7 @@ void handlePreviousButtonInterrupt()
     return;
   PreviousButtonPressed = true;
 }
-void handleConfirmButtoInterrupt()
+void handleConfirmButtonInterrupt()
 {
   if (digitalRead(CONFIRM_COMMAND_BUTTON) == HIGH)
     return;
@@ -110,7 +109,7 @@ void setup()
   pinMode(CONFIRM_COMMAND_BUTTON, INPUT_PULLUP);
   pinMode(NEXT_COMMAND_BUTTON, INPUT_PULLUP);
 
-  attachInterrupt(digitalPinToInterrupt(CONFIRM_COMMAND_BUTTON), handleConfirmButtoInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(CONFIRM_COMMAND_BUTTON), handleConfirmButtonInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(NEXT_COMMAND_BUTTON), handleNextButtonInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(PREVIOUS_COMMAND_BUTTON), handlePreviousButtonInterrupt, FALLING);
 
