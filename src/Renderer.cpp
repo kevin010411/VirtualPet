@@ -20,7 +20,7 @@ String Renderer::fileNameAsString(File &activeFile)
     return fn;
 }
 
-void Renderer::GetAnimationList(String now_animation_list_name)
+void Renderer::InitAnimationList(String now_animation_list_name)
 {
     String animation_name = "/animation/";
     animation_name += now_animation_list_name;
@@ -109,6 +109,9 @@ void Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int bat
         return;
     }
 
+    bool flipX = true;
+    bool flipY = false;
+
     bmpFile.seek(pixelDataOffset);
 
     int rowSize = ((bmpWidth * 3 + 3) / 4) * 4;
@@ -128,18 +131,33 @@ void Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int bat
                 uint8_t b = rowBuffer[i * rowSize + j];
                 uint8_t g = rowBuffer[i * rowSize + j + 1];
                 uint8_t r = rowBuffer[i * rowSize + j + 2];
-                int flipped_x = bmpWidth - 1 - x;
-                lineBuffer[i * bmpWidth + flipped_x] = ((r & 0xF8) << 8) |
-                                                       ((g & 0xFC) << 3) |
-                                                       (b >> 3);
+                if (flipX)
+                {
+                    int flipped_x = bmpWidth - 1 - x;
+                    lineBuffer[i * bmpWidth + flipped_x] = ((r & 0xF8) << 8) |
+                                                           ((g & 0xFC) << 3) |
+                                                           (b >> 3);
+                }
+                else
+                    lineBuffer[i * bmpWidth + x] =
+                        ((r & 0xF8) << 8) |
+                        ((g & 0xFC) << 3) |
+                        (b >> 3);
             }
         }
 
         for (int i = 0; i < actualLines; i++)
         {
+            int srcRow = y + i;
+            int drawY;
             // 反轉上下順序
-            int flipped_y = ymin + (bmpHeight - 1 - (y + i));
-            tft->drawRGBBitmap(xmin, flipped_y, &lineBuffer[i * bmpWidth], bmpWidth, 1);
+            if (flipY)
+                drawY = ymin + (bmpHeight - 1 - srcRow);
+            else
+                drawY = ymin + srcRow;
+            tft->drawRGBBitmap(xmin, drawY,
+                               &lineBuffer[i * bmpWidth],
+                               bmpWidth, 1);
         }
     }
 
@@ -147,47 +165,53 @@ void Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int bat
     Serial.println("BMP render done (optimized).\n");
 }
 
-void Renderer::DisplayAnimation()
+bool Renderer::DisplayAnimation()
 {
     if (now_animation_list.size() <= animation_index)
     {
         animation_index = 0;
+        if (showOneTime)
+            return true;
     }
     String animation_name = "/animation/";
     animation_name += now_animation_name;
     animation_name += "/";
     animation_name += now_animation_list[animation_index++];
     ShowSDCardImage(animation_name.c_str(), 0, 32);
+    return false;
 }
 
-void Renderer::DisplayAnimation(String animationName)
+bool Renderer::DisplayAnimation(String animationName, bool showOnce, String animateFileName)
 {
-    int index = -1;
-    for (size_t i = 0; i < animation_list_name.size(); ++i)
+    if (animateFileName == "")
     {
-        if (animation_list_name[i] == animationName)
+        int index = -1;
+        for (size_t i = 0; i < animation_list_name.size(); ++i)
         {
-            index = i;
-            break;
+            if (animation_list_name[i] == animationName)
+            {
+                index = i;
+                break;
+            }
         }
+        if (index == -1)
+        {
+            Serial.print("找不到指定的animationName:");
+            Serial.println(animationName);
+            ShowAnimationList();
+            return false;
+        }
+        animateFileName = animation_list_name[index];
     }
 
-    if (index == -1)
+    if (animateFileName != now_animation_name)
     {
-        Serial.print("找不到指定的animationName:");
-        Serial.println(animationName);
-        ShowAnimationList();
+        now_animation_name = animateFileName;
+        InitAnimationList(now_animation_name);
+        animation_index = 0;
+        showOneTime = showOnce;
     }
-    else
-    {
-        if (animation_list_name[index] != now_animation_name)
-        {
-            now_animation_name = animation_list_name[index];
-            GetAnimationList(now_animation_name);
-            animation_index = 0;
-        }
-        DisplayAnimation();
-    }
+    return DisplayAnimation();
 }
 
 void Renderer::ShowAnimationList()
@@ -195,7 +219,7 @@ void Renderer::ShowAnimationList()
     tft->setCursor(0, 64);
     for (unsigned short pos = 0; pos < animation_list_name.size(); ++pos)
     {
-        tft->print(animation_list_name[pos]);
+        tft->print(animation_list_name[pos] + " ");
         Serial.println(animation_list_name[pos]);
     }
 }

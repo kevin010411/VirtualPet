@@ -66,6 +66,7 @@
         "system_error": "cpp",
         "tuple": "cpp",
         "numbers": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "ctime": "cpp"
     }
 }

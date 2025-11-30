@@ -17,9 +17,10 @@ private:
 
     unsigned short animation_index;
     int max_animation_index;
+    bool showOneTime;
 
     String fileNameAsString(File &file);
-    void GetAnimationList(String animation_name);
+    void InitAnimationList(String animation_name);
 
 public:
     Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD);
@@ -27,8 +28,8 @@ public:
     void initAnimations();
     // void ShowSDCardImage(String path, int xpos, int ypos, int opacity);
     void ShowSDCardImage(const char *img_path, int xmin = 0, int ymin = 0, int batch_lines = 4);
-    void DisplayAnimation();
-    void DisplayAnimation(String animationName);
+    bool DisplayAnimation();
+    bool DisplayAnimation(String animationName, bool showOnce, String animateName = "");
     void ShowAnimationList();
 };
 

@@ -1,108 +1,10 @@
 ﻿#include "Game.h"
 #include <Arduino.h>
 
-enum class HealthStatus
-{
-    Healthy,
-    Hungry,
-    Depressed,
-    Dirty,
-    Poop,
-    Sick,
-};
-
-HealthStatus decide_state(
-    uint8_t hunger, uint8_t mood, unsigned int env_value, unsigned int clean_value, bool hasSick, const PetConfig &cfg)
-{
-    // 優先權：Sick > Hungry > Depressed > Poop >  Dirty > Healthy
-    if (hasSick)
-        return HealthStatus::Sick;
-    if (hunger >= 70)
-        return HealthStatus::Hungry;
-    if (mood <= 30)
-        return HealthStatus::Depressed;
-    if (env_value <= 300)
-        return HealthStatus::Poop;
-    if (clean_value <= 100)
-        return HealthStatus::Dirty;
-    return HealthStatus::Healthy;
-}
-
-Pet::Pet(Adafruit_ST7735 *ref_tft, float age) : age(age), hungry_value(50), mood(50),
-                                                env_value(1000), clean_value(300), hasSick(false),
-                                                tft(ref_tft), status(HealthStatus::Healthy) {}
-
-void Pet::dayPassed()
-{
-    hungry_value = clamp<int>(hungry_value + 1, 0, cfg.max_hunger);
-    mood = clamp<int>(mood - 1, 0, cfg.max_mood);
-    age = clamp<float>(age + cfg.age_per_tick, 0.0f, cfg.max_age);
-    clean_value = clamp<int>(clean_value - 1, 0, cfg.max_clean);
-    env_value = clamp<int>(env_value - 1, 0, cfg.max_env_clean);
-
-    status = decide_state(hungry_value, mood, env_value, clean_value, hasSick, cfg);
-}
-
-void Pet::feedPet(int add_satiety)
-{
-    hungry_value = clamp<int>(hungry_value - add_satiety, 0, cfg.max_hunger);
-}
-
-void Pet::changeMood(int delta)
-{
-    mood = clamp<int>(mood + delta, 0, cfg.max_mood);
-}
-
-void Pet::takeShower(int value)
-{
-    clean_value = clamp<int>(clean_value + value, 0, cfg.max_clean);
-}
-
-void Pet::cleanEnv(unsigned int clear_value)
-{
-    env_value = clamp<int>(env_value + clear_value, 0, cfg.max_env_clean);
-}
-
-void Pet::getSick()
-{
-    hasSick = true;
-}
-
-bool Pet::checkHealth()
-{
-    if (!hasSick)
-        return false;
-    hasSick = false;
-    return true;
-}
-
-String Pet::CurrentAnimation() const
-{
-    switch (status)
-    {
-    case HealthStatus::Healthy:
-        return "idle"; // 平時
-    case HealthStatus::Hungry:
-        return "hungry"; // 肚子餓
-    case HealthStatus::Depressed:
-        return "depress"; // 心情差
-    case HealthStatus::Sick:
-        return "sick"; // 生病
-    case HealthStatus::Dirty:
-        return "dirty"; // 臭臭
-    case HealthStatus::Poop:
-        return "poop"; // 大便
-    }
-    return "idle";
-}
-
-Animation::Animation(String n, int d)
-    : name(n), duration(d) {}
-
 Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
     : pet(Pet(ref_tft)), renderer(Renderer(ref_tft, ref_SD)),
       tft(ref_tft), last_tick_time(0), environment_value(10), environment_cooldown(0),
-      nowCommand(FEED_PET)
+      nowCommand(FEED_PET), guessApple(&pet, &renderer, &animationQueue, &dirtyAnimation)
 {
 }
 
@@ -111,7 +13,7 @@ void Game::setup_game()
     renderer.initAnimations();
     lastSelected = static_cast<int>(nowCommand);
     draw_all_layout();
-    dirty_select = true;
+    dirtySelect = true;
     dirtyAnimation = true;
 }
 
@@ -124,7 +26,7 @@ void Game::loop_game()
     {
         environment_cooldown -= time_comsumed;
         last_tick_time = current_time;
-        control_pet_animation(time_comsumed);
+        ControlAnimation(time_comsumed);
         if (environment_cooldown <= 0)
         {
             environment_value = environment_value - 5;
@@ -132,50 +34,98 @@ void Game::loop_game()
                 environment_value = 0;
             environment_cooldown = random(3 * gameTick, 6 * gameTick);
         }
-        roll_sick();
-        pet.dayPassed();
+        if (animationQueue.empty())
+        {
+            roll_sick();
+            pet.dayPassed();
+        }
+        guessApple.update(time_comsumed);
 
-        baseAnimationName = pet.CurrentAnimation();
+        String cadidateAnimate = pet.CurrentAnimation();
+        if (baseAnimationName != cadidateAnimate)
+        {
+            baseAnimationName = cadidateAnimate;
+            dirtyAnimation = true;
+        }
     }
     // 時間到或有dirty_animation或dirty select才重畫
-    render_game(current_time);
+    RenderGame(current_time);
 }
 
-void Game::control_pet_animation(unsigned long time_comsumed)
+void Game::ControlAnimation(unsigned long time_comsumed)
 {
-    displayDuration -= time_comsumed;
-    if (displayDuration > 0)
+    if (animationQueue.empty())
         return;
 
-    if (!animationQueue.empty())
-        animationQueue.pop();
+    displayDuration -= time_comsumed;
+    if (displayDuration > 0 && !animateDone)
+        return;
 
+    animationQueue.pop();
     if (!animationQueue.empty())
-        displayDuration = animationQueue.back().duration;
+        displayDuration = animationQueue.front().duration;
+    else
+        displayDuration = 0;
+    dirtyAnimation = true;
 }
 
-void Game::render_game(unsigned long current_time)
+void Game::RenderGame(unsigned long current_time)
 {
     bool frame_due = (current_time - lastFrameTime >= frameInterval);
     if (frame_due)
         lastFrameTime = current_time;
 
     // === 最小重繪：只畫「髒」的部分 ===
-    if (dirtyAnimation || frame_due)
+    if (dirtyAnimation || ShowAnimate == "")
     {
-        const String &toShow = (!animationQueue.empty())
-                                   ? animationQueue.back().name
-                                   : baseAnimationName;
+        bool showOnce;
+        if (!animationQueue.empty())
+        {
+            ShowAnimate = animationQueue.front().name;
+            showOnce = animationQueue.front().showOnce;
+        }
+        else
+        {
+            ShowAnimate = baseAnimationName;
+            showOnce = false; // 平常 idle 不需要 showOneTime
+        }
 
-        renderer.DisplayAnimation(toShow);
+        renderer.DisplayAnimation(ShowAnimate, showOnce);
         dirtyAnimation = false;
     }
+    else if (frame_due)
+    {
+        animateDone |= renderer.DisplayAnimation();
+    }
 
-    if (dirty_select)
+    if (dirtySelect)
     {
         draw_select_layout(); // 你原本就只畫 32x32 的選取格，保留這個最小重繪
-        dirty_select = false;
+        dirtySelect = false;
     }
+}
+
+void Game::OnLeftKey()
+{
+    if (guessApple.isActive())
+        guessApple.onLeft();
+    else
+        NextCommand();
+}
+
+void Game::OnRightKey()
+{
+    if (guessApple.isActive())
+        guessApple.onRight();
+    else
+        PrevCommand();
+}
+
+void Game::OnConfirmKey()
+{
+    if (guessApple.isActive()) // 小遊戲中 confirm 可以忽略，或做「跳過」之類的功能
+        return;
+    ExecuteCommand();
 }
 
 String Game::NowCommand()
@@ -186,7 +136,7 @@ void Game::NextCommand()
 {
     lastSelected = static_cast<int>(nowCommand);
     nowCommand = static_cast<CommandTable>((nowCommand + 1) % NUM_COMMANDS);
-    dirty_select = true;
+    dirtySelect = true;
 }
 void Game::PrevCommand()
 {
@@ -195,24 +145,11 @@ void Game::PrevCommand()
         nowCommand = static_cast<CommandTable>(nowCommand - 1 + NUM_COMMANDS);
     else
         nowCommand = static_cast<CommandTable>(nowCommand - 1);
-    dirty_select = true;
+    dirtySelect = true;
 }
 void Game::ExecuteCommand()
 {
     parse_command(nowCommand);
-    dirty_select = true;
-}
-void Game::draw_all_layout()
-{
-    for (int i = 0; i < 8; ++i)
-    {
-        int y_start = 0;
-        if (i >= 4)
-            y_start = 160 - 32;
-        char path[20]; // 緩衝區大小視需求調整
-        sprintf(path, "/layout/%d.bmp", i + 1);
-        renderer.ShowSDCardImage(path, i % 4 * 32, y_start);
-    }
 }
 
 void Game::parse_command(CommandTable command)
@@ -221,29 +158,35 @@ void Game::parse_command(CommandTable command)
     {
     case FEED_PET:
         pet.feedPet(40);
-        animationQueue.push(Animation("feed", gameTick * 7));
-        animationQueue.push(Animation("happy", gameTick * 3));
+        animationQueue.push(Animation("feed", gameTick * 3.5));
+        animationQueue.push(Animation("happy", gameTick * 1.5));
+        dirtyAnimation = true;
         break;
     case HAVE_FUN:
-        pet.changeMood(30);
-        animationQueue.push(Animation("happy", gameTick * 3));
+        guessApple.start();
         break;
     case CLEAN:
         pet.cleanEnv(300);
-        animationQueue.push(Animation("clean", gameTick * 5));
-        animationQueue.push(Animation("happy", gameTick * 3));
+        animationQueue.push(Animation("clean", gameTick * 3.5));
+        animationQueue.push(Animation("happy", gameTick * 1.5));
+        dirtyAnimation = true;
         break;
     case MEDICINE:
-        pet.checkHealth();
-        animationQueue.push(Animation("heal", gameTick * 5));
-        animationQueue.push(Animation("happy", gameTick * 3));
+        pet.takeMedicine();
+        animationQueue.push(Animation("heal", gameTick * 3.5));
+        animationQueue.push(Animation("happy", gameTick * 1.5));
+        dirtyAnimation = true;
         break;
     case SHOWER:
         pet.takeShower(250);
-        animationQueue.push(Animation("shower", gameTick * 5));
-        animationQueue.push(Animation("happy", gameTick * 3));
+        animationQueue.push(Animation("shower", gameTick * 3.5));
+        animationQueue.push(Animation("happy", gameTick * 1.5));
+        dirtyAnimation = true;
         break;
     case PREDICT:
+        animationQueue.push(Animation("pred_anim", gameTick * 20, true));
+        roll_fortune();
+        dirtyAnimation = true;
         break;
     case GIFT:
         break;
@@ -255,9 +198,25 @@ void Game::parse_command(CommandTable command)
         break;
     }
     if (!animationQueue.empty())
-        displayDuration = animationQueue.back().duration;
+    {
+        displayDuration = animationQueue.front().duration;
+        animateDone = false;
+    }
     else
         displayDuration = 0;
+}
+
+void Game::draw_all_layout()
+{
+    for (int i = 0; i < 8; ++i)
+    {
+        int y_start = 0;
+        if (i >= 4)
+            y_start = 160 - 32;
+        char path[20]; // 緩衝區大小視需求調整
+        sprintf(path, "/layout/%d.bmp", i + 1);
+        renderer.ShowSDCardImage(path, i % 4 * 32, y_start);
+    }
 }
 
 void Game::draw_select_layout()
@@ -289,4 +248,11 @@ void Game::roll_sick()
     {
         pet.getSick();
     }
+}
+
+void Game::roll_fortune()
+{
+    String fortune_idx = String(random(1, MAX_FORTUNE + 1));
+    animationQueue.push(Animation("predict_" + fortune_idx, gameTick * 5));
+    dirtyAnimation = true;
 }

@@ -61,7 +61,7 @@ void buttonDetect()
   {
     if (now - lastPrevPressTime >= BUTTON_COOLDOWN)
     {
-      game.PrevCommand();
+      game.OnRightKey();
       lastPrevPressTime = now;
     }
     PreviousButtonPressed = false;
@@ -71,7 +71,7 @@ void buttonDetect()
   {
     if (now - lastNextPressTime >= BUTTON_COOLDOWN)
     {
-      game.NextCommand();
+      game.OnLeftKey();
       lastNextPressTime = now;
     }
     NextButtonPressed = false;
@@ -81,7 +81,7 @@ void buttonDetect()
   {
     if (now - lastConfirmPressTime >= BUTTON_COOLDOWN)
     {
-      game.ExecuteCommand();
+      game.OnConfirmKey();
       lastConfirmPressTime = now;
     }
     ConfirmButtonPressed = false;
@@ -104,6 +104,7 @@ void setup()
   digitalWrite(TFT_BLK, HIGH); // 打開背光
   tft.initR(INITR_BLACKTAB);   // 初始化 ST7735，選擇黑底對應的設定
   tft.setRotation(2);          // 設置旋轉方向，0~3 分別對應四種方向
+  tft.setTextColor(ST77XX_RED);
 
   pinMode(PREVIOUS_COMMAND_BUTTON, INPUT_PULLUP);
   pinMode(CONFIRM_COMMAND_BUTTON, INPUT_PULLUP);
