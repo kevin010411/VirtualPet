@@ -18,8 +18,8 @@ struct PetConfig
     uint16_t min_stay_ticks = 10;      // 任一狀態最短停留（避免抖動）
 };
 
-
-struct PersisState{
+struct PersisState
+{
     uint32_t magic;
     uint16_t version;
 
@@ -40,7 +40,7 @@ HealthStatus decide_state(uint8_t hunger, uint8_t mood, unsigned int env_value,
 class Pet
 {
 public:
-    Pet(Adafruit_ST7735 *ref_tft,SdFat *ref_SD, float age = 0);
+    Pet(Adafruit_ST7735 *ref_tft, SdFat *ref_SD, float age = 0);
     void dayPassed();
     void feedPet(int add_satiety);
     void changeMood(int delta);
@@ -54,12 +54,13 @@ public:
 
     HealthStatus getStatus() const;
     String CurrentAnimation() const;
+    String getAge();
 
 private:
     PetConfig cfg;
-    SdFat* SD;
-    Adafruit_ST7735 *tft;
     PersisState st;
+    SdFat *SD;
+    Adafruit_ST7735 *tft;
 
     static constexpr uint32_t MAGIC = 0x50455431;
     static constexpr uint16_t VER = 1;

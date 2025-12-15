@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
-    : pet(Pet(ref_tft,ref_SD)), renderer(Renderer(ref_tft, ref_SD)),
+    : pet(Pet(ref_tft, ref_SD)), renderer(Renderer(ref_tft, ref_SD)),
       tft(ref_tft), last_tick_time(0), environment_value(10), environment_cooldown(0),
       nowCommand(FEED_PET), guessApple(&pet, &renderer, &animationQueue, &dirtyAnimation)
 {
@@ -16,8 +16,8 @@ void Game::setup_game()
     draw_all_layout();
     dirtySelect = true;
     dirtyAnimation = true;
-    if(!(pet.loadStateFromSD()))
-        pet.setDefaultState();
+    // if (!(pet.loadStateFromSD()))
+    pet.setDefaultState();
 }
 
 void Game::loop_game()
@@ -50,8 +50,8 @@ void Game::loop_game()
             baseAnimationName = cadidateAnimate;
             dirtyAnimation = true;
         }
-        savePatient +=1;
-        if(savePatient>savePeriod)
+        savePatient += 1;
+        if (savePatient > savePeriod)
             pet.saveStateToSD();
     }
     // 時間到或有dirty_animation或dirty select才重畫
@@ -73,7 +73,7 @@ void Game::ControlAnimation(unsigned long time_comsumed)
     else
         displayDuration = 0;
     dirtyAnimation = true;
-    animateDone=false;
+    animateDone = false;
 }
 
 void Game::RenderGame(unsigned long current_time)
@@ -98,10 +98,10 @@ void Game::RenderGame(unsigned long current_time)
             showOnce = false; // 平常 idle 不需要 showOneTime
         }
 
-        if(ShowAnimate.indexOf("pred_a")!=-1)
-            frameInterval=150;
+        if (ShowAnimate.indexOf("pred_a") != -1)
+            frameInterval = 150;
         else
-            frameInterval=600;
+            frameInterval = 600;
 
         renderer.DisplayAnimation(ShowAnimate, showOnce);
         dirtyAnimation = false;
@@ -203,21 +203,21 @@ void Game::parse_command(CommandTable command)
         roll_fortune();
         break;
     case GIFT:
+        pet.changeMood(50);
+        animationQueue.push(Animation("gift", gameTick * 2.5));
+        animationQueue.push(Animation("gift_happy", gameTick * 1.5));
+        animationQueue.push(Animation("happy", gameTick * 1.2));
+        dirtyAnimation = true;
         break;
-    case READ:
+    case STATUS:
+        animationQueue.push(Animation("1y" + pet.getAge() + "kg", gameTick * 4));
+        dirtyAnimation = true;
         break;
     default:
         Serial.println(command);
         Serial.println(F("指令錯誤"));
         break;
     }
-    // if (!animationQueue.empty() && displayDuration<=0)
-    // {
-    //     displayDuration = animationQueue.front().duration;
-    //     animateDone = false;
-    // }
-    // else
-    //     displayDuration = 0;
 }
 
 void Game::draw_all_layout()
@@ -267,6 +267,6 @@ void Game::roll_sick()
 void Game::roll_fortune()
 {
     String fortune_idx = String(random(1, MAX_FORTUNE + 1));
-    animationQueue.push(Animation("predict_" + fortune_idx, gameTick * 3000,true));
+    animationQueue.push(Animation("predict_" + fortune_idx, gameTick * 2.4));
     dirtyAnimation = true;
 }

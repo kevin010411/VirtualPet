@@ -27,14 +27,13 @@ HealthStatus decide_state(
     return HealthStatus::Healthy;
 }
 
-Pet::Pet(Adafruit_ST7735 *ref_tft,SdFat *ref_SD, float age) :
-                                                tft(ref_tft),SD(ref_SD) {}
+Pet::Pet(Adafruit_ST7735 *ref_tft, SdFat *ref_SD, float age) : tft(ref_tft), SD(ref_SD) {}
 
 void Pet::dayPassed()
 {
-    if(HealthStatus(st.status)!=HealthStatus::Healthy)
+    if (HealthStatus(st.status) != HealthStatus::Healthy)
         return;
-        
+
     st.hungry_value = clamp<int>(st.hungry_value + 1, 0, cfg.max_hunger);
     st.mood = clamp<int>(st.mood - 1, 0, cfg.max_mood);
     st.age = clamp<float>(st.age + cfg.age_per_tick, 0.0f, cfg.max_age);
@@ -48,35 +47,30 @@ void Pet::feedPet(int add_satiety)
 {
     st.hungry_value = clamp<int>(st.hungry_value - add_satiety, 0, cfg.max_hunger);
     st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
-
 }
 
 void Pet::changeMood(int delta)
 {
     st.mood = clamp<int>(st.mood + delta, 0, cfg.max_mood);
     st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
-
 }
 
 void Pet::takeShower(int value)
 {
     st.clean_value = clamp<int>(st.clean_value + value, 0, cfg.max_clean);
     st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
-
 }
 
 void Pet::cleanEnv(unsigned int clear_value)
 {
     st.env_value = clamp<int>(st.env_value + clear_value, 0, cfg.max_env_clean);
     st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
-
 }
 
 void Pet::getSick()
 {
     st.hasSick = true;
     st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
-
 }
 
 bool Pet::takeMedicine()
@@ -111,40 +105,42 @@ String Pet::CurrentAnimation() const
 
 bool Pet::saveStateToSD()
 {
-    File f = SD->open("/state.tmp",FILE_WRITE);
-    if(!f) return false;
+    File f = SD->open("/state.tmp", FILE_WRITE);
+    if (!f)
+        return false;
 
     st.magic = MAGIC; // "PET1"
     st.version = VER;
 
     f.seek(0);
-    size_t n = f.write((uint8_t*)&st,sizeof(st));
+    size_t n = f.write((uint8_t *)&st, sizeof(st));
     f.flush();
     f.close();
 
-    if(SD->exists("/state.bin"))
+    if (SD->exists("/state.bin"))
         SD->remove("/state.bin");
-    if(!SD->rename("/state.tmp","/state.bin")) 
+    if (!SD->rename("/state.tmp", "/state.bin"))
         return false;
 
-    return n==sizeof(st);
+    return n == sizeof(st);
 }
 
 bool Pet::loadStateFromSD()
 {
-    File f = SD->open("/state.bin",FILE_READ);
-    if(!f) return false;
+    File f = SD->open("/state.bin", FILE_READ);
+    if (!f)
+        return false;
 
-    if(f.size()!=sizeof(PersisState))
+    if (f.size() != sizeof(PersisState))
     {
         f.close();
         return false;
     }
 
-    f.read((uint8_t*)&st,sizeof(st));
+    f.read((uint8_t *)&st, sizeof(st));
     f.close();
 
-    if(st.magic!=MAGIC || st.version != VER)
+    if (st.magic != MAGIC || st.version != VER)
         return false;
 
     return true;
@@ -163,4 +159,33 @@ void Pet::setDefaultState()
     st.mood = 70;
     st.clean_value = 200;
     st.env_value = 800;
+}
+
+String Pet::getAge()
+{
+
+    double normalized = st.age / cfg.max_age;
+
+    // 可投射的目標值
+    std::vector<double> targets = {0.1, 0.5, 1.0};
+
+    double best = targets[0];
+    double minDiff = std::abs(normalized - best);
+
+    for (double t : targets)
+    {
+        double diff = std::abs(normalized - t);
+        if (diff < minDiff)
+        {
+            minDiff = diff;
+            best = t;
+        }
+    }
+
+    // 轉換成String
+    if (best == 0.1)
+        return "0.1";
+    if (best == 0.5)
+        return "0.5";
+    return "1";
 }

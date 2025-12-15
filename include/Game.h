@@ -50,7 +50,7 @@ private:
         SHOWER,
         PREDICT,
         GIFT,
-        READ,
+        STATUS,
     };
 
     const String COMMANDS[8] = {
@@ -61,7 +61,7 @@ private:
         "SHOWER",
         "PREDICT",
         "GIFT",
-        "READ",
+        "STATUS",
     };
 
     const int NUM_COMMANDS = sizeof(COMMANDS) / sizeof(COMMANDS[0]);
