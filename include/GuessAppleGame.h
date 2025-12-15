@@ -1,3 +1,4 @@
+
 #ifndef GUESSAPPLEGAME_H
 #define GUESSAPPLEGAME_H
 
@@ -13,7 +14,8 @@ enum class State
     WaitingInput,
     ShowingResult,
     Win,
-    Lose
+    Lose,
+    Cancel
 };
 enum class Side
 {
@@ -31,6 +33,7 @@ public:
     void update(unsigned long dt); // 每次 gameTick 呼叫
     void onLeft();                 // 玩家按左
     void onRight();                // 玩家按右
+    void onMid();                  // 玩家按中
     bool isActive() const;         // 現在有沒有在玩
     bool isFinished() const;       // 玩完了嗎
     bool isWin() const;            // 有沒有贏

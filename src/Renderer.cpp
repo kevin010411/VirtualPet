@@ -44,14 +44,14 @@ void Renderer::initAnimations()
 {
     tft->fillRect(0, 64, 128, 128, tft->color565(0, 0, 0));
     tft->setCursor(0, 64);
-    tft->println("SD Init Success");
-    Serial.println("SD Init Success");
+    // tft->println("SD Init Success");
+    // Serial.println("SD Init Success");
 
     File root = SD->open("/animation");
     if (!root || !root.isDirectory())
     {
         tft->print("Failed to open root directory");
-        Serial.println("Failed to open root directory");
+        // Serial.println("Failed to open root directory");
         return;
     }
 
@@ -73,7 +73,7 @@ void Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int bat
     if (!bmpFile)
     {
         tft->println("Failed to open BMP file");
-        Serial.println("Failed to open BMP file");
+        // Serial.println("Failed to open BMP file");
         return;
     }
 
@@ -162,7 +162,7 @@ void Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int bat
     }
 
     bmpFile.close();
-    Serial.println("BMP render done (optimized).\n");
+    // Serial.println("BMP render done (optimized).\n");
 }
 
 bool Renderer::DisplayAnimation()

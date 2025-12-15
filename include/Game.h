@@ -21,7 +21,8 @@ public:
     void OnConfirmKey();
 
 private:
-    const unsigned long gameTick = 1000;
+    const unsigned long gameTick = 1200;
+    const short savePeriod = 1;
     Pet pet;
     Renderer renderer;
     Adafruit_ST7735 *tft;
@@ -31,6 +32,7 @@ private:
     long displayDuration = 0;
     bool isPredictTime = false;
     int lastSelected = 0;
+    short savePatient = 0;
     int environment_value;
     int environment_cooldown;
     GuessAppleGame guessApple;
@@ -66,7 +68,7 @@ private:
     CommandTable nowCommand = FEED_PET;
 
     // 動畫間隔
-    const unsigned long frameInterval = 100; // 每幀 100ms，可自行調整
+    unsigned long frameInterval = 500; // 每幀 100ms，可自行調整
     unsigned long lastFrameTime = 0;
     String ShowAnimate = "";
 

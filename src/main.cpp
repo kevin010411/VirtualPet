@@ -90,6 +90,7 @@ void buttonDetect()
 
 void setup()
 {
+  delay(2000);
   // 初始化序列埠
   Serial.begin(115200);
 
@@ -101,8 +102,8 @@ void setup()
 
   // 初始化 TFT 螢幕
   pinMode(TFT_BLK, OUTPUT);
-  digitalWrite(TFT_BLK, HIGH); // 打開背光
   tft.initR(INITR_BLACKTAB);   // 初始化 ST7735，選擇黑底對應的設定
+  digitalWrite(TFT_BLK, LOW); // 打開背光
   tft.setRotation(2);          // 設置旋轉方向，0~3 分別對應四種方向
   tft.setTextColor(ST77XX_RED);
 
@@ -113,7 +114,6 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(CONFIRM_COMMAND_BUTTON), handleConfirmButtonInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(NEXT_COMMAND_BUTTON), handleNextButtonInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(PREVIOUS_COMMAND_BUTTON), handlePreviousButtonInterrupt, FALLING);
-
   if (!SD.begin(SD_CS, SD_SCK_MHZ(SD_SPI_MHZ)))
   {
     tft.fillScreen(ST77XX_BLACK);
@@ -123,9 +123,10 @@ void setup()
   }
 
   game.setup_game();
-  tft.print("Init Done");
+  // tft.print("Init Done");
   Serial.println("Init Done");
-  delay(500);
+  delay(1000);
+  digitalWrite(TFT_BLK, HIGH); // 打開背光
 }
 
 void loop()

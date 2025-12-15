@@ -27,57 +27,71 @@ HealthStatus decide_state(
     return HealthStatus::Healthy;
 }
 
-Pet::Pet(Adafruit_ST7735 *ref_tft, float age) : age(age), hungry_value(50), mood(50),
-                                                env_value(1000), clean_value(300), hasSick(false),
-                                                tft(ref_tft), status(HealthStatus::Healthy) {}
+Pet::Pet(Adafruit_ST7735 *ref_tft,SdFat *ref_SD, float age) :
+                                                tft(ref_tft),SD(ref_SD) {}
 
 void Pet::dayPassed()
 {
-    hungry_value = clamp<int>(hungry_value + 1, 0, cfg.max_hunger);
-    mood = clamp<int>(mood - 1, 0, cfg.max_mood);
-    age = clamp<float>(age + cfg.age_per_tick, 0.0f, cfg.max_age);
-    clean_value = clamp<int>(clean_value - 1, 0, cfg.max_clean);
-    env_value = clamp<int>(env_value - 1, 0, cfg.max_env_clean);
+    if(HealthStatus(st.status)!=HealthStatus::Healthy)
+        return;
+        
+    st.hungry_value = clamp<int>(st.hungry_value + 1, 0, cfg.max_hunger);
+    st.mood = clamp<int>(st.mood - 1, 0, cfg.max_mood);
+    st.age = clamp<float>(st.age + cfg.age_per_tick, 0.0f, cfg.max_age);
+    st.clean_value = clamp<int>(st.clean_value - 1, 0, cfg.max_clean);
+    st.env_value = clamp<int>(st.env_value - 1, 0, cfg.max_env_clean);
 
-    status = decide_state(hungry_value, mood, env_value, clean_value, hasSick, cfg);
+    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
 }
 
 void Pet::feedPet(int add_satiety)
 {
-    hungry_value = clamp<int>(hungry_value - add_satiety, 0, cfg.max_hunger);
+    st.hungry_value = clamp<int>(st.hungry_value - add_satiety, 0, cfg.max_hunger);
+    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+
 }
 
 void Pet::changeMood(int delta)
 {
-    mood = clamp<int>(mood + delta, 0, cfg.max_mood);
+    st.mood = clamp<int>(st.mood + delta, 0, cfg.max_mood);
+    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+
 }
 
 void Pet::takeShower(int value)
 {
-    clean_value = clamp<int>(clean_value + value, 0, cfg.max_clean);
+    st.clean_value = clamp<int>(st.clean_value + value, 0, cfg.max_clean);
+    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+
 }
 
 void Pet::cleanEnv(unsigned int clear_value)
 {
-    env_value = clamp<int>(env_value + clear_value, 0, cfg.max_env_clean);
+    st.env_value = clamp<int>(st.env_value + clear_value, 0, cfg.max_env_clean);
+    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+
 }
 
 void Pet::getSick()
 {
-    hasSick = true;
+    st.hasSick = true;
+    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+
 }
 
 bool Pet::takeMedicine()
 {
-    if (!hasSick)
+    if (!st.hasSick)
         return false;
-    hasSick = false;
+    st.hasSick = false;
+    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+
     return true;
 }
 
 String Pet::CurrentAnimation() const
 {
-    switch (status)
+    switch (HealthStatus(st.status))
     {
     case HealthStatus::Healthy:
         return "idle"; // 平時
@@ -93,4 +107,60 @@ String Pet::CurrentAnimation() const
         return "poop"; // 大便
     }
     return "idle";
+}
+
+bool Pet::saveStateToSD()
+{
+    File f = SD->open("/state.tmp",FILE_WRITE);
+    if(!f) return false;
+
+    st.magic = MAGIC; // "PET1"
+    st.version = VER;
+
+    f.seek(0);
+    size_t n = f.write((uint8_t*)&st,sizeof(st));
+    f.flush();
+    f.close();
+
+    if(SD->exists("/state.bin"))
+        SD->remove("/state.bin");
+    if(!SD->rename("/state.tmp","/state.bin")) 
+        return false;
+
+    return n==sizeof(st);
+}
+
+bool Pet::loadStateFromSD()
+{
+    File f = SD->open("/state.bin",FILE_READ);
+    if(!f) return false;
+
+    if(f.size()!=sizeof(PersisState))
+    {
+        f.close();
+        return false;
+    }
+
+    f.read((uint8_t*)&st,sizeof(st));
+    f.close();
+
+    if(st.magic!=MAGIC || st.version != VER)
+        return false;
+
+    return true;
+}
+
+void Pet::setDefaultState()
+{
+    st.magic = MAGIC;
+    st.version = VER;
+
+    st.hasSick = false;
+
+    st.age = 0.0f;
+
+    st.hungry_value = 0;
+    st.mood = 70;
+    st.clean_value = 200;
+    st.env_value = 800;
 }

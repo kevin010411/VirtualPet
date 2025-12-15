@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
-    : pet(Pet(ref_tft)), renderer(Renderer(ref_tft, ref_SD)),
+    : pet(Pet(ref_tft,ref_SD)), renderer(Renderer(ref_tft, ref_SD)),
       tft(ref_tft), last_tick_time(0), environment_value(10), environment_cooldown(0),
       nowCommand(FEED_PET), guessApple(&pet, &renderer, &animationQueue, &dirtyAnimation)
 {
@@ -12,9 +12,12 @@ void Game::setup_game()
 {
     renderer.initAnimations();
     lastSelected = static_cast<int>(nowCommand);
+    renderer.DisplayAnimation("idle", true);
     draw_all_layout();
     dirtySelect = true;
     dirtyAnimation = true;
+    if(!(pet.loadStateFromSD()))
+        pet.setDefaultState();
 }
 
 void Game::loop_game()
@@ -47,6 +50,9 @@ void Game::loop_game()
             baseAnimationName = cadidateAnimate;
             dirtyAnimation = true;
         }
+        savePatient +=1;
+        if(savePatient>savePeriod)
+            pet.saveStateToSD();
     }
     // 時間到或有dirty_animation或dirty select才重畫
     RenderGame(current_time);
@@ -67,6 +73,7 @@ void Game::ControlAnimation(unsigned long time_comsumed)
     else
         displayDuration = 0;
     dirtyAnimation = true;
+    animateDone=false;
 }
 
 void Game::RenderGame(unsigned long current_time)
@@ -83,12 +90,18 @@ void Game::RenderGame(unsigned long current_time)
         {
             ShowAnimate = animationQueue.front().name;
             showOnce = animationQueue.front().showOnce;
+            displayDuration = animationQueue.front().duration;
         }
         else
         {
             ShowAnimate = baseAnimationName;
             showOnce = false; // 平常 idle 不需要 showOneTime
         }
+
+        if(ShowAnimate.indexOf("pred_a")!=-1)
+            frameInterval=150;
+        else
+            frameInterval=600;
 
         renderer.DisplayAnimation(ShowAnimate, showOnce);
         dirtyAnimation = false;
@@ -124,8 +137,9 @@ void Game::OnRightKey()
 void Game::OnConfirmKey()
 {
     if (guessApple.isActive()) // 小遊戲中 confirm 可以忽略，或做「跳過」之類的功能
-        return;
-    ExecuteCommand();
+        guessApple.onMid();
+    else
+        ExecuteCommand();
 }
 
 String Game::NowCommand()
@@ -158,35 +172,35 @@ void Game::parse_command(CommandTable command)
     {
     case FEED_PET:
         pet.feedPet(40);
-        animationQueue.push(Animation("feed", gameTick * 3.5));
-        animationQueue.push(Animation("happy", gameTick * 1.5));
+        animationQueue.push(Animation("feed", gameTick * 1.2));
+        animationQueue.push(Animation("happy", gameTick * 1.2));
         dirtyAnimation = true;
         break;
     case HAVE_FUN:
         guessApple.start();
         break;
     case CLEAN:
-        pet.cleanEnv(300);
-        animationQueue.push(Animation("clean", gameTick * 3.5));
-        animationQueue.push(Animation("happy", gameTick * 1.5));
+        pet.cleanEnv(500);
+        animationQueue.push(Animation("clean", gameTick * 1.2));
+        animationQueue.push(Animation("happy", gameTick * 1.2));
         dirtyAnimation = true;
         break;
     case MEDICINE:
         pet.takeMedicine();
-        animationQueue.push(Animation("heal", gameTick * 3.5));
-        animationQueue.push(Animation("happy", gameTick * 1.5));
+        animationQueue.push(Animation("heal", gameTick * 1.2));
+        animationQueue.push(Animation("happy", gameTick * 1.2));
         dirtyAnimation = true;
         break;
     case SHOWER:
         pet.takeShower(250);
-        animationQueue.push(Animation("shower", gameTick * 3.5));
-        animationQueue.push(Animation("happy", gameTick * 1.5));
+        animationQueue.push(Animation("shower", gameTick * 1.2));
+        animationQueue.push(Animation("happy", gameTick * 1.2));
         dirtyAnimation = true;
         break;
     case PREDICT:
         animationQueue.push(Animation("pred_anim", gameTick * 20, true));
-        roll_fortune();
         dirtyAnimation = true;
+        roll_fortune();
         break;
     case GIFT:
         break;
@@ -197,13 +211,13 @@ void Game::parse_command(CommandTable command)
         Serial.println(F("指令錯誤"));
         break;
     }
-    if (!animationQueue.empty())
-    {
-        displayDuration = animationQueue.front().duration;
-        animateDone = false;
-    }
-    else
-        displayDuration = 0;
+    // if (!animationQueue.empty() && displayDuration<=0)
+    // {
+    //     displayDuration = animationQueue.front().duration;
+    //     animateDone = false;
+    // }
+    // else
+    //     displayDuration = 0;
 }
 
 void Game::draw_all_layout()
@@ -253,6 +267,6 @@ void Game::roll_sick()
 void Game::roll_fortune()
 {
     String fortune_idx = String(random(1, MAX_FORTUNE + 1));
-    animationQueue.push(Animation("predict_" + fortune_idx, gameTick * 5));
+    animationQueue.push(Animation("predict_" + fortune_idx, gameTick * 3000,true));
     dirtyAnimation = true;
 }

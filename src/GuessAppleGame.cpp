@@ -25,7 +25,7 @@ void GuessAppleGame::update(unsigned long dt)
     switch (state)
     {
     case State::WaitingApple:
-        if (now - lastMoveTime > 700)
+        if (now - lastMoveTime > 300)
         {
             appleSide = (random(2) == 0) ? Side::Left : Side::Right;
             state = State::WaitingInput;
@@ -45,23 +45,23 @@ void GuessAppleGame::update(unsigned long dt)
             {
                 state = State::Win;
                 animationQueue->push(Animation("guess_win", 2000, true));
-                *dirtyAnimate = true;
             }
             else if (wrongCount >= 3)
             {
                 state = State::Lose;
                 animationQueue->push(Animation("guess_loss", 2000, true));
-                *dirtyAnimate = true;
             }
             else
             {
                 state = State::WaitingApple;
                 animationQueue->push(Animation("apple", 2000, true));
-                *dirtyAnimate = true;
             }
+            *dirtyAnimate = true;
+
         }
         break;
 
+    case State::Cancel:
     case State::Win:
     case State::Lose:
         if (animationQueue->empty())
@@ -95,6 +95,13 @@ void GuessAppleGame::onRight()
         handleGuess(Side::Right);
 }
 
+void GuessAppleGame::onMid()
+{
+
+    state = State::Inactive;
+    
+}
+
 void GuessAppleGame::reset()
 {
     correctCount = 0;
@@ -110,14 +117,14 @@ void GuessAppleGame::handleGuess(Side player)
     *dirtyAnimate = true;
     if (correct)
     {
-        pet->changeMood(20);
+        pet->changeMood(40);
         correctCount++;
         animationQueue->push(Animation("guess_right", 2000, true));
         *dirtyAnimate = true;
     }
     else
     {
-        pet->changeMood(-10);
+        pet->changeMood(-5);
         wrongCount++;
         animationQueue->push(Animation("guess_wrong", 2000, true));
         *dirtyAnimate = true;

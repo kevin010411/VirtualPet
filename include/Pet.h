@@ -1,6 +1,7 @@
 #ifndef PET_H
 #define PET_H
 
+#include <SdFat.h>
 #include <Adafruit_ST7735.h>
 
 template <typename T>
@@ -17,6 +18,21 @@ struct PetConfig
     uint16_t min_stay_ticks = 10;      // 任一狀態最短停留（避免抖動）
 };
 
+
+struct PersisState{
+    uint32_t magic;
+    uint16_t version;
+
+    bool hasSick;
+    uint8_t status;
+    float age;
+
+    int32_t hungry_value;
+    int32_t mood;
+    int32_t clean_value;
+    int32_t env_value;
+};
+
 enum class HealthStatus;
 HealthStatus decide_state(uint8_t hunger, uint8_t mood, unsigned int env_value,
                           unsigned int clean_value, bool hasSick, const PetConfig &cfg);
@@ -24,7 +40,7 @@ HealthStatus decide_state(uint8_t hunger, uint8_t mood, unsigned int env_value,
 class Pet
 {
 public:
-    Pet(Adafruit_ST7735 *ref_tft, float age = 0);
+    Pet(Adafruit_ST7735 *ref_tft,SdFat *ref_SD, float age = 0);
     void dayPassed();
     void feedPet(int add_satiety);
     void changeMood(int delta);
@@ -32,19 +48,21 @@ public:
     void cleanEnv(unsigned int clear_value);
     void getSick();
     bool takeMedicine();
+    bool saveStateToSD();
+    bool loadStateFromSD();
+    void setDefaultState();
+
     HealthStatus getStatus() const;
     String CurrentAnimation() const;
 
 private:
     PetConfig cfg;
-    bool hasSick;
-    float age;
-    int hungry_value;
-    int mood;
-    int clean_value;
-    int env_value;
+    SdFat* SD;
     Adafruit_ST7735 *tft;
-    HealthStatus status;
+    PersisState st;
+
+    static constexpr uint32_t MAGIC = 0x50455431;
+    static constexpr uint16_t VER = 1;
 };
 
 #endif
