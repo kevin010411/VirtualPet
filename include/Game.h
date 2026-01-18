@@ -19,6 +19,7 @@ public:
     void OnLeftKey();
     void OnRightKey();
     void OnConfirmKey();
+    void resetPet();
 
 private:
     const unsigned long gameTick = 1200;

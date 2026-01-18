@@ -16,8 +16,8 @@ void Game::setup_game()
     draw_all_layout();
     dirtySelect = true;
     dirtyAnimation = true;
-    // if (!(pet.loadStateFromSD()))
-    pet.setDefaultState();
+    if (!(pet.loadStateFromSD()))
+        pet.setDefaultState();
 }
 
 void Game::loop_game()
@@ -116,6 +116,12 @@ void Game::RenderGame(unsigned long current_time)
         draw_select_layout(); // 你原本就只畫 32x32 的選取格，保留這個最小重繪
         dirtySelect = false;
     }
+}
+
+void Game::resetPet()
+{
+    pet.setDefaultState();
+    dirtyAnimation = true;
 }
 
 void Game::OnLeftKey()

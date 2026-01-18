@@ -69,6 +69,8 @@ void Pet::cleanEnv(unsigned int clear_value)
 
 void Pet::getSick()
 {
+    if (HealthStatus(st.status) != HealthStatus::Healthy)
+        return;
     st.hasSick = true;
     st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
 }
@@ -188,4 +190,9 @@ String Pet::getAge()
     if (best == 0.5)
         return "0.5";
     return "1";
+}
+
+HealthStatus Pet::getStatus() const
+{
+    return HealthStatus(st.status);
 }

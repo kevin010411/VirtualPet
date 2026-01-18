@@ -88,9 +88,96 @@ void buttonDetect()
   }
 }
 
+typedef void (*LongPressCallback)();
+void handleLongPress(
+    int pin,
+    unsigned long thresholdMs,
+    LongPressCallback callback)
+{
+  static unsigned long pressStartTime[20] = {0}; // 依 pin index 存時間
+  static bool fired[20] = {false};
+
+  int idx = pin % 20; // 簡單對應（STM32 pin number 足夠用）
+
+  if (digitalRead(pin) == LOW)
+  {
+    if (pressStartTime[idx] == 0)
+      pressStartTime[idx] = millis();
+
+    if (!fired[idx] && (millis() - pressStartTime[idx] > thresholdMs))
+    {
+      callback();
+      fired[idx] = true;
+    }
+  }
+  else
+  {
+    pressStartTime[idx] = 0;
+    fired[idx] = false;
+  }
+}
+void handleComboLongPress(
+    int pinA,
+    int pinB,
+    unsigned long thresholdMs,
+    LongPressCallback callback)
+{
+  static unsigned long comboStart = 0;
+  static bool fired = false;
+
+  bool bothPressed = (digitalRead(pinA) == LOW) && (digitalRead(pinB) == LOW);
+
+  if (bothPressed)
+  {
+    PreviousButtonPressed = false;
+    NextButtonPressed = false;
+    if (comboStart == 0)
+      comboStart = millis();
+
+    if (!fired && (millis() - comboStart > thresholdMs))
+    {
+      callback();
+      fired = true;
+    }
+  }
+  else
+  {
+    comboStart = 0;
+    fired = false;
+  }
+}
+
+static void TFT_Reset200ms()
+{
+  pinMode(TFT_RST, OUTPUT);
+  digitalWrite(TFT_RST, HIGH);
+  delay(10);
+  digitalWrite(TFT_RST, LOW);
+  delay(200);
+  digitalWrite(TFT_RST, HIGH);
+  delay(200);
+}
+
+void onConfirmLongPress()
+{
+  digitalWrite(TFT_BLK, LOW);
+  TFT_Reset200ms();
+  tft.initR(INITR_BLACKTAB);
+  tft.setRotation(2);
+  digitalWrite(TFT_BLK, HIGH);
+  game.setup_game();
+}
+
+static void onLRComboLongPress()
+{
+  // digitalWrite(TFT_BLK, LOW);
+  game.resetPet();
+  // digitalWrite(TFT_BLK, HIGH);
+}
+
 void setup()
 {
-  delay(2000);
+  delay(1000);
   // 初始化序列埠
   Serial.begin(115200);
 
@@ -102,9 +189,10 @@ void setup()
 
   // 初始化 TFT 螢幕
   pinMode(TFT_BLK, OUTPUT);
-  tft.initR(INITR_BLACKTAB);   // 初始化 ST7735，選擇黑底對應的設定
+  TFT_Reset200ms();           // 200ms reset
+  tft.initR(INITR_BLACKTAB);  // 初始化 ST7735，選擇黑底對應的設定
   digitalWrite(TFT_BLK, LOW); // 打開背光
-  tft.setRotation(2);          // 設置旋轉方向，0~3 分別對應四種方向
+  tft.setRotation(2);         // 設置旋轉方向，0~3 分別對應四種方向
   tft.setTextColor(ST77XX_RED);
 
   pinMode(PREVIOUS_COMMAND_BUTTON, INPUT_PULLUP);
@@ -131,6 +219,13 @@ void setup()
 
 void loop()
 {
+  // 每圈都把 TFT_RST(PB14) 維持在推挽輸出 HIGH
+  pinMode(TFT_RST, OUTPUT);
+  digitalWrite(TFT_RST, HIGH);
+
   buttonDetect();
   game.loop_game();
+
+  handleLongPress(CONFIRM_COMMAND_BUTTON, 2000, onConfirmLongPress);
+  handleComboLongPress(PREVIOUS_COMMAND_BUTTON, NEXT_COMMAND_BUTTON, 2000, onLRComboLongPress);
 }

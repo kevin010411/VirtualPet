@@ -1,70 +1,63 @@
 #include "Renderer.h"
 #include <Arduino.h>
 
-Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD) : tft(ref_tft), SD(ref_SD), animation_index(0), max_animation_index(0)
+Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD) : tft(ref_tft), SD(ref_SD), animation_index(0)
 {
 }
 
-String Renderer::fileNameAsString(File &activeFile)
+void Renderer::scanAnimationTree(const char *dirPath)
 {
-    char filename[20];
-    String fn = "";
+    File dir = SD->open(dirPath);
+    if (!dir || !dir.isDirectory())
+        return;
 
-    activeFile.getName(filename, 20);
-
-    for (unsigned short i = 0; i < strlen(filename); i++)
-    {
-        fn = fn + filename[i];
-    }
-
-    return fn;
-}
-
-void Renderer::InitAnimationList(String now_animation_list_name)
-{
-    String animation_name = "/animation/";
-    animation_name += now_animation_list_name;
-    File root = SD->open(animation_name);
-    now_animation_list.clear();
+    uint16_t fileCount = 0;
 
     while (true)
     {
-        File frameFile = root.openNextFile();
-        if (!frameFile)
+        File entry = dir.openNextFile();
+        if (!entry)
             break;
-        String fileName = fileNameAsString(frameFile);
-        now_animation_list.push_back(fileName);
 
-        frameFile.close();
+        char name[32];
+        entry.getName(name, sizeof(name));
+
+        if (entry.isDirectory())
+        {
+            char child[128];
+            snprintf(child, sizeof(child), "%s/%s", dirPath, name);
+            entry.close();
+            scanAnimationTree(child);
+        }
+        else
+        {
+            fileCount++;
+            entry.close();
+        }
     }
-    std::sort(now_animation_list.begin(), now_animation_list.end());
+    dir.close();
+
+    if (fileCount > 0)
+    {
+        const char *prefix = "/animation/";
+        String base = String(dirPath);
+
+        String key = base.startsWith(prefix)
+                         ? base.substring(strlen(prefix)) // e.g. "idle/breathe"
+                         : base;
+
+        AnimInfo info;
+        info.baseDir = base;
+        info.maxFrame = fileCount;
+
+        animCache[key] = info;
+    }
 }
 
 void Renderer::initAnimations()
 {
-    tft->fillRect(0, 64, 128, 128, tft->color565(0, 0, 0));
-    tft->setCursor(0, 64);
-    // tft->println("SD Init Success");
-    // Serial.println("SD Init Success");
-
-    File root = SD->open("/animation");
-    if (!root || !root.isDirectory())
-    {
-        tft->print("Failed to open root directory");
-        // Serial.println("Failed to open root directory");
-        return;
-    }
-
-    while (true)
-    {
-        File folder = root.openNextFile();
-        if (!folder || !folder.isDirectory())
-            break;
-        String fileName = fileNameAsString(folder);
-        animation_list_name.push_back(fileName);
-        folder.close();
-    }
-    root.close();
+    animCache.clear();
+    scanAnimationTree("/animation");
 }
 
 void Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int batch_lines)
@@ -167,59 +160,40 @@ void Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int bat
 
 bool Renderer::DisplayAnimation()
 {
-    if (now_animation_list.size() <= animation_index)
+    if (animation_index > now_anim_info->maxFrame)
     {
-        animation_index = 0;
+        animation_index = 1;
         if (showOneTime)
             return true;
     }
-    String animation_name = "/animation/";
-    animation_name += now_animation_name;
-    animation_name += "/";
-    animation_name += now_animation_list[animation_index++];
-    ShowSDCardImage(animation_name.c_str(), 0, 32);
+
+    char path[128];
+    snprintf(path, sizeof(path), "/animation/%s/%u.bmp",
+             now_anim_key.c_str(),
+             (unsigned)animation_index);
+
+    ShowSDCardImage(path, 0, 32);
+    animation_index++;
     return false;
 }
 
-bool Renderer::DisplayAnimation(String animationName, bool showOnce, String animateFileName)
+bool Renderer::DisplayAnimation(const String &key, bool showOnce)
 {
-    if (animateFileName == "")
+    auto it = animCache.find(key);
+    if (it == animCache.end())
     {
-        int index = -1;
-        for (size_t i = 0; i < animation_list_name.size(); ++i)
-        {
-            if (animation_list_name[i] == animationName)
-            {
-                index = i;
-                break;
-            }
-        }
-        if (index == -1)
-        {
-            Serial.print("找不到指定的animationName:");
-            Serial.println(animationName);
-            ShowAnimationList();
-            return false;
-        }
-        animateFileName = animation_list_name[index];
+        tft->print("animCache 找不到: ");
+        tft->println(key);
+        return true;
     }
 
-    if (animateFileName != now_animation_name)
+    if (key != now_anim_key)
     {
-        now_animation_name = animateFileName;
-        InitAnimationList(now_animation_name);
-        animation_index = 0;
+        now_anim_key = key;
+        now_anim_info = &(it->second);
+        animation_index = 1; //
         showOneTime = showOnce;
     }
-    return DisplayAnimation();
-}
 
-void Renderer::ShowAnimationList()
-{
-    tft->setCursor(0, 64);
-    for (unsigned short pos = 0; pos < animation_list_name.size(); ++pos)
-    {
-        tft->print(animation_list_name[pos] + " ");
-        Serial.println(animation_list_name[pos]);
-    }
+    return DisplayAnimation();
 }
