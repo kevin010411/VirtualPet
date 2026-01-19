@@ -26,7 +26,7 @@ SdFat SD;
 
 Game game(&tft, &SD);
 
-const unsigned long BUTTON_COOLDOWN = 500; // 0.5 秒
+const unsigned long BUTTON_COOLDOWN = 250; // 0.25 秒
 unsigned long lastPrevPressTime = 0;
 unsigned long lastNextPressTime = 0;
 unsigned long lastConfirmPressTime = 0;
@@ -170,9 +170,10 @@ void onConfirmLongPress()
 
 static void onLRComboLongPress()
 {
-  // digitalWrite(TFT_BLK, LOW);
+  digitalWrite(TFT_BLK, LOW);
   game.resetPet();
-  // digitalWrite(TFT_BLK, HIGH);
+  delay(1000);
+  digitalWrite(TFT_BLK, HIGH);
 }
 
 void setup()
@@ -223,9 +224,9 @@ void loop()
   pinMode(TFT_RST, OUTPUT);
   digitalWrite(TFT_RST, HIGH);
 
-  buttonDetect();
-  game.loop_game();
-
   handleLongPress(CONFIRM_COMMAND_BUTTON, 2000, onConfirmLongPress);
   handleComboLongPress(PREVIOUS_COMMAND_BUTTON, NEXT_COMMAND_BUTTON, 2000, onLRComboLongPress);
+
+  buttonDetect();
+  game.loop_game();
 }

@@ -161,6 +161,8 @@ void Pet::setDefaultState()
     st.mood = 70;
     st.clean_value = 200;
     st.env_value = 800;
+    st.status = u_int8_t(HealthStatus::Healthy);
+    saveStateToSD();
 }
 
 String Pet::getAge()
