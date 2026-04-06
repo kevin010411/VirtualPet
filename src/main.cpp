@@ -16,6 +16,7 @@ const int CONFIRM_COMMAND_BUTTON = PA11;
 
 // 建議頻率
 const uint32_t SD_SPI_MHZ = 16;
+const uint8_t TFT_INIT_TAB = INITR_GREENTAB;
 
 // 建立 TFT 顯示物件
 // Adafruit_ST7735 tft(TFT_CS, TFT_DC, PB15 /*MOSI*/, PB13 /*SCLK*/, TFT_RST);
@@ -26,13 +27,16 @@ SdFat SD;
 
 Game game(&tft, &SD);
 
-const unsigned long BUTTON_COOLDOWN = 250; // 0.25 秒
+const unsigned long BUTTON_COOLDOWN = 50;                    // 0.05 秒
+const unsigned long SLEEP_TIMEOUT_MS = 10UL * 60UL * 1000UL; // 5分鐘會自動休眠
 unsigned long lastPrevPressTime = 0;
 unsigned long lastNextPressTime = 0;
 unsigned long lastConfirmPressTime = 0;
+unsigned long lastInteractionMs = 0;
 volatile bool PreviousButtonPressed = false;
 volatile bool ConfirmButtonPressed = false;
 volatile bool NextButtonPressed = false;
+bool isSleeping = false;
 
 void handlePreviousButtonInterrupt()
 {
@@ -53,9 +57,48 @@ void handleNextButtonInterrupt()
   NextButtonPressed = true;
 }
 
+bool hasPendingButtonPress()
+{
+  return PreviousButtonPressed || ConfirmButtonPressed || NextButtonPressed;
+}
+
+void clearButtonFlags()
+{
+  PreviousButtonPressed = false;
+  ConfirmButtonPressed = false;
+  NextButtonPressed = false;
+}
+
+void noteInteraction(unsigned long now = millis())
+{
+  lastInteractionMs = now;
+}
+
+void enterSleep()
+{
+  isSleeping = true;
+  digitalWrite(TFT_BLK, LOW);
+}
+
+void wakeFromSleep(unsigned long now)
+{
+  clearButtonFlags();
+  digitalWrite(TFT_BLK, HIGH);
+  game.requestFullRedraw();
+  noteInteraction(now);
+  isSleeping = false;
+}
+
 void buttonDetect()
 {
   unsigned long now = millis();
+
+  if (isSleeping)
+  {
+    if (hasPendingButtonPress())
+      wakeFromSleep(now);
+    return;
+  }
 
   if (PreviousButtonPressed)
   {
@@ -63,6 +106,7 @@ void buttonDetect()
     {
       game.OnRightKey();
       lastPrevPressTime = now;
+      noteInteraction(now);
     }
     PreviousButtonPressed = false;
   }
@@ -73,6 +117,7 @@ void buttonDetect()
     {
       game.OnLeftKey();
       lastNextPressTime = now;
+      noteInteraction(now);
     }
     NextButtonPressed = false;
   }
@@ -83,6 +128,7 @@ void buttonDetect()
     {
       game.OnConfirmKey();
       lastConfirmPressTime = now;
+      noteInteraction(now);
     }
     ConfirmButtonPressed = false;
   }
@@ -160,9 +206,10 @@ static void TFT_Reset200ms()
 
 void onConfirmLongPress()
 {
+  noteInteraction();
   digitalWrite(TFT_BLK, LOW);
   TFT_Reset200ms();
-  tft.initR(INITR_BLACKTAB);
+  tft.initR(TFT_INIT_TAB);
   tft.setRotation(2);
   digitalWrite(TFT_BLK, HIGH);
   game.setup_game();
@@ -170,6 +217,7 @@ void onConfirmLongPress()
 
 static void onLRComboLongPress()
 {
+  noteInteraction();
   digitalWrite(TFT_BLK, LOW);
   game.resetPet();
   delay(1000);
@@ -191,7 +239,7 @@ void setup()
   // 初始化 TFT 螢幕
   pinMode(TFT_BLK, OUTPUT);
   TFT_Reset200ms();           // 200ms reset
-  tft.initR(INITR_BLACKTAB);  // 初始化 ST7735，選擇黑底對應的設定
+  tft.initR(TFT_INIT_TAB);    // 初始化 ST7735，先測試不同的 tab 設定
   digitalWrite(TFT_BLK, LOW); // 打開背光
   tft.setRotation(2);         // 設置旋轉方向，0~3 分別對應四種方向
   tft.setTextColor(ST77XX_RED);
@@ -216,6 +264,7 @@ void setup()
   Serial.println("Init Done");
   delay(1000);
   digitalWrite(TFT_BLK, HIGH); // 打開背光
+  noteInteraction();
 }
 
 void loop()
@@ -224,9 +273,19 @@ void loop()
   pinMode(TFT_RST, OUTPUT);
   digitalWrite(TFT_RST, HIGH);
 
+  buttonDetect();
+  if (isSleeping)
+    return;
+
   handleLongPress(CONFIRM_COMMAND_BUTTON, 2000, onConfirmLongPress);
   handleComboLongPress(PREVIOUS_COMMAND_BUTTON, NEXT_COMMAND_BUTTON, 2000, onLRComboLongPress);
 
-  buttonDetect();
+  const unsigned long now = millis();
+  if (now - lastInteractionMs >= SLEEP_TIMEOUT_MS)
+  {
+    enterSleep();
+    return;
+  }
+
   game.loop_game();
 }

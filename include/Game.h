@@ -1,19 +1,26 @@
 #ifndef GAME_H
 #define GAME_H
 
-#include "Renderer.h"
+#include <Arduino.h>
+#include <deque>
+#include <SdFat.h>
 #include "Animation.h"
 #include "GuessAppleGame.h"
-#include "Pet.h"
-#include <vector>
-#include <queue>
 
-class Game
+class Adafruit_ST7735;
+class Pet;
+class PetStorage;
+class Renderer;
+
+class Game : public GuessAppleGameHost
 {
 public:
     Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD);
+    ~Game();
+
     void setup_game();
     void loop_game();
+    void requestFullRedraw();
 
     String NowCommand();
     void OnLeftKey();
@@ -21,70 +28,74 @@ public:
     void OnConfirmKey();
     void resetPet();
 
+    void queueAnimation(const Animation &animation) override;
+    void clearAnimationsByOwner(AnimationOwner owner) override;
+    void markAnimationDirty() override;
+    void changePetMood(int delta) override;
+
 private:
-    const unsigned long gameTick = 1200;
-    const short savePeriod = 1;
-    Pet pet;
-    Renderer renderer;
-    Adafruit_ST7735 *tft;
-    unsigned long last_tick_time;
-    std::queue<Animation> animationQueue = {};
-    String baseAnimationName;
-    long displayDuration = 0;
-    bool isPredictTime = false;
-    int lastSelected = 0;
-    short savePatient = 0;
-    int environment_value;
-    int environment_cooldown;
-    GuessAppleGame guessApple;
-    // --- Dirty flags ---
-    bool dirtySelect = true;    // 選取框 / 指令高亮
-    bool dirtyAnimation = true; // 主動畫
-    bool animateDone = true;
+    static constexpr unsigned long gameTick = 1200;
+    static constexpr unsigned long frameIntervalSlow = 600;
+    static constexpr unsigned long frameIntervalFast = 150;
+    static constexpr uint8_t savePeriodTicks = 2;
+    static constexpr unsigned int environmentDecayAmount = 5;
+    static constexpr int maxFortune = 11;
 
-    enum CommandTable
+    enum class Command
     {
-        FEED_PET,
-        HAVE_FUN,
-        CLEAN,
-        MEDICINE,
-        SHOWER,
-        PREDICT,
-        GIFT,
-        STATUS,
+        FeedPet,
+        HaveFun,
+        Clean,
+        Medicine,
+        Shower,
+        Predict,
+        Gift,
+        Status,
+        Count
     };
 
-    const String COMMANDS[8] = {
-        "FEED_PET",
-        "HAVE_FUN",
-        "CLEAN",
-        "MEDICINE",
-        "SHOWER",
-        "PREDICT",
-        "GIFT",
-        "STATUS",
-    };
+    Pet *pet;
+    PetStorage *petStorage;
+    Renderer *renderer;
+    GuessAppleGame *guessApple;
+    Adafruit_ST7735 *tft;
+    SdFat *sd;
 
-    const int NUM_COMMANDS = sizeof(COMMANDS) / sizeof(COMMANDS[0]);
-    CommandTable nowCommand = FEED_PET;
-
-    // 動畫間隔
-    unsigned long frameInterval = 500; // 每幀 100ms，可自行調整
+    unsigned long last_tick_time = 0;
+    std::deque<Animation> animationQueue = {};
+    Animation activeAnimation = {};
+    bool hasActiveAnimation = false;
+    AnimationId baseAnimationId = AnimationId::Idle;
+    long displayDuration = 0;
+    int lastSelected = 0;
+    uint8_t saveCounter = 0;
+    long environmentCooldown = 0;
+    bool dirtySelect = true;
+    bool dirtyAnimation = true;
+    bool animateDone = true;
+    unsigned long frameInterval = frameIntervalSlow;
     unsigned long lastFrameTime = 0;
-    String ShowAnimate = "";
+    AnimationId showAnimationId = AnimationId::None;
+    Command nowCommand = Command::FeedPet;
+
+    static const char *commandLabel(Command command);
+    static int commandCount();
+    static AnimationId fortuneToAnimationId(int fortuneIndex);
 
     void NextCommand();
     void PrevCommand();
     void ExecuteCommand();
-    void ControlAnimation(unsigned long dt);
+    void ControlAnimation(unsigned long elapsed);
     void RenderGame(unsigned long now);
     void draw_all_layout();
     void draw_select_layout();
     void roll_sick();
-    void parse_command(CommandTable command);
-
-    const int MAX_FORTUNE = 11;
     void roll_fortune();
+    void parse_command(Command command);
+    void refreshBaseAnimation();
+    void maybeSavePet();
+    void maybeDecayEnvironment(unsigned long elapsed);
+    void tryStartNextAnimation();
 };
 
 #endif // GAME_H

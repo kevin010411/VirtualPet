@@ -1,13 +1,10 @@
-
 #ifndef GUESSAPPLEGAME_H
 #define GUESSAPPLEGAME_H
 
-#include "Renderer.h"
+#include <Arduino.h>
 #include "Animation.h"
-#include "Pet.h"
-#include <queue>
 
-enum class State
+enum class GuessAppleState
 {
     Inactive,
     WaitingApple,
@@ -17,38 +14,49 @@ enum class State
     Lose,
     Cancel
 };
-enum class Side
+
+enum class GuessAppleSide
 {
     Left,
     Right
 };
 
+class GuessAppleGameHost
+{
+public:
+    virtual ~GuessAppleGameHost() = default;
+    virtual void queueAnimation(const Animation &animation) = 0;
+    virtual void clearAnimationsByOwner(AnimationOwner owner) = 0;
+    virtual void markAnimationDirty() = 0;
+    virtual void changePetMood(int delta) = 0;
+};
+
 class GuessAppleGame
 {
 public:
-    GuessAppleGame(Pet *pet, Renderer *renderer, std::queue<Animation> *animQueue, bool *calloutAnimate);
+    explicit GuessAppleGame(GuessAppleGameHost &host);
 
-    void start(); // 開始玩這個遊戲
+    void start();
     void reset();
-    void update(unsigned long dt); // 每次 gameTick 呼叫
-    void onLeft();                 // 玩家按左
-    void onRight();                // 玩家按右
-    void onMid();                  // 玩家按中
-    bool isActive() const;         // 現在有沒有在玩
-    bool isFinished() const;       // 玩完了嗎
-    bool isWin() const;            // 有沒有贏
+    void update();
+    void onLeft();
+    void onRight();
+    void onMid();
+    bool isActive() const;
+    bool isFinished() const;
+    bool isWin() const;
 
 private:
-    State state;
+    void queuePromptAnimation();
+    void handleGuess(GuessAppleSide player);
+
+    GuessAppleGameHost &host;
+    GuessAppleState state;
     int correctCount;
     int wrongCount;
-    Side appleSide;
-    Renderer *renderer;
-    Pet *pet;
-    bool *dirtyAnimate;
-    std::queue<Animation> *animationQueue; // 看你要不要把 queue 傳進來用，或改成 callback
+    GuessAppleSide appleSide;
+    AnimationId promptAnimationId;
     unsigned long lastMoveTime = 0;
-    void handleGuess(Side player);
 };
 
 #endif

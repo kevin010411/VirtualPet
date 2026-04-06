@@ -1,37 +1,48 @@
 #include "Pet.h"
 
-enum class HealthStatus
-{
-    Healthy,
-    Hungry,
-    Depressed,
-    Dirty,
-    Poop,
-    Sick,
-};
-
 HealthStatus decide_state(
     uint8_t hunger, uint8_t mood, unsigned int env_value, unsigned int clean_value, bool hasSick, const PetConfig &cfg)
 {
-    // 優先權：Sick > Hungry > Depressed > Poop >  Dirty > Healthy
     if (hasSick)
         return HealthStatus::Sick;
-    if (hunger >= 70)
+    if (hunger >= cfg.hungry_threshold)
         return HealthStatus::Hungry;
-    if (mood <= 30)
+    if (mood <= cfg.depressed_threshold)
         return HealthStatus::Depressed;
-    if (env_value <= 300)
+    if (env_value <= cfg.poop_threshold)
         return HealthStatus::Poop;
-    if (clean_value <= 100)
+    if (clean_value <= cfg.dirty_threshold)
         return HealthStatus::Dirty;
     return HealthStatus::Healthy;
 }
 
-Pet::Pet(Adafruit_ST7735 *ref_tft, SdFat *ref_SD, float age) : tft(ref_tft), SD(ref_SD) {}
+Pet::Pet(float age)
+{
+    setDefaultState();
+    st.age = clamp<float>(age, 0.0f, cfg.max_age);
+    refreshStatus();
+}
+
+void Pet::setConfig(const PetConfig &newConfig)
+{
+    cfg = newConfig;
+    refreshStatus();
+}
+
+void Pet::refreshStatus()
+{
+    st.status = static_cast<uint8_t>(decide_state(
+        st.hungry_value,
+        st.mood,
+        st.env_value,
+        st.clean_value,
+        st.hasSick,
+        cfg));
+}
 
 void Pet::dayPassed()
 {
-    if (HealthStatus(st.status) != HealthStatus::Healthy)
+    if (getStatus() != HealthStatus::Healthy)
         return;
 
     st.hungry_value = clamp<int>(st.hungry_value + 1, 0, cfg.max_hunger);
@@ -39,162 +50,132 @@ void Pet::dayPassed()
     st.age = clamp<float>(st.age + cfg.age_per_tick, 0.0f, cfg.max_age);
     st.clean_value = clamp<int>(st.clean_value - 1, 0, cfg.max_clean);
     st.env_value = clamp<int>(st.env_value - 1, 0, cfg.max_env_clean);
-
-    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+    refreshStatus();
 }
 
 void Pet::feedPet(int add_satiety)
 {
     st.hungry_value = clamp<int>(st.hungry_value - add_satiety, 0, cfg.max_hunger);
-    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+    refreshStatus();
 }
 
 void Pet::changeMood(int delta)
 {
     st.mood = clamp<int>(st.mood + delta, 0, cfg.max_mood);
-    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+    refreshStatus();
 }
 
 void Pet::takeShower(int value)
 {
     st.clean_value = clamp<int>(st.clean_value + value, 0, cfg.max_clean);
-    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+    refreshStatus();
 }
 
 void Pet::cleanEnv(unsigned int clear_value)
 {
     st.env_value = clamp<int>(st.env_value + clear_value, 0, cfg.max_env_clean);
-    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+    refreshStatus();
+}
+
+void Pet::decayEnvironment(unsigned int decay_value)
+{
+    st.env_value = clamp<int>(st.env_value - static_cast<int>(decay_value), 0, cfg.max_env_clean);
+    refreshStatus();
 }
 
 void Pet::getSick()
 {
-    if (HealthStatus(st.status) != HealthStatus::Healthy)
+    if (getStatus() != HealthStatus::Healthy)
         return;
+
     st.hasSick = true;
-    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
+    refreshStatus();
 }
 
 bool Pet::takeMedicine()
 {
     if (!st.hasSick)
         return false;
-    st.hasSick = false;
-    st.status = (uint8_t)decide_state(st.hungry_value, st.mood, st.env_value, st.clean_value, st.hasSick, cfg);
 
+    st.hasSick = false;
+    refreshStatus();
     return true;
 }
 
-String Pet::CurrentAnimation() const
+AnimationId Pet::CurrentAnimation() const
 {
-    switch (HealthStatus(st.status))
+    switch (getStatus())
     {
     case HealthStatus::Healthy:
-        return "idle"; // 平時
+        return AnimationId::Idle;
     case HealthStatus::Hungry:
-        return "hungry"; // 肚子餓
+        return AnimationId::Hungry;
     case HealthStatus::Depressed:
-        return "depress"; // 心情差
+        return AnimationId::Depress;
     case HealthStatus::Sick:
-        return "sick"; // 生病
+        return AnimationId::Sick;
     case HealthStatus::Dirty:
-        return "dirty"; // 臭臭
+        return AnimationId::Dirty;
     case HealthStatus::Poop:
-        return "poop"; // 大便
-    }
-    return "idle";
-}
-
-bool Pet::saveStateToSD()
-{
-    File f = SD->open("/state.tmp", FILE_WRITE);
-    if (!f)
-        return false;
-
-    st.magic = MAGIC; // "PET1"
-    st.version = VER;
-
-    f.seek(0);
-    size_t n = f.write((uint8_t *)&st, sizeof(st));
-    f.flush();
-    f.close();
-
-    if (SD->exists("/state.bin"))
-        SD->remove("/state.bin");
-    if (!SD->rename("/state.tmp", "/state.bin"))
-        return false;
-
-    return n == sizeof(st);
-}
-
-bool Pet::loadStateFromSD()
-{
-    File f = SD->open("/state.bin", FILE_READ);
-    if (!f)
-        return false;
-
-    if (f.size() != sizeof(PersisState))
-    {
-        f.close();
-        return false;
+        return AnimationId::Poop;
     }
 
-    f.read((uint8_t *)&st, sizeof(st));
-    f.close();
+    return AnimationId::Idle;
+}
 
-    if (st.magic != MAGIC || st.version != VER)
-        return false;
-
-    return true;
+AnimationId Pet::CurrentAgeAnimation() const
+{
+    const double normalized = st.age / cfg.max_age;
+    if (normalized < 0.3)
+        return AnimationId::StatusAge01;
+    if (normalized < 0.75)
+        return AnimationId::StatusAge05;
+    return AnimationId::StatusAge1;
 }
 
 void Pet::setDefaultState()
 {
     st.magic = MAGIC;
     st.version = VER;
-
     st.hasSick = false;
-
+    st.status = static_cast<uint8_t>(HealthStatus::Healthy);
     st.age = 0.0f;
-
     st.hungry_value = 0;
     st.mood = 70;
     st.clean_value = 200;
     st.env_value = 800;
-    st.status = u_int8_t(HealthStatus::Healthy);
-    saveStateToSD();
 }
 
 String Pet::getAge()
 {
-
-    double normalized = st.age / cfg.max_age;
-
-    // 可投射的目標值
-    std::vector<double> targets = {0.1, 0.5, 1.0};
-
-    double best = targets[0];
-    double minDiff = std::abs(normalized - best);
-
-    for (double t : targets)
+    switch (CurrentAgeAnimation())
     {
-        double diff = std::abs(normalized - t);
-        if (diff < minDiff)
-        {
-            minDiff = diff;
-            best = t;
-        }
-    }
-
-    // 轉換成String
-    if (best == 0.1)
+    case AnimationId::StatusAge01:
         return "0.1";
-    if (best == 0.5)
+    case AnimationId::StatusAge05:
         return "0.5";
-    return "1";
+    case AnimationId::StatusAge1:
+    default:
+        return "1";
+    }
 }
 
 HealthStatus Pet::getStatus() const
 {
-    return HealthStatus(st.status);
+    return static_cast<HealthStatus>(st.status);
+}
+
+const PersisState &Pet::persistentState() const
+{
+    return st;
+}
+
+bool Pet::restoreState(const PersisState &state)
+{
+    if (state.magic != MAGIC || state.version != VER)
+        return false;
+
+    st = state;
+    refreshStatus();
+    return true;
 }

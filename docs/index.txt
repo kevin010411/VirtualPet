@@ -1,0 +1,51 @@
+# Copy this file to /index.txt on the SD card.
+# Format: id|format|frames|width|height|fps|path
+
+# Base status animations
+Idle|bmp|3|128|96|6|/dino/animation/idle
+Happy|bmp|2|128|96|6|/dino/animation/happy
+Hungry|bmp|2|128|96|6|/dino/animation/hungry
+Depress|bmp|2|128|96|6|/dino/animation/depress
+Dirty|bmp|2|128|96|6|/dino/animation/dirty
+Clean|bmp|2|128|96|6|/dino/animation/clean
+Sick|bmp|2|128|96|6|/dino/animation/sick
+Poop|bmp|2|128|96|6|/dino/animation/poop
+
+# Action animations
+Feed|bmp|2|128|96|8|/dino/animation/feed
+Heal|bmp|2|128|96|8|/dino/animation/heal
+Shower|bmp|2|128|96|8|/dino/animation/shower
+Gift|bmp|3|128|96|8|/dino/animation/gift
+GiftHappy|bmp|2|128|96|8|/dino/animation/gift_happy
+
+# Guess game animations
+Apple1|bmp|4|128|96|8|/dino/guess_game/1
+Apple2|bmp|4|128|96|8|/dino/guess_game/2
+Apple3|bmp|4|128|96|8|/dino/guess_game/3
+AppleP1|bmp|2|128|96|8|/dino/guess_game/r1
+AppleP2|bmp|2|128|96|8|/dino/guess_game/r2
+AppleP3|bmp|2|128|96|8|/dino/guess_game/r3
+AppleP4|bmp|2|128|96|8|/dino/guess_game/r4
+GuessRight|bmp|4|128|96|10|/dino/guess_game/right
+GuessWrong|bmp|4|128|96|10|/dino/guess_game/wrong
+GuessWin|bmp|5|128|96|10|/dino/guess_game/win
+GuessLoss|bmp|2|128|96|10|/dino/guess_game/loss
+
+# Age status animations
+StatusAge01|bmp|2|128|96|6|/age/1y0.1kg
+StatusAge05|bmp|2|128|96|6|/age/1y0.5kg
+StatusAge1|bmp|2|128|96|6|/age/1y1kg
+
+# Prediction animations
+PredAnim|bmp|23|128|96|10|/dino/predict/anim
+Predict1|bmp|2|128|96|8|/dino/predict/1
+Predict2|bmp|2|128|96|8|/dino/predict/2
+Predict3|bmp|2|128|96|8|/dino/predict/3
+Predict4|bmp|2|128|96|8|/dino/predict/4
+Predict5|bmp|2|128|96|8|/dino/predict/5
+Predict6|bmp|2|128|96|8|/dino/predict/6
+Predict7|bmp|2|128|96|8|/dino/predict/7
+Predict8|bmp|2|128|96|8|/dino/predict/8
+Predict9|bmp|2|128|96|8|/dino/predict/9
+Predict10|bmp|2|128|96|8|/dino/predict/10
+Predict11|bmp|2|128|96|8|/dino/predict/11

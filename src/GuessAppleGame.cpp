@@ -1,83 +1,125 @@
 #include "GuessAppleGame.h"
 
-GuessAppleGame::GuessAppleGame(Pet *pet, Renderer *renderer, std::queue<Animation> *animQueue, bool *calloutAnimate)
-    : pet(pet), renderer(renderer), animationQueue(animQueue), dirtyAnimate(calloutAnimate)
+namespace
+{
+constexpr unsigned long kAppleRevealDelayMs = 300;
+constexpr unsigned long kApplePromptLoopDurationMs = 24UL * 60UL * 60UL * 1000UL;
+constexpr unsigned long kResultAnimationDurationMs = 2000;
+constexpr unsigned long kExitDelayMs = 250;
+
+AnimationId randomAppleAnimation()
+{
+    switch (random(1, 4))
+    {
+    case 1:
+        return AnimationId::Apple1;
+    case 2:
+        return AnimationId::Apple2;
+    default:
+        return AnimationId::Apple3;
+    }
+}
+
+AnimationId appleResultAnimation(GuessAppleSide appleSide, GuessAppleSide playerSide)
+{
+    const int result = static_cast<int>(appleSide) + static_cast<int>(playerSide) * 2 + 1;
+    switch (result)
+    {
+    case 1:
+        return AnimationId::AppleP1;
+    case 2:
+        return AnimationId::AppleP2;
+    case 3:
+        return AnimationId::AppleP3;
+    default:
+        return AnimationId::AppleP4;
+    }
+}
+} // namespace
+
+GuessAppleGame::GuessAppleGame(GuessAppleGameHost &hostRef)
+    : host(hostRef)
 {
     reset();
+}
+
+void GuessAppleGame::queuePromptAnimation()
+{
+    host.clearAnimationsByOwner(AnimationOwner::Minigame);
+    host.queueAnimation(Animation(promptAnimationId, kApplePromptLoopDurationMs, false, AnimationOwner::Minigame, AnimationPriority::Critical));
+    host.markAnimationDirty();
 }
 
 void GuessAppleGame::start()
 {
     reset();
-    state = State::WaitingApple;
+    promptAnimationId = randomAppleAnimation();
+    queuePromptAnimation();
+    state = GuessAppleState::WaitingApple;
     lastMoveTime = millis();
 }
 
-bool GuessAppleGame::isActive() const { return state != State::Inactive; }
-
-void GuessAppleGame::update(unsigned long dt)
+bool GuessAppleGame::isActive() const
 {
-    if (state == State::Inactive)
+    return state != GuessAppleState::Inactive;
+}
+
+bool GuessAppleGame::isFinished() const
+{
+    return state == GuessAppleState::Win || state == GuessAppleState::Lose || state == GuessAppleState::Cancel;
+}
+
+bool GuessAppleGame::isWin() const
+{
+    return state == GuessAppleState::Win;
+}
+
+void GuessAppleGame::update()
+{
+    if (state == GuessAppleState::Inactive)
         return;
 
-    unsigned long now = millis();
-    String animate_idx = "";
+    const unsigned long now = millis();
     switch (state)
     {
-    case State::WaitingApple:
-        if (now - lastMoveTime > 300)
+    case GuessAppleState::WaitingApple:
+        if (now - lastMoveTime > kAppleRevealDelayMs)
         {
-            appleSide = (random(2) == 0) ? Side::Left : Side::Right;
-            state = State::WaitingInput;
-        }
-        if (animationQueue->empty())
-        {
-            animate_idx = String(random(1, 4));
-            animationQueue->push(Animation("apple_" + animate_idx, 20000, true));
-            *dirtyAnimate = true;
+            appleSide = (random(2) == 0) ? GuessAppleSide::Left : GuessAppleSide::Right;
+            state = GuessAppleState::WaitingInput;
         }
         break;
 
-    case State::ShowingResult:
-        if (animationQueue->empty())
+    case GuessAppleState::ShowingResult:
+        if (correctCount >= 3)
         {
-            if (correctCount >= 3)
-            {
-                state = State::Win;
-                animationQueue->push(Animation("guess_win", 2000, true));
-            }
-            else if (wrongCount >= 3)
-            {
-                state = State::Lose;
-                animationQueue->push(Animation("guess_loss", 2000, true));
-            }
-            else
-            {
-                state = State::WaitingApple;
-                animationQueue->push(Animation("apple", 2000, true));
-            }
-            *dirtyAnimate = true;
-
+            state = GuessAppleState::Win;
+            host.queueAnimation(Animation(AnimationId::GuessWin, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+            host.markAnimationDirty();
+        }
+        else if (wrongCount >= 3)
+        {
+            state = GuessAppleState::Lose;
+            host.queueAnimation(Animation(AnimationId::GuessLoss, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+            host.markAnimationDirty();
+        }
+        else
+        {
+            state = GuessAppleState::WaitingApple;
+            promptAnimationId = randomAppleAnimation();
+            queuePromptAnimation();
+            lastMoveTime = now;
         }
         break;
 
-    case State::Cancel:
-    case State::Win:
-    case State::Lose:
-        if (animationQueue->empty())
-        {
-            state = State::Inactive;
-        }
-        break;
-    case State::WaitingInput:
-        if (animationQueue->empty())
-        {
-            animate_idx = String(random(1, 4));
-            animationQueue->push(Animation("apple_" + animate_idx, 20000, true));
-            *dirtyAnimate = true;
-        }
+    case GuessAppleState::Cancel:
+    case GuessAppleState::Win:
+    case GuessAppleState::Lose:
+        if (now - lastMoveTime > kExitDelayMs)
+            state = GuessAppleState::Inactive;
         break;
 
+    case GuessAppleState::WaitingInput:
     default:
         break;
     }
@@ -85,50 +127,57 @@ void GuessAppleGame::update(unsigned long dt)
 
 void GuessAppleGame::onLeft()
 {
-    if (state == State::WaitingInput)
-        handleGuess(Side::Left);
+    if (state == GuessAppleState::WaitingInput)
+        handleGuess(GuessAppleSide::Left);
 }
 
 void GuessAppleGame::onRight()
 {
-    if (state == State::WaitingInput)
-        handleGuess(Side::Right);
+    if (state == GuessAppleState::WaitingInput)
+        handleGuess(GuessAppleSide::Right);
 }
 
 void GuessAppleGame::onMid()
 {
+    if (!isActive())
+        return;
 
-    state = State::Inactive;
-    
+    host.clearAnimationsByOwner(AnimationOwner::Minigame);
+    host.markAnimationDirty();
+    state = GuessAppleState::Cancel;
+    lastMoveTime = millis();
 }
 
 void GuessAppleGame::reset()
 {
     correctCount = 0;
     wrongCount = 0;
-    state = State::Inactive;
+    appleSide = GuessAppleSide::Left;
+    promptAnimationId = AnimationId::Apple1;
+    state = GuessAppleState::Inactive;
+    lastMoveTime = 0;
 }
 
-void GuessAppleGame::handleGuess(Side player)
+void GuessAppleGame::handleGuess(GuessAppleSide player)
 {
-    bool correct = (player == appleSide);
-    String result = String(int(appleSide) + int(player) * 2 + 1);
-    animationQueue->push(Animation("apple_p" + result, 2000, true));
-    *dirtyAnimate = true;
+    const bool correct = (player == appleSide);
+
+    host.clearAnimationsByOwner(AnimationOwner::Minigame);
+    host.queueAnimation(Animation(appleResultAnimation(appleSide, player), kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
     if (correct)
     {
-        pet->changeMood(40);
+        host.changePetMood(40);
         correctCount++;
-        animationQueue->push(Animation("guess_right", 2000, true));
-        *dirtyAnimate = true;
+        host.queueAnimation(Animation(AnimationId::GuessRight, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
     }
     else
     {
-        pet->changeMood(-5);
+        host.changePetMood(-5);
         wrongCount++;
-        animationQueue->push(Animation("guess_wrong", 2000, true));
-        *dirtyAnimate = true;
+        host.queueAnimation(Animation(AnimationId::GuessWrong, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
     }
 
-    state = State::ShowingResult;
+    host.markAnimationDirty();
+    state = GuessAppleState::ShowingResult;
+    lastMoveTime = millis();
 }
