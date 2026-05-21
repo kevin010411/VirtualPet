@@ -2,39 +2,39 @@
 
 namespace
 {
-constexpr unsigned long kAppleRevealDelayMs = 300;
-constexpr unsigned long kApplePromptLoopDurationMs = 24UL * 60UL * 60UL * 1000UL;
-constexpr unsigned long kResultAnimationDurationMs = 2000;
-constexpr unsigned long kExitDelayMs = 250;
+    constexpr unsigned long kAppleRevealDelayMs = 50;
+    constexpr unsigned long kApplePromptLoopDurationMs = 24UL * 60UL * 60UL * 1000UL;
+    constexpr unsigned long kResultAnimationDurationMs = 2000;
+    constexpr unsigned long kExitDelayMs = 250;
 
-AnimationId randomAppleAnimation()
-{
-    switch (random(1, 4))
+    AnimationId randomAppleAnimation()
     {
-    case 1:
-        return AnimationId::Apple1;
-    case 2:
-        return AnimationId::Apple2;
-    default:
-        return AnimationId::Apple3;
+        switch (random(1, 4))
+        {
+        case 1:
+            return AnimationId::Apple1;
+        case 2:
+            return AnimationId::Apple2;
+        default:
+            return AnimationId::Apple3;
+        }
     }
-}
 
-AnimationId appleResultAnimation(GuessAppleSide appleSide, GuessAppleSide playerSide)
-{
-    const int result = static_cast<int>(appleSide) + static_cast<int>(playerSide) * 2 + 1;
-    switch (result)
+    AnimationId appleResultAnimation(GuessAppleSide appleSide, GuessAppleSide playerSide)
     {
-    case 1:
-        return AnimationId::AppleP1;
-    case 2:
-        return AnimationId::AppleP2;
-    case 3:
-        return AnimationId::AppleP3;
-    default:
-        return AnimationId::AppleP4;
+        const int result = static_cast<int>(appleSide) + static_cast<int>(playerSide) * 2 + 1;
+        switch (result)
+        {
+        case 1:
+            return AnimationId::AppleP1;
+        case 2:
+            return AnimationId::AppleP2;
+        case 3:
+            return AnimationId::AppleP3;
+        default:
+            return AnimationId::AppleP4;
+        }
     }
-}
 } // namespace
 
 GuessAppleGame::GuessAppleGame(GuessAppleGameHost &hostRef)

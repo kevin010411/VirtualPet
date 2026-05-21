@@ -16,7 +16,8 @@ Recommended path:
 - Very simple MCU parsing
 - Human-readable and easy to edit by hand
 - Supports deep folder structures without changing firmware
-- Keeps `bmp` and `raw` resources on the same schema
+- Keeps `bmp`, `raw`, and `rle` resources on the same schema
+- Supports reusable path templates for multiple animals that share the same asset layout
 
 ## Line format
 
@@ -29,7 +30,7 @@ id|format|frames|width|height|fps|path
 Example:
 
 ```txt
-Idle|bmp|6|128|96|6|/assets/pet/base/idle
+Idle|bmp|6|128|96|6|/{animal}/animation/idle
 ```
 
 Lines starting with `#` are comments. Empty lines are ignored.
@@ -43,6 +44,7 @@ Lines starting with `#` are comments. Empty lines are ignored.
   - Supported values:
   - `bmp`
   - `raw`
+  - `rle`
 - `frames`
   - Total frame count
   - Must be greater than `0`
@@ -57,9 +59,11 @@ Lines starting with `#` are comments. Empty lines are ignored.
   - `0` means use firmware default frame interval
 - `path`
   - Folder or base path of the animation asset
+  - Supports the `{animal}` token, which is replaced by the firmware-selected animal name
   - Firmware will load frames as:
   - `path/1.bmp`, `path/2.bmp`, ... for `bmp`
   - `path/1.raw`, `path/2.raw`, ... for `raw`
+  - `path/1.rle`, `path/2.rle`, ... for `rle`
 
 ## Validation rules
 
@@ -73,26 +77,48 @@ Lines starting with `#` are comments. Empty lines are ignored.
 
 ```txt
 # Pet base status
-Idle|bmp|6|128|96|6|/assets/pet/base/idle
-Hungry|bmp|4|128|96|6|/assets/pet/status/hungry
-Depress|bmp|4|128|96|6|/assets/pet/status/depress
+Idle|bmp|6|128|96|6|/{animal}/animation/idle
+Hungry|bmp|4|128|96|6|/{animal}/animation/hungry
+Depress|bmp|4|128|96|6|/{animal}/animation/depress
 
 # Command animations
-Feed|raw|5|128|96|8|/assets/actions/feed
-Gift|raw|6|128|96|8|/assets/actions/gift
+Feed|raw|5|128|96|8|/{animal}/animation/feed
+Gift|rle|6|128|96|8|/{animal}/animation/gift
 
 # Minigame animations
-GuessWin|raw|4|128|96|10|/assets/minigame/guess/win
-GuessLoss|raw|4|128|96|10|/assets/minigame/guess/loss
+GuessWin|raw|4|128|96|10|/{animal}/guess_game/win
+GuessLoss|rle|4|128|96|10|/{animal}/guess_game/loss
 ```
 
 ## Folder layout recommendation
 
 ```txt
 /index.txt
-/assets/pet/base/idle/1.bmp
-/assets/pet/status/hungry/1.bmp
-/assets/actions/feed/1.raw
-/assets/minigame/guess/win/1.raw
+/dino/animation/idle/1.bmp
+/cat/animation/hungry/1.bmp
+/dog/animation/feed/1.raw
+/dog/guess_game/win/1.rle
 /assets/ui/layout/1.bmp
 ```
+
+## Multi-animal usage
+
+If the SD card contains:
+
+```txt
+/dino/animation/idle/1.bmp
+/dog/animation/idle/1.bmp
+/cat/animation/idle/1.bmp
+```
+
+Then the same manifest line:
+
+```txt
+Idle|bmp|6|128|96|6|/{animal}/animation/idle
+```
+
+can be reused by changing the firmware-side selected animal name, for example:
+
+- `dino`
+- `dog`
+- `cat`

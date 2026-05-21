@@ -6,11 +6,11 @@
 #include <SdFat.h>
 #include "Animation.h"
 #include "GuessAppleGame.h"
+#include "Renderer.h"
 
 class Adafruit_ST7735;
 class Pet;
 class PetStorage;
-class Renderer;
 
 class Game : public GuessAppleGameHost
 {
@@ -21,6 +21,8 @@ public:
     void setup_game();
     void loop_game();
     void requestFullRedraw();
+    void setRendererAssetFormatPreference(Renderer::AssetFormatPreference preference);
+    void setRendererAssetAnimal(const char *animalName);
 
     String NowCommand();
     void OnLeftKey();

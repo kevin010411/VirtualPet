@@ -25,6 +25,16 @@ Game::~Game()
     delete pet;
 }
 
+void Game::setRendererAssetFormatPreference(Renderer::AssetFormatPreference preference)
+{
+    renderer->setAssetFormatPreference(preference);
+}
+
+void Game::setRendererAssetAnimal(const char *animalName)
+{
+    renderer->setAssetAnimal(animalName);
+}
+
 const char *Game::commandLabel(Command command)
 {
     switch (command)
@@ -402,9 +412,7 @@ void Game::draw_all_layout()
         if (i >= 4)
             y_start = 160 - 32;
 
-        char path[20];
-        sprintf(path, "/layout/%d.bmp", i + 1);
-        renderer->ShowSDCardImage(path, (i % 4) * 32, y_start);
+        renderer->ShowSDCardFrame("/layout", static_cast<uint16_t>(i + 1), (i % 4) * 32, y_start);
     }
 }
 
@@ -412,15 +420,11 @@ void Game::draw_select_layout()
 {
     const int prevIdx = lastSelected;
     const int y_prev = (prevIdx >= 4) ? (160 - 32) : 0;
-    char path_prev[24];
-    sprintf(path_prev, "/layout/%d.bmp", prevIdx + 1);
-    renderer->ShowSDCardImage(path_prev, (prevIdx % 4) * 32, y_prev);
+    renderer->ShowSDCardFrame("/layout", static_cast<uint16_t>(prevIdx + 1), (prevIdx % 4) * 32, y_prev);
 
     const int curIdx = static_cast<int>(nowCommand);
     const int y_cur = (curIdx >= 4) ? (160 - 32) : 0;
-    char path_sel[28];
-    sprintf(path_sel, "/layout_sel/%d.bmp", curIdx + 1);
-    renderer->ShowSDCardImage(path_sel, (curIdx % 4) * 32, y_cur);
+    renderer->ShowSDCardFrame("/layout_sel", static_cast<uint16_t>(curIdx + 1), (curIdx % 4) * 32, y_cur);
 }
 
 void Game::roll_sick()

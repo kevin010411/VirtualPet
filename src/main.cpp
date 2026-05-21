@@ -18,6 +18,8 @@ const int CONFIRM_COMMAND_BUTTON = PA11;
 // 建議頻率
 const uint32_t SD_SPI_MHZ = 16;
 const uint8_t TFT_INIT_TAB = INITR_GREENTAB;
+constexpr Renderer::AssetFormatPreference kAssetFormatPreference = Renderer::AssetFormatPreference::PreferRle;
+constexpr const char *kAnimalAssetName = "dino";
 
 // 建立 TFT 顯示物件
 SPIClass SPI_2(PB15, TFT_RST, PB13);
@@ -318,6 +320,8 @@ void setup()
     tft.print("init error");
   }
 
+  game.setRendererAssetFormatPreference(kAssetFormatPreference);
+  game.setRendererAssetAnimal(kAnimalAssetName);
   game.setup_game();
   Serial.println("Init Done");
   delay(1000);

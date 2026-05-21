@@ -21,5 +21,27 @@ Recommended streaming-ready formats for the next pipeline iteration:
 
 Current implementation strategy:
 - Keep BMP as a fallback.
-- Add metadata-driven support for raw RGB565 sequences.
-- Reserve RLE as a future extension of the metadata format.
+- Support metadata-driven `raw` RGB565 sequences.
+- Support metadata-driven `rle` RGB565 sequences.
+- Allow `main.cpp` to choose whether `.bmp` or `.rle` should be preferred when both assets exist.
+
+RLE file layout used by the renderer:
+
+1. File header
+- `uint16_t width` in little-endian
+- `uint16_t height` in little-endian
+
+2. Pixel stream
+- Repeated packets of:
+- `uint16_t run_length` in little-endian
+- `uint16_t rgb565_color` in little-endian
+
+3. Decoding rule
+- Expand each packet into `run_length` pixels of `rgb565_color`
+- The expanded pixel count must match `width * height`
+- No end marker is used; the stream ends exactly when all pixels are decoded
+
+Notes:
+- `bmp` remains the easiest format to inspect manually.
+- `rle` is a better runtime choice when frames contain large same-color regions and SD bandwidth is the bottleneck.
+- `raw` is still the simplest high-throughput format when asset size is acceptable.
