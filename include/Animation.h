@@ -46,6 +46,11 @@ enum class AnimationId : uint8_t
     StatusAge01,
     StatusAge05,
     StatusAge1,
+    Battery,
+    Apple4,
+    GuessStart,
+    Layout,
+    LayoutSel,
     Count
 };
 

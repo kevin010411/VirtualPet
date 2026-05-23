@@ -17,7 +17,7 @@ const int CONFIRM_COMMAND_BUTTON = PA11;
 
 // 建議頻率
 const uint32_t SD_SPI_MHZ = 16;
-const uint8_t TFT_INIT_TAB = INITR_GREENTAB;
+const uint8_t TFT_INIT_TAB = INITR_BLACKTAB;
 constexpr Renderer::AssetFormatPreference kAssetFormatPreference = Renderer::AssetFormatPreference::PreferRle;
 constexpr const char *kAnimalAssetName = "dino";
 
@@ -31,10 +31,15 @@ Game game(&tft, &SD);
 // =========================
 // Low battery / PVD 設定
 // =========================
-volatile bool g_lowBattery = false;
-static bool g_lowBatteryShown = false;
+static bool g_sdReady = false;
+static bool g_lowBatteryMode = false;
 static unsigned long g_lowBatterySince = 0;
-static const unsigned long LOW_BAT_CONFIRM_MS = 200; // 防抖動誤判
+static unsigned long g_lowBatteryEnteredAt = 0;
+static const unsigned long LOW_BAT_CONFIRM_MS = 8000; // 防抖動誤判
+static const unsigned long LOW_BAT_ANIMATION_MS = 5000;
+static unsigned long g_lowBatteryRecoveredSince = 0;
+static const unsigned long LOW_BAT_RECOVER_CONFIRM_MS = 500;
+static const bool FORCE_LOW_BATTERY_TEST = true; // 測試 low battery 時改成 true
 
 static void initLowBatteryDetector()
 {
@@ -54,31 +59,22 @@ static void initLowBatteryDetector()
 
 static bool isVddBelowPvdThreshold()
 {
+  if (FORCE_LOW_BATTERY_TEST)
+    return true;
+
   // PVDO = 1 表示 VDD 低於設定門檻
   return (PWR->CSR & PWR_CSR_PVDO) != 0;
 }
 
-static void showLowBatteryWarningOnce()
+static void showSdInitError()
 {
-  if (g_lowBatteryShown)
-    return;
-
-  // 你的平常畫面是 rotation(2)
-  // low battery 需要反過來，所以切成 rotation(0)
-  tft.setRotation(0);
-
   tft.fillScreen(ST77XX_BLACK);
   tft.setTextWrap(true);
   tft.setTextColor(ST77XX_RED);
-  tft.setTextSize(2);
-
-  tft.setCursor(12, 45);
-  tft.println("LOW");
-
-  tft.setCursor(12, 75);
-  tft.println("BATTERY");
-
-  g_lowBatteryShown = true;
+  tft.setTextSize(1);
+  tft.setCursor(0, 0);
+  tft.print("SD init error");
+  digitalWrite(TFT_BLK, HIGH);
 }
 
 const unsigned long BUTTON_COOLDOWN = 50;                    // 0.05 秒
@@ -118,6 +114,12 @@ bool hasPendingButtonPress()
   return PreviousButtonPressed || ConfirmButtonPressed || NextButtonPressed;
 }
 
+bool isLRComboHeld()
+{
+  return digitalRead(PREVIOUS_COMMAND_BUTTON) == LOW &&
+         digitalRead(NEXT_COMMAND_BUTTON) == LOW;
+}
+
 void clearButtonFlags()
 {
   PreviousButtonPressed = false;
@@ -148,6 +150,13 @@ void wakeFromSleep(unsigned long now)
 void buttonDetect()
 {
   unsigned long now = millis();
+
+  if (isLRComboHeld())
+  {
+    PreviousButtonPressed = false;
+    NextButtonPressed = false;
+    return;
+  }
 
   if (isSleeping)
   {
@@ -282,6 +291,68 @@ static void onLRComboLongPress()
   digitalWrite(TFT_BLK, HIGH);
 }
 
+static void enterLowBatteryMode(unsigned long now)
+{
+  if (g_lowBatteryMode)
+    return;
+
+  g_lowBatteryMode = true;
+  g_lowBatteryEnteredAt = now;
+  clearButtonFlags();
+  isSleeping = false;
+  digitalWrite(TFT_BLK, HIGH);
+  game.saveNow();
+  game.startBatteryAnimation();
+}
+
+static void leaveLowBatteryMode(unsigned long now)
+{
+  g_lowBatteryMode = false;
+  g_lowBatteryEnteredAt = 0;
+  g_lowBatteryRecoveredSince = 0;
+  clearButtonFlags();
+  if (isSleeping)
+  {
+    wakeFromSleep(now);
+    return;
+  }
+
+  digitalWrite(TFT_BLK, HIGH);
+  game.requestFullRedraw();
+  noteInteraction(now);
+}
+
+static void updateLowBatteryMode(unsigned long now)
+{
+  if (isVddBelowPvdThreshold())
+  {
+    g_lowBatteryRecoveredSince = 0;
+    if (g_lowBatterySince == 0)
+      g_lowBatterySince = now;
+
+    if (!g_lowBatteryMode && now - g_lowBatterySince >= LOW_BAT_CONFIRM_MS)
+      enterLowBatteryMode(now);
+
+    if (g_lowBatteryMode && !isSleeping)
+    {
+      game.updateBatteryAnimation(now);
+      if (now - g_lowBatteryEnteredAt >= LOW_BAT_ANIMATION_MS)
+        enterSleep();
+    }
+    return;
+  }
+
+  g_lowBatterySince = 0;
+  if (!g_lowBatteryMode)
+    return;
+
+  if (g_lowBatteryRecoveredSince == 0)
+    g_lowBatteryRecoveredSince = now;
+
+  if (now - g_lowBatteryRecoveredSince >= LOW_BAT_RECOVER_CONFIRM_MS)
+    leaveLowBatteryMode(now);
+}
+
 void setup()
 {
   delay(1000);
@@ -314,12 +385,11 @@ void setup()
 
   if (!SD.begin(SD_CS, SD_SCK_MHZ(SD_SPI_MHZ)))
   {
-    tft.fillScreen(ST77XX_BLACK);
-    tft.setCursor(0, 0);
-    tft.setTextWrap(true);
-    tft.print("init error");
+    showSdInitError();
+    return;
   }
 
+  g_sdReady = true;
   game.setRendererAssetFormatPreference(kAssetFormatPreference);
   game.setRendererAssetAnimal(kAnimalAssetName);
   game.setup_game();
@@ -337,40 +407,19 @@ void loop()
 
   const unsigned long now = millis();
 
-  // =========================
-  // 先做 low battery 檢查
-  // =========================
-  if (isVddBelowPvdThreshold())
-  {
-    if (g_lowBatterySince == 0)
-      g_lowBatterySince = now;
-
-    if (now - g_lowBatterySince >= LOW_BAT_CONFIRM_MS)
-      g_lowBattery = true;
-  }
-  else
-  {
-    g_lowBatterySince = 0;
-  }
-
-  // 一旦 low battery 成立，就直接顯示警告並停止主流程
-  if (g_lowBattery)
-  {
-    // 若原本在睡眠，先把背光打開
-    if (isSleeping)
-      isSleeping = false;
-
-    digitalWrite(TFT_BLK, HIGH);
-    showLowBatteryWarningOnce();
+  if (!g_sdReady)
     return;
-  }
 
+  updateLowBatteryMode(now);
+  if (g_lowBatteryMode)
+    return;
+
+  handleComboLongPress(PREVIOUS_COMMAND_BUTTON, NEXT_COMMAND_BUTTON, 2000, onLRComboLongPress);
   buttonDetect();
   if (isSleeping)
     return;
 
   handleLongPress(CONFIRM_COMMAND_BUTTON, 2000, onConfirmLongPress);
-  handleComboLongPress(PREVIOUS_COMMAND_BUTTON, NEXT_COMMAND_BUTTON, 2000, onLRComboLongPress);
 
   if (now - lastInteractionMs >= SLEEP_TIMEOUT_MS)
   {

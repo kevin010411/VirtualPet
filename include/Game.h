@@ -23,6 +23,10 @@ public:
     void requestFullRedraw();
     void setRendererAssetFormatPreference(Renderer::AssetFormatPreference preference);
     void setRendererAssetAnimal(const char *animalName);
+    bool saveNow();
+    bool showBatteryScreen();
+    void startBatteryAnimation();
+    void updateBatteryAnimation(unsigned long now);
 
     String NowCommand();
     void OnLeftKey();
@@ -38,7 +42,6 @@ public:
 private:
     static constexpr unsigned long gameTick = 1200;
     static constexpr unsigned long frameIntervalSlow = 600;
-    static constexpr unsigned long frameIntervalFast = 150;
     static constexpr uint8_t savePeriodTicks = 2;
     static constexpr unsigned int environmentDecayAmount = 5;
     static constexpr int maxFortune = 11;
@@ -60,8 +63,6 @@ private:
     PetStorage *petStorage;
     Renderer *renderer;
     GuessAppleGame *guessApple;
-    Adafruit_ST7735 *tft;
-    SdFat *sd;
 
     unsigned long last_tick_time = 0;
     std::deque<Animation> animationQueue = {};

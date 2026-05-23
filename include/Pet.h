@@ -15,7 +15,6 @@ struct PetConfig
     unsigned int max_clean = 300;      // 0=極差, 300=極好
     unsigned int max_env_clean = 1000; // 0=極差, 1000=極好
     float age_per_tick = 0.2f;         // 每 tick 增齡
-    uint16_t min_stay_ticks = 10;      // 任一狀態最短停留（避免抖動）
     uint8_t hungry_threshold = 70;
     uint8_t depressed_threshold = 30;
     unsigned int dirty_threshold = 100;

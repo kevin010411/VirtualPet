@@ -11,9 +11,7 @@ Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
     : pet(new Pet()),
       petStorage(new PetStorage(ref_SD)),
       renderer(new Renderer(ref_tft, ref_SD)),
-      guessApple(new GuessAppleGame(*this)),
-      tft(ref_tft),
-      sd(ref_SD)
+      guessApple(new GuessAppleGame(*this))
 {
 }
 
@@ -33,6 +31,41 @@ void Game::setRendererAssetFormatPreference(Renderer::AssetFormatPreference pref
 void Game::setRendererAssetAnimal(const char *animalName)
 {
     renderer->setAssetAnimal(animalName);
+}
+
+bool Game::saveNow()
+{
+    const bool saved = petStorage->save(*pet);
+    if (saved)
+        saveCounter = 0;
+    return saved;
+}
+
+bool Game::showBatteryScreen()
+{
+    return renderer->ShowSDCardFrame("/battery", 1,0,32);
+}
+
+void Game::startBatteryAnimation()
+{
+    clearAnimationsByOwner(AnimationOwner::Command);
+    clearAnimationsByOwner(AnimationOwner::Minigame);
+    clearAnimationsByOwner(AnimationOwner::System);
+    showAnimationId = AnimationId::Battery;
+    frameInterval = renderer->frameIntervalFor(showAnimationId, frameIntervalSlow);
+    lastFrameTime = 0;
+    animateDone = !renderer->setAnimation(showAnimationId, false);
+    if (!animateDone)
+        animateDone = renderer->advanceAnimationFrame();
+}
+
+void Game::updateBatteryAnimation(unsigned long now)
+{
+    if (now - lastFrameTime < frameInterval)
+        return;
+
+    lastFrameTime = now;
+    renderer->advanceAnimationFrame();
 }
 
 const char *Game::commandLabel(Command command)
@@ -112,6 +145,9 @@ void Game::setup_game()
     showAnimationId = AnimationId::None;
     hasActiveAnimation = false;
     activeAnimation = Animation();
+    animationQueue.clear();
+    guessApple->reset();
+    last_tick_time = millis();
 
     if (!petStorage->load(*pet))
         pet->setDefaultState();
@@ -122,6 +158,8 @@ void Game::setup_game()
 void Game::loop_game()
 {
     const unsigned long current_time = millis();
+    guessApple->update();
+
     const unsigned long elapsed = current_time - last_tick_time;
     if (elapsed >= gameTick)
     {
@@ -135,7 +173,6 @@ void Game::loop_game()
             pet->dayPassed();
         }
 
-        guessApple->update();
         refreshBaseAnimation();
         maybeSavePet();
     }

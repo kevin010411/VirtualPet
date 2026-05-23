@@ -1,36 +1,14 @@
 #include "PetStorage.h"
 
-PetStorage::PetStorage(SdFat *ref_sd) : sd(ref_sd) {}
-
-bool PetStorage::save(const Pet &pet)
+namespace
 {
-    if (sd == nullptr)
-        return false;
+constexpr const char *kStatePath = "/state.bin";
+constexpr const char *kBackupStatePath = "/state.bak";
+constexpr const char *kTempStatePath = "/state.tmp";
 
-    File f = sd->open("/state.tmp", FILE_WRITE);
-    if (!f)
-        return false;
-
-    const PersisState &state = pet.persistentState();
-    f.seek(0);
-    size_t n = f.write(reinterpret_cast<const uint8_t *>(&state), sizeof(state));
-    f.flush();
-    f.close();
-
-    if (sd->exists("/state.bin"))
-        sd->remove("/state.bin");
-    if (!sd->rename("/state.tmp", "/state.bin"))
-        return false;
-
-    return n == sizeof(state);
-}
-
-bool PetStorage::load(Pet &pet)
+bool loadStateFile(SdFat *sd, const char *path, Pet &pet)
 {
-    if (sd == nullptr)
-        return false;
-
-    File f = sd->open("/state.bin", FILE_READ);
+    File f = sd->open(path, FILE_READ);
     if (!f)
         return false;
 
@@ -48,4 +26,50 @@ bool PetStorage::load(Pet &pet)
         return false;
 
     return pet.restoreState(state);
+}
+} // namespace
+
+PetStorage::PetStorage(SdFat *ref_sd) : sd(ref_sd) {}
+
+bool PetStorage::save(const Pet &pet)
+{
+    if (sd == nullptr)
+        return false;
+
+    if (sd->exists(kTempStatePath) && !sd->remove(kTempStatePath))
+        return false;
+
+    File f = sd->open(kTempStatePath, FILE_WRITE);
+    if (!f)
+        return false;
+
+    const PersisState &state = pet.persistentState();
+    const size_t n = f.write(reinterpret_cast<const uint8_t *>(&state), sizeof(state));
+    f.flush();
+    f.close();
+
+    if (n != sizeof(state))
+    {
+        sd->remove(kTempStatePath);
+        return false;
+    }
+
+    if (sd->exists(kStatePath))
+    {
+        if (sd->exists(kBackupStatePath) && !sd->remove(kBackupStatePath))
+            return false;
+        if (!sd->rename(kStatePath, kBackupStatePath))
+            return false;
+    }
+
+    return sd->rename(kTempStatePath, kStatePath);
+}
+
+bool PetStorage::load(Pet &pet)
+{
+    if (sd == nullptr)
+        return false;
+
+    return loadStateFile(sd, kStatePath, pet) ||
+           loadStateFile(sd, kBackupStatePath, pet);
 }
