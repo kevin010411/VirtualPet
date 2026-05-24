@@ -1,48 +1,21 @@
-#include <Adafruit_ST7735.h>
-#include "Game.h"
+#include "hardware/BoardConfig.h"
+#include "hardware/ButtonInput.h"
+#include "hardware/CalibratedST7735.h"
+#include "app/Game.h"
 #include <SdFat.h>
 #include "stm32f1xx.h"
 
-const int SD_CS = PB0; // ← 經 74VHC125 緩衝到 CARD_CS
-
-// TFT (SPI2)
-const int TFT_CS = PB12;
-const int TFT_DC = PA8;
-const int TFT_RST = PB14;
-const int TFT_BLK = PA9;
-
-const int NEXT_COMMAND_BUTTON = PA12;
-const int PREVIOUS_COMMAND_BUTTON = PA10;
-const int CONFIRM_COMMAND_BUTTON = PA11;
-
-// 建議頻率
-const uint32_t SD_SPI_MHZ = 16;
-const uint8_t TFT_INIT_TAB = INITR_BLACKTAB;
-const int8_t TFT_COL_OFFSET = 2;
-const int8_t TFT_ROW_OFFSET = 1;
-constexpr Renderer::AssetFormatPreference kAssetFormatPreference = Renderer::AssetFormatPreference::PreferRle;
-constexpr const char *kAnimalAssetName = "dino";
-
-class CalibratedST7735 : public Adafruit_ST7735
-{
-public:
-  CalibratedST7735(SPIClass *spiClass, int8_t cs, int8_t dc, int8_t rst)
-      : Adafruit_ST7735(spiClass, cs, dc, rst)
-  {
-  }
-
-  void setDisplayOffset(int8_t col, int8_t row)
-  {
-    setColRowStart(col, row);
-  }
-};
-
 // 建立 TFT 顯示物件
-SPIClass SPI_2(PB15, TFT_RST, PB13);
-CalibratedST7735 tft(&SPI_2, TFT_CS, TFT_DC, TFT_RST);
+SPIClass SPI_2(PB15, BoardConfig::TftRstPin, PB13);
+CalibratedST7735 tft(&SPI_2, BoardConfig::TftCsPin, BoardConfig::TftDcPin, BoardConfig::TftRstPin);
 
 SdFat SD;
 Game game(&tft, &SD);
+ButtonInput buttons(
+    BoardConfig::PreviousCommandButtonPin,
+    BoardConfig::NextCommandButtonPin,
+    BoardConfig::ConfirmCommandButtonPin,
+    50);
 
 // =========================
 // Low battery / PVD 設定
@@ -51,11 +24,11 @@ static bool g_sdReady = false;
 static bool g_lowBatteryMode = false;
 static unsigned long g_lowBatterySince = 0;
 static unsigned long g_lowBatteryEnteredAt = 0;
-static const unsigned long LOW_BAT_CONFIRM_MS = 800; // 防抖動誤判
-static const unsigned long LOW_BAT_ANIMATION_MS = 5000;
+static const unsigned long kLowBatteryConfirmMs = 800; // 防抖動誤判
+static const unsigned long kLowBatteryAnimationMs = 5000;
 static unsigned long g_lowBatteryRecoveredSince = 0;
-static const unsigned long LOW_BAT_RECOVER_CONFIRM_MS = 500;
-static const bool FORCE_LOW_BATTERY_TEST = false; // 測試 low battery 時改成 true
+static const unsigned long kLowBatteryRecoverConfirmMs = 500;
+static const bool kForceLowBatteryTest = false; // 測試 low battery 時改成 true
 
 static void initLowBatteryDetector()
 {
@@ -75,7 +48,7 @@ static void initLowBatteryDetector()
 
 static bool isVddBelowPvdThreshold()
 {
-  if (FORCE_LOW_BATTERY_TEST)
+  if (kForceLowBatteryTest)
     return true;
 
   // PVDO = 1 表示 VDD 低於設定門檻
@@ -90,222 +63,86 @@ static void showSdInitError()
   tft.setTextSize(1);
   tft.setCursor(0, 0);
   tft.print("SD init error");
-  digitalWrite(TFT_BLK, HIGH);
+  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
 }
 
-const unsigned long BUTTON_COOLDOWN = 50;                    // 0.05 秒
-const unsigned long SLEEP_TIMEOUT_MS = 10UL * 60UL * 1000UL; // 10分鐘會自動休眠
-unsigned long lastPrevPressTime = 0;
-unsigned long lastNextPressTime = 0;
-unsigned long lastConfirmPressTime = 0;
-unsigned long lastInteractionMs = 0;
-volatile bool PreviousButtonPressed = false;
-volatile bool ConfirmButtonPressed = false;
-volatile bool NextButtonPressed = false;
-bool isSleeping = false;
-
-void handlePreviousButtonInterrupt()
-{
-  if (digitalRead(PREVIOUS_COMMAND_BUTTON) == HIGH)
-    return;
-  PreviousButtonPressed = true;
-}
-
-void handleConfirmButtonInterrupt()
-{
-  if (digitalRead(CONFIRM_COMMAND_BUTTON) == HIGH)
-    return;
-  ConfirmButtonPressed = true;
-}
-
-void handleNextButtonInterrupt()
-{
-  if (digitalRead(NEXT_COMMAND_BUTTON) == HIGH)
-    return;
-  NextButtonPressed = true;
-}
-
-bool hasPendingButtonPress()
-{
-  return PreviousButtonPressed || ConfirmButtonPressed || NextButtonPressed;
-}
-
-bool isLRComboHeld()
-{
-  return digitalRead(PREVIOUS_COMMAND_BUTTON) == LOW &&
-         digitalRead(NEXT_COMMAND_BUTTON) == LOW;
-}
-
-void clearButtonFlags()
-{
-  PreviousButtonPressed = false;
-  ConfirmButtonPressed = false;
-  NextButtonPressed = false;
-}
+const unsigned long kSleepTimeoutMs = 10UL * 60UL * 1000UL; // 10分鐘會自動休眠
+unsigned long g_lastInteractionMs = 0;
+bool g_isSleeping = false;
 
 void noteInteraction(unsigned long now = millis())
 {
-  lastInteractionMs = now;
+  g_lastInteractionMs = now;
 }
 
 void enterSleep()
 {
-  isSleeping = true;
-  digitalWrite(TFT_BLK, LOW);
+  g_isSleeping = true;
+  digitalWrite(BoardConfig::TftBacklightPin, LOW);
 }
 
 void wakeFromSleep(unsigned long now)
 {
-  clearButtonFlags();
-  digitalWrite(TFT_BLK, HIGH);
+  buttons.clearFlags();
+  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   game.requestFullRedraw();
   noteInteraction(now);
-  isSleeping = false;
+  g_isSleeping = false;
 }
 
-void buttonDetect()
+void wakeFromSleepNow()
 {
-  unsigned long now = millis();
-
-  if (isLRComboHeld())
-  {
-    PreviousButtonPressed = false;
-    NextButtonPressed = false;
-    return;
-  }
-
-  if (isSleeping)
-  {
-    if (hasPendingButtonPress())
-      wakeFromSleep(now);
-    return;
-  }
-
-  if (PreviousButtonPressed)
-  {
-    if (now - lastPrevPressTime >= BUTTON_COOLDOWN)
-    {
-      game.OnRightKey();
-      lastPrevPressTime = now;
-      noteInteraction(now);
-    }
-    PreviousButtonPressed = false;
-  }
-
-  if (NextButtonPressed)
-  {
-    if (now - lastNextPressTime >= BUTTON_COOLDOWN)
-    {
-      game.OnLeftKey();
-      lastNextPressTime = now;
-      noteInteraction(now);
-    }
-    NextButtonPressed = false;
-  }
-
-  if (ConfirmButtonPressed)
-  {
-    if (now - lastConfirmPressTime >= BUTTON_COOLDOWN)
-    {
-      game.OnConfirmKey();
-      lastConfirmPressTime = now;
-      noteInteraction(now);
-    }
-    ConfirmButtonPressed = false;
-  }
+  wakeFromSleep(millis());
 }
 
-typedef void (*LongPressCallback)();
-
-void handleLongPress(
-    int pin,
-    unsigned long thresholdMs,
-    LongPressCallback callback)
+void onPreviousButton()
 {
-  static unsigned long pressStartTime[20] = {0};
-  static bool fired[20] = {false};
-
-  int idx = pin % 20;
-
-  if (digitalRead(pin) == LOW)
-  {
-    if (pressStartTime[idx] == 0)
-      pressStartTime[idx] = millis();
-
-    if (!fired[idx] && (millis() - pressStartTime[idx] > thresholdMs))
-    {
-      callback();
-      fired[idx] = true;
-    }
-  }
-  else
-  {
-    pressStartTime[idx] = 0;
-    fired[idx] = false;
-  }
+  game.OnRightKey();
+  noteInteraction();
 }
 
-void handleComboLongPress(
-    int pinA,
-    int pinB,
-    unsigned long thresholdMs,
-    LongPressCallback callback)
+void onNextButton()
 {
-  static unsigned long comboStart = 0;
-  static bool fired = false;
+  game.OnLeftKey();
+  noteInteraction();
+}
 
-  bool bothPressed = (digitalRead(pinA) == LOW) && (digitalRead(pinB) == LOW);
-
-  if (bothPressed)
-  {
-    PreviousButtonPressed = false;
-    NextButtonPressed = false;
-    if (comboStart == 0)
-      comboStart = millis();
-
-    if (!fired && (millis() - comboStart > thresholdMs))
-    {
-      callback();
-      fired = true;
-    }
-  }
-  else
-  {
-    comboStart = 0;
-    fired = false;
-  }
+void onConfirmButton()
+{
+  game.OnConfirmKey();
+  noteInteraction();
 }
 
 static void TFT_Reset200ms()
 {
-  pinMode(TFT_RST, OUTPUT);
-  digitalWrite(TFT_RST, HIGH);
+  pinMode(BoardConfig::TftRstPin, OUTPUT);
+  digitalWrite(BoardConfig::TftRstPin, HIGH);
   delay(10);
-  digitalWrite(TFT_RST, LOW);
+  digitalWrite(BoardConfig::TftRstPin, LOW);
   delay(200);
-  digitalWrite(TFT_RST, HIGH);
+  digitalWrite(BoardConfig::TftRstPin, HIGH);
   delay(200);
 }
 
 void onConfirmLongPress()
 {
   noteInteraction();
-  digitalWrite(TFT_BLK, LOW);
+  digitalWrite(BoardConfig::TftBacklightPin, LOW);
   TFT_Reset200ms();
-  tft.initR(TFT_INIT_TAB);
-  tft.setDisplayOffset(TFT_COL_OFFSET, TFT_ROW_OFFSET);
+  tft.initR(BoardConfig::TftInitTab);
+  tft.setDisplayOffset(BoardConfig::TftColOffset, BoardConfig::TftRowOffset);
   tft.setRotation(2);
-  digitalWrite(TFT_BLK, HIGH);
+  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   game.setup_game();
 }
 
 static void onLRComboLongPress()
 {
   noteInteraction();
-  digitalWrite(TFT_BLK, LOW);
+  digitalWrite(BoardConfig::TftBacklightPin, LOW);
   game.resetPet();
   delay(1000);
-  digitalWrite(TFT_BLK, HIGH);
+  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
 }
 
 static void enterLowBatteryMode(unsigned long now)
@@ -315,9 +152,9 @@ static void enterLowBatteryMode(unsigned long now)
 
   g_lowBatteryMode = true;
   g_lowBatteryEnteredAt = now;
-  clearButtonFlags();
-  isSleeping = false;
-  digitalWrite(TFT_BLK, HIGH);
+  buttons.clearFlags();
+  g_isSleeping = false;
+  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   game.saveNow();
   game.startBatteryAnimation();
 }
@@ -327,14 +164,14 @@ static void leaveLowBatteryMode(unsigned long now)
   g_lowBatteryMode = false;
   g_lowBatteryEnteredAt = 0;
   g_lowBatteryRecoveredSince = 0;
-  clearButtonFlags();
-  if (isSleeping)
+  buttons.clearFlags();
+  if (g_isSleeping)
   {
     wakeFromSleep(now);
     return;
   }
 
-  digitalWrite(TFT_BLK, HIGH);
+  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   game.requestFullRedraw();
   noteInteraction(now);
 }
@@ -347,13 +184,13 @@ static void updateLowBatteryMode(unsigned long now)
     if (g_lowBatterySince == 0)
       g_lowBatterySince = now;
 
-    if (!g_lowBatteryMode && now - g_lowBatterySince >= LOW_BAT_CONFIRM_MS)
+    if (!g_lowBatteryMode && now - g_lowBatterySince >= kLowBatteryConfirmMs)
       enterLowBatteryMode(now);
 
-    if (g_lowBatteryMode && !isSleeping)
+    if (g_lowBatteryMode && !g_isSleeping)
     {
       game.updateBatteryAnimation(now);
-      if (now - g_lowBatteryEnteredAt >= LOW_BAT_ANIMATION_MS)
+      if (now - g_lowBatteryEnteredAt >= kLowBatteryAnimationMs)
         enterSleep();
     }
     return;
@@ -366,7 +203,7 @@ static void updateLowBatteryMode(unsigned long now)
   if (g_lowBatteryRecoveredSince == 0)
     g_lowBatteryRecoveredSince = now;
 
-  if (now - g_lowBatteryRecoveredSince >= LOW_BAT_RECOVER_CONFIRM_MS)
+  if (now - g_lowBatteryRecoveredSince >= kLowBatteryRecoverConfirmMs)
     leaveLowBatteryMode(now);
 }
 
@@ -382,46 +219,40 @@ void setup()
   SPI_2.begin(); // SPI2
 
   // 初始化 TFT 螢幕
-  pinMode(TFT_BLK, OUTPUT);
+  pinMode(BoardConfig::TftBacklightPin, OUTPUT);
   TFT_Reset200ms();
-  tft.initR(TFT_INIT_TAB);
-  digitalWrite(TFT_BLK, LOW);
-  tft.setDisplayOffset(TFT_COL_OFFSET, TFT_ROW_OFFSET);
+  tft.initR(BoardConfig::TftInitTab);
+  digitalWrite(BoardConfig::TftBacklightPin, LOW);
+  tft.setDisplayOffset(BoardConfig::TftColOffset, BoardConfig::TftRowOffset);
   tft.setRotation(2);
   tft.setTextColor(ST77XX_RED);
 
   // 初始化 low battery 偵測
   initLowBatteryDetector();
 
-  pinMode(PREVIOUS_COMMAND_BUTTON, INPUT_PULLUP);
-  pinMode(CONFIRM_COMMAND_BUTTON, INPUT_PULLUP);
-  pinMode(NEXT_COMMAND_BUTTON, INPUT_PULLUP);
+  buttons.begin();
 
-  attachInterrupt(digitalPinToInterrupt(CONFIRM_COMMAND_BUTTON), handleConfirmButtonInterrupt, FALLING);
-  attachInterrupt(digitalPinToInterrupt(NEXT_COMMAND_BUTTON), handleNextButtonInterrupt, FALLING);
-  attachInterrupt(digitalPinToInterrupt(PREVIOUS_COMMAND_BUTTON), handlePreviousButtonInterrupt, FALLING);
-
-  if (!SD.begin(SD_CS, SD_SCK_MHZ(SD_SPI_MHZ)))
+  if (!SD.begin(BoardConfig::SdCsPin, SD_SCK_MHZ(BoardConfig::SdSpiMhz)))
   {
     showSdInitError();
     return;
   }
 
   g_sdReady = true;
-  game.setRendererAssetFormatPreference(kAssetFormatPreference);
-  game.setRendererAssetAnimal(kAnimalAssetName);
+  game.setRendererAssetFormatPreference(BoardConfig::AssetFormatPreference);
+  game.setRendererAssetAnimal(BoardConfig::AnimalAssetName);
   game.setup_game();
   Serial.println("Init Done");
   delay(1000);
-  digitalWrite(TFT_BLK, HIGH);
+  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   noteInteraction();
 }
 
 void loop()
 {
   // 每圈都把 TFT_RST(PB14) 維持在推挽輸出 HIGH
-  pinMode(TFT_RST, OUTPUT);
-  digitalWrite(TFT_RST, HIGH);
+  pinMode(BoardConfig::TftRstPin, OUTPUT);
+  digitalWrite(BoardConfig::TftRstPin, HIGH);
 
   const unsigned long now = millis();
 
@@ -432,14 +263,14 @@ void loop()
   if (g_lowBatteryMode)
     return;
 
-  handleComboLongPress(PREVIOUS_COMMAND_BUTTON, NEXT_COMMAND_BUTTON, 2000, onLRComboLongPress);
-  buttonDetect();
-  if (isSleeping)
+  buttons.handlePreviousNextComboLongPress(2000, onLRComboLongPress);
+  buttons.update(g_isSleeping, onPreviousButton, onNextButton, onConfirmButton, wakeFromSleepNow);
+  if (g_isSleeping)
     return;
 
-  handleLongPress(CONFIRM_COMMAND_BUTTON, 2000, onConfirmLongPress);
+  buttons.handleConfirmLongPress(2000, onConfirmLongPress);
 
-  if (now - lastInteractionMs >= SLEEP_TIMEOUT_MS)
+  if (now - g_lastInteractionMs >= kSleepTimeoutMs)
   {
     enterSleep();
     return;

@@ -1,4 +1,4 @@
-#include "Pet.h"
+#include "domain/Pet.h"
 
 HealthStatus decide_state(
     uint8_t hunger, uint8_t mood, unsigned int env_value, unsigned int clean_value, bool hasSick, const PetConfig &cfg)
@@ -19,7 +19,7 @@ HealthStatus decide_state(
 Pet::Pet(float age)
 {
     setDefaultState();
-    st.age = clamp<float>(age, 0.0f, cfg.max_age);
+    st.age = clampValue<float>(age, 0.0f, cfg.max_age);
     refreshStatus();
 }
 
@@ -45,41 +45,41 @@ void Pet::dayPassed()
     if (getStatus() != HealthStatus::Healthy)
         return;
 
-    st.hungry_value = clamp<int>(st.hungry_value + 1, 0, cfg.max_hunger);
-    st.mood = clamp<int>(st.mood - 1, 0, cfg.max_mood);
-    st.age = clamp<float>(st.age + cfg.age_per_tick, 0.0f, cfg.max_age);
-    st.clean_value = clamp<int>(st.clean_value - 1, 0, cfg.max_clean);
-    st.env_value = clamp<int>(st.env_value - 1, 0, cfg.max_env_clean);
+    st.hungry_value = clampValue<int>(st.hungry_value + 1, 0, cfg.max_hunger);
+    st.mood = clampValue<int>(st.mood - 1, 0, cfg.max_mood);
+    st.age = clampValue<float>(st.age + cfg.age_per_tick, 0.0f, cfg.max_age);
+    st.clean_value = clampValue<int>(st.clean_value - 1, 0, cfg.max_clean);
+    st.env_value = clampValue<int>(st.env_value - 1, 0, cfg.max_env_clean);
     refreshStatus();
 }
 
 void Pet::feedPet(int add_satiety)
 {
-    st.hungry_value = clamp<int>(st.hungry_value - add_satiety, 0, cfg.max_hunger);
+    st.hungry_value = clampValue<int>(st.hungry_value - add_satiety, 0, cfg.max_hunger);
     refreshStatus();
 }
 
 void Pet::changeMood(int delta)
 {
-    st.mood = clamp<int>(st.mood + delta, 0, cfg.max_mood);
+    st.mood = clampValue<int>(st.mood + delta, 0, cfg.max_mood);
     refreshStatus();
 }
 
 void Pet::takeShower(int value)
 {
-    st.clean_value = clamp<int>(st.clean_value + value, 0, cfg.max_clean);
+    st.clean_value = clampValue<int>(st.clean_value + value, 0, cfg.max_clean);
     refreshStatus();
 }
 
 void Pet::cleanEnv(unsigned int clear_value)
 {
-    st.env_value = clamp<int>(st.env_value + clear_value, 0, cfg.max_env_clean);
+    st.env_value = clampValue<int>(st.env_value + clear_value, 0, cfg.max_env_clean);
     refreshStatus();
 }
 
 void Pet::decayEnvironment(unsigned int decay_value)
 {
-    st.env_value = clamp<int>(st.env_value - static_cast<int>(decay_value), 0, cfg.max_env_clean);
+    st.env_value = clampValue<int>(st.env_value - static_cast<int>(decay_value), 0, cfg.max_env_clean);
     refreshStatus();
 }
 
@@ -135,8 +135,8 @@ AnimationId Pet::CurrentAgeAnimation() const
 
 void Pet::setDefaultState()
 {
-    st.magic = MAGIC;
-    st.version = VER;
+    st.magic = kPetStateMagic;
+    st.version = kPetStateVersion;
     st.hasSick = false;
     st.status = static_cast<uint8_t>(HealthStatus::Healthy);
     st.age = 0.0f;
@@ -165,14 +165,14 @@ HealthStatus Pet::getStatus() const
     return static_cast<HealthStatus>(st.status);
 }
 
-const PersisState &Pet::persistentState() const
+const PersistedPetState &Pet::persistentState() const
 {
     return st;
 }
 
-bool Pet::restoreState(const PersisState &state)
+bool Pet::restoreState(const PersistedPetState &state)
 {
-    if (state.magic != MAGIC || state.version != VER)
+    if (state.magic != kPetStateMagic || state.version != kPetStateVersion)
         return false;
 
     st = state;

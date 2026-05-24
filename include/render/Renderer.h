@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <Adafruit_ST7735.h>
 #include <SdFat.h>
-#include "Animation.h"
+#include "domain/Animation.h"
 
 class Renderer
 {

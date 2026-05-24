@@ -2,7 +2,7 @@
 #define GUESSAPPLEGAME_H
 
 #include <Arduino.h>
-#include "Animation.h"
+#include "domain/Animation.h"
 
 enum class GuessAppleState
 {

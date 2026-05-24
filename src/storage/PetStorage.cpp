@@ -1,4 +1,4 @@
-#include "PetStorage.h"
+#include "storage/PetStorage.h"
 
 namespace
 {
@@ -12,13 +12,13 @@ bool loadStateFile(SdFat *sd, const char *path, Pet &pet)
     if (!f)
         return false;
 
-    if (f.size() != sizeof(PersisState))
+    if (f.size() != sizeof(PersistedPetState))
     {
         f.close();
         return false;
     }
 
-    PersisState state = {};
+    PersistedPetState state = {};
     const size_t readCount = f.read(reinterpret_cast<uint8_t *>(&state), sizeof(state));
     f.close();
 
@@ -43,7 +43,7 @@ bool PetStorage::save(const Pet &pet)
     if (!f)
         return false;
 
-    const PersisState &state = pet.persistentState();
+    const PersistedPetState &state = pet.persistentState();
     const size_t n = f.write(reinterpret_cast<const uint8_t *>(&state), sizeof(state));
     f.flush();
     f.close();

@@ -1,11 +1,11 @@
-#include "Game.h"
+#include "app/Game.h"
 
 #include <Arduino.h>
 #include <Adafruit_ST7735.h>
 #include <SdFat.h>
-#include "Pet.h"
-#include "PetStorage.h"
-#include "Renderer.h"
+#include "domain/Pet.h"
+#include "storage/PetStorage.h"
+#include "render/Renderer.h"
 
 Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
     : pet(new Pet()),

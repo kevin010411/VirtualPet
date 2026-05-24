@@ -2,10 +2,10 @@
 #define PET_H
 
 #include <Arduino.h>
-#include "Animation.h"
+#include "domain/Animation.h"
 
 template <typename T>
-static inline T clamp(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi : v); }
+static inline T clampValue(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 struct PetConfig
 {
@@ -21,7 +21,7 @@ struct PetConfig
     unsigned int poop_threshold = 300;
 };
 
-struct PersisState
+struct PersistedPetState
 {
     uint32_t magic;
     uint16_t version;
@@ -70,17 +70,17 @@ public:
     AnimationId CurrentAgeAnimation() const;
     String getAge();
 
-    const PersisState &persistentState() const;
-    bool restoreState(const PersisState &state);
+    const PersistedPetState &persistentState() const;
+    bool restoreState(const PersistedPetState &state);
 
 private:
     void refreshStatus();
 
     PetConfig cfg;
-    PersisState st = {};
+    PersistedPetState st = {};
 
-    static constexpr uint32_t MAGIC = 0x50455431;
-    static constexpr uint16_t VER = 1;
+    static constexpr uint32_t kPetStateMagic = 0x50455431;
+    static constexpr uint16_t kPetStateVersion = 1;
 };
 
 #endif

@@ -4,9 +4,9 @@
 #include <Arduino.h>
 #include <deque>
 #include <SdFat.h>
-#include "Animation.h"
-#include "GuessAppleGame.h"
-#include "Renderer.h"
+#include "domain/Animation.h"
+#include "minigame/GuessAppleGame.h"
+#include "render/Renderer.h"
 
 class Adafruit_ST7735;
 class Pet;
