@@ -38,6 +38,7 @@ public:
     void clearAnimationsByOwner(AnimationOwner owner) override;
     void markAnimationDirty() override;
     void changePetMood(int delta) override;
+    bool hasAnimationForOwner(AnimationOwner owner) const override;
 
 private:
     static constexpr unsigned long gameTick = 1200;

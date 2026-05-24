@@ -18,12 +18,28 @@ const int CONFIRM_COMMAND_BUTTON = PA11;
 // 建議頻率
 const uint32_t SD_SPI_MHZ = 16;
 const uint8_t TFT_INIT_TAB = INITR_BLACKTAB;
+const int8_t TFT_COL_OFFSET = 2;
+const int8_t TFT_ROW_OFFSET = 1;
 constexpr Renderer::AssetFormatPreference kAssetFormatPreference = Renderer::AssetFormatPreference::PreferRle;
 constexpr const char *kAnimalAssetName = "dino";
 
+class CalibratedST7735 : public Adafruit_ST7735
+{
+public:
+  CalibratedST7735(SPIClass *spiClass, int8_t cs, int8_t dc, int8_t rst)
+      : Adafruit_ST7735(spiClass, cs, dc, rst)
+  {
+  }
+
+  void setDisplayOffset(int8_t col, int8_t row)
+  {
+    setColRowStart(col, row);
+  }
+};
+
 // 建立 TFT 顯示物件
 SPIClass SPI_2(PB15, TFT_RST, PB13);
-Adafruit_ST7735 tft(&SPI_2, TFT_CS, TFT_DC, TFT_RST);
+CalibratedST7735 tft(&SPI_2, TFT_CS, TFT_DC, TFT_RST);
 
 SdFat SD;
 Game game(&tft, &SD);
@@ -35,11 +51,11 @@ static bool g_sdReady = false;
 static bool g_lowBatteryMode = false;
 static unsigned long g_lowBatterySince = 0;
 static unsigned long g_lowBatteryEnteredAt = 0;
-static const unsigned long LOW_BAT_CONFIRM_MS = 8000; // 防抖動誤判
+static const unsigned long LOW_BAT_CONFIRM_MS = 800; // 防抖動誤判
 static const unsigned long LOW_BAT_ANIMATION_MS = 5000;
 static unsigned long g_lowBatteryRecoveredSince = 0;
 static const unsigned long LOW_BAT_RECOVER_CONFIRM_MS = 500;
-static const bool FORCE_LOW_BATTERY_TEST = true; // 測試 low battery 時改成 true
+static const bool FORCE_LOW_BATTERY_TEST = false; // 測試 low battery 時改成 true
 
 static void initLowBatteryDetector()
 {
@@ -277,6 +293,7 @@ void onConfirmLongPress()
   digitalWrite(TFT_BLK, LOW);
   TFT_Reset200ms();
   tft.initR(TFT_INIT_TAB);
+  tft.setDisplayOffset(TFT_COL_OFFSET, TFT_ROW_OFFSET);
   tft.setRotation(2);
   digitalWrite(TFT_BLK, HIGH);
   game.setup_game();
@@ -369,6 +386,7 @@ void setup()
   TFT_Reset200ms();
   tft.initR(TFT_INIT_TAB);
   digitalWrite(TFT_BLK, LOW);
+  tft.setDisplayOffset(TFT_COL_OFFSET, TFT_ROW_OFFSET);
   tft.setRotation(2);
   tft.setTextColor(ST77XX_RED);
 

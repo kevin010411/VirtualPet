@@ -158,7 +158,6 @@ void Game::setup_game()
 void Game::loop_game()
 {
     const unsigned long current_time = millis();
-    guessApple->update();
 
     const unsigned long elapsed = current_time - last_tick_time;
     if (elapsed >= gameTick)
@@ -166,6 +165,7 @@ void Game::loop_game()
         last_tick_time = current_time;
         maybeDecayEnvironment(elapsed);
         ControlAnimation(elapsed);
+        guessApple->update();
 
         if (animationQueue.empty())
         {
@@ -175,6 +175,10 @@ void Game::loop_game()
 
         refreshBaseAnimation();
         maybeSavePet();
+    }
+    else
+    {
+        guessApple->update();
     }
 
     RenderGame(current_time);
@@ -376,6 +380,20 @@ void Game::clearAnimationsByOwner(AnimationOwner owner)
         animateDone = true;
         showAnimationId = AnimationId::None;
     }
+}
+
+bool Game::hasAnimationForOwner(AnimationOwner owner) const
+{
+    if (hasActiveAnimation && activeAnimation.owner == owner)
+        return true;
+
+    for (const Animation &animation : animationQueue)
+    {
+        if (animation.owner == owner)
+            return true;
+    }
+
+    return false;
 }
 
 void Game::markAnimationDirty()

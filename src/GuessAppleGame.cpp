@@ -3,20 +3,24 @@
 namespace
 {
     constexpr unsigned long kAppleRevealDelayMs = 50;
+    constexpr unsigned long kStartAnimationDurationMs = 1200;
     constexpr unsigned long kApplePromptLoopDurationMs = 24UL * 60UL * 60UL * 1000UL;
     constexpr unsigned long kResultAnimationDurationMs = 2000;
-    constexpr unsigned long kExitDelayMs = 250;
+    constexpr unsigned long kCancelExitDelayMs = 250;
+    constexpr int kMaxGuessCount = 3;
 
     AnimationId randomAppleAnimation()
     {
-        switch (random(1, 4))
+        switch (random(1, 5))
         {
         case 1:
             return AnimationId::Apple1;
         case 2:
             return AnimationId::Apple2;
-        default:
+        case 3:
             return AnimationId::Apple3;
+        default:
+            return AnimationId::Apple4;
         }
     }
 
@@ -53,9 +57,10 @@ void GuessAppleGame::queuePromptAnimation()
 void GuessAppleGame::start()
 {
     reset();
-    promptAnimationId = randomAppleAnimation();
-    queuePromptAnimation();
-    state = GuessAppleState::WaitingApple;
+    host.clearAnimationsByOwner(AnimationOwner::Minigame);
+    host.queueAnimation(Animation(AnimationId::GuessStart, kStartAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+    host.markAnimationDirty();
+    state = GuessAppleState::Starting;
     lastMoveTime = millis();
 }
 
@@ -82,6 +87,16 @@ void GuessAppleGame::update()
     const unsigned long now = millis();
     switch (state)
     {
+    case GuessAppleState::Starting:
+        if (!host.hasAnimationForOwner(AnimationOwner::Minigame))
+        {
+            promptAnimationId = randomAppleAnimation();
+            queuePromptAnimation();
+            state = GuessAppleState::WaitingApple;
+            lastMoveTime = now;
+        }
+        break;
+
     case GuessAppleState::WaitingApple:
         if (now - lastMoveTime > kAppleRevealDelayMs)
         {
@@ -91,17 +106,17 @@ void GuessAppleGame::update()
         break;
 
     case GuessAppleState::ShowingResult:
-        if (correctCount >= 3)
+        if (host.hasAnimationForOwner(AnimationOwner::Minigame))
+            break;
+
+        if (correctCount + wrongCount >= kMaxGuessCount)
         {
-            state = GuessAppleState::Win;
-            host.queueAnimation(Animation(AnimationId::GuessWin, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+            state = (correctCount > wrongCount) ? GuessAppleState::Win : GuessAppleState::Lose;
+            const AnimationId finalAnimation = (state == GuessAppleState::Win) ? AnimationId::GuessWin : AnimationId::GuessLoss;
+            host.clearAnimationsByOwner(AnimationOwner::Minigame);
+            host.queueAnimation(Animation(finalAnimation, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
             host.markAnimationDirty();
-        }
-        else if (wrongCount >= 3)
-        {
-            state = GuessAppleState::Lose;
-            host.queueAnimation(Animation(AnimationId::GuessLoss, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
-            host.markAnimationDirty();
+            lastMoveTime = now;
         }
         else
         {
@@ -113,9 +128,13 @@ void GuessAppleGame::update()
         break;
 
     case GuessAppleState::Cancel:
+        if (now - lastMoveTime > kCancelExitDelayMs)
+            state = GuessAppleState::Inactive;
+        break;
+
     case GuessAppleState::Win:
     case GuessAppleState::Lose:
-        if (now - lastMoveTime > kExitDelayMs)
+        if (!host.hasAnimationForOwner(AnimationOwner::Minigame))
             state = GuessAppleState::Inactive;
         break;
 

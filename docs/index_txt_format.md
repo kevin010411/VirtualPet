@@ -55,8 +55,10 @@ Lines starting with `#` are comments. Empty lines are ignored.
   - Frame height in pixels
   - Must be greater than `0`
 - `fps`
-  - Animation playback hint
-  - `0` means use firmware default frame interval
+  - Animation playback FPS for this animation
+  - The firmware converts this to a frame interval with `1000 / fps` milliseconds
+  - `0` means use the firmware default frame interval
+  - This controls playback cadence only; the drawing/decoding path is still selected by `format`
 - `path`
   - Folder or base path of the animation asset
   - Supports the `{animal}` token, which is replaced by the firmware-selected animal name
@@ -72,6 +74,19 @@ Lines starting with `#` are comments. Empty lines are ignored.
 - Unknown `format` values are ignored
 - `frames`, `width`, or `height` equal to `0` are ignored
 - Empty `path` values are ignored
+- `fps` may be `0`; non-zero values should be chosen so the target hardware can finish drawing each frame before the next interval
+
+## Playback behavior
+
+`fps` can be tuned independently per animation. For example, a status loop can use `6` FPS while a short result animation uses `10` FPS.
+
+The field does not switch rendering logic. Rendering is selected by `format`:
+
+- `bmp` uses numbered BMP frames and the BMP decoder
+- `raw` uses numbered RGB565 raw frames
+- `rle` uses numbered RGB565 RLE frames
+
+If a non-zero `fps` is configured, both normal gameplay animation and the low-battery animation use that manifest value. If the manifest line is missing or `fps` is `0`, firmware falls back to its default frame interval.
 
 ## Example
 
@@ -86,8 +101,13 @@ Feed|raw|5|128|96|8|/{animal}/animation/feed
 Gift|rle|6|128|96|8|/{animal}/animation/gift
 
 # Minigame animations
+GuessStart|bmp|2|128|96|8|/{animal}/guess_game/start
+Apple4|bmp|4|128|96|8|/{animal}/guess_game/4
 GuessWin|raw|4|128|96|10|/{animal}/guess_game/win
 GuessLoss|rle|4|128|96|10|/{animal}/guess_game/loss
+
+# System animations
+Battery|bmp|2|128|96|6|/battery
 ```
 
 ## Folder layout recommendation
@@ -98,6 +118,7 @@ GuessLoss|rle|4|128|96|10|/{animal}/guess_game/loss
 /cat/animation/hungry/1.bmp
 /dog/animation/feed/1.raw
 /dog/guess_game/win/1.rle
+/battery/1.bmp
 /assets/ui/layout/1.bmp
 ```
 

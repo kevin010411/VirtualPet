@@ -1,5 +1,7 @@
 # Copy this file to /index.txt on the SD card.
 # Format: id|format|frames|width|height|fps|path
+# fps controls playback cadence per animation. Rendering/decoding is selected by format.
+# Use fps=0 to fall back to the firmware default frame interval.
 
 # Base status animations
 Idle|bmp|3|128|96|6|/{animal}/animation/idle
@@ -19,9 +21,11 @@ Gift|bmp|3|128|96|8|/{animal}/animation/gift
 GiftHappy|bmp|2|128|96|8|/{animal}/animation/gift_happy
 
 # Guess game animations
+GuessStart|bmp|2|128|96|8|/{animal}/guess_game/start
 Apple1|bmp|4|128|96|8|/{animal}/guess_game/1
 Apple2|bmp|4|128|96|8|/{animal}/guess_game/2
 Apple3|bmp|4|128|96|8|/{animal}/guess_game/3
+Apple4|bmp|4|128|96|8|/{animal}/guess_game/4
 AppleP1|bmp|2|128|96|8|/{animal}/guess_game/r1
 AppleP2|bmp|2|128|96|8|/{animal}/guess_game/r2
 AppleP3|bmp|2|128|96|8|/{animal}/guess_game/r3
@@ -49,3 +53,6 @@ Predict8|bmp|2|128|96|8|/{animal}/predict/8
 Predict9|bmp|2|128|96|8|/{animal}/predict/9
 Predict10|bmp|2|128|96|8|/{animal}/predict/10
 Predict11|bmp|2|128|96|8|/{animal}/predict/11
+
+# System animations
+Battery|bmp|2|128|96|6|/battery
