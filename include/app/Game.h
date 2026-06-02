@@ -21,7 +21,6 @@ public:
     void setup_game();
     void loop_game();
     void requestFullRedraw();
-    void setRendererAssetFormatPreference(Renderer::AssetFormatPreference preference);
     void setRendererAssetAppearance(const char *speciesCode, const char *outfitCode);
     bool saveNow();
     bool showBatteryScreen();

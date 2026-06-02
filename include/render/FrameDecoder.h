@@ -6,6 +6,7 @@
 #include <SdFat.h>
 #include <vector>
 #include "render/AssetManifest.h"
+#include "render/AssetFormatConfig.h"
 
 namespace FrameDecoder
 {
@@ -19,6 +20,7 @@ bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, con
 bool buildFramePath(char *dest, size_t destSize, const char *basePath, uint16_t frameIndex, const char *ext);
 bool fileExists(SdFat *sd, const char *path);
 
+#if ENABLE_SD_BMP_ASSETS
 bool showBmpImage(SdFat *sd,
                   Adafruit_ST7735 *tft,
                   std::vector<uint8_t> &rowBuffer,
@@ -27,17 +29,9 @@ bool showBmpImage(SdFat *sd,
                   int xmin,
                   int ymin,
                   int batchLines);
+#endif
 
-bool showRawImage(SdFat *sd,
-                  Adafruit_ST7735 *tft,
-                  std::vector<uint16_t> &lineBuffer,
-                  const char *imgPath,
-                  uint16_t width,
-                  uint16_t height,
-                  int xmin,
-                  int ymin,
-                  int batchLines);
-
+#if ENABLE_SD_RLE_ASSETS
 bool showRleImage(SdFat *sd,
                   Adafruit_ST7735 *tft,
                   std::vector<uint16_t> &lineBuffer,
@@ -47,8 +41,7 @@ bool showRleImage(SdFat *sd,
                   bool validateExpectedSize,
                   int xmin,
                   int ymin);
-
-bool showRawFrame(SdFat *sd, Adafruit_ST7735 *tft, std::vector<uint16_t> &lineBuffer, const AnimationMeta &meta, uint16_t frameIndex);
+#endif
 } // namespace FrameDecoder
 
 #endif

@@ -11,7 +11,7 @@
 Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
     : pet(new Pet()),
       petStorage(new PetStorage(ref_SD)),
-      renderer(new Renderer(ref_tft, ref_SD)),
+      renderer(Renderer::create(ref_tft, ref_SD)),
       guessItem(new GuessItemGame(*this))
 {
 }
@@ -22,11 +22,6 @@ Game::~Game()
     delete renderer;
     delete petStorage;
     delete pet;
-}
-
-void Game::setRendererAssetFormatPreference(Renderer::AssetFormatPreference preference)
-{
-    renderer->setAssetFormatPreference(preference);
 }
 
 void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfitCode)

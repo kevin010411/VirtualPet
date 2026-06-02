@@ -68,6 +68,7 @@ bool fileExists(SdFat *sd, const char *path)
     return sd->exists(path);
 }
 
+#if ENABLE_SD_BMP_ASSETS
 bool showBmpImage(SdFat *sd,
                   Adafruit_ST7735 *tft,
                   std::vector<uint8_t> &rowBuffer,
@@ -152,44 +153,9 @@ bool showBmpImage(SdFat *sd,
     bmpFile.close();
     return true;
 }
+#endif
 
-bool showRawImage(SdFat *sd,
-                  Adafruit_ST7735 *tft,
-                  std::vector<uint16_t> &lineBuffer,
-                  const char *imgPath,
-                  uint16_t width,
-                  uint16_t height,
-                  int xmin,
-                  int ymin,
-                  int batchLines)
-{
-    File frameFile = sd->open(imgPath);
-    if (!frameFile)
-        return false;
-
-    const size_t lineCapacity = static_cast<size_t>(width) * batchLines;
-    if (lineBuffer.size() < lineCapacity)
-        lineBuffer.resize(lineCapacity);
-
-    for (uint16_t y = 0; y < height; y += batchLines)
-    {
-        const uint16_t actualLines = (y + batchLines > height) ? (height - y) : static_cast<uint16_t>(batchLines);
-        const size_t bytesNeeded = static_cast<size_t>(width) * actualLines * sizeof(uint16_t);
-        const int bytesRead = frameFile.read(reinterpret_cast<uint8_t *>(lineBuffer.data()), bytesNeeded);
-        if (bytesRead != static_cast<int>(bytesNeeded))
-        {
-            frameFile.close();
-            return false;
-        }
-
-        for (uint16_t i = 0; i < actualLines; ++i)
-            tft->drawRGBBitmap(xmin, ymin + y + i, &lineBuffer[i * width], width, 1);
-    }
-
-    frameFile.close();
-    return true;
-}
-
+#if ENABLE_SD_RLE_ASSETS
 bool showRleImage(SdFat *sd,
                   Adafruit_ST7735 *tft,
                   std::vector<uint16_t> &lineBuffer,
@@ -289,12 +255,5 @@ bool showRleImage(SdFat *sd,
     frameFile.close();
     return true;
 }
-
-bool showRawFrame(SdFat *sd, Adafruit_ST7735 *tft, std::vector<uint16_t> &lineBuffer, const AnimationMeta &meta, uint16_t frameIndex)
-{
-    char path[128];
-    if (!buildFramePath(path, sizeof(path), meta.path, frameIndex, ".raw"))
-        return false;
-    return showRawImage(sd, tft, lineBuffer, path, meta.width, meta.height, 0, 32, kWorkingBatchLines);
-}
+#endif
 } // namespace FrameDecoder

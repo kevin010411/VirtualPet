@@ -8,7 +8,6 @@
 enum class AssetFormat : uint8_t
 {
     BmpSequence,
-    RawRgb565Sequence,
     RleRgb565Sequence
 };
 

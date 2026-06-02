@@ -5,8 +5,9 @@
 #include <SdFat.h>
 #include <string.h>
 #include <vector>
-#include "render/AssetManifest.h"
+#include "render/BMPRenderer.h"
 #include "render/FrameDecoder.h"
+#include "render/RLERenderer.h"
 #include "render/RenderStatsReporter.h"
 
 struct Renderer::AnimationState
@@ -15,7 +16,6 @@ struct Renderer::AnimationState
     uint16_t animationIndex = 0;
     uint16_t maxFrame = 0;
     bool playOnce = false;
-    Renderer::AssetFormatPreference formatPreference = Renderer::AssetFormatPreference::Auto;
     char speciesCode[9] = "dino";
     char outfitCode[9] = "base";
     std::vector<uint8_t> rowBuffer;
@@ -25,6 +25,15 @@ struct Renderer::AnimationState
     RenderStats stats;
 #endif
 };
+
+Renderer *Renderer::create(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
+{
+#if ENABLE_SD_RLE_ASSETS
+    return new RLERenderer(ref_tft, ref_SD);
+#elif ENABLE_SD_BMP_ASSETS
+    return new BMPRenderer(ref_tft, ref_SD);
+#endif
+}
 
 Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
     : tft(ref_tft), SD(ref_SD), state(new AnimationState())
@@ -50,11 +59,6 @@ void Renderer::initAnimations()
     const int rowCapacity = ((FrameDecoder::kDefaultAnimWidth * 3 + 3) / 4) * 4 * FrameDecoder::kWorkingBatchLines;
     state->rowBuffer.assign(rowCapacity, 0);
     state->lineBuffer.assign(FrameDecoder::kDefaultAnimWidth * FrameDecoder::kWorkingBatchLines, 0);
-}
-
-void Renderer::setAssetFormatPreference(AssetFormatPreference preference)
-{
-    state->formatPreference = preference;
 }
 
 void Renderer::setAssetAppearance(const char *speciesCode, const char *outfitCode)
@@ -88,6 +92,26 @@ bool Renderer::reloadManifest()
     return state->manifest.load(SD, state->speciesCode, state->outfitCode);
 }
 
+Adafruit_ST7735 *Renderer::display() const
+{
+    return tft;
+}
+
+SdFat *Renderer::sdCard() const
+{
+    return SD;
+}
+
+std::vector<uint8_t> &Renderer::rowBuffer()
+{
+    return state->rowBuffer;
+}
+
+std::vector<uint16_t> &Renderer::lineBuffer()
+{
+    return state->lineBuffer;
+}
+
 bool Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int batch_lines)
 {
     if (img_path == nullptr || img_path[0] == '\0')
@@ -96,27 +120,9 @@ bool Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int bat
         return false;
     }
 
-    bool ok = false;
-    if (FrameDecoder::endsWithIgnoreCase(img_path, ".bmp"))
-    {
-        ok = FrameDecoder::showBmpImage(SD, tft, state->rowBuffer, state->lineBuffer, img_path, xmin, ymin, batch_lines);
-    }
-    else if (FrameDecoder::endsWithIgnoreCase(img_path, ".rle"))
-    {
-        ok = FrameDecoder::showRleImage(SD, tft, state->lineBuffer, img_path, 0, 0, false, xmin, ymin);
-    }
-    else if (FrameDecoder::endsWithIgnoreCase(img_path, ".raw"))
-    {
-        ok = FrameDecoder::showRawImage(SD, tft, state->lineBuffer, img_path, FrameDecoder::kDefaultAnimWidth, FrameDecoder::kDefaultAnimHeight, xmin, ymin, batch_lines);
-    }
-    else
-    {
-        char resolvedPath[128];
-        if (FrameDecoder::replaceOrAppendExtension(resolvedPath, sizeof(resolvedPath), img_path, ".bmp"))
-            ok = FrameDecoder::showBmpImage(SD, tft, state->rowBuffer, state->lineBuffer, resolvedPath, xmin, ymin, batch_lines);
-        if (!ok && FrameDecoder::replaceOrAppendExtension(resolvedPath, sizeof(resolvedPath), img_path, ".rle"))
-            ok = FrameDecoder::showRleImage(SD, tft, state->lineBuffer, resolvedPath, 0, 0, false, xmin, ymin);
-    }
+    char resolvedPath[128];
+    const bool hasPath = FrameDecoder::replaceOrAppendExtension(resolvedPath, sizeof(resolvedPath), img_path, assetExtension());
+    const bool ok = hasPath && showImageFile(resolvedPath, xmin, ymin, batch_lines, nullptr);
 
     if (!ok)
         FrameDecoder::showResourceError(tft);
@@ -132,31 +138,15 @@ bool Renderer::ShowSDCardFrame(const char *base_path, uint16_t frame_index, int 
     }
 
     char candidatePath[128];
-    bool ok = false;
-
-    const char *primaryExt = ".bmp";
-    const char *fallbackExt = ".rle";
-    if (state->formatPreference == AssetFormatPreference::PreferRle)
+    if (!FrameDecoder::buildFramePath(candidatePath, sizeof(candidatePath), base_path, frame_index, assetExtension()))
     {
-        primaryExt = ".rle";
-        fallbackExt = ".bmp";
+        FrameDecoder::showResourceError(tft);
+        return false;
     }
 
-    if (FrameDecoder::buildFramePath(candidatePath, sizeof(candidatePath), base_path, frame_index, primaryExt) &&
-        FrameDecoder::fileExists(SD, candidatePath))
-    {
-        ok = ShowSDCardImage(candidatePath, xmin, ymin, batch_lines);
-    }
-    else if (FrameDecoder::buildFramePath(candidatePath, sizeof(candidatePath), base_path, frame_index, fallbackExt) &&
-             FrameDecoder::fileExists(SD, candidatePath))
-    {
-        ok = ShowSDCardImage(candidatePath, xmin, ymin, batch_lines);
-    }
-    else if (FrameDecoder::buildFramePath(candidatePath, sizeof(candidatePath), base_path, frame_index, primaryExt))
-    {
-        ok = ShowSDCardImage(candidatePath, xmin, ymin, batch_lines);
-    }
-
+    const bool ok = showImageFile(candidatePath, xmin, ymin, batch_lines, nullptr);
+    if (!ok)
+        FrameDecoder::showResourceError(tft);
     return ok;
 }
 
@@ -201,55 +191,13 @@ bool Renderer::advanceAnimationFrame()
     {
         FrameDecoder::showResourceError(tft);
     }
-    else if (meta->format == AssetFormat::RawRgb565Sequence)
-    {
-        ok = FrameDecoder::showRawFrame(SD, tft, state->lineBuffer, *meta, state->animationIndex);
-        if (!ok)
-            FrameDecoder::showResourceError(tft);
-    }
     else
     {
-        char primaryPath[128];
-        char fallbackPath[128];
-        const char *primaryExt = ".bmp";
-        const char *fallbackExt = ".rle";
-
-        if (meta->format == AssetFormat::BmpSequence)
-        {
-            if (state->formatPreference == AssetFormatPreference::PreferRle)
-            {
-                primaryExt = ".rle";
-                fallbackExt = ".bmp";
-            }
-        }
-        else
-        {
-            primaryExt = ".rle";
-            fallbackExt = ".bmp";
-            if (state->formatPreference == AssetFormatPreference::PreferBmp)
-            {
-                primaryExt = ".bmp";
-                fallbackExt = ".rle";
-            }
-        }
-
-        if (FrameDecoder::buildFramePath(primaryPath, sizeof(primaryPath), meta->path, state->animationIndex, primaryExt))
-        {
-            if (FrameDecoder::endsWithIgnoreCase(primaryPath, ".rle"))
-                ok = FrameDecoder::showRleImage(SD, tft, state->lineBuffer, primaryPath, meta->width, meta->height, true, 0, 32);
-            else
-                ok = ShowSDCardImage(primaryPath, 0, 32);
-        }
-
-        if (!ok &&
-            FrameDecoder::buildFramePath(fallbackPath, sizeof(fallbackPath), meta->path, state->animationIndex, fallbackExt) &&
-            FrameDecoder::fileExists(SD, fallbackPath))
-        {
-            if (FrameDecoder::endsWithIgnoreCase(fallbackPath, ".rle"))
-                ok = FrameDecoder::showRleImage(SD, tft, state->lineBuffer, fallbackPath, meta->width, meta->height, true, 0, 32);
-            else
-                ok = ShowSDCardImage(fallbackPath, 0, 32);
-        }
+        char framePath[128];
+        if (FrameDecoder::buildFramePath(framePath, sizeof(framePath), meta->path, state->animationIndex, assetExtension()))
+            ok = showImageFile(framePath, 0, 32, FrameDecoder::kWorkingBatchLines, meta);
+        if (!ok)
+            FrameDecoder::showResourceError(tft);
     }
 
     if (ok)

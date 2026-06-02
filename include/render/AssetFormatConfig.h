@@ -1,0 +1,16 @@
+#ifndef ASSET_FORMAT_CONFIG_H
+#define ASSET_FORMAT_CONFIG_H
+
+#ifndef ENABLE_SD_BMP_ASSETS
+#define ENABLE_SD_BMP_ASSETS 0
+#endif
+
+#ifndef ENABLE_SD_RLE_ASSETS
+#define ENABLE_SD_RLE_ASSETS 1
+#endif
+
+#if (ENABLE_SD_BMP_ASSETS + ENABLE_SD_RLE_ASSETS) != 1
+#error "Exactly one of ENABLE_SD_BMP_ASSETS or ENABLE_SD_RLE_ASSETS must be 1"
+#endif
+
+#endif

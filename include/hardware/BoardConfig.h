@@ -3,7 +3,6 @@
 
 #include <Arduino.h>
 #include <Adafruit_ST7735.h>
-#include "render/Renderer.h"
 
 namespace BoardConfig
 {
@@ -25,7 +24,6 @@ constexpr uint8_t TftInitTab = INITR_BLACKTAB;
 constexpr int8_t TftColOffset = 2;
 constexpr int8_t TftRowOffset = 1;
 
-constexpr Renderer::AssetFormatPreference AssetFormatPreference = Renderer::AssetFormatPreference::PreferRle;
 constexpr const char *DefaultSpeciesCode = "dino";
 constexpr const char *DefaultOutfitCode = "base";
 } // namespace BoardConfig

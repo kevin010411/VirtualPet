@@ -36,8 +36,6 @@ void trimWhitespace(char *text)
 
 AssetFormat parseAssetFormat(const char *text)
 {
-    if (strcmp(text, "raw") == 0)
-        return AssetFormat::RawRgb565Sequence;
     if (strcmp(text, "rle") == 0)
         return AssetFormat::RleRgb565Sequence;
     return AssetFormat::BmpSequence;
@@ -178,9 +176,8 @@ bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitC
             continue;
 
         const bool isBmp = strcmp(fields[1], "bmp") == 0;
-        const bool isRaw = strcmp(fields[1], "raw") == 0;
         const bool isRle = strcmp(fields[1], "rle") == 0;
-        if (!isBmp && !isRaw && !isRle)
+        if (!isBmp && !isRle)
             continue;
 
         AnimationMeta parsed = {};

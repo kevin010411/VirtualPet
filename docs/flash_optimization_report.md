@@ -13,9 +13,9 @@
 | 建置狀態 | Flash | Flash 使用率 | RAM | RAM 使用率 |
 | --- | ---: | ---: | ---: | ---: |
 | 最佳化前 | 60076 bytes | 91.7% | 7848 bytes | 38.3% |
-| 最佳化後 | 50908 bytes | 77.7% | 7812 bytes | 38.1% |
+| 最佳化後 | 49504 bytes | 75.5% | 9352 bytes | 45.7% |
 
-共節省 Flash：9168 bytes，約為 64 KB flash 空間的 14.0%。
+共節省 Flash：11072 bytes，約為 64 KB flash 空間的 16.9%。
 
 ## 已套用的變更
 
@@ -31,10 +31,9 @@
    - 功能停用時，從 `Renderer` 移除 release 期間的 `micros()`、float 與 FPS 更新路徑。
    - 主要 Flash 節省來源：避免 release 韌體編入 float 運算、格式化 float 輸出，以及 SD 報表寫入邏輯。
 
-3. 預設停用序列埠開機 log。
-   - 新增 `ENABLE_SERIAL_LOG=0`。
-   - 包住 `Serial.begin()` 與 `Serial.println()` 呼叫。
-   - 這讓除錯 log 仍容易恢復，同時 release 不需支付 Flash 成本。
+3. 移除序列埠開機 log。
+   - 刪除 `Serial.begin()` 與 `Serial.println()` 呼叫。
+   - release 韌體不再編入開機序列埠輸出路徑。
 
 4. 移除未使用的 `Adafruit EPD` 依賴。
    - 專案使用的是 `Adafruit_ST7735`，不是 EPD/ThinkInk 類別。
@@ -47,14 +46,15 @@
 最終 PlatformIO 記憶體報告：
 
 ```text
-RAM:   [====      ]  38.1% (used 7812 bytes from 20480 bytes)
-Flash: [========  ]  77.7% (used 50908 bytes from 65536 bytes)
+text=49256, data=248, bss=9104
+Flash: 49504 bytes
+RAM:   9352 bytes
 ```
 
 ## 注意事項與風險
 
 - FPS report 檔案產生功能目前在 release build 中停用。若要用於 profiling，請設定 `-DENABLE_RENDER_STATS=1`。
-- 序列埠開機訊息目前在 release build 中停用。若要啟用，請設定 `-DENABLE_SERIAL_LOG=1`。
+- 序列埠開機訊息已移除。
 - LTO 可能稍微增加建置時間，但本次產生了顯著的 Flash 降幅，而且韌體仍可成功建置。
 - 剩餘 warning 來自 Adafruit ST77xx library 使用 Arduino 已棄用的 `boolean` typedef；這不是本次最佳化造成的。
 
@@ -62,5 +62,5 @@ Flash: [========  ]  77.7% (used 50908 bytes from 65536 bytes)
 
 - 若 Flash 或 heap fragmentation 成為問題，可將 `std::vector` 與 `std::deque` 改為固定容量 buffer。
 - 若資源與狀態檔格式可以保持簡單，可檢視 `SdFat` 設定，關閉未使用的 exFAT、iostream 或 long filename 支援。
-- 若 SD 資源不再需要 BMP 相容性，可考慮只使用 RLE/raw 資源，並移除 BMP fallback 路徑。
-- 生產版韌體建議維持停用 render stats 與 serial logging。
+- SD 資源格式可透過 `ENABLE_SD_BMP_ASSETS` / `ENABLE_SD_RLE_ASSETS` 在 build time 選擇，預設只編入 RLE renderer。
+- 生產版韌體建議維持停用 render stats。
