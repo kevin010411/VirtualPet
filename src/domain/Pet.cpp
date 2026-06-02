@@ -171,12 +171,17 @@ AnimationId Pet::CurrentAnimation() const
 
 AnimationId Pet::CurrentAgeAnimation() const
 {
-    const double normalized = st.age / cfg.max_age;
-    if (normalized < 0.3)
-        return AnimationId::AgeStatus1;
-    if (normalized < 0.75)
-        return AnimationId::AgeStatus2;
-    return AnimationId::AgeStatus3;
+    return AnimationId::AgeStatus;
+}
+
+uint16_t Pet::CurrentAgeFrame(uint16_t maxFrame) const
+{
+    if (maxFrame <= 1)
+        return 1;
+
+    const float normalized = cfg.max_age <= 0.0f ? 1.0f : clampValue<float>(st.age / cfg.max_age, 0.0f, 1.0f);
+    const uint16_t frame = static_cast<uint16_t>(normalized * static_cast<float>(maxFrame)) + 1;
+    return clampValue<uint16_t>(frame, 1, maxFrame);
 }
 
 void Pet::setDefaultState()
@@ -196,13 +201,12 @@ void Pet::setDefaultState()
 
 String Pet::getAge()
 {
-    switch (CurrentAgeAnimation())
+    switch (CurrentAgeFrame(3))
     {
-    case AnimationId::AgeStatus1:
+    case 1:
         return "0.1";
-    case AnimationId::AgeStatus2:
+    case 2:
         return "0.5";
-    case AnimationId::AgeStatus3:
     default:
         return "1";
     }

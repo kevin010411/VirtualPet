@@ -43,9 +43,7 @@ enum class AnimationId : uint8_t
     Predict9,
     Predict10,
     Predict11,
-    AgeStatus1,
-    AgeStatus2,
-    AgeStatus3,
+    AgeStatus,
     Battery,
     GuessItem4,
     GuessStart,
@@ -82,17 +80,22 @@ struct Animation
     bool playOnce;
     AnimationOwner owner;
     AnimationPriority priority;
+    uint16_t frameIndex;
 
     Animation(AnimationId animationId = AnimationId::None,
               unsigned long duration = 0,
               bool once = false,
               AnimationOwner animationOwner = AnimationOwner::BaseState,
-              AnimationPriority animationPriority = AnimationPriority::Base)
+              AnimationPriority animationPriority = AnimationPriority::Base,
+              uint16_t fixedFrameIndex = 0)
         : id(animationId),
           durationMs(duration),
           playOnce(once),
           owner(animationOwner),
-          priority(animationPriority) {}
+          priority(animationPriority),
+          frameIndex(fixedFrameIndex) {}
+
+    bool isFixedFrame() const { return frameIndex != 0; }
 };
 
 #endif

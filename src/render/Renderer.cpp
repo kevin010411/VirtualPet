@@ -150,6 +150,32 @@ bool Renderer::ShowSDCardFrame(const char *base_path, uint16_t frame_index, int 
     return ok;
 }
 
+bool Renderer::ShowAnimationFrame(AnimationId id, uint16_t frame_index, int xmin, int ymin, int batch_lines)
+{
+    AnimationMeta *meta = state->manifest.metaFor(id);
+    if (id == AnimationId::None || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
+    {
+        FrameDecoder::showResourceError(tft);
+        return false;
+    }
+
+    const uint16_t maxFrame = meta->singleFile ? 1 : meta->frameCount;
+    uint16_t safeFrame = frame_index;
+    if (safeFrame < 1)
+        safeFrame = 1;
+    if (safeFrame > maxFrame)
+        safeFrame = maxFrame;
+
+    char framePath[128];
+    const bool hasFramePath = meta->singleFile
+                                  ? FrameDecoder::replaceOrAppendExtension(framePath, sizeof(framePath), meta->path, assetExtension())
+                                  : FrameDecoder::buildFramePath(framePath, sizeof(framePath), meta->path, safeFrame, assetExtension());
+    const bool ok = hasFramePath && showImageFile(framePath, xmin, ymin, batch_lines, meta);
+    if (!ok)
+        FrameDecoder::showResourceError(tft);
+    return ok;
+}
+
 bool Renderer::setAnimation(AnimationId id, bool playOnce)
 {
     AnimationMeta *meta = state->manifest.metaFor(id);
@@ -212,6 +238,15 @@ bool Renderer::advanceAnimationFrame()
 
     state->animationIndex++;
     return !ok;
+}
+
+uint16_t Renderer::frameCountFor(AnimationId id) const
+{
+    const AnimationMeta *meta = state->manifest.metaFor(id);
+    if (id == AnimationId::None || !meta->configured || meta->frameCount == 0)
+        return 0;
+
+    return meta->singleFile ? 1 : meta->frameCount;
 }
 
 unsigned long Renderer::frameIntervalFor(AnimationId id, unsigned long defaultIntervalMs) const

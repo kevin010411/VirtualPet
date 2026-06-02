@@ -38,9 +38,7 @@ GuessWin|bmp|5|128|96|10|/{species}/guess_game/win
 GuessLoss|bmp|2|128|96|10|/{species}/guess_game/loss
 
 # 年齡狀態動畫
-AgeStatus1|bmp|2|128|96|6|/status/age/1
-AgeStatus2|bmp|2|128|96|6|/status/age/2
-AgeStatus3|bmp|2|128|96|6|/status/age/3
+AgeStatus|bmp|3|128|96|6|/status/age
 
 # 占卜動畫
 PredAnim|bmp|23|128|96|10|/predict/anim

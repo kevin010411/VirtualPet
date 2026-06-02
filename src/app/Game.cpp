@@ -241,6 +241,9 @@ void Game::ControlAnimation(unsigned long elapsed)
         return;
 
     displayDuration -= static_cast<long>(elapsed);
+    if (displayDuration > 0 && activeAnimation.isFixedFrame())
+        return;
+
     if (displayDuration > 0 && !animateDone)
         return;
 
@@ -281,12 +284,19 @@ void Game::RenderGame(unsigned long current_time)
         }
 
         frameInterval = renderer->frameIntervalFor(showAnimationId, frameIntervalSlow);
-        animateDone = !renderer->setAnimation(showAnimationId, playOnce);
-        if (!animateDone)
-            animateDone = renderer->advanceAnimationFrame();
+        if (hasActiveAnimation && activeAnimation.isFixedFrame())
+        {
+            animateDone = !renderer->ShowAnimationFrame(showAnimationId, activeAnimation.frameIndex);
+        }
+        else
+        {
+            animateDone = !renderer->setAnimation(showAnimationId, playOnce);
+            if (!animateDone)
+                animateDone = renderer->advanceAnimationFrame();
+        }
         dirtyAnimation = false;
     }
-    else if (frame_due)
+    else if (frame_due && !(hasActiveAnimation && activeAnimation.isFixedFrame()))
     {
         animateDone |= renderer->advanceAnimationFrame();
     }
@@ -478,9 +488,13 @@ void Game::parse_command(Command command)
         markAnimationDirty();
         break;
     case Command::Status:
-        queueAnimation(Animation(pet->CurrentAgeAnimation(), gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal));
+    {
+        const AnimationId ageAnimation = pet->CurrentAgeAnimation();
+        const uint16_t maxFrame = renderer->frameCountFor(ageAnimation);
+        queueAnimation(Animation(ageAnimation, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet->CurrentAgeFrame(maxFrame)));
         markAnimationDirty();
         break;
+    }
     case Command::Count:
         break;
     }

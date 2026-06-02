@@ -20,8 +20,10 @@ public:
     bool reloadManifest();
     bool ShowSDCardImage(const char *img_path, int xmin = 0, int ymin = 0, int batch_lines = 4);
     bool ShowSDCardFrame(const char *base_path, uint16_t frame_index, int xmin = 0, int ymin = 0, int batch_lines = 4);
+    bool ShowAnimationFrame(AnimationId id, uint16_t frame_index, int xmin = 0, int ymin = 32, int batch_lines = 4);
     bool setAnimation(AnimationId id, bool playOnce);
     bool advanceAnimationFrame();
+    uint16_t frameCountFor(AnimationId id) const;
     unsigned long frameIntervalFor(AnimationId id, unsigned long defaultIntervalMs) const;
 
 private:

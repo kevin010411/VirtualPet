@@ -70,6 +70,7 @@ public:
     HealthStatus getStatus() const;
     AnimationId CurrentAnimation() const;
     AnimationId CurrentAgeAnimation() const;
+    uint16_t CurrentAgeFrame(uint16_t maxFrame) const;
     String getAge();
     const char *speciesCode() const;
     const char *outfitCode() const;
