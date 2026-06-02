@@ -164,7 +164,7 @@ bool Renderer::setAnimation(AnimationId id, bool playOnce)
 
     state->nowAnimId = id;
     state->animationIndex = 1;
-    state->maxFrame = meta->frameCount;
+    state->maxFrame = meta->singleFile ? 1 : meta->frameCount;
     state->playOnce = playOnce;
     return true;
 }
@@ -194,7 +194,10 @@ bool Renderer::advanceAnimationFrame()
     else
     {
         char framePath[128];
-        if (FrameDecoder::buildFramePath(framePath, sizeof(framePath), meta->path, state->animationIndex, assetExtension()))
+        const bool hasFramePath = meta->singleFile
+                                      ? FrameDecoder::replaceOrAppendExtension(framePath, sizeof(framePath), meta->path, assetExtension())
+                                      : FrameDecoder::buildFramePath(framePath, sizeof(framePath), meta->path, state->animationIndex, assetExtension());
+        if (hasFramePath)
             ok = showImageFile(framePath, 0, 32, FrameDecoder::kWorkingBatchLines, meta);
         if (!ok)
             FrameDecoder::showResourceError(tft);

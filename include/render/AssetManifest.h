@@ -20,6 +20,7 @@ struct AnimationMeta
     uint16_t frameCount;
     uint8_t fpsHint;
     bool configured;
+    bool singleFile;
 };
 
 class AssetManifest

@@ -59,12 +59,13 @@ Idle|bmp|6|128|96|6|/{species}/{outfit}/idle
   - `0` 表示使用韌體預設影格間隔
   - 此欄位只控制播放節奏；繪製與解碼路徑仍由 `format` 選擇
 - `path`
-  - 動畫資源的資料夾或基礎路徑
+  - 動畫資源的資料夾、基礎路徑，或單一檔案路徑
   - 支援 `{species}` 與 `{outfit}` token，會由韌體選定的短代碼取代
   - 也接受舊版 `{animal}`，作為 species alias
-  - 韌體會以下列方式載入影格：
+  - 若 `path` 沒有 `.bmp` 或 `.rle` 副檔名，韌體會把它視為資料夾：
   - `path/1.bmp`、`path/2.bmp`、... 用於 `bmp`
   - `path/1.rle`、`path/2.rle`、... 用於 `rle`
+  - 若 `path` 已包含 `.bmp` 或 `.rle` 副檔名，韌體會把它視為單一畫面，只播放該檔案
 
 ## 驗證規則
 

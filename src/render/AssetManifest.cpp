@@ -41,6 +41,31 @@ AssetFormat parseAssetFormat(const char *text)
     return AssetFormat::BmpSequence;
 }
 
+bool endsWithIgnoreCase(const char *text, const char *suffix)
+{
+    if (text == nullptr || suffix == nullptr)
+        return false;
+
+    const size_t textLen = strlen(text);
+    const size_t suffixLen = strlen(suffix);
+    if (textLen < suffixLen)
+        return false;
+
+    const char *start = text + textLen - suffixLen;
+    for (size_t i = 0; i < suffixLen; ++i)
+    {
+        char a = start[i];
+        char b = suffix[i];
+        if (a >= 'A' && a <= 'Z')
+            a = static_cast<char>(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z')
+            b = static_cast<char>(b - 'A' + 'a');
+        if (a != b)
+            return false;
+    }
+    return true;
+}
+
 bool splitManifestFields(char *line, char **fields, size_t fieldCount)
 {
     size_t count = 0;
@@ -145,6 +170,7 @@ void AssetManifest::reset()
         meta.frameCount = 0;
         meta.fpsHint = 0;
         meta.configured = false;
+        meta.singleFile = false;
     }
 }
 
@@ -191,6 +217,11 @@ bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitC
 
         if (parsed.frameCount == 0 || parsed.width == 0 || parsed.height == 0 || parsed.path[0] == '\0')
             continue;
+
+        parsed.singleFile = endsWithIgnoreCase(parsed.path, ".bmp") ||
+                            endsWithIgnoreCase(parsed.path, ".rle");
+        if (parsed.singleFile)
+            parsed.frameCount = 1;
 
         parsed.configured = true;
         *metaFor(targetId) = parsed;
