@@ -2,13 +2,21 @@
 
 namespace
 {
+#ifndef ENABLE_GUESS_GAME_SINGLE_ROUND
+#define ENABLE_GUESS_GAME_SINGLE_ROUND 0
+#endif
+
     constexpr unsigned long kItemRevealDelayMs = 50;
     constexpr unsigned long kStartAnimationDurationMs = 1200;
     constexpr unsigned long kItemPromptLoopDurationMs = 24UL * 60UL * 60UL * 1000UL;
     constexpr unsigned long kItemPromptSwitchIntervalMs = 800;
     constexpr unsigned long kResultAnimationDurationMs = 2000;
     constexpr unsigned long kCancelExitDelayMs = 250;
+#if ENABLE_GUESS_GAME_SINGLE_ROUND
+    constexpr int kMaxGuessCount = 1;
+#else
     constexpr int kMaxGuessCount = 3;
+#endif
 
     AnimationId randomItemAnimation()
     {
@@ -125,12 +133,17 @@ void GuessItemGame::update()
 
         if (correctCount + wrongCount >= kMaxGuessCount)
         {
+#if ENABLE_GUESS_GAME_SINGLE_ROUND
+            state = GuessItemState::Inactive;
+            lastMoveTime = now;
+#else
             state = (correctCount > wrongCount) ? GuessItemState::Win : GuessItemState::Lose;
             const AnimationId finalAnimation = (state == GuessItemState::Win) ? AnimationId::GuessWin : AnimationId::GuessLoss;
             host.clearAnimationsByOwner(AnimationOwner::Minigame);
             host.queueAnimation(Animation(finalAnimation, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
             host.markAnimationDirty();
             lastMoveTime = now;
+#endif
         }
         else
         {
