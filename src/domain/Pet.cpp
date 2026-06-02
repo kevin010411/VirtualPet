@@ -86,17 +86,19 @@ void Pet::refreshStatus()
         cfg));
 }
 
-void Pet::dayPassed()
+bool Pet::dayPassed()
 {
     if (getStatus() != HealthStatus::Healthy)
-        return;
+        return false;
 
     st.hungry_value = clampValue<int>(st.hungry_value + 1, 0, cfg.max_hunger);
     st.mood = clampValue<int>(st.mood - 1, 0, cfg.max_mood);
     st.age = clampValue<float>(st.age + cfg.age_per_tick, 0.0f, cfg.max_age);
     st.clean_value = clampValue<int>(st.clean_value - 1, 0, cfg.max_clean);
     st.env_value = clampValue<int>(st.env_value - 1, 0, cfg.max_env_clean);
+    st.healthy_days += 1;
     refreshStatus();
+    return true;
 }
 
 void Pet::feedPet(int add_satiety)
@@ -197,6 +199,7 @@ void Pet::setDefaultState()
     st.env_value = 800;
     strcpy(st.species, "dino");
     strcpy(st.outfit, "base");
+    st.healthy_days = 0;
 }
 
 String Pet::getAge()
@@ -230,6 +233,11 @@ const char *Pet::speciesCode() const
 const char *Pet::outfitCode() const
 {
     return st.outfit[0] == '\0' ? "base" : st.outfit;
+}
+
+uint32_t Pet::healthyDays() const
+{
+    return st.healthy_days;
 }
 
 bool Pet::setSpeciesCode(const char *code)

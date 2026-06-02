@@ -36,6 +36,7 @@ struct PersistedPetState
     int32_t env_value;
     char species[9];
     char outfit[9];
+    uint32_t healthy_days;
 };
 
 enum class HealthStatus
@@ -56,7 +57,7 @@ class Pet
 public:
     Pet(float age = 0);
 
-    void dayPassed();
+    bool dayPassed();
     void feedPet(int add_satiety);
     void changeMood(int delta);
     void takeShower(int value);
@@ -74,6 +75,7 @@ public:
     String getAge();
     const char *speciesCode() const;
     const char *outfitCode() const;
+    uint32_t healthyDays() const;
     bool setSpeciesCode(const char *code);
     bool setOutfitCode(const char *code);
 
@@ -87,7 +89,7 @@ private:
     PersistedPetState st = {};
 
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 2;
+    static constexpr uint16_t kPetStateVersion = 3;
 };
 
 #endif

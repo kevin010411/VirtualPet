@@ -1,0 +1,29 @@
+# command_rules.txt
+# Purpose:
+#   Let SD-card data enable or disable commands by command name and healthy days.
+#
+# Location on SD card:
+#   /command_rules.txt
+#
+# Line format:
+#   command|enabled|min_healthy_days|max_healthy_days
+#
+# Rules:
+#   - Lines starting with # are comments.
+#   - Empty lines are ignored.
+#   - The first matching row decides whether the command can run.
+#   - If this file is missing, invalid, or has no matching row, the command is enabled.
+#   - enabled accepts 1, 0, true, false, on, off.
+#   - max_healthy_days may be * for no upper limit.
+#   - command may be *, FEED_PET, PREDICT, GIFT, MEDICINE, SHOWER, HAVE_FUN,
+#     CLEAN, STATUS, or the friendly names FeedPet, Predict, Gift, Medicine,
+#     Shower, HaveFun, Clean, Status.
+#   - Disabled commands still appear in the menu, but pressing confirm does not
+#     execute them.
+#
+# Examples:
+#   Enable everything by default, but disable Gift before 7 healthy days.
+#   Disable Predict before 3 healthy days.
+
+Gift|0|0|6
+Predict|0|0|2

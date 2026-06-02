@@ -8,11 +8,196 @@
 #include "storage/PetStorage.h"
 #include "render/Renderer.h"
 
+namespace
+{
+constexpr const char *kSpeciesByHealthyDaysPath = "/species_by_healthy_days.txt";
+constexpr const char *kCommandRulesPath = "/command_rules.txt";
+constexpr uint32_t kNoMaxHealthyDays = 0xFFFFFFFFUL;
+
+bool isSpaceChar(char c)
+{
+    return c == ' ' || c == '\t';
+}
+
+char *trimField(char *text)
+{
+    while (text != nullptr && isSpaceChar(*text))
+        ++text;
+
+    if (text == nullptr || *text == '\0')
+        return text;
+
+    char *end = text + strlen(text) - 1;
+    while (end >= text && isSpaceChar(*end))
+    {
+        *end = '\0';
+        --end;
+    }
+    return text;
+}
+
+bool readConfigLine(File &file, char *line, size_t lineSize)
+{
+    if (line == nullptr || lineSize == 0)
+        return false;
+
+    size_t index = 0;
+    bool sawAny = false;
+    while (file.available())
+    {
+        const char c = static_cast<char>(file.read());
+        sawAny = true;
+        if (c == '\r')
+            continue;
+        if (c == '\n')
+            break;
+        if (index + 1 < lineSize)
+            line[index++] = c;
+    }
+
+    line[index] = '\0';
+    return sawAny || index > 0;
+}
+
+bool parseUnsignedField(const char *text, uint32_t &value)
+{
+    if (text == nullptr || text[0] == '\0')
+        return false;
+
+    uint32_t parsed = 0;
+    for (const char *cursor = text; *cursor != '\0'; ++cursor)
+    {
+        if (*cursor < '0' || *cursor > '9')
+            return false;
+        parsed = parsed * 10UL + static_cast<uint32_t>(*cursor - '0');
+    }
+
+    value = parsed;
+    return true;
+}
+
+bool parseRangeField(const char *text, uint32_t &value)
+{
+    if (strcmp(text, "*") == 0)
+    {
+        value = kNoMaxHealthyDays;
+        return true;
+    }
+
+    return parseUnsignedField(text, value);
+}
+
+bool parseEnabledField(const char *text, bool &enabled)
+{
+    if (strcmp(text, "1") == 0)
+    {
+        enabled = true;
+        return true;
+    }
+
+    if (strcmp(text, "0") == 0)
+    {
+        enabled = false;
+        return true;
+    }
+
+    return false;
+}
+
+bool isValidAppearanceCode(const char *code)
+{
+    if (code == nullptr || code[0] == '\0')
+        return false;
+
+    const size_t len = strlen(code);
+    if (len > 8)
+        return false;
+
+    for (size_t i = 0; i < len; ++i)
+    {
+        const char c = code[i];
+        const bool valid = (c >= 'a' && c <= 'z') ||
+                           (c >= 'A' && c <= 'Z') ||
+                           (c >= '0' && c <= '9') ||
+                           c == '_' || c == '-';
+        if (!valid)
+            return false;
+    }
+
+    return true;
+}
+
+bool splitSpeciesRule(char *line, uint32_t &minDays, uint32_t &maxDays, char *&speciesCode, char *&outfitCode)
+{
+    char *fields[4] = {};
+    fields[0] = line;
+    int fieldIndex = 1;
+
+    for (char *cursor = line; *cursor != '\0'; ++cursor)
+    {
+        if (*cursor != '|')
+            continue;
+        if (fieldIndex >= 4)
+            return false;
+        *cursor = '\0';
+        fields[fieldIndex++] = cursor + 1;
+    }
+
+    if (fieldIndex != 4)
+        return false;
+
+    for (int i = 0; i < 4; ++i)
+        fields[i] = trimField(fields[i]);
+
+    if (!parseUnsignedField(fields[0], minDays))
+        return false;
+
+    if (strcmp(fields[1], "*") == 0)
+        maxDays = kNoMaxHealthyDays;
+    else if (!parseUnsignedField(fields[1], maxDays))
+        return false;
+
+    speciesCode = fields[2];
+    outfitCode = fields[3];
+    return minDays <= maxDays &&
+           isValidAppearanceCode(speciesCode) &&
+           isValidAppearanceCode(outfitCode);
+}
+
+bool splitCommandRule(char *line, char *fields[], size_t fieldCount)
+{
+    if (line == nullptr || fields == nullptr || fieldCount == 0)
+        return false;
+
+    fields[0] = line;
+    size_t fieldIndex = 1;
+    for (char *cursor = line; *cursor != '\0'; ++cursor)
+    {
+        if (*cursor != '|')
+            continue;
+        if (fieldIndex >= fieldCount)
+            return false;
+        *cursor = '\0';
+        fields[fieldIndex++] = cursor + 1;
+    }
+
+    if (fieldIndex != fieldCount)
+        return false;
+
+    for (size_t i = 0; i < fieldCount; ++i)
+        fields[i] = trimField(fields[i]);
+
+    return true;
+}
+
+} // namespace
+
 Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
     : pet(new Pet()),
       petStorage(new PetStorage(ref_SD)),
       renderer(Renderer::create(ref_tft, ref_SD)),
-      guessItem(new GuessItemGame(*this))
+      guessItem(new GuessItemGame(*this)),
+      sd(ref_SD)
 {
 }
 
@@ -162,6 +347,7 @@ void Game::setup_game()
         pet->setOutfitCode(defaultOutfitCode);
     }
 
+    applySpeciesForHealthyDays();
     renderer->setAssetAppearance(pet->speciesCode(), pet->outfitCode());
     renderer->reloadManifest();
     refreshBaseAnimation();
@@ -182,7 +368,8 @@ void Game::loop_game()
         if (animationQueue.empty())
         {
             roll_sick();
-            pet->dayPassed();
+            if (pet->dayPassed())
+                applySpeciesForHealthyDays();
         }
 
         refreshBaseAnimation();
@@ -311,6 +498,7 @@ void Game::RenderGame(unsigned long current_time)
 void Game::resetPet()
 {
     pet->setDefaultState();
+    applySpeciesForHealthyDays();
     renderer->setAssetAppearance(pet->speciesCode(), pet->outfitCode());
     renderer->reloadManifest();
     clearAnimationsByOwner(AnimationOwner::Command);
@@ -319,6 +507,45 @@ void Game::resetPet()
     dirtyAnimation = true;
     saveCounter = 0;
     petStorage->save(*pet);
+}
+
+bool Game::applySpeciesForHealthyDays()
+{
+    if (sd == nullptr || !sd->exists(kSpeciesByHealthyDaysPath))
+        return false;
+
+    File file = sd->open(kSpeciesByHealthyDaysPath, FILE_READ);
+    if (!file)
+        return false;
+
+    const uint32_t healthyDays = pet->healthyDays();
+    char line[80] = {};
+    while (readConfigLine(file, line, sizeof(line)))
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+
+        uint32_t minDays = 0;
+        uint32_t maxDays = 0;
+        char *speciesCode = nullptr;
+        char *outfitCode = nullptr;
+        if (!splitSpeciesRule(content, minDays, maxDays, speciesCode, outfitCode))
+            continue;
+
+        if (healthyDays < minDays || healthyDays > maxDays)
+            continue;
+
+        file.close();
+        if (strcmp(pet->speciesCode(), speciesCode) == 0 &&
+            strcmp(pet->outfitCode(), outfitCode) == 0)
+            return false;
+
+        return applyAppearance(speciesCode, outfitCode);
+    }
+
+    file.close();
+    return false;
 }
 
 bool Game::applyAppearance(const char *speciesCode, const char *outfitCode)
@@ -382,7 +609,87 @@ void Game::PrevCommand()
 
 void Game::ExecuteCommand()
 {
+    if (!isCommandEnabled(nowCommand))
+        return;
+
     parse_command(nowCommand);
+}
+
+bool Game::commandMatches(Command command, const char *text) const
+{
+    if (text == nullptr)
+        return false;
+
+    if (strcmp(text, "*") == 0 || strcmp(text, commandLabel(command)) == 0)
+        return true;
+
+    switch (command)
+    {
+    case Command::FeedPet:
+        return strcmp(text, "FeedPet") == 0;
+    case Command::Predict:
+        return strcmp(text, "Predict") == 0;
+    case Command::Gift:
+        return strcmp(text, "Gift") == 0;
+    case Command::Medicine:
+        return strcmp(text, "Medicine") == 0;
+    case Command::Shower:
+        return strcmp(text, "Shower") == 0;
+    case Command::HaveFun:
+        return strcmp(text, "HaveFun") == 0;
+    case Command::Clean:
+        return strcmp(text, "Clean") == 0;
+    case Command::Status:
+        return strcmp(text, "Status") == 0;
+    case Command::Count:
+        break;
+    }
+
+    return false;
+}
+
+bool Game::isCommandEnabled(Command command)
+{
+    if (sd == nullptr || !sd->exists(kCommandRulesPath))
+        return true;
+
+    File file = sd->open(kCommandRulesPath, FILE_READ);
+    if (!file)
+        return true;
+
+    char line[96] = {};
+    while (readConfigLine(file, line, sizeof(line)))
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+
+        char *fields[4] = {};
+        if (!splitCommandRule(content, fields, 4))
+            continue;
+
+        bool enabled = true;
+        uint32_t minDays = 0;
+        uint32_t maxDays = 0;
+        if (!commandMatches(command, fields[0]) ||
+            !parseEnabledField(fields[1], enabled) ||
+            !parseUnsignedField(fields[2], minDays) ||
+            !parseRangeField(fields[3], maxDays) ||
+            minDays > maxDays)
+        {
+            continue;
+        }
+
+        const uint32_t healthyDays = pet->healthyDays();
+        if (healthyDays < minDays || healthyDays > maxDays)
+            continue;
+
+        file.close();
+        return enabled;
+    }
+
+    file.close();
+    return true;
 }
 
 void Game::queueAnimation(const Animation &animation)

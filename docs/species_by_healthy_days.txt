@@ -1,0 +1,44 @@
+# species_by_healthy_days.txt
+# Purpose:
+#   Let SD-card data decide which species/outfit should be used after the pet
+#   has lived a certain number of healthy days.
+#
+# Location suggestion on SD card:
+#   /species_by_healthy_days.txt
+#
+# Line format:
+#   min_healthy_days|max_healthy_days|species|outfit
+#
+# Rules:
+#   - Lines starting with # are comments.
+#   - Empty lines are ignored.
+#   - min_healthy_days and max_healthy_days are inclusive.
+#   - Use * for max_healthy_days to mean no upper limit.
+#   - species and outfit must be 1-8 characters.
+#   - species and outfit may use only A-Z, a-z, 0-9, _ and -.
+#   - Put more specific ranges before wider fallback ranges.
+#   - If no row matches, firmware should keep the current species/outfit.
+#
+# Evolution behavior:
+#   - healthy_days is stored in /state.bin with the pet state.
+#   - healthy_days increases only when dayPassed() runs while the pet status is
+#     Healthy. Hungry, Depressed, Dirty, Poop, or Sick days do not increase it.
+#   - Firmware checks this file after loading a pet, after resetting a pet, and
+#     after healthy_days increases.
+#   - The first matching row is applied. If the species/outfit is different from
+#     the current one, firmware reloads the animation manifest and saves state.
+#   - If this file is missing, invalid, or has no matching row, firmware keeps
+#     the current species/outfit.
+#   - Old v2 state files did not store healthy_days. Firmware deletes those
+#     files instead of guessing healthy_days, then starts from a fresh state.
+#
+# Example:
+#   A pet starts as dino/base.
+#   After 3 healthy days it becomes baby/base.
+#   After 7 healthy days it becomes teen/base.
+#   After 14 healthy days it becomes drgn/base.
+
+0|2|dino|base
+3|6|baby|base
+7|13|teen|base
+14|*|drgn|base

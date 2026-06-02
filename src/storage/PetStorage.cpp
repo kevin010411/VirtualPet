@@ -16,7 +16,16 @@ bool loadStateFile(SdFat *sd, const char *path, Pet &pet)
 
     const size_t stateSize = f.size();
     const size_t legacyStateSize = offsetof(PersistedPetState, species);
-    if (stateSize != sizeof(PersistedPetState) && stateSize != legacyStateSize)
+    const size_t v2StateSize = offsetof(PersistedPetState, healthy_days);
+    if (stateSize == v2StateSize)
+    {
+        f.close();
+        sd->remove(path);
+        return false;
+    }
+
+    if (stateSize != sizeof(PersistedPetState) &&
+        stateSize != legacyStateSize)
     {
         f.close();
         return false;

@@ -63,6 +63,7 @@ private:
     PetStorage *petStorage;
     Renderer *renderer;
     GuessItemGame *guessItem;
+    SdFat *sd;
 
     unsigned long last_tick_time = 0;
     std::deque<Animation> animationQueue = {};
@@ -102,6 +103,9 @@ private:
     void maybeDecayEnvironment(unsigned long elapsed);
     void tryStartNextAnimation();
     bool applyAppearance(const char *speciesCode, const char *outfitCode);
+    bool applySpeciesForHealthyDays();
+    bool isCommandEnabled(Command command);
+    bool commandMatches(Command command, const char *text) const;
 };
 
 #endif // GAME_H
