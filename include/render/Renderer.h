@@ -21,7 +21,8 @@ public:
 
     void initAnimations();
     void setAssetFormatPreference(AssetFormatPreference preference);
-    void setAssetAnimal(const char *animalName);
+    void setAssetAppearance(const char *speciesCode, const char *outfitCode);
+    bool reloadManifest();
     bool ShowSDCardImage(const char *img_path, int xmin = 0, int ymin = 0, int batch_lines = 4);
     bool ShowSDCardFrame(const char *base_path, uint16_t frame_index, int xmin = 0, int ymin = 0, int batch_lines = 4);
     bool setAnimation(AnimationId id, bool playOnce);

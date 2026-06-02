@@ -34,6 +34,8 @@ struct PersistedPetState
     int32_t mood;
     int32_t clean_value;
     int32_t env_value;
+    char species[9];
+    char outfit[9];
 };
 
 enum class HealthStatus
@@ -69,6 +71,10 @@ public:
     AnimationId CurrentAnimation() const;
     AnimationId CurrentAgeAnimation() const;
     String getAge();
+    const char *speciesCode() const;
+    const char *outfitCode() const;
+    bool setSpeciesCode(const char *code);
+    bool setOutfitCode(const char *code);
 
     const PersistedPetState &persistentState() const;
     bool restoreState(const PersistedPetState &state);
@@ -80,7 +86,7 @@ private:
     PersistedPetState st = {};
 
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 1;
+    static constexpr uint16_t kPetStateVersion = 2;
 };
 
 #endif

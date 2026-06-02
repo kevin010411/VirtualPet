@@ -27,7 +27,7 @@ class AssetManifest
 {
 public:
     void reset();
-    bool load(SdFat *sd, const char *animalName);
+    bool load(SdFat *sd, const char *speciesCode, const char *outfitCode);
 
     AnimationMeta *metaFor(AnimationId id);
     const AnimationMeta *metaFor(AnimationId id) const;

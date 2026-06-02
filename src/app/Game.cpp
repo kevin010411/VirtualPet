@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <Adafruit_ST7735.h>
 #include <SdFat.h>
+#include <string.h>
 #include "domain/Pet.h"
 #include "storage/PetStorage.h"
 #include "render/Renderer.h"
@@ -11,13 +12,13 @@ Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
     : pet(new Pet()),
       petStorage(new PetStorage(ref_SD)),
       renderer(new Renderer(ref_tft, ref_SD)),
-      guessApple(new GuessAppleGame(*this))
+      guessItem(new GuessItemGame(*this))
 {
 }
 
 Game::~Game()
 {
-    delete guessApple;
+    delete guessItem;
     delete renderer;
     delete petStorage;
     delete pet;
@@ -28,9 +29,19 @@ void Game::setRendererAssetFormatPreference(Renderer::AssetFormatPreference pref
     renderer->setAssetFormatPreference(preference);
 }
 
-void Game::setRendererAssetAnimal(const char *animalName)
+void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfitCode)
 {
-    renderer->setAssetAnimal(animalName);
+    if (pet->setSpeciesCode(speciesCode))
+        strncpy(defaultSpeciesCode, pet->speciesCode(), sizeof(defaultSpeciesCode) - 1);
+    defaultSpeciesCode[sizeof(defaultSpeciesCode) - 1] = '\0';
+
+    if (pet->setOutfitCode(outfitCode))
+        strncpy(defaultOutfitCode, pet->outfitCode(), sizeof(defaultOutfitCode) - 1);
+    defaultOutfitCode[sizeof(defaultOutfitCode) - 1] = '\0';
+
+    renderer->setAssetAppearance(defaultSpeciesCode, defaultOutfitCode);
+    renderer->reloadManifest();
+    dirtyAnimation = true;
 }
 
 bool Game::saveNow()
@@ -146,12 +157,18 @@ void Game::setup_game()
     hasActiveAnimation = false;
     activeAnimation = Animation();
     animationQueue.clear();
-    guessApple->reset();
+    guessItem->reset();
     last_tick_time = millis();
 
     if (!petStorage->load(*pet))
+    {
         pet->setDefaultState();
+        pet->setSpeciesCode(defaultSpeciesCode);
+        pet->setOutfitCode(defaultOutfitCode);
+    }
 
+    renderer->setAssetAppearance(pet->speciesCode(), pet->outfitCode());
+    renderer->reloadManifest();
     refreshBaseAnimation();
 }
 
@@ -165,7 +182,7 @@ void Game::loop_game()
         last_tick_time = current_time;
         maybeDecayEnvironment(elapsed);
         ControlAnimation(elapsed);
-        guessApple->update();
+        guessItem->update();
 
         if (animationQueue.empty())
         {
@@ -178,7 +195,7 @@ void Game::loop_game()
     }
     else
     {
-        guessApple->update();
+        guessItem->update();
     }
 
     RenderGame(current_time);
@@ -289,6 +306,8 @@ void Game::RenderGame(unsigned long current_time)
 void Game::resetPet()
 {
     pet->setDefaultState();
+    renderer->setAssetAppearance(pet->speciesCode(), pet->outfitCode());
+    renderer->reloadManifest();
     clearAnimationsByOwner(AnimationOwner::Command);
     clearAnimationsByOwner(AnimationOwner::Minigame);
     refreshBaseAnimation();
@@ -297,26 +316,39 @@ void Game::resetPet()
     petStorage->save(*pet);
 }
 
+bool Game::applyAppearance(const char *speciesCode, const char *outfitCode)
+{
+    if (!pet->setSpeciesCode(speciesCode) || !pet->setOutfitCode(outfitCode))
+        return false;
+
+    renderer->setAssetAppearance(pet->speciesCode(), pet->outfitCode());
+    renderer->reloadManifest();
+    dirtyAnimation = true;
+    showAnimationId = AnimationId::None;
+    lastFrameTime = 0;
+    return petStorage->save(*pet);
+}
+
 void Game::OnLeftKey()
 {
-    if (guessApple->isActive())
-        guessApple->onLeft();
+    if (guessItem->isActive())
+        guessItem->onLeft();
     else
         NextCommand();
 }
 
 void Game::OnRightKey()
 {
-    if (guessApple->isActive())
-        guessApple->onRight();
+    if (guessItem->isActive())
+        guessItem->onRight();
     else
         PrevCommand();
 }
 
 void Game::OnConfirmKey()
 {
-    if (guessApple->isActive())
-        guessApple->onMid();
+    if (guessItem->isActive())
+        guessItem->onMid();
     else
         ExecuteCommand();
 }
@@ -418,7 +450,7 @@ void Game::parse_command(Command command)
         break;
     case Command::HaveFun:
         clearAnimationsByOwner(AnimationOwner::Command);
-        guessApple->start();
+        guessItem->start();
         break;
     case Command::Clean:
         pet->cleanEnv(500);

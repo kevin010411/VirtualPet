@@ -18,13 +18,16 @@ constexpr int NextCommandButtonPin = PA12;
 constexpr int PreviousCommandButtonPin = PA10;
 constexpr int ConfirmCommandButtonPin = PA11;
 
+constexpr int buzzerPin = PA4;
+
 constexpr uint32_t SdSpiMhz = 16;
 constexpr uint8_t TftInitTab = INITR_BLACKTAB;
 constexpr int8_t TftColOffset = 2;
 constexpr int8_t TftRowOffset = 1;
 
 constexpr Renderer::AssetFormatPreference AssetFormatPreference = Renderer::AssetFormatPreference::PreferRle;
-constexpr const char *AnimalAssetName = "dino";
+constexpr const char *DefaultSpeciesCode = "dino";
+constexpr const char *DefaultOutfitCode = "base";
 } // namespace BoardConfig
 
 #endif

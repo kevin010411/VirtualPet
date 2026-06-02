@@ -1,5 +1,7 @@
 #include "storage/PetStorage.h"
 
+#include <stddef.h>
+
 namespace
 {
 constexpr const char *kStatePath = "/state.bin";
@@ -12,17 +14,19 @@ bool loadStateFile(SdFat *sd, const char *path, Pet &pet)
     if (!f)
         return false;
 
-    if (f.size() != sizeof(PersistedPetState))
+    const size_t stateSize = f.size();
+    const size_t legacyStateSize = offsetof(PersistedPetState, species);
+    if (stateSize != sizeof(PersistedPetState) && stateSize != legacyStateSize)
     {
         f.close();
         return false;
     }
 
     PersistedPetState state = {};
-    const size_t readCount = f.read(reinterpret_cast<uint8_t *>(&state), sizeof(state));
+    const size_t readCount = f.read(reinterpret_cast<uint8_t *>(&state), stateSize);
     f.close();
 
-    if (readCount != sizeof(state))
+    if (readCount != stateSize)
         return false;
 
     return pet.restoreState(state);

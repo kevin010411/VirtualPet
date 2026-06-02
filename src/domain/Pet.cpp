@@ -1,5 +1,51 @@
 #include "domain/Pet.h"
 
+#include <string.h>
+
+namespace
+{
+constexpr uint16_t kLegacyPetStateVersion = 1;
+
+struct PersistedPetStateV1
+{
+    uint32_t magic;
+    uint16_t version;
+
+    bool hasSick;
+    uint8_t status;
+    float age;
+
+    int32_t hungry_value;
+    int32_t mood;
+    int32_t clean_value;
+    int32_t env_value;
+};
+
+bool copyAppearanceCode(char *dest, size_t destSize, const char *source)
+{
+    if (dest == nullptr || destSize == 0 || source == nullptr || source[0] == '\0')
+        return false;
+
+    const size_t len = strlen(source);
+    if (len >= destSize)
+        return false;
+
+    for (size_t i = 0; i < len; ++i)
+    {
+        const char c = source[i];
+        const bool valid = (c >= 'a' && c <= 'z') ||
+                           (c >= 'A' && c <= 'Z') ||
+                           (c >= '0' && c <= '9') ||
+                           c == '_' || c == '-';
+        if (!valid)
+            return false;
+    }
+
+    strcpy(dest, source);
+    return true;
+}
+} // namespace
+
 HealthStatus decide_state(
     uint8_t hunger, uint8_t mood, unsigned int env_value, unsigned int clean_value, bool hasSick, const PetConfig &cfg)
 {
@@ -127,10 +173,10 @@ AnimationId Pet::CurrentAgeAnimation() const
 {
     const double normalized = st.age / cfg.max_age;
     if (normalized < 0.3)
-        return AnimationId::StatusAge01;
+        return AnimationId::AgeStatus1;
     if (normalized < 0.75)
-        return AnimationId::StatusAge05;
-    return AnimationId::StatusAge1;
+        return AnimationId::AgeStatus2;
+    return AnimationId::AgeStatus3;
 }
 
 void Pet::setDefaultState()
@@ -144,17 +190,19 @@ void Pet::setDefaultState()
     st.mood = 70;
     st.clean_value = 200;
     st.env_value = 800;
+    strcpy(st.species, "dino");
+    strcpy(st.outfit, "base");
 }
 
 String Pet::getAge()
 {
     switch (CurrentAgeAnimation())
     {
-    case AnimationId::StatusAge01:
+    case AnimationId::AgeStatus1:
         return "0.1";
-    case AnimationId::StatusAge05:
+    case AnimationId::AgeStatus2:
         return "0.5";
-    case AnimationId::StatusAge1:
+    case AnimationId::AgeStatus3:
     default:
         return "1";
     }
@@ -170,12 +218,57 @@ const PersistedPetState &Pet::persistentState() const
     return st;
 }
 
+const char *Pet::speciesCode() const
+{
+    return st.species[0] == '\0' ? "dino" : st.species;
+}
+
+const char *Pet::outfitCode() const
+{
+    return st.outfit[0] == '\0' ? "base" : st.outfit;
+}
+
+bool Pet::setSpeciesCode(const char *code)
+{
+    return copyAppearanceCode(st.species, sizeof(st.species), code);
+}
+
+bool Pet::setOutfitCode(const char *code)
+{
+    return copyAppearanceCode(st.outfit, sizeof(st.outfit), code);
+}
+
 bool Pet::restoreState(const PersistedPetState &state)
 {
-    if (state.magic != kPetStateMagic || state.version != kPetStateVersion)
+    if (state.magic != kPetStateMagic)
         return false;
 
-    st = state;
+    if (state.version == kPetStateVersion)
+    {
+        st = state;
+        if (st.species[0] == '\0')
+            strcpy(st.species, "dino");
+        if (st.outfit[0] == '\0')
+            strcpy(st.outfit, "base");
+    }
+    else if (state.version == kLegacyPetStateVersion)
+    {
+        const PersistedPetStateV1 *legacy = reinterpret_cast<const PersistedPetStateV1 *>(&state);
+        setDefaultState();
+        st.hasSick = legacy->hasSick;
+        st.status = legacy->status;
+        st.age = legacy->age;
+        st.hungry_value = legacy->hungry_value;
+        st.mood = legacy->mood;
+        st.clean_value = legacy->clean_value;
+        st.env_value = legacy->env_value;
+    }
+    else
+    {
+        return false;
+    }
+
+    st.version = kPetStateVersion;
     refreshStatus();
     return true;
 }

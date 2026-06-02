@@ -28,6 +28,7 @@ void ButtonInput::clearFlags()
     previousPressed = false;
     confirmPressed = false;
     nextPressed = false;
+    anyPressPending = false;
 }
 
 bool ButtonInput::hasPendingPress() const
@@ -44,9 +45,17 @@ void ButtonInput::update(bool isSleeping,
                          ButtonCallback onPrevious,
                          ButtonCallback onNext,
                          ButtonCallback onConfirm,
-                         ButtonCallback onWake)
+                         ButtonCallback onWake,
+                         ButtonCallback onAnyPress)
 {
     const unsigned long now = millis();
+
+    if (anyPressPending)
+    {
+        anyPressPending = false;
+        if (onAnyPress != nullptr)
+            onAnyPress();
+    }
 
     if (isPreviousNextComboHeld())
     {
@@ -145,6 +154,7 @@ void ButtonInput::notePreviousInterrupt()
 {
     if (digitalRead(previousPin) == HIGH)
         return;
+    anyPressPending = true;
     previousPressed = true;
 }
 
@@ -152,6 +162,7 @@ void ButtonInput::noteNextInterrupt()
 {
     if (digitalRead(nextPin) == HIGH)
         return;
+    anyPressPending = true;
     nextPressed = true;
 }
 
@@ -159,6 +170,7 @@ void ButtonInput::noteConfirmInterrupt()
 {
     if (digitalRead(confirmPin) == HIGH)
         return;
+    anyPressPending = true;
     confirmPressed = true;
 }
 

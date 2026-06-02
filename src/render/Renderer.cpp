@@ -16,7 +16,8 @@ struct Renderer::AnimationState
     uint16_t maxFrame = 0;
     bool playOnce = false;
     Renderer::AssetFormatPreference formatPreference = Renderer::AssetFormatPreference::Auto;
-    char animalName[24] = "dino";
+    char speciesCode[9] = "dino";
+    char outfitCode[9] = "base";
     std::vector<uint8_t> rowBuffer;
     std::vector<uint16_t> lineBuffer;
     AssetManifest manifest;
@@ -40,8 +41,7 @@ void Renderer::initAnimations()
     state->maxFrame = 0;
     state->playOnce = false;
     state->stats = RenderStats{};
-    state->manifest.reset();
-    state->manifest.load(SD, state->animalName);
+    reloadManifest();
 
     const int rowCapacity = ((FrameDecoder::kDefaultAnimWidth * 3 + 3) / 4) * 4 * FrameDecoder::kWorkingBatchLines;
     state->rowBuffer.assign(rowCapacity, 0);
@@ -53,17 +53,35 @@ void Renderer::setAssetFormatPreference(AssetFormatPreference preference)
     state->formatPreference = preference;
 }
 
-void Renderer::setAssetAnimal(const char *animalName)
+void Renderer::setAssetAppearance(const char *speciesCode, const char *outfitCode)
 {
-    if (animalName == nullptr || animalName[0] == '\0')
+    if (speciesCode == nullptr || speciesCode[0] == '\0')
     {
-        strncpy(state->animalName, "dino", sizeof(state->animalName) - 1);
-        state->animalName[sizeof(state->animalName) - 1] = '\0';
-        return;
+        strncpy(state->speciesCode, "dino", sizeof(state->speciesCode) - 1);
     }
+    else
+    {
+        strncpy(state->speciesCode, speciesCode, sizeof(state->speciesCode) - 1);
+    }
+    state->speciesCode[sizeof(state->speciesCode) - 1] = '\0';
 
-    strncpy(state->animalName, animalName, sizeof(state->animalName) - 1);
-    state->animalName[sizeof(state->animalName) - 1] = '\0';
+    if (outfitCode == nullptr || outfitCode[0] == '\0')
+    {
+        strncpy(state->outfitCode, "base", sizeof(state->outfitCode) - 1);
+    }
+    else
+    {
+        strncpy(state->outfitCode, outfitCode, sizeof(state->outfitCode) - 1);
+    }
+    state->outfitCode[sizeof(state->outfitCode) - 1] = '\0';
+}
+
+bool Renderer::reloadManifest()
+{
+    state->manifest.reset();
+    state->animationIndex = 1;
+    state->maxFrame = 0;
+    return state->manifest.load(SD, state->speciesCode, state->outfitCode);
 }
 
 bool Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int batch_lines)

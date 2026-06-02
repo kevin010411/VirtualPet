@@ -2,57 +2,59 @@
 # Format: id|format|frames|width|height|fps|path
 # fps controls playback cadence per animation. Rendering/decoding is selected by format.
 # Use fps=0 to fall back to the firmware default frame interval.
+# Appearance paths use short codes: /{species}/{outfit}/...
+# Keep species/outfit codes <= 8 chars. Use outfit=base when no outfit is equipped.
 
 # Base status animations
-Idle|bmp|3|128|96|6|/{animal}/animation/idle
-Happy|bmp|2|128|96|6|/{animal}/animation/happy
-Hungry|bmp|2|128|96|6|/{animal}/animation/hungry
-Depress|bmp|2|128|96|6|/{animal}/animation/depress
-Dirty|bmp|2|128|96|6|/{animal}/animation/dirty
-Clean|bmp|2|128|96|6|/{animal}/animation/clean
-Sick|bmp|2|128|96|6|/{animal}/animation/sick
-Poop|bmp|2|128|96|6|/{animal}/animation/poop
+Idle|bmp|3|128|96|6|/{species}/{outfit}/idle
+Happy|bmp|2|128|96|6|/{species}/{outfit}/happy
+Hungry|bmp|2|128|96|6|/{species}/{outfit}/hungry
+Depress|bmp|2|128|96|6|/{species}/{outfit}/depress
+Dirty|bmp|2|128|96|6|/{species}/{outfit}/dirty
+Clean|bmp|2|128|96|6|/{species}/{outfit}/clean
+Sick|bmp|2|128|96|6|/{species}/{outfit}/sick
+Poop|bmp|2|128|96|6|/{species}/{outfit}/poop
 
 # Action animations
-Feed|bmp|2|128|96|8|/{animal}/animation/feed
-Heal|bmp|2|128|96|8|/{animal}/animation/heal
-Shower|bmp|2|128|96|8|/{animal}/animation/shower
-Gift|bmp|3|128|96|8|/{animal}/animation/gift
-GiftHappy|bmp|2|128|96|8|/{animal}/animation/gift_happy
+Feed|bmp|2|128|96|8|/{species}/{outfit}/feed
+Heal|bmp|2|128|96|8|/{species}/{outfit}/heal
+Shower|bmp|2|128|96|8|/{species}/{outfit}/shower
+Gift|bmp|3|128|96|8|/{species}/{outfit}/gift
+GiftHappy|bmp|2|128|96|8|/{species}/{outfit}/gift_happy
 
 # Guess game animations
-GuessStart|bmp|2|128|96|8|/{animal}/guess_game/start
-Apple1|bmp|4|128|96|8|/{animal}/guess_game/1
-Apple2|bmp|4|128|96|8|/{animal}/guess_game/2
-Apple3|bmp|4|128|96|8|/{animal}/guess_game/3
-Apple4|bmp|4|128|96|8|/{animal}/guess_game/4
-AppleP1|bmp|2|128|96|8|/{animal}/guess_game/r1
-AppleP2|bmp|2|128|96|8|/{animal}/guess_game/r2
-AppleP3|bmp|2|128|96|8|/{animal}/guess_game/r3
-AppleP4|bmp|2|128|96|8|/{animal}/guess_game/r4
-GuessRight|bmp|4|128|96|10|/{animal}/guess_game/right
-GuessWrong|bmp|4|128|96|10|/{animal}/guess_game/wrong
-GuessWin|bmp|5|128|96|10|/{animal}/guess_game/win
-GuessLoss|bmp|2|128|96|10|/{animal}/guess_game/loss
+GuessStart|bmp|2|128|96|8|/{species}/guess_game/guess_start
+GuessItem1|bmp|4|128|96|8|/{species}/guess_game/1
+GuessItem2|bmp|4|128|96|8|/{species}/guess_game/2
+GuessItem3|bmp|4|128|96|8|/{species}/guess_game/3
+GuessItem4|bmp|4|128|96|8|/{species}/guess_game/4
+GuessLL|bmp|2|128|96|8|/{species}/guess_game/ll
+GuessLR|bmp|2|128|96|8|/{species}/guess_game/lr
+GuessRL|bmp|2|128|96|8|/{species}/guess_game/rl
+GuessRR|bmp|2|128|96|8|/{species}/guess_game/rr
+GuessRight|bmp|4|128|96|10|/{species}/guess_game/right
+GuessWrong|bmp|4|128|96|10|/{species}/guess_game/wrong
+GuessWin|bmp|5|128|96|10|/{species}/guess_game/win
+GuessLoss|bmp|2|128|96|10|/{species}/guess_game/loss
 
 # Age status animations
-StatusAge01|bmp|2|128|96|6|/age/1y0.1kg
-StatusAge05|bmp|2|128|96|6|/age/1y0.5kg
-StatusAge1|bmp|2|128|96|6|/age/1y1kg
+AgeStatus1|bmp|2|128|96|6|/status/age/1
+AgeStatus2|bmp|2|128|96|6|/status/age/2
+AgeStatus3|bmp|2|128|96|6|/status/age/3
 
 # Prediction animations
-PredAnim|bmp|23|128|96|10|/{animal}/predict/anim
-Predict1|bmp|2|128|96|8|/{animal}/predict/1
-Predict2|bmp|2|128|96|8|/{animal}/predict/2
-Predict3|bmp|2|128|96|8|/{animal}/predict/3
-Predict4|bmp|2|128|96|8|/{animal}/predict/4
-Predict5|bmp|2|128|96|8|/{animal}/predict/5
-Predict6|bmp|2|128|96|8|/{animal}/predict/6
-Predict7|bmp|2|128|96|8|/{animal}/predict/7
-Predict8|bmp|2|128|96|8|/{animal}/predict/8
-Predict9|bmp|2|128|96|8|/{animal}/predict/9
-Predict10|bmp|2|128|96|8|/{animal}/predict/10
-Predict11|bmp|2|128|96|8|/{animal}/predict/11
+PredAnim|bmp|23|128|96|10|/predict/anim
+Predict1|bmp|2|128|96|8|/predict/1
+Predict2|bmp|2|128|96|8|/predict/2
+Predict3|bmp|2|128|96|8|/predict/3
+Predict4|bmp|2|128|96|8|/predict/4
+Predict5|bmp|2|128|96|8|/predict/5
+Predict6|bmp|2|128|96|8|/predict/6
+Predict7|bmp|2|128|96|8|/predict/7
+Predict8|bmp|2|128|96|8|/predict/8
+Predict9|bmp|2|128|96|8|/predict/9
+Predict10|bmp|2|128|96|8|/predict/10
+Predict11|bmp|2|128|96|8|/predict/11
 
 # System animations
 Battery|bmp|2|128|96|6|/battery

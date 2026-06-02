@@ -70,6 +70,11 @@ const unsigned long kSleepTimeoutMs = 10UL * 60UL * 1000UL; // 10分鐘會自動
 unsigned long g_lastInteractionMs = 0;
 bool g_isSleeping = false;
 
+void playButtonBeep()
+{
+  tone(BoardConfig::buzzerPin, 2400, 35);
+}
+
 void noteInteraction(unsigned long now = millis())
 {
   g_lastInteractionMs = now;
@@ -220,6 +225,7 @@ void setup()
 
   // 初始化 TFT 螢幕
   pinMode(BoardConfig::TftBacklightPin, OUTPUT);
+  pinMode(BoardConfig::buzzerPin, OUTPUT);
   TFT_Reset200ms();
   tft.initR(BoardConfig::TftInitTab);
   digitalWrite(BoardConfig::TftBacklightPin, LOW);
@@ -240,7 +246,7 @@ void setup()
 
   g_sdReady = true;
   game.setRendererAssetFormatPreference(BoardConfig::AssetFormatPreference);
-  game.setRendererAssetAnimal(BoardConfig::AnimalAssetName);
+  game.setRendererAssetAppearance(BoardConfig::DefaultSpeciesCode, BoardConfig::DefaultOutfitCode);
   game.setup_game();
   Serial.println("Init Done");
   delay(1000);
@@ -264,13 +270,14 @@ void loop()
     return;
 
   buttons.handlePreviousNextComboLongPress(2000, onLRComboLongPress);
-  buttons.update(g_isSleeping, onPreviousButton, onNextButton, onConfirmButton, wakeFromSleepNow);
+  buttons.update(g_isSleeping, onPreviousButton, onNextButton, onConfirmButton, wakeFromSleepNow, playButtonBeep);
   if (g_isSleeping)
     return;
 
   buttons.handleConfirmLongPress(2000, onConfirmLongPress);
 
-  if (now - g_lastInteractionMs >= kSleepTimeoutMs)
+  const unsigned long sleepCheckNow = millis();
+  if (sleepCheckNow - g_lastInteractionMs >= kSleepTimeoutMs)
   {
     enterSleep();
     return;

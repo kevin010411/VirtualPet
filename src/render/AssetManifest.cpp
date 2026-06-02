@@ -9,6 +9,8 @@ constexpr uint16_t kDefaultAnimWidth = 128;
 constexpr uint16_t kDefaultAnimHeight = 96;
 constexpr const char *kManifestPath = "/index.txt";
 constexpr const char *kAnimalToken = "{animal}";
+constexpr const char *kSpeciesToken = "{species}";
+constexpr const char *kOutfitToken = "{outfit}";
 
 AnimationMeta gAnimationRegistry[kAnimationIdCount] = {};
 
@@ -72,14 +74,30 @@ bool splitManifestFields(char *line, char **fields, size_t fieldCount)
     return true;
 }
 
-bool applyAnimalToken(char *dest, size_t destSize, const char *source, const char *animalName)
+bool appendText(char *dest, size_t destSize, size_t &destIndex, const char *text)
+{
+    if (dest == nullptr || destSize == 0 || text == nullptr)
+        return false;
+
+    const size_t len = strlen(text);
+    if (destIndex + len >= destSize)
+        return false;
+
+    memcpy(dest + destIndex, text, len);
+    destIndex += len;
+    return true;
+}
+
+bool applyAppearanceTokens(char *dest, size_t destSize, const char *source, const char *speciesCode, const char *outfitCode)
 {
     if (dest == nullptr || destSize == 0 || source == nullptr)
         return false;
 
-    const char *replacement = (animalName != nullptr) ? animalName : "";
+    const char *speciesReplacement = (speciesCode != nullptr && speciesCode[0] != '\0') ? speciesCode : "dino";
+    const char *outfitReplacement = (outfitCode != nullptr && outfitCode[0] != '\0') ? outfitCode : "base";
     const size_t tokenLen = strlen(kAnimalToken);
-    const size_t replacementLen = strlen(replacement);
+    const size_t speciesTokenLen = strlen(kSpeciesToken);
+    const size_t outfitTokenLen = strlen(kOutfitToken);
 
     size_t destIndex = 0;
     const char *cursor = source;
@@ -87,11 +105,23 @@ bool applyAnimalToken(char *dest, size_t destSize, const char *source, const cha
     {
         if (strncmp(cursor, kAnimalToken, tokenLen) == 0)
         {
-            if (destIndex + replacementLen >= destSize)
+            if (!appendText(dest, destSize, destIndex, speciesReplacement))
                 return false;
-            memcpy(dest + destIndex, replacement, replacementLen);
-            destIndex += replacementLen;
             cursor += tokenLen;
+            continue;
+        }
+        if (strncmp(cursor, kSpeciesToken, speciesTokenLen) == 0)
+        {
+            if (!appendText(dest, destSize, destIndex, speciesReplacement))
+                return false;
+            cursor += speciesTokenLen;
+            continue;
+        }
+        if (strncmp(cursor, kOutfitToken, outfitTokenLen) == 0)
+        {
+            if (!appendText(dest, destSize, destIndex, outfitReplacement))
+                return false;
+            cursor += outfitTokenLen;
             continue;
         }
 
@@ -120,7 +150,7 @@ void AssetManifest::reset()
     }
 }
 
-bool AssetManifest::load(SdFat *sd, const char *animalName)
+bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitCode)
 {
     if (sd == nullptr)
         return false;
@@ -159,7 +189,7 @@ bool AssetManifest::load(SdFat *sd, const char *animalName)
         parsed.width = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
         parsed.height = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
         parsed.fpsHint = static_cast<uint8_t>(strtoul(fields[5], nullptr, 10));
-        if (!applyAnimalToken(parsed.path, sizeof(parsed.path), fields[6], animalName))
+        if (!applyAppearanceTokens(parsed.path, sizeof(parsed.path), fields[6], speciesCode, outfitCode))
             continue;
 
         if (parsed.frameCount == 0 || parsed.width == 0 || parsed.height == 0 || parsed.path[0] == '\0')

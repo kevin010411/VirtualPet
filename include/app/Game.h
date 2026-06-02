@@ -5,14 +5,14 @@
 #include <deque>
 #include <SdFat.h>
 #include "domain/Animation.h"
-#include "minigame/GuessAppleGame.h"
+#include "minigame/GuessItemGame.h"
 #include "render/Renderer.h"
 
 class Adafruit_ST7735;
 class Pet;
 class PetStorage;
 
-class Game : public GuessAppleGameHost
+class Game : public GuessItemGameHost
 {
 public:
     Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD);
@@ -22,7 +22,7 @@ public:
     void loop_game();
     void requestFullRedraw();
     void setRendererAssetFormatPreference(Renderer::AssetFormatPreference preference);
-    void setRendererAssetAnimal(const char *animalName);
+    void setRendererAssetAppearance(const char *speciesCode, const char *outfitCode);
     bool saveNow();
     bool showBatteryScreen();
     void startBatteryAnimation();
@@ -50,12 +50,12 @@ private:
     enum class Command
     {
         FeedPet,
-        HaveFun,
-        Clean,
-        Medicine,
-        Shower,
         Predict,
         Gift,
+        Medicine,
+        Shower,
+        HaveFun,
+        Clean,
         Status,
         Count
     };
@@ -63,7 +63,7 @@ private:
     Pet *pet;
     PetStorage *petStorage;
     Renderer *renderer;
-    GuessAppleGame *guessApple;
+    GuessItemGame *guessItem;
 
     unsigned long last_tick_time = 0;
     std::deque<Animation> animationQueue = {};
@@ -81,6 +81,8 @@ private:
     unsigned long lastFrameTime = 0;
     AnimationId showAnimationId = AnimationId::None;
     Command nowCommand = Command::FeedPet;
+    char defaultSpeciesCode[9] = "dino";
+    char defaultOutfitCode[9] = "base";
 
     static const char *commandLabel(Command command);
     static int commandCount();
@@ -100,6 +102,7 @@ private:
     void maybeSavePet();
     void maybeDecayEnvironment(unsigned long elapsed);
     void tryStartNextAnimation();
+    bool applyAppearance(const char *speciesCode, const char *outfitCode);
 };
 
 #endif // GAME_H

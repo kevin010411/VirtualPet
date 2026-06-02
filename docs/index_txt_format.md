@@ -17,7 +17,7 @@ Recommended path:
 - Human-readable and easy to edit by hand
 - Supports deep folder structures without changing firmware
 - Keeps `bmp`, `raw`, and `rle` resources on the same schema
-- Supports reusable path templates for multiple animals that share the same asset layout
+- Supports reusable path templates for multiple appearances that share the same asset layout
 
 ## Line format
 
@@ -30,7 +30,7 @@ id|format|frames|width|height|fps|path
 Example:
 
 ```txt
-Idle|bmp|6|128|96|6|/{animal}/animation/idle
+Idle|bmp|6|128|96|6|/{species}/{outfit}/idle
 ```
 
 Lines starting with `#` are comments. Empty lines are ignored.
@@ -61,7 +61,8 @@ Lines starting with `#` are comments. Empty lines are ignored.
   - This controls playback cadence only; the drawing/decoding path is still selected by `format`
 - `path`
   - Folder or base path of the animation asset
-  - Supports the `{animal}` token, which is replaced by the firmware-selected animal name
+  - Supports `{species}` and `{outfit}` tokens, which are replaced by the firmware-selected short codes
+  - Also accepts legacy `{animal}` as a species alias
   - Firmware will load frames as:
   - `path/1.bmp`, `path/2.bmp`, ... for `bmp`
   - `path/1.raw`, `path/2.raw`, ... for `raw`
@@ -92,19 +93,23 @@ If a non-zero `fps` is configured, both normal gameplay animation and the low-ba
 
 ```txt
 # Pet base status
-Idle|bmp|6|128|96|6|/{animal}/animation/idle
-Hungry|bmp|4|128|96|6|/{animal}/animation/hungry
-Depress|bmp|4|128|96|6|/{animal}/animation/depress
+Idle|bmp|6|128|96|6|/{species}/{outfit}/idle
+Hungry|bmp|4|128|96|6|/{species}/{outfit}/hungry
+Depress|bmp|4|128|96|6|/{species}/{outfit}/depress
 
 # Command animations
-Feed|raw|5|128|96|8|/{animal}/animation/feed
-Gift|rle|6|128|96|8|/{animal}/animation/gift
+Feed|raw|5|128|96|8|/{species}/{outfit}/feed
+Gift|rle|6|128|96|8|/{species}/{outfit}/gift
 
 # Minigame animations
-GuessStart|bmp|2|128|96|8|/{animal}/guess_game/start
-Apple4|bmp|4|128|96|8|/{animal}/guess_game/4
-GuessWin|raw|4|128|96|10|/{animal}/guess_game/win
-GuessLoss|rle|4|128|96|10|/{animal}/guess_game/loss
+GuessStart|bmp|2|128|96|8|/{species}/{outfit}/guess_start
+GuessItem4|bmp|4|128|96|8|/{species}/{outfit}/item4
+GuessLL|bmp|2|128|96|8|/{species}/{outfit}/ll
+GuessLR|bmp|2|128|96|8|/{species}/{outfit}/lr
+GuessRL|bmp|2|128|96|8|/{species}/{outfit}/rl
+GuessRR|bmp|2|128|96|8|/{species}/{outfit}/rr
+GuessWin|raw|4|128|96|10|/{species}/{outfit}/guess_win
+GuessLoss|rle|4|128|96|10|/{species}/{outfit}/guess_loss
 
 # System animations
 Battery|bmp|2|128|96|6|/battery
@@ -114,32 +119,57 @@ Battery|bmp|2|128|96|6|/battery
 
 ```txt
 /index.txt
-/dino/animation/idle/1.bmp
-/cat/animation/hungry/1.bmp
-/dog/animation/feed/1.raw
-/dog/guess_game/win/1.rle
+/dino/base/idle/1.bmp
+/cat/base/hungry/1.bmp
+/dog/hat/feed/1.raw
+/dog/hat/guess_win/1.rle
 /battery/1.bmp
 /assets/ui/layout/1.bmp
 ```
 
-## Multi-animal usage
+## Appearance usage
 
 If the SD card contains:
 
 ```txt
-/dino/animation/idle/1.bmp
-/dog/animation/idle/1.bmp
-/cat/animation/idle/1.bmp
+/dino/base/idle/1.bmp
+/dino/hat/idle/1.bmp
+/drgn/base/idle/1.bmp
 ```
 
 Then the same manifest line:
 
 ```txt
-Idle|bmp|6|128|96|6|/{animal}/animation/idle
+Idle|bmp|6|128|96|6|/{species}/{outfit}/idle
 ```
 
-can be reused by changing the firmware-side selected animal name, for example:
+can be reused by changing the firmware-side selected appearance codes, for example:
 
-- `dino`
-- `dog`
-- `cat`
+- `species=dino`, `outfit=base`
+- `species=dino`, `outfit=hat`
+- `species=drgn`, `outfit=base`
+
+Keep `species` and `outfit` codes at 8 characters or fewer. Use `outfit=base` when no outfit is equipped.
+
+## Guess item result naming
+
+Guess item result animations use `GuessXY`, where:
+
+- `X` is the pet-facing direction: `L` or `R`
+- `Y` is the item position: `L` or `R`
+
+Use matching lowercase folder names on the SD card:
+
+```txt
+GuessLL|bmp|2|128|96|8|/{species}/{outfit}/ll
+GuessLR|bmp|2|128|96|8|/{species}/{outfit}/lr
+GuessRL|bmp|2|128|96|8|/{species}/{outfit}/rl
+GuessRR|bmp|2|128|96|8|/{species}/{outfit}/rr
+```
+
+Examples:
+
+- `GuessLL`: pet faces left, item is on the left
+- `GuessLR`: pet faces left, item is on the right
+- `GuessRL`: pet faces right, item is on the left
+- `GuessRR`: pet faces right, item is on the right

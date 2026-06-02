@@ -1,14 +1,14 @@
-#ifndef GUESSAPPLEGAME_H
-#define GUESSAPPLEGAME_H
+#ifndef GUESSITEMGAME_H
+#define GUESSITEMGAME_H
 
 #include <Arduino.h>
 #include "domain/Animation.h"
 
-enum class GuessAppleState
+enum class GuessItemState
 {
     Inactive,
     Starting,
-    WaitingApple,
+    WaitingItem,
     WaitingInput,
     ShowingResult,
     Win,
@@ -16,16 +16,16 @@ enum class GuessAppleState
     Cancel
 };
 
-enum class GuessAppleSide
+enum class GuessItemSide
 {
     Left,
     Right
 };
 
-class GuessAppleGameHost
+class GuessItemGameHost
 {
 public:
-    virtual ~GuessAppleGameHost() = default;
+    virtual ~GuessItemGameHost() = default;
     virtual void queueAnimation(const Animation &animation) = 0;
     virtual void clearAnimationsByOwner(AnimationOwner owner) = 0;
     virtual void markAnimationDirty() = 0;
@@ -33,10 +33,10 @@ public:
     virtual bool hasAnimationForOwner(AnimationOwner owner) const = 0;
 };
 
-class GuessAppleGame
+class GuessItemGame
 {
 public:
-    explicit GuessAppleGame(GuessAppleGameHost &host);
+    explicit GuessItemGame(GuessItemGameHost &host);
 
     void start();
     void reset();
@@ -50,13 +50,13 @@ public:
 
 private:
     void queuePromptAnimation();
-    void handleGuess(GuessAppleSide player);
+    void handleGuess(GuessItemSide player);
 
-    GuessAppleGameHost &host;
-    GuessAppleState state;
+    GuessItemGameHost &host;
+    GuessItemState state;
     int correctCount;
     int wrongCount;
-    GuessAppleSide appleSide;
+    GuessItemSide itemSide;
     AnimationId promptAnimationId;
     unsigned long lastMoveTime = 0;
 };

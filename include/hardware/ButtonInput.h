@@ -19,7 +19,8 @@ public:
                 ButtonCallback onPrevious,
                 ButtonCallback onNext,
                 ButtonCallback onConfirm,
-                ButtonCallback onWake);
+                ButtonCallback onWake,
+                ButtonCallback onAnyPress);
     void handleConfirmLongPress(unsigned long thresholdMs, ButtonCallback callback);
     void handlePreviousNextComboLongPress(unsigned long thresholdMs, ButtonCallback callback);
 
@@ -48,6 +49,7 @@ private:
     volatile bool previousPressed = false;
     volatile bool nextPressed = false;
     volatile bool confirmPressed = false;
+    volatile bool anyPressPending = false;
 };
 
 #endif

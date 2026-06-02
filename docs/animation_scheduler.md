@@ -11,7 +11,7 @@ The scheduler decides animation playback order using `owner` and `priority`.
   - Button-triggered actions such as `Feed`, `Clean`, `Gift`, `Predict`
   - These represent user intent and should override base state playback
 - `Minigame`
-  - Interactive game flow such as apple prompts, win/loss, result feedback
+  - Interactive game flow such as item prompts, win/loss, result feedback
   - These must not be interrupted by base-state playback
 - `System`
   - Reserved for boot, error, recovery, or future critical animations
@@ -44,7 +44,7 @@ The scheduler decides animation playback order using `owner` and `priority`.
 - `Command` + `Normal`
   - Status card / informational animations
 - `Minigame` + `Critical`
-  - Guess-apple prompts, result panels, win/loss animations
+- Guess-item prompts, result panels, win/loss animations
 
 ## Why this exists
 
