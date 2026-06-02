@@ -1,95 +1,95 @@
-# `index.txt` Format Specification
+# `index.txt` 格式規格
 
-`index.txt` is the animation manifest stored on the SD card. It is the single source of truth for animation resources.
+`index.txt` 是存放在 SD 卡上的動畫 manifest，也是動畫資源的單一真實來源。
 
-## File location
+## 檔案位置
 
-Recommended path:
+建議路徑：
 
 ```txt
 /index.txt
 ```
 
-## Design goals
+## 設計目標
 
-- One line per animation resource
-- Very simple MCU parsing
-- Human-readable and easy to edit by hand
-- Supports deep folder structures without changing firmware
-- Keeps `bmp`, `raw`, and `rle` resources on the same schema
-- Supports reusable path templates for multiple appearances that share the same asset layout
+- 每一行代表一個動畫資源
+- MCU 端解析必須非常簡單
+- 人類可讀，且方便手動編輯
+- 支援深層資料夾結構，不需要修改韌體
+- 讓 `bmp`、`raw` 與 `rle` 資源使用同一套 schema
+- 支援可重用的路徑樣板，讓多個外觀共用相同資源配置
 
-## Line format
+## 行格式
 
-Each non-empty line must use this fixed field order:
+每一個非空行都必須使用這個固定欄位順序：
 
 ```txt
 id|format|frames|width|height|fps|path
 ```
 
-Example:
+範例：
 
 ```txt
 Idle|bmp|6|128|96|6|/{species}/{outfit}/idle
 ```
 
-Lines starting with `#` are comments. Empty lines are ignored.
+以 `#` 開頭的行是註解。空行會被忽略。
 
-## Field definitions
+## 欄位定義
 
 - `id`
-  - Must match the firmware animation id name exactly
-  - Example: `Idle`, `Hungry`, `Feed`, `GuessWin`
+  - 必須與韌體中的 animation id 名稱完全相同
+  - 範例：`Idle`、`Hungry`、`Feed`、`GuessWin`
 - `format`
-  - Supported values:
+  - 支援值：
   - `bmp`
   - `raw`
   - `rle`
 - `frames`
-  - Total frame count
-  - Must be greater than `0`
+  - 總影格數
+  - 必須大於 `0`
 - `width`
-  - Frame width in pixels
-  - Must be greater than `0`
+  - 影格寬度，單位為像素
+  - 必須大於 `0`
 - `height`
-  - Frame height in pixels
-  - Must be greater than `0`
+  - 影格高度，單位為像素
+  - 必須大於 `0`
 - `fps`
-  - Animation playback FPS for this animation
-  - The firmware converts this to a frame interval with `1000 / fps` milliseconds
-  - `0` means use the firmware default frame interval
-  - This controls playback cadence only; the drawing/decoding path is still selected by `format`
+  - 此動畫的播放 FPS
+  - 韌體會用 `1000 / fps` 毫秒將它轉換成影格間隔
+  - `0` 表示使用韌體預設影格間隔
+  - 此欄位只控制播放節奏；繪製與解碼路徑仍由 `format` 選擇
 - `path`
-  - Folder or base path of the animation asset
-  - Supports `{species}` and `{outfit}` tokens, which are replaced by the firmware-selected short codes
-  - Also accepts legacy `{animal}` as a species alias
-  - Firmware will load frames as:
-  - `path/1.bmp`, `path/2.bmp`, ... for `bmp`
-  - `path/1.raw`, `path/2.raw`, ... for `raw`
-  - `path/1.rle`, `path/2.rle`, ... for `rle`
+  - 動畫資源的資料夾或基礎路徑
+  - 支援 `{species}` 與 `{outfit}` token，會由韌體選定的短代碼取代
+  - 也接受舊版 `{animal}`，作為 species alias
+  - 韌體會以下列方式載入影格：
+  - `path/1.bmp`、`path/2.bmp`、... 用於 `bmp`
+  - `path/1.raw`、`path/2.raw`、... 用於 `raw`
+  - `path/1.rle`、`path/2.rle`、... 用於 `rle`
 
-## Validation rules
+## 驗證規則
 
-- Every resource line must contain exactly 7 fields
-- Unknown `id` values are ignored
-- Unknown `format` values are ignored
-- `frames`, `width`, or `height` equal to `0` are ignored
-- Empty `path` values are ignored
-- `fps` may be `0`; non-zero values should be chosen so the target hardware can finish drawing each frame before the next interval
+- 每一行資源必須剛好包含 7 個欄位
+- 未知的 `id` 值會被忽略
+- 未知的 `format` 值會被忽略
+- `frames`、`width` 或 `height` 等於 `0` 時會被忽略
+- 空的 `path` 值會被忽略
+- `fps` 可以是 `0`；非零值應選擇目標硬體能在下一個間隔前完成繪製的速度
 
-## Playback behavior
+## 播放行為
 
-`fps` can be tuned independently per animation. For example, a status loop can use `6` FPS while a short result animation uses `10` FPS.
+`fps` 可以針對每個動畫獨立調整。例如，狀態循環可使用 `6` FPS，而短結果動畫可使用 `10` FPS。
 
-The field does not switch rendering logic. Rendering is selected by `format`:
+此欄位不會切換渲染邏輯。渲染方式由 `format` 選擇：
 
-- `bmp` uses numbered BMP frames and the BMP decoder
-- `raw` uses numbered RGB565 raw frames
-- `rle` uses numbered RGB565 RLE frames
+- `bmp` 使用編號 BMP 影格與 BMP decoder
+- `raw` 使用編號 RGB565 raw 影格
+- `rle` 使用編號 RGB565 RLE 影格
 
-If a non-zero `fps` is configured, both normal gameplay animation and the low-battery animation use that manifest value. If the manifest line is missing or `fps` is `0`, firmware falls back to its default frame interval.
+如果設定了非零 `fps`，一般遊戲動畫與低電量動畫都會使用該 manifest 值。若 manifest 行缺失或 `fps` 為 `0`，韌體會退回使用預設影格間隔。
 
-## Example
+## 範例
 
 ```txt
 # Pet base status
@@ -111,11 +111,11 @@ GuessRR|bmp|2|128|96|8|/{species}/{outfit}/rr
 GuessWin|raw|4|128|96|10|/{species}/{outfit}/guess_win
 GuessLoss|rle|4|128|96|10|/{species}/{outfit}/guess_loss
 
-# System animations
+# 系統動畫
 Battery|bmp|2|128|96|6|/battery
 ```
 
-## Folder layout recommendation
+## 資料夾配置建議
 
 ```txt
 /index.txt
@@ -127,9 +127,9 @@ Battery|bmp|2|128|96|6|/battery
 /assets/ui/layout/1.bmp
 ```
 
-## Appearance usage
+## 外觀使用方式
 
-If the SD card contains:
+如果 SD 卡包含：
 
 ```txt
 /dino/base/idle/1.bmp
@@ -137,28 +137,28 @@ If the SD card contains:
 /drgn/base/idle/1.bmp
 ```
 
-Then the same manifest line:
+那麼同一行 manifest：
 
 ```txt
 Idle|bmp|6|128|96|6|/{species}/{outfit}/idle
 ```
 
-can be reused by changing the firmware-side selected appearance codes, for example:
+可透過改變韌體端選定的外觀代碼重複使用，例如：
 
-- `species=dino`, `outfit=base`
-- `species=dino`, `outfit=hat`
-- `species=drgn`, `outfit=base`
+- `species=dino`、`outfit=base`
+- `species=dino`、`outfit=hat`
+- `species=drgn`、`outfit=base`
 
-Keep `species` and `outfit` codes at 8 characters or fewer. Use `outfit=base` when no outfit is equipped.
+請將 `species` 與 `outfit` 代碼保持在 8 個字元以內。未裝備 outfit 時使用 `outfit=base`。
 
-## Guess item result naming
+## 猜道具結果命名
 
-Guess item result animations use `GuessXY`, where:
+猜道具結果動畫使用 `GuessXY`，其中：
 
-- `X` is the pet-facing direction: `L` or `R`
-- `Y` is the item position: `L` or `R`
+- `X` 是寵物面向方向：`L` 或 `R`
+- `Y` 是道具位置：`L` 或 `R`
 
-Use matching lowercase folder names on the SD card:
+SD 卡上請使用對應的小寫資料夾名稱：
 
 ```txt
 GuessLL|bmp|2|128|96|8|/{species}/{outfit}/ll
@@ -167,9 +167,9 @@ GuessRL|bmp|2|128|96|8|/{species}/{outfit}/rl
 GuessRR|bmp|2|128|96|8|/{species}/{outfit}/rr
 ```
 
-Examples:
+範例：
 
-- `GuessLL`: pet faces left, item is on the left
-- `GuessLR`: pet faces left, item is on the right
-- `GuessRL`: pet faces right, item is on the left
-- `GuessRR`: pet faces right, item is on the right
+- `GuessLL`：寵物面向左，道具在左邊
+- `GuessLR`：寵物面向左，道具在右邊
+- `GuessRL`：寵物面向右，道具在左邊
+- `GuessRR`：寵物面向右，道具在右邊

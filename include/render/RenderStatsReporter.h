@@ -4,6 +4,10 @@
 #include <Arduino.h>
 #include <SdFat.h>
 
+#ifndef ENABLE_RENDER_STATS
+#define ENABLE_RENDER_STATS 0
+#endif
+
 struct RenderStats
 {
     uint32_t totalFrames = 0;

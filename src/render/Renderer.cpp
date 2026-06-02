@@ -21,7 +21,9 @@ struct Renderer::AnimationState
     std::vector<uint8_t> rowBuffer;
     std::vector<uint16_t> lineBuffer;
     AssetManifest manifest;
+#if ENABLE_RENDER_STATS
     RenderStats stats;
+#endif
 };
 
 Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
@@ -40,7 +42,9 @@ void Renderer::initAnimations()
     state->animationIndex = 0;
     state->maxFrame = 0;
     state->playOnce = false;
+#if ENABLE_RENDER_STATS
     state->stats = RenderStats{};
+#endif
     reloadManifest();
 
     const int rowCapacity = ((FrameDecoder::kDefaultAnimWidth * 3 + 3) / 4) * 4 * FrameDecoder::kWorkingBatchLines;
@@ -187,7 +191,9 @@ bool Renderer::advanceAnimationFrame()
             return true;
     }
 
+#if ENABLE_RENDER_STATS
     const unsigned long frameStartUs = micros();
+#endif
     AnimationMeta *meta = state->manifest.metaFor(state->nowAnimId);
     bool ok = false;
 
@@ -247,7 +253,11 @@ bool Renderer::advanceAnimationFrame()
     }
 
     if (ok)
+    {
+#if ENABLE_RENDER_STATS
         updateRenderStats(state->stats, SD, micros() - frameStartUs);
+#endif
+    }
 
     state->animationIndex++;
     return !ok;

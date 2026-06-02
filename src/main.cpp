@@ -5,6 +5,10 @@
 #include <SdFat.h>
 #include "stm32f1xx.h"
 
+#ifndef ENABLE_SERIAL_LOG
+#define ENABLE_SERIAL_LOG 0
+#endif
+
 // 建立 TFT 顯示物件
 SPIClass SPI_2(PB15, BoardConfig::TftRstPin, PB13);
 CalibratedST7735 tft(&SPI_2, BoardConfig::TftCsPin, BoardConfig::TftDcPin, BoardConfig::TftRstPin);
@@ -215,10 +219,14 @@ static void updateLowBatteryMode(unsigned long now)
 void setup()
 {
   delay(1000);
+#if ENABLE_SERIAL_LOG
   Serial.begin(115200);
+#endif
 
   randomSeed(analogRead(0));
+#if ENABLE_SERIAL_LOG
   Serial.println("Init Done");
+#endif
 
   SPI.begin();   // SPI1
   SPI_2.begin(); // SPI2
@@ -248,7 +256,9 @@ void setup()
   game.setRendererAssetFormatPreference(BoardConfig::AssetFormatPreference);
   game.setRendererAssetAppearance(BoardConfig::DefaultSpeciesCode, BoardConfig::DefaultOutfitCode);
   game.setup_game();
+#if ENABLE_SERIAL_LOG
   Serial.println("Init Done");
+#endif
   delay(1000);
   digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   noteInteraction();

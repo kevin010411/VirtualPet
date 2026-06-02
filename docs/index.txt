@@ -1,11 +1,11 @@
-# Copy this file to /index.txt on the SD card.
-# Format: id|format|frames|width|height|fps|path
-# fps controls playback cadence per animation. Rendering/decoding is selected by format.
-# Use fps=0 to fall back to the firmware default frame interval.
-# Appearance paths use short codes: /{species}/{outfit}/...
-# Keep species/outfit codes <= 8 chars. Use outfit=base when no outfit is equipped.
+# 將此檔案複製到 SD 卡的 /index.txt。
+# 格式：id|format|frames|width|height|fps|path
+# fps 控制每個動畫的播放節奏；渲染與解碼方式由 format 選擇。
+# 使用 fps=0 會退回韌體預設影格間隔。
+# 外觀路徑使用短代碼：/{species}/{outfit}/...
+# species/outfit 代碼請保持在 8 個字元以內。未裝備 outfit 時使用 outfit=base。
 
-# Base status animations
+# 基礎狀態動畫
 Idle|bmp|3|128|96|6|/{species}/{outfit}/idle
 Happy|bmp|2|128|96|6|/{species}/{outfit}/happy
 Hungry|bmp|2|128|96|6|/{species}/{outfit}/hungry
@@ -15,14 +15,14 @@ Clean|bmp|2|128|96|6|/{species}/{outfit}/clean
 Sick|bmp|2|128|96|6|/{species}/{outfit}/sick
 Poop|bmp|2|128|96|6|/{species}/{outfit}/poop
 
-# Action animations
+# 動作動畫
 Feed|bmp|2|128|96|8|/{species}/{outfit}/feed
 Heal|bmp|2|128|96|8|/{species}/{outfit}/heal
 Shower|bmp|2|128|96|8|/{species}/{outfit}/shower
 Gift|bmp|3|128|96|8|/{species}/{outfit}/gift
 GiftHappy|bmp|2|128|96|8|/{species}/{outfit}/gift_happy
 
-# Guess game animations
+# 猜道具遊戲動畫
 GuessStart|bmp|2|128|96|8|/{species}/guess_game/guess_start
 GuessItem1|bmp|4|128|96|8|/{species}/guess_game/1
 GuessItem2|bmp|4|128|96|8|/{species}/guess_game/2
@@ -37,12 +37,12 @@ GuessWrong|bmp|4|128|96|10|/{species}/guess_game/wrong
 GuessWin|bmp|5|128|96|10|/{species}/guess_game/win
 GuessLoss|bmp|2|128|96|10|/{species}/guess_game/loss
 
-# Age status animations
+# 年齡狀態動畫
 AgeStatus1|bmp|2|128|96|6|/status/age/1
 AgeStatus2|bmp|2|128|96|6|/status/age/2
 AgeStatus3|bmp|2|128|96|6|/status/age/3
 
-# Prediction animations
+# 占卜動畫
 PredAnim|bmp|23|128|96|10|/predict/anim
 Predict1|bmp|2|128|96|8|/predict/1
 Predict2|bmp|2|128|96|8|/predict/2
@@ -56,5 +56,5 @@ Predict9|bmp|2|128|96|8|/predict/9
 Predict10|bmp|2|128|96|8|/predict/10
 Predict11|bmp|2|128|96|8|/predict/11
 
-# System animations
+# 系統動畫
 Battery|bmp|2|128|96|6|/battery

@@ -1,67 +1,67 @@
-# Animation Scheduler Rules
+# 動畫排程規則
 
-The scheduler decides animation playback order using `owner` and `priority`.
+排程器會根據 `owner` 與 `priority` 決定動畫播放順序。
 
-## Owners
+## 擁有者
 
 - `BaseState`
-  - Pet idle/status animations such as `Idle`, `Hungry`, `Sick`
-  - These should be treated as fallback visuals
+  - 寵物待機或狀態動畫，例如 `Idle`、`Hungry`、`Sick`
+  - 這些動畫應視為備用畫面
 - `Command`
-  - Button-triggered actions such as `Feed`, `Clean`, `Gift`, `Predict`
-  - These represent user intent and should override base state playback
+  - 由按鈕觸發的動作，例如 `Feed`、`Clean`、`Gift`、`Predict`
+  - 這些動畫代表使用者意圖，應覆蓋基礎狀態播放
 - `Minigame`
-  - Interactive game flow such as item prompts, win/loss, result feedback
-  - These must not be interrupted by base-state playback
+  - 互動遊戲流程，例如道具提示、勝負畫面、結果回饋
+  - 這些動畫不能被基礎狀態播放中斷
 - `System`
-  - Reserved for boot, error, recovery, or future critical animations
+  - 保留給開機、錯誤、復原，或未來的關鍵動畫
 
-## Priorities
+## 優先權
 
 - `Base`
-  - Default priority for passive state animations
+  - 被動狀態動畫的預設優先權
 - `Normal`
-  - Non-critical command or status-card style animations
+  - 非關鍵的指令動畫，或狀態卡片類動畫
 - `High`
-  - Standard user-triggered action animations
+  - 一般使用者觸發的動作動畫
 - `Critical`
-  - Minigame and hard-lock sequences that must finish before fallback resumes
+  - 小遊戲與硬性鎖定流程，必須在恢復備用畫面前播放完成
 
-## Current playback policy
+## 目前播放策略
 
-- A currently playing non-base animation stays active until it finishes
-- Base-state animation is only shown when no owned animation is active
-- Pending animations are sorted by priority before playback
-- For equal priority, queue order is preserved
-- Clearing animations by owner removes pending items from that owner and can also stop the currently active animation if it belongs to that owner
+- 目前正在播放的非基礎動畫會保持啟用，直到播放完成
+- 只有在沒有任何具擁有者的動畫啟用時，才會顯示基礎狀態動畫
+- 待播放動畫會先依優先權排序
+- 優先權相同時，保留佇列順序
+- 依擁有者清除動畫時，會移除該擁有者的待播放項目；若目前播放中的動畫也屬於該擁有者，也可以一併停止
 
-## Default mapping used by firmware
+## 韌體使用的預設對應
 
 - `BaseState` + `Base`
-  - Pet status animations
+  - 寵物狀態動畫
 - `Command` + `High`
-  - Feed, clean, medicine, shower, gift, predict pipeline
+  - 餵食、清潔、吃藥、洗澡、送禮、占卜流程
 - `Command` + `Normal`
-  - Status card / informational animations
+  - 狀態卡片或資訊類動畫
 - `Minigame` + `Critical`
-- Guess-item prompts, result panels, win/loss animations
+  - 猜道具提示、結果面板、勝負動畫
 
-## Why this exists
+## 為什麼需要這份規則
 
-This policy prevents:
+這套策略用來避免：
 
-- Pet status animations from stealing the screen during minigames
-- User action animations from being replaced by passive idle updates
-- Mid-sequence command animations from being reordered by lower-priority events
+- 寵物狀態動畫在小遊戲中搶走畫面
+- 使用者動作動畫被被動待機更新取代
+- 指令流程中段的動畫被較低優先權事件重新排序
 
-## Planned manifest integration
+## 規劃中的 manifest 整合
 
-In the current firmware, owner and priority are assigned in code.
+目前韌體會在程式碼中指定 owner 與 priority。
 
-Long term, `index.txt` may also include playback hints such as:
+長期來看，`index.txt` 也可以包含播放提示，例如：
 
 ```txt
 id=GuessWin;path=/assets/minigame/guess/win;format=raw_sequence;frames=4;width=128;height=96;fps=10;owner=Minigame;priority=Critical
 ```
 
-That should be treated as metadata for scheduler defaults, not as a replacement for runtime game logic.
+這些資訊應視為排程器預設值的 metadata，而不是取代執行期間的遊戲邏輯。
