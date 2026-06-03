@@ -37,6 +37,7 @@ public:
     void clearAnimationsByOwner(AnimationOwner owner) override;
     void markAnimationDirty() override;
     void changePetMood(int delta) override;
+    bool hasAnimation(AnimationId id) const override;
     bool hasAnimationForOwner(AnimationOwner owner) const override;
 
 private:
@@ -106,7 +107,6 @@ private:
     bool applyAppearance(const char *speciesCode, const char *outfitCode);
     bool applySpeciesForHealthyDays();
     bool isCommandEnabled(Command command);
-    bool hasAnimation(AnimationId id) const;
     bool hasAnimations(const AnimationId *ids, size_t count) const;
 };
 

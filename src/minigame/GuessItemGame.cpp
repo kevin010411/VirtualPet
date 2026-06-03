@@ -70,9 +70,20 @@ void GuessItemGame::start()
 {
     reset();
     host.clearAnimationsByOwner(AnimationOwner::Minigame);
-    host.queueAnimation(Animation(AnimationId::GuessStart, kStartAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
-    host.markAnimationDirty();
-    state = GuessItemState::Starting;
+
+    if (host.hasAnimation(AnimationId::GuessStart))
+    {
+        host.queueAnimation(Animation(AnimationId::GuessStart, kStartAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+        host.markAnimationDirty();
+        state = GuessItemState::Starting;
+    }
+    else
+    {
+        promptAnimationId = randomItemAnimation();
+        queuePromptAnimation();
+        state = GuessItemState::WaitingItem;
+    }
+
     lastMoveTime = millis();
 }
 

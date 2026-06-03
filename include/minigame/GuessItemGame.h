@@ -30,6 +30,7 @@ public:
     virtual void clearAnimationsByOwner(AnimationOwner owner) = 0;
     virtual void markAnimationDirty() = 0;
     virtual void changePetMood(int delta) = 0;
+    virtual bool hasAnimation(AnimationId id) const = 0;
     virtual bool hasAnimationForOwner(AnimationOwner owner) const = 0;
 };
 

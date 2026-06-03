@@ -595,7 +595,6 @@ bool Game::isCommandEnabled(Command command)
     case Command::HaveFun:
     {
         const AnimationId required[] = {
-            AnimationId::GuessStart,
             AnimationId::GuessItem1,
             AnimationId::GuessItem2,
             AnimationId::GuessItem3,
