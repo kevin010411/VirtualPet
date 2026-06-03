@@ -15,9 +15,10 @@
 #   - If this file is missing, invalid, or has no matching row, the command is enabled.
 #   - enabled accepts 1, 0, true, false, on, off.
 #   - max_healthy_days may be * for no upper limit.
-#   - command may be *, FEED_PET, PREDICT, GIFT, MEDICINE, SHOWER, HAVE_FUN,
-#     CLEAN, STATUS, or the friendly names FeedPet, Predict, Gift, Medicine,
-#     Shower, HaveFun, Clean, Status.
+#   - command may be *, FeedPet, Predict, Gift, Medicine, Shower, HaveFun,
+#     Clean, Status, or Happy.
+#   - Happy is not a menu command; it controls whether command interactions
+#     append the shared Happy animation afterward.
 #   - Disabled commands still appear in the menu, but pressing confirm does not
 #     execute them.
 #

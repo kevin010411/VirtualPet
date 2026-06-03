@@ -7,10 +7,7 @@ namespace
 {
 constexpr uint16_t kDefaultAnimWidth = 128;
 constexpr uint16_t kDefaultAnimHeight = 96;
-constexpr const char *kManifestPath = "/index.txt";
-constexpr const char *kAnimalToken = "{animal}";
-constexpr const char *kSpeciesToken = "{species}";
-constexpr const char *kOutfitToken = "{outfit}";
+constexpr const char *kMainManifestPath = "/index/main.txt";
 
 AnimationMeta gAnimationRegistry[kAnimationIdCount] = {};
 
@@ -97,89 +94,36 @@ bool splitManifestFields(char *line, char **fields, size_t fieldCount)
     return true;
 }
 
-bool appendText(char *dest, size_t destSize, size_t &destIndex, const char *text)
-{
-    if (dest == nullptr || destSize == 0 || text == nullptr)
-        return false;
-
-    const size_t len = strlen(text);
-    if (destIndex + len >= destSize)
-        return false;
-
-    memcpy(dest + destIndex, text, len);
-    destIndex += len;
-    return true;
-}
-
-bool applyAppearanceTokens(char *dest, size_t destSize, const char *source, const char *speciesCode, const char *outfitCode)
+bool copyManifestPath(char *dest, size_t destSize, const char *source)
 {
     if (dest == nullptr || destSize == 0 || source == nullptr)
         return false;
 
-    const char *speciesReplacement = (speciesCode != nullptr && speciesCode[0] != '\0') ? speciesCode : "dino";
-    const char *outfitReplacement = (outfitCode != nullptr && outfitCode[0] != '\0') ? outfitCode : "base";
-    const size_t tokenLen = strlen(kAnimalToken);
-    const size_t speciesTokenLen = strlen(kSpeciesToken);
-    const size_t outfitTokenLen = strlen(kOutfitToken);
-
-    size_t destIndex = 0;
-    const char *cursor = source;
-    while (*cursor != '\0')
-    {
-        if (strncmp(cursor, kAnimalToken, tokenLen) == 0)
-        {
-            if (!appendText(dest, destSize, destIndex, speciesReplacement))
-                return false;
-            cursor += tokenLen;
-            continue;
-        }
-        if (strncmp(cursor, kSpeciesToken, speciesTokenLen) == 0)
-        {
-            if (!appendText(dest, destSize, destIndex, speciesReplacement))
-                return false;
-            cursor += speciesTokenLen;
-            continue;
-        }
-        if (strncmp(cursor, kOutfitToken, outfitTokenLen) == 0)
-        {
-            if (!appendText(dest, destSize, destIndex, outfitReplacement))
-                return false;
-            cursor += outfitTokenLen;
-            continue;
-        }
-
-        if (destIndex + 1 >= destSize)
-            return false;
-        dest[destIndex++] = *cursor++;
-    }
-
-    dest[destIndex] = '\0';
-    return true;
-}
-} // namespace
-
-void AssetManifest::reset()
-{
-    for (size_t i = 0; i < kAnimationIdCount; ++i)
-    {
-        AnimationMeta &meta = gAnimationRegistry[i];
-        meta.path[0] = '\0';
-        meta.format = AssetFormat::BmpSequence;
-        meta.width = kDefaultAnimWidth;
-        meta.height = kDefaultAnimHeight;
-        meta.frameCount = 0;
-        meta.fpsHint = 0;
-        meta.configured = false;
-        meta.singleFile = false;
-    }
-}
-
-bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitCode)
-{
-    if (sd == nullptr)
+    const size_t len = strlen(source);
+    if (len >= destSize)
         return false;
 
-    File manifest = sd->open(kManifestPath, FILE_READ);
+    memcpy(dest, source, len + 1);
+    return true;
+}
+
+bool buildAppearanceManifestPath(char *dest, size_t destSize, const char *speciesCode, const char *outfitCode)
+{
+    if (dest == nullptr || destSize == 0)
+        return false;
+
+    const char *species = (speciesCode != nullptr && speciesCode[0] != '\0') ? speciesCode : "dino";
+    const char *outfit = (outfitCode != nullptr && outfitCode[0] != '\0') ? outfitCode : "base";
+    const int written = snprintf(dest, destSize, "/index/%s_%s.txt", species, outfit);
+    return written >= 0 && written < static_cast<int>(destSize);
+}
+
+bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPath)
+{
+    if (sd == nullptr || manifestPath == nullptr || manifestPath[0] == '\0')
+        return false;
+
+    File manifest = sd->open(manifestPath, FILE_READ);
     if (!manifest)
         return false;
 
@@ -212,7 +156,7 @@ bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitC
         parsed.width = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
         parsed.height = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
         parsed.fpsHint = static_cast<uint8_t>(strtoul(fields[5], nullptr, 10));
-        if (!applyAppearanceTokens(parsed.path, sizeof(parsed.path), fields[6], speciesCode, outfitCode))
+        if (!copyManifestPath(parsed.path, sizeof(parsed.path), fields[6]))
             continue;
 
         if (parsed.frameCount == 0 || parsed.width == 0 || parsed.height == 0 || parsed.path[0] == '\0')
@@ -224,11 +168,45 @@ bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitC
             parsed.frameCount = 1;
 
         parsed.configured = true;
-        *metaFor(targetId) = parsed;
+        *registry.metaFor(targetId) = parsed;
     }
 
     manifest.close();
     return true;
+}
+} // namespace
+
+void AssetManifest::reset()
+{
+    for (size_t i = 0; i < kAnimationIdCount; ++i)
+    {
+        AnimationMeta &meta = gAnimationRegistry[i];
+        meta.path[0] = '\0';
+        meta.format = AssetFormat::BmpSequence;
+        meta.width = kDefaultAnimWidth;
+        meta.height = kDefaultAnimHeight;
+        meta.frameCount = 0;
+        meta.fpsHint = 0;
+        meta.configured = false;
+        meta.singleFile = false;
+    }
+}
+
+bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitCode)
+{
+    reset();
+
+    if (sd == nullptr)
+        return false;
+
+    char appearanceManifestPath[48];
+    if (!buildAppearanceManifestPath(appearanceManifestPath, sizeof(appearanceManifestPath), speciesCode, outfitCode))
+        return false;
+
+    if (!loadManifestFile(sd, *this, kMainManifestPath))
+        return false;
+
+    return loadManifestFile(sd, *this, appearanceManifestPath);
 }
 
 AnimationMeta *AssetManifest::metaFor(AnimationId id)

@@ -1,58 +1,17 @@
-# 將此檔案複製到 SD 卡的 /index.txt。
-# 格式：id|format|frames|width|height|fps|path
-# fps 控制每個動畫的播放節奏；渲染與解碼方式由 format 選擇。
-# 使用 fps=0 會退回韌體預設影格間隔。
-# 外觀路徑使用短代碼：/{species}/{outfit}/...
-# species/outfit 代碼請保持在 8 個字元以內。未裝備 outfit 時使用 outfit=base。
+# Legacy note
 
-# 基礎狀態動畫
-Idle|bmp|3|128|96|6|/{species}/{outfit}/idle
-Happy|bmp|2|128|96|6|/{species}/{outfit}/happy
-Hungry|bmp|2|128|96|6|/{species}/{outfit}/hungry
-Depress|bmp|2|128|96|6|/{species}/{outfit}/depress
-Dirty|bmp|2|128|96|6|/{species}/{outfit}/dirty
-Clean|bmp|2|128|96|6|/{species}/{outfit}/clean
-Sick|bmp|2|128|96|6|/{species}/{outfit}/sick
-Poop|bmp|2|128|96|6|/{species}/{outfit}/poop
+舊版 `/index.txt` 已不再支援。
 
-# 動作動畫
-Feed|bmp|2|128|96|8|/{species}/{outfit}/feed
-Heal|bmp|2|128|96|8|/{species}/{outfit}/heal
-Shower|bmp|2|128|96|8|/{species}/{outfit}/shower
-Gift|bmp|3|128|96|8|/{species}/{outfit}/gift
-GiftHappy|bmp|2|128|96|8|/{species}/{outfit}/gift_happy
+請改用 SD 卡上的 `/index/` 資料夾：
 
-# 猜道具遊戲動畫
-GuessStart|bmp|2|128|96|8|/{species}/guess_game/guess_start
-GuessItem1|bmp|4|128|96|8|/{species}/guess_game/1
-GuessItem2|bmp|4|128|96|8|/{species}/guess_game/2
-GuessItem3|bmp|4|128|96|8|/{species}/guess_game/3
-GuessItem4|bmp|4|128|96|8|/{species}/guess_game/4
-GuessLL|bmp|2|128|96|8|/{species}/guess_game/ll
-GuessLR|bmp|2|128|96|8|/{species}/guess_game/lr
-GuessRL|bmp|2|128|96|8|/{species}/guess_game/rl
-GuessRR|bmp|2|128|96|8|/{species}/guess_game/rr
-GuessRight|bmp|4|128|96|10|/{species}/guess_game/right
-GuessWrong|bmp|4|128|96|10|/{species}/guess_game/wrong
-GuessWin|bmp|5|128|96|10|/{species}/guess_game/win
-GuessLoss|bmp|2|128|96|10|/{species}/guess_game/loss
+```txt
+/index/main.txt
+/index/{species}_{outfit}.txt
+```
 
-# 年齡狀態動畫
-AgeStatus|bmp|3|128|96|6|/status/age
+可參考：
 
-# 占卜動畫
-PredAnim|bmp|23|128|96|10|/predict/anim
-Predict1|bmp|2|128|96|8|/predict/1
-Predict2|bmp|2|128|96|8|/predict/2
-Predict3|bmp|2|128|96|8|/predict/3
-Predict4|bmp|2|128|96|8|/predict/4
-Predict5|bmp|2|128|96|8|/predict/5
-Predict6|bmp|2|128|96|8|/predict/6
-Predict7|bmp|2|128|96|8|/predict/7
-Predict8|bmp|2|128|96|8|/predict/8
-Predict9|bmp|2|128|96|8|/predict/9
-Predict10|bmp|2|128|96|8|/predict/10
-Predict11|bmp|2|128|96|8|/predict/11
-
-# 系統動畫
-Battery|bmp|2|128|96|6|/battery
+```txt
+docs/index/main.txt
+docs/index/dino_base.txt
+```

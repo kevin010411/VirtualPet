@@ -1,0 +1,7 @@
+# Copy this file to SD card path: /index/main.txt
+# Format: id|format|frames|width|height|fps|path
+# main.txt stores shared/system resources only.
+
+Battery|bmp|2|128|96|6|/battery
+Layout|bmp|8|32|32|0|/layout
+LayoutSel|bmp|8|32|32|0|/layout_sel

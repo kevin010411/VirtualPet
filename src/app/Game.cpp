@@ -11,7 +11,6 @@
 namespace
 {
 constexpr const char *kSpeciesByHealthyDaysPath = "/species_by_healthy_days.txt";
-constexpr const char *kCommandRulesPath = "/command_rules.txt";
 constexpr uint32_t kNoMaxHealthyDays = 0xFFFFFFFFUL;
 
 bool isSpaceChar(char c)
@@ -76,34 +75,6 @@ bool parseUnsignedField(const char *text, uint32_t &value)
     return true;
 }
 
-bool parseRangeField(const char *text, uint32_t &value)
-{
-    if (strcmp(text, "*") == 0)
-    {
-        value = kNoMaxHealthyDays;
-        return true;
-    }
-
-    return parseUnsignedField(text, value);
-}
-
-bool parseEnabledField(const char *text, bool &enabled)
-{
-    if (strcmp(text, "1") == 0)
-    {
-        enabled = true;
-        return true;
-    }
-
-    if (strcmp(text, "0") == 0)
-    {
-        enabled = false;
-        return true;
-    }
-
-    return false;
-}
-
 bool isValidAppearanceCode(const char *code)
 {
     if (code == nullptr || code[0] == '\0')
@@ -162,32 +133,6 @@ bool splitSpeciesRule(char *line, uint32_t &minDays, uint32_t &maxDays, char *&s
     return minDays <= maxDays &&
            isValidAppearanceCode(speciesCode) &&
            isValidAppearanceCode(outfitCode);
-}
-
-bool splitCommandRule(char *line, char *fields[], size_t fieldCount)
-{
-    if (line == nullptr || fields == nullptr || fieldCount == 0)
-        return false;
-
-    fields[0] = line;
-    size_t fieldIndex = 1;
-    for (char *cursor = line; *cursor != '\0'; ++cursor)
-    {
-        if (*cursor != '|')
-            continue;
-        if (fieldIndex >= fieldCount)
-            return false;
-        *cursor = '\0';
-        fields[fieldIndex++] = cursor + 1;
-    }
-
-    if (fieldIndex != fieldCount)
-        return false;
-
-    for (size_t i = 0; i < fieldCount; ++i)
-        fields[i] = trimField(fields[i]);
-
-    return true;
 }
 
 } // namespace
@@ -615,80 +560,81 @@ void Game::ExecuteCommand()
     parse_command(nowCommand);
 }
 
-bool Game::commandMatches(Command command, const char *text) const
+bool Game::isCommandEnabled(Command command)
 {
-    if (text == nullptr)
-        return false;
-
-    if (strcmp(text, "*") == 0 || strcmp(text, commandLabel(command)) == 0)
-        return true;
-
     switch (command)
     {
     case Command::FeedPet:
-        return strcmp(text, "FeedPet") == 0;
+        return hasAnimation(AnimationId::Feed);
     case Command::Predict:
-        return strcmp(text, "Predict") == 0;
+    {
+        const AnimationId required[] = {
+            AnimationId::PredAnim,
+            AnimationId::Predict1,
+            AnimationId::Predict2,
+            AnimationId::Predict3,
+            AnimationId::Predict4,
+            AnimationId::Predict5,
+            AnimationId::Predict6,
+            AnimationId::Predict7,
+            AnimationId::Predict8,
+            AnimationId::Predict9,
+            AnimationId::Predict10,
+            AnimationId::Predict11};
+        return hasAnimations(required, sizeof(required) / sizeof(required[0]));
+    }
     case Command::Gift:
-        return strcmp(text, "Gift") == 0;
+    {
+        const AnimationId required[] = {AnimationId::Gift, AnimationId::GiftHappy};
+        return hasAnimations(required, sizeof(required) / sizeof(required[0]));
+    }
     case Command::Medicine:
-        return strcmp(text, "Medicine") == 0;
+        return hasAnimation(AnimationId::Heal);
     case Command::Shower:
-        return strcmp(text, "Shower") == 0;
+        return hasAnimation(AnimationId::Shower);
     case Command::HaveFun:
-        return strcmp(text, "HaveFun") == 0;
+    {
+        const AnimationId required[] = {
+            AnimationId::GuessStart,
+            AnimationId::GuessItem1,
+            AnimationId::GuessItem2,
+            AnimationId::GuessItem3,
+            AnimationId::GuessItem4,
+            AnimationId::GuessLL,
+            AnimationId::GuessLR,
+            AnimationId::GuessRL,
+            AnimationId::GuessRR,
+            AnimationId::GuessRight,
+            AnimationId::GuessWrong,
+            AnimationId::GuessWin,
+            AnimationId::GuessLoss};
+        return hasAnimations(required, sizeof(required) / sizeof(required[0]));
+    }
     case Command::Clean:
-        return strcmp(text, "Clean") == 0;
+        return hasAnimation(AnimationId::Clean);
     case Command::Status:
-        return strcmp(text, "Status") == 0;
+        return hasAnimation(pet->CurrentAgeAnimation());
     case Command::Count:
         break;
     }
-
     return false;
 }
 
-bool Game::isCommandEnabled(Command command)
+bool Game::hasAnimation(AnimationId id) const
 {
-    if (sd == nullptr || !sd->exists(kCommandRulesPath))
-        return true;
+    return renderer->frameCountFor(id) > 0;
+}
 
-    File file = sd->open(kCommandRulesPath, FILE_READ);
-    if (!file)
-        return true;
+bool Game::hasAnimations(const AnimationId *ids, size_t count) const
+{
+    if (ids == nullptr)
+        return false;
 
-    char line[96] = {};
-    while (readConfigLine(file, line, sizeof(line)))
+    for (size_t i = 0; i < count; ++i)
     {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
-            continue;
-
-        char *fields[4] = {};
-        if (!splitCommandRule(content, fields, 4))
-            continue;
-
-        bool enabled = true;
-        uint32_t minDays = 0;
-        uint32_t maxDays = 0;
-        if (!commandMatches(command, fields[0]) ||
-            !parseEnabledField(fields[1], enabled) ||
-            !parseUnsignedField(fields[2], minDays) ||
-            !parseRangeField(fields[3], maxDays) ||
-            minDays > maxDays)
-        {
-            continue;
-        }
-
-        const uint32_t healthyDays = pet->healthyDays();
-        if (healthyDays < minDays || healthyDays > maxDays)
-            continue;
-
-        file.close();
-        return enabled;
+        if (!hasAnimation(ids[i]))
+            return false;
     }
-
-    file.close();
     return true;
 }
 
@@ -704,6 +650,14 @@ void Game::queueAnimation(const Animation &animation)
         }
     }
     animationQueue.insert(insertIt, animation);
+}
+
+void Game::queuePostCommandHappyAnimation()
+{
+    if (!hasAnimation(AnimationId::Happy))
+        return;
+
+    queueAnimation(Animation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
 }
 
 void Game::clearAnimationsByOwner(AnimationOwner owner)
@@ -757,7 +711,7 @@ void Game::parse_command(Command command)
     case Command::FeedPet:
         pet->feedPet(40);
         queueAnimation(Animation(AnimationId::Feed, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
-        queueAnimation(Animation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+        queuePostCommandHappyAnimation();
         markAnimationDirty();
         break;
     case Command::HaveFun:
@@ -767,19 +721,19 @@ void Game::parse_command(Command command)
     case Command::Clean:
         pet->cleanEnv(500);
         queueAnimation(Animation(AnimationId::Clean, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
-        queueAnimation(Animation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+        queuePostCommandHappyAnimation();
         markAnimationDirty();
         break;
     case Command::Medicine:
         pet->takeMedicine();
         queueAnimation(Animation(AnimationId::Heal, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
-        queueAnimation(Animation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+        queuePostCommandHappyAnimation();
         markAnimationDirty();
         break;
     case Command::Shower:
         pet->takeShower(250);
         queueAnimation(Animation(AnimationId::Shower, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
-        queueAnimation(Animation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+        queuePostCommandHappyAnimation();
         markAnimationDirty();
         break;
     case Command::Predict:
@@ -791,7 +745,7 @@ void Game::parse_command(Command command)
         pet->changeMood(50);
         queueAnimation(Animation(AnimationId::Gift, gameTick * 2.5, false, AnimationOwner::Command, AnimationPriority::High));
         queueAnimation(Animation(AnimationId::GiftHappy, gameTick * 1.5, false, AnimationOwner::Command, AnimationPriority::High));
-        queueAnimation(Animation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+        queuePostCommandHappyAnimation();
         markAnimationDirty();
         break;
     case Command::Status:
@@ -832,7 +786,7 @@ void Game::draw_select_layout()
 
 void Game::roll_sick()
 {
-    const float probability = 0.01f;
+    const float probability = 0.001f;
     const float randValue = random(1001) / 1000.0f;
     if (randValue < probability)
         pet->getSick();

@@ -1,0 +1,53 @@
+# Copy this file to SD card path: /index/dino_base.txt
+# Format: id|format|frames|width|height|fps|path
+# This file stores the dino/base appearance animations.
+# Paths are literal SD-card paths. Token replacement is not supported.
+
+# Base state animations
+Idle|bmp|3|128|96|6|/dino/base/idle
+Happy|bmp|2|128|96|6|/dino/base/happy
+Hungry|bmp|2|128|96|6|/dino/base/hungry
+Depress|bmp|2|128|96|6|/dino/base/depress
+Dirty|bmp|2|128|96|6|/dino/base/dirty
+Clean|bmp|2|128|96|6|/dino/base/clean
+Sick|bmp|2|128|96|6|/dino/base/sick
+Poop|bmp|2|128|96|6|/dino/base/poop
+
+# Command animations
+Feed|bmp|2|128|96|8|/dino/base/feed
+Heal|bmp|2|128|96|8|/dino/base/heal
+Shower|bmp|2|128|96|8|/dino/base/shower
+Gift|bmp|3|128|96|8|/dino/base/gift
+GiftHappy|bmp|2|128|96|8|/dino/base/gift_happy
+
+# Guess game animations
+GuessStart|bmp|2|128|96|8|/dino/guess_game/guess_start
+GuessItem1|bmp|4|128|96|8|/dino/guess_game/1
+GuessItem2|bmp|4|128|96|8|/dino/guess_game/2
+GuessItem3|bmp|4|128|96|8|/dino/guess_game/3
+GuessItem4|bmp|4|128|96|8|/dino/guess_game/4
+GuessLL|bmp|2|128|96|8|/dino/guess_game/ll
+GuessLR|bmp|2|128|96|8|/dino/guess_game/lr
+GuessRL|bmp|2|128|96|8|/dino/guess_game/rl
+GuessRR|bmp|2|128|96|8|/dino/guess_game/rr
+GuessRight|bmp|4|128|96|10|/dino/guess_game/right
+GuessWrong|bmp|4|128|96|10|/dino/guess_game/wrong
+GuessWin|bmp|5|128|96|10|/dino/guess_game/win
+GuessLoss|bmp|2|128|96|10|/dino/guess_game/loss
+
+# Age status animation
+AgeStatus|bmp|3|128|96|6|/status/age
+
+# Fortune animations
+PredAnim|bmp|23|128|96|10|/predict/anim
+Predict1|bmp|2|128|96|8|/predict/1
+Predict2|bmp|2|128|96|8|/predict/2
+Predict3|bmp|2|128|96|8|/predict/3
+Predict4|bmp|2|128|96|8|/predict/4
+Predict5|bmp|2|128|96|8|/predict/5
+Predict6|bmp|2|128|96|8|/predict/6
+Predict7|bmp|2|128|96|8|/predict/7
+Predict8|bmp|2|128|96|8|/predict/8
+Predict9|bmp|2|128|96|8|/predict/9
+Predict10|bmp|2|128|96|8|/predict/10
+Predict11|bmp|2|128|96|8|/predict/11

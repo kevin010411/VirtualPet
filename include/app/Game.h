@@ -102,10 +102,12 @@ private:
     void maybeSavePet();
     void maybeDecayEnvironment(unsigned long elapsed);
     void tryStartNextAnimation();
+    void queuePostCommandHappyAnimation();
     bool applyAppearance(const char *speciesCode, const char *outfitCode);
     bool applySpeciesForHealthyDays();
     bool isCommandEnabled(Command command);
-    bool commandMatches(Command command, const char *text) const;
+    bool hasAnimation(AnimationId id) const;
+    bool hasAnimations(const AnimationId *ids, size_t count) const;
 };
 
 #endif // GAME_H
