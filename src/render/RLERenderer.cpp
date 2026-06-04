@@ -19,10 +19,9 @@ bool RLERenderer::showImageFile(const char *imgPath,
                                 int batchLines,
                                 const AnimationMeta *meta)
 {
-    (void)batchLines;
     const bool validateSize = meta != nullptr;
     const uint16_t expectedWidth = validateSize ? meta->width : 0;
     const uint16_t expectedHeight = validateSize ? meta->height : 0;
-    return FrameDecoder::showRleImage(sdCard(), display(), lineBuffer(), imgPath, expectedWidth, expectedHeight, validateSize, xmin, ymin);
+    return FrameDecoder::showRleImage(sdCard(), display(), rowBuffer(), lineBuffer(), imgPath, expectedWidth, expectedHeight, validateSize, xmin, ymin, batchLines);
 }
 #endif

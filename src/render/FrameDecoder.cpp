@@ -16,31 +16,6 @@ void showResourceError(Adafruit_ST7735 *tft)
     tft->print("resource error");
 }
 
-bool endsWithIgnoreCase(const char *text, const char *suffix)
-{
-    if (text == nullptr || suffix == nullptr)
-        return false;
-
-    const size_t textLen = strlen(text);
-    const size_t suffixLen = strlen(suffix);
-    if (textLen < suffixLen)
-        return false;
-
-    const char *start = text + textLen - suffixLen;
-    for (size_t i = 0; i < suffixLen; ++i)
-    {
-        char a = start[i];
-        char b = suffix[i];
-        if (a >= 'A' && a <= 'Z')
-            a = static_cast<char>(a - 'A' + 'a');
-        if (b >= 'A' && b <= 'Z')
-            b = static_cast<char>(b - 'A' + 'a');
-        if (a != b)
-            return false;
-    }
-    return true;
-}
-
 bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, const char *ext)
 {
     if (dest == nullptr || destSize == 0 || path == nullptr || ext == nullptr)
@@ -59,13 +34,6 @@ bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, con
 bool buildFramePath(char *dest, size_t destSize, const char *basePath, uint16_t frameIndex, const char *ext)
 {
     return snprintf(dest, destSize, "%s/%u%s", basePath, static_cast<unsigned>(frameIndex), ext) < static_cast<int>(destSize);
-}
-
-bool fileExists(SdFat *sd, const char *path)
-{
-    if (sd == nullptr || path == nullptr)
-        return false;
-    return sd->exists(path);
 }
 
 #if ENABLE_SD_BMP_ASSETS
@@ -156,32 +124,93 @@ bool showBmpImage(SdFat *sd,
 #endif
 
 #if ENABLE_SD_RLE_ASSETS
+namespace
+{
+constexpr size_t kRleReadBufferBytes = 512;
+
+class RleBufferedReader
+{
+public:
+    RleBufferedReader(File &source, std::vector<uint8_t> &buffer)
+        : file(source), readBuffer(buffer)
+    {
+        if (readBuffer.size() < kRleReadBufferBytes)
+            readBuffer.resize(kRleReadBufferBytes);
+    }
+
+    bool readU16LE(uint16_t &value)
+    {
+        uint8_t low = 0;
+        uint8_t high = 0;
+        if (!readByte(low) || !readByte(high))
+            return false;
+
+        value = static_cast<uint16_t>(low | (static_cast<uint16_t>(high) << 8));
+        return true;
+    }
+
+    bool hasTrailingData() const
+    {
+        return readPosition < readLength || file.available();
+    }
+
+private:
+    bool readByte(uint8_t &value)
+    {
+        if (readPosition >= readLength && !refill())
+            return false;
+
+        value = readBuffer[readPosition++];
+        return true;
+    }
+
+    bool refill()
+    {
+        const int bytesRead = file.read(readBuffer.data(), readBuffer.size());
+        if (bytesRead <= 0)
+            return false;
+
+        readPosition = 0;
+        readLength = static_cast<size_t>(bytesRead);
+        return true;
+    }
+
+    File &file;
+    std::vector<uint8_t> &readBuffer;
+    size_t readPosition = 0;
+    size_t readLength = 0;
+};
+} // namespace
+
 bool showRleImage(SdFat *sd,
                   Adafruit_ST7735 *tft,
+                  std::vector<uint8_t> &readBuffer,
                   std::vector<uint16_t> &lineBuffer,
                   const char *imgPath,
                   uint16_t expectedWidth,
                   uint16_t expectedHeight,
                   bool validateExpectedSize,
                   int xmin,
-                  int ymin)
+                  int ymin,
+                  int batchLines)
 {
+    if (sd == nullptr || tft == nullptr)
+        return false;
+
     File frameFile = sd->open(imgPath);
     if (!frameFile)
         return false;
 
-    const int widthLo = frameFile.read();
-    const int widthHi = frameFile.read();
-    const int heightLo = frameFile.read();
-    const int heightHi = frameFile.read();
-    if (widthLo < 0 || widthHi < 0 || heightLo < 0 || heightHi < 0)
+    RleBufferedReader reader(frameFile, readBuffer);
+
+    uint16_t width = 0;
+    uint16_t height = 0;
+    if (!reader.readU16LE(width) || !reader.readU16LE(height))
     {
         frameFile.close();
         return false;
     }
 
-    const uint16_t width = static_cast<uint16_t>(widthLo | (widthHi << 8));
-    const uint16_t height = static_cast<uint16_t>(heightLo | (heightHi << 8));
     if (width == 0 || height == 0)
     {
         frameFile.close();
@@ -194,7 +223,8 @@ bool showRleImage(SdFat *sd,
         return false;
     }
 
-    const size_t lineCapacity = static_cast<size_t>(width);
+    const int safeBatchLines = (batchLines < 1) ? 1 : batchLines;
+    const size_t lineCapacity = static_cast<size_t>(width) * static_cast<size_t>(safeBatchLines);
     if (lineBuffer.size() < lineCapacity)
         lineBuffer.resize(lineCapacity);
 
@@ -203,50 +233,52 @@ bool showRleImage(SdFat *sd,
     size_t pixelsWritten = 0;
     const size_t totalPixels = static_cast<size_t>(width) * height;
 
-    while (pixelsWritten < totalPixels)
+    for (uint16_t batchStartRow = 0; batchStartRow < height; batchStartRow = static_cast<uint16_t>(batchStartRow + safeBatchLines))
     {
-        const int rowIndex = static_cast<int>(pixelsWritten / width);
-        size_t lineCount = 0;
-        while (lineCount < width)
-        {
-            if (runLength == 0)
-            {
-                const int lowCount = frameFile.read();
-                const int highCount = frameFile.read();
-                const int lowColor = frameFile.read();
-                const int highColor = frameFile.read();
-                if (lowCount < 0 || highCount < 0 || lowColor < 0 || highColor < 0)
-                {
-                    frameFile.close();
-                    return false;
-                }
+        const int actualLines = (batchStartRow + safeBatchLines > height) ? (height - batchStartRow) : safeBatchLines;
 
-                runLength = static_cast<uint16_t>(lowCount | (highCount << 8));
-                runColor = static_cast<uint16_t>(lowColor | (highColor << 8));
+        for (int rowOffset = 0; rowOffset < actualLines; ++rowOffset)
+        {
+            const size_t bufferRow = static_cast<size_t>(actualLines - 1 - rowOffset);
+            uint16_t *destLine = &lineBuffer[bufferRow * width];
+            size_t lineCount = 0;
+
+            while (lineCount < width)
+            {
                 if (runLength == 0)
                 {
-                    frameFile.close();
-                    return false;
+                    if (!reader.readU16LE(runLength) || !reader.readU16LE(runColor))
+                    {
+                        frameFile.close();
+                        return false;
+                    }
+
+                    if (runLength == 0)
+                    {
+                        frameFile.close();
+                        return false;
+                    }
                 }
-            }
 
-            const size_t copyCount = (runLength < (width - lineCount)) ? runLength : (width - lineCount);
-            for (size_t i = 0; i < copyCount; ++i)
-            {
-                const size_t destX = (width - 1) - (lineCount + i);
-                lineBuffer[destX] = runColor;
-            }
+                const size_t remainingLine = static_cast<size_t>(width) - lineCount;
+                const size_t copyCount = (runLength < remainingLine) ? runLength : remainingLine;
+                for (size_t i = 0; i < copyCount; ++i)
+                {
+                    const size_t destX = (static_cast<size_t>(width) - 1) - (lineCount + i);
+                    destLine[destX] = runColor;
+                }
 
-            lineCount += copyCount;
-            pixelsWritten += copyCount;
-            runLength = static_cast<uint16_t>(runLength - copyCount);
+                lineCount += copyCount;
+                pixelsWritten += copyCount;
+                runLength = static_cast<uint16_t>(runLength - copyCount);
+            }
         }
 
-        const int y = static_cast<int>((height - 1) - rowIndex);
-        tft->drawRGBBitmap(xmin, ymin + y, lineBuffer.data(), width, 1);
+        const int y = static_cast<int>(height - batchStartRow - actualLines);
+        tft->drawRGBBitmap(xmin, ymin + y, lineBuffer.data(), width, actualLines);
     }
 
-    if (runLength != 0 || frameFile.available())
+    if (pixelsWritten != totalPixels || runLength != 0 || reader.hasTrailingData())
     {
         frameFile.close();
         return false;

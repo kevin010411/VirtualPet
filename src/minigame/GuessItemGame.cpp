@@ -151,7 +151,8 @@ void GuessItemGame::update()
             state = (correctCount > wrongCount) ? GuessItemState::Win : GuessItemState::Lose;
             const AnimationId finalAnimation = (state == GuessItemState::Win) ? AnimationId::GuessWin : AnimationId::GuessLoss;
             host.clearAnimationsByOwner(AnimationOwner::Minigame);
-            host.queueAnimation(Animation(finalAnimation, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+            if (host.hasAnimation(finalAnimation))
+                host.queueAnimation(Animation(finalAnimation, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
             host.markAnimationDirty();
             lastMoveTime = now;
 #endif
@@ -222,15 +223,17 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     host.queueAnimation(Animation(itemResultAnimation(itemSide, player), kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
     if (correct)
     {
-        host.changePetMood(40);
+        host.changePetMood(60);
         correctCount++;
-        host.queueAnimation(Animation(AnimationId::GuessRight, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+        if (host.hasAnimation(AnimationId::GuessRight))
+            host.queueAnimation(Animation(AnimationId::GuessRight, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
     }
     else
     {
         host.changePetMood(-5);
         wrongCount++;
-        host.queueAnimation(Animation(AnimationId::GuessWrong, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+        if (host.hasAnimation(AnimationId::GuessWrong))
+            host.queueAnimation(Animation(AnimationId::GuessWrong, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
     }
 
     host.markAnimationDirty();

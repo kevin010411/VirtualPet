@@ -602,11 +602,7 @@ bool Game::isCommandEnabled(Command command)
             AnimationId::GuessLL,
             AnimationId::GuessLR,
             AnimationId::GuessRL,
-            AnimationId::GuessRR,
-            AnimationId::GuessRight,
-            AnimationId::GuessWrong,
-            AnimationId::GuessWin,
-            AnimationId::GuessLoss};
+            AnimationId::GuessRR};
         return hasAnimations(required, sizeof(required) / sizeof(required[0]));
     }
     case Command::Clean:
@@ -639,6 +635,9 @@ bool Game::hasAnimations(const AnimationId *ids, size_t count) const
 
 void Game::queueAnimation(const Animation &animation)
 {
+    if (animation.id != AnimationId::None && !hasAnimation(animation.id))
+        return;
+
     auto insertIt = animationQueue.end();
     for (auto it = animationQueue.begin(); it != animationQueue.end(); ++it)
     {
