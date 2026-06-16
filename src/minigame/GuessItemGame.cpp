@@ -1,3 +1,7 @@
+#include "app/AppProfile.h"
+
+#if ENABLE_GUESS_ITEM_GAME
+
 #include "minigame/GuessItemGame.h"
 
 namespace
@@ -240,3 +244,5 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     state = GuessItemState::ShowingResult;
     lastMoveTime = millis();
 }
+
+#endif // ENABLE_GUESS_ITEM_GAME

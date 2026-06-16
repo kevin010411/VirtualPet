@@ -1,6 +1,10 @@
 #ifndef GUESSITEMGAME_H
 #define GUESSITEMGAME_H
 
+#include "app/AppProfile.h"
+
+#if ENABLE_GUESS_ITEM_GAME
+
 #include <Arduino.h>
 #include "domain/Animation.h"
 
@@ -61,5 +65,7 @@ private:
     AnimationId promptAnimationId;
     unsigned long lastMoveTime = 0;
 };
+
+#endif // ENABLE_GUESS_ITEM_GAME
 
 #endif

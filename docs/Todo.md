@@ -1,0 +1,1 @@
+- [ ] 目前isCommandEnabled需要再調查哪邊調用以及必要性(與某些function功能重疊)

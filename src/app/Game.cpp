@@ -141,18 +141,69 @@ Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
     : pet(new Pet()),
       petStorage(new PetStorage(ref_SD)),
       renderer(Renderer::create(ref_tft, ref_SD)),
+#if ENABLE_GUESS_ITEM_GAME
       guessItem(new GuessItemGame(*this)),
+#endif
       sd(ref_SD)
 {
 }
 
 Game::~Game()
 {
+#if ENABLE_GUESS_ITEM_GAME
     delete guessItem;
+#endif
     delete renderer;
     delete petStorage;
     delete pet;
 }
+
+const Game::CommandSpec Game::commandRegistry[] = {
+    {"NO_OP", &Game::canExecuteNever, &Game::executeNoOp},
+    {"FEED_PET", &Game::canFeedPet, &Game::executeFeedPet},
+    {"PREDICT", &Game::canPredict, &Game::executePredict},
+    {"GIFT", &Game::canAlwaysExecute, &Game::executeGift},
+    {"MEDICINE", &Game::canMedicine, &Game::executeMedicine},
+    {"SHOWER", &Game::canShower, &Game::executeShower},
+#if ENABLE_GUESS_ITEM_GAME
+    {"HAVE_FUN", &Game::canAlwaysExecute, &Game::executeHaveFun},
+#else
+    {"HAVE_FUN", &Game::canExecuteNever, &Game::executeNoOp},
+#endif
+    {"CLEAN", &Game::canClean, &Game::executeClean},
+    {"STATUS", &Game::canStatus, &Game::executeStatus},
+};
+
+const Game::Command Game::profileCommands[] = {
+#if APP_PROFILE == APP_PROFILE_VENDOR_A
+    Command::FeedPet,
+    Command::Predict,
+    Command::Gift,
+    Command::Medicine,
+    Command::Shower,
+    Command::Gift,
+    Command::NoOp,
+    Command::Status,
+#elif APP_PROFILE == APP_PROFILE_VENDOR_B
+    Command::FeedPet,
+    Command::Predict,
+    Command::Gift,
+    Command::Medicine,
+    Command::Shower,
+    Command::NoOp,
+    Command::Clean,
+    Command::Status,
+#else
+    Command::FeedPet,
+    Command::Predict,
+    Command::Gift,
+    Command::Medicine,
+    Command::Shower,
+    Command::HaveFun,
+    Command::Clean,
+    Command::Status,
+#endif
+};
 
 void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfitCode)
 {
@@ -206,33 +257,30 @@ void Game::updateBatteryAnimation(unsigned long now)
 
 const char *Game::commandLabel(Command command)
 {
-    switch (command)
-    {
-    case Command::FeedPet:
-        return "FEED_PET";
-    case Command::HaveFun:
-        return "HAVE_FUN";
-    case Command::Clean:
-        return "CLEAN";
-    case Command::Medicine:
-        return "MEDICINE";
-    case Command::Shower:
-        return "SHOWER";
-    case Command::Predict:
-        return "PREDICT";
-    case Command::Gift:
-        return "GIFT";
-    case Command::Status:
-        return "STATUS";
-    case Command::Count:
-        break;
-    }
-    return "UNKNOWN";
+    const CommandSpec *spec = commandSpec(command);
+    return spec == nullptr ? "UNKNOWN" : spec->label;
 }
 
 int Game::commandCount()
 {
-    return static_cast<int>(Command::Count);
+    return sizeof(profileCommands) / sizeof(profileCommands[0]);
+}
+
+const Game::CommandSpec *Game::commandSpec(Command command)
+{
+    const int index = static_cast<int>(command);
+    if (index < 0 || index >= static_cast<int>(Command::Count))
+        return nullptr;
+
+    return &commandRegistry[index];
+}
+
+Game::Command Game::commandForSlot(int slot)
+{
+    if (slot < 0 || slot >= commandCount())
+        return Command::NoOp;
+
+    return profileCommands[slot];
 }
 
 AnimationId Game::fortuneToAnimationId(int fortuneIndex)
@@ -267,7 +315,7 @@ AnimationId Game::fortuneToAnimationId(int fortuneIndex)
 void Game::setup_game()
 {
     renderer->initAnimations();
-    lastSelected = static_cast<int>(nowCommand);
+    lastSelected = selectedSlot;
     baseAnimationId = pet->CurrentAnimation();
     renderer->setAnimation(baseAnimationId, false);
     draw_all_layout();
@@ -282,7 +330,9 @@ void Game::setup_game()
     hasActiveAnimation = false;
     activeAnimation = Animation();
     animationQueue.clear();
+#if ENABLE_GUESS_ITEM_GAME
     guessItem->reset();
+#endif
     last_tick_time = millis();
 
     if (!petStorage->load(*pet))
@@ -308,7 +358,9 @@ void Game::loop_game()
         last_tick_time = current_time;
         maybeDecayEnvironment(elapsed);
         ControlAnimation(elapsed);
+#if ENABLE_GUESS_ITEM_GAME
         guessItem->update();
+#endif
 
         if (animationQueue.empty())
         {
@@ -322,7 +374,9 @@ void Game::loop_game()
     }
     else
     {
+#if ENABLE_GUESS_ITEM_GAME
         guessItem->update();
+#endif
     }
 
     RenderGame(current_time);
@@ -508,111 +562,146 @@ bool Game::applyAppearance(const char *speciesCode, const char *outfitCode)
 
 void Game::OnLeftKey()
 {
+#if ENABLE_GUESS_ITEM_GAME
     if (guessItem->isActive())
         guessItem->onLeft();
     else
+#endif
         NextCommand();
 }
 
 void Game::OnRightKey()
 {
+#if ENABLE_GUESS_ITEM_GAME
     if (guessItem->isActive())
         guessItem->onRight();
     else
+#endif
         PrevCommand();
 }
 
 void Game::OnConfirmKey()
 {
+#if ENABLE_GUESS_ITEM_GAME
     if (guessItem->isActive())
         guessItem->onMid();
     else
+#endif
         ExecuteCommand();
 }
 
 String Game::NowCommand()
 {
-    return commandLabel(nowCommand);
+    return commandLabel(commandForSlot(selectedSlot));
 }
 
 void Game::NextCommand()
 {
-    lastSelected = static_cast<int>(nowCommand);
-    const int nextValue = (static_cast<int>(nowCommand) + 1) % commandCount();
-    nowCommand = static_cast<Command>(nextValue);
+    lastSelected = selectedSlot;
+    for (int step = 0; step < commandCount(); ++step)
+    {
+        selectedSlot = (selectedSlot + 1) % commandCount();
+        if (commandForSlot(selectedSlot) != Command::NoOp)
+            break;
+    }
     dirtySelect = true;
 }
 
 void Game::PrevCommand()
 {
-    lastSelected = static_cast<int>(nowCommand);
-    const int currentValue = static_cast<int>(nowCommand);
-    const int prevValue = (currentValue == 0) ? (commandCount() - 1) : (currentValue - 1);
-    nowCommand = static_cast<Command>(prevValue);
+    lastSelected = selectedSlot;
+    for (int step = 0; step < commandCount(); ++step)
+    {
+        selectedSlot = (selectedSlot == 0) ? (commandCount() - 1) : (selectedSlot - 1);
+        if (commandForSlot(selectedSlot) != Command::NoOp)
+            break;
+    }
     dirtySelect = true;
 }
 
 void Game::ExecuteCommand()
 {
-    if (!isCommandEnabled(nowCommand))
+    const CommandSpec *spec = commandSpec(commandForSlot(selectedSlot));
+    if (spec == nullptr)
         return;
 
-    parse_command(nowCommand);
+    if (spec->canExecute == nullptr || !(this->*spec->canExecute)())
+        return;
+
+    if (spec->execute == nullptr)
+        return;
+
+    (this->*spec->execute)();
 }
 
 bool Game::isCommandEnabled(Command command)
 {
-    switch (command)
-    {
-    case Command::FeedPet:
-        return hasAnimation(AnimationId::Feed);
-    case Command::Predict:
-    {
-        const AnimationId required[] = {
-            AnimationId::PredAnim,
-            AnimationId::Predict1,
-            AnimationId::Predict2,
-            AnimationId::Predict3,
-            AnimationId::Predict4,
-            AnimationId::Predict5,
-            AnimationId::Predict6,
-            AnimationId::Predict7,
-            AnimationId::Predict8,
-            AnimationId::Predict9,
-            AnimationId::Predict10,
-            AnimationId::Predict11};
-        return hasAnimations(required, sizeof(required) / sizeof(required[0]));
-    }
-    case Command::Gift:
-    {
-        const AnimationId required[] = {AnimationId::Gift, AnimationId::GiftHappy};
-        return hasAnimations(required, sizeof(required) / sizeof(required[0]));
-    }
-    case Command::Medicine:
-        return hasAnimation(AnimationId::Heal);
-    case Command::Shower:
-        return hasAnimation(AnimationId::Shower);
-    case Command::HaveFun:
-    {
-        const AnimationId required[] = {
-            AnimationId::GuessItem1,
-            AnimationId::GuessItem2,
-            AnimationId::GuessItem3,
-            AnimationId::GuessItem4,
-            AnimationId::GuessLL,
-            AnimationId::GuessLR,
-            AnimationId::GuessRL,
-            AnimationId::GuessRR};
-        return hasAnimations(required, sizeof(required) / sizeof(required[0]));
-    }
-    case Command::Clean:
-        return hasAnimation(AnimationId::Clean);
-    case Command::Status:
-        return hasAnimation(pet->CurrentAgeAnimation());
-    case Command::Count:
-        break;
-    }
+    const CommandSpec *spec = commandSpec(command);
+    if (spec == nullptr || spec->canExecute == nullptr)
+        return false;
+
+    return (this->*spec->canExecute)();
+}
+
+bool Game::canAlwaysExecute() const
+{
+    return true;
+}
+
+bool Game::canExecuteNever() const
+{
     return false;
+}
+
+bool Game::canFeedPet() const
+{
+    return hasAnimation(AnimationId::Feed);
+}
+
+bool Game::canPredict() const
+{
+    const AnimationId required[] = {
+        AnimationId::PredAnim,
+        AnimationId::Predict1,
+        AnimationId::Predict2,
+        AnimationId::Predict3,
+        AnimationId::Predict4,
+        AnimationId::Predict5,
+        AnimationId::Predict6,
+        AnimationId::Predict7,
+        AnimationId::Predict8,
+        AnimationId::Predict9,
+        AnimationId::Predict10,
+        AnimationId::Predict11};
+    return hasAnimations(required, sizeof(required) / sizeof(required[0]));
+}
+
+bool Game::canMedicine() const
+{
+    return hasAnimation(AnimationId::Heal);
+}
+
+bool Game::canShower() const
+{
+    return hasAnimation(AnimationId::Shower);
+}
+
+bool Game::canClean() const
+{
+    return hasAnimation(AnimationId::Clean);
+}
+
+bool Game::canStatus() const
+{
+#if APP_STATUS_MODE == STATUS_MODE_PET_STATE
+    return hasAnimation(pet->CurrentAnimation());
+#elif APP_STATUS_MODE == STATUS_MODE_RANDOM3
+    return hasAnimation(pet->CurrentAgeAnimation()) ||
+           hasAnimation(AnimationId::Happy) ||
+           hasAnimation(AnimationId::Idle);
+#else
+    return hasAnimation(pet->CurrentAgeAnimation());
+#endif
 }
 
 bool Game::hasAnimation(AnimationId id) const
@@ -631,6 +720,24 @@ bool Game::hasAnimations(const AnimationId *ids, size_t count) const
             return false;
     }
     return true;
+}
+
+bool Game::canPlayGuessItemGame() const
+{
+#if ENABLE_GUESS_ITEM_GAME
+    const AnimationId required[] = {
+        AnimationId::GuessItem1,
+        AnimationId::GuessItem2,
+        AnimationId::GuessItem3,
+        AnimationId::GuessItem4,
+        AnimationId::GuessLL,
+        AnimationId::GuessLR,
+        AnimationId::GuessRL,
+        AnimationId::GuessRR};
+    return hasAnimations(required, sizeof(required) / sizeof(required[0]));
+#else
+    return false;
+#endif
 }
 
 void Game::queueAnimation(const Animation &animation)
@@ -656,6 +763,18 @@ void Game::queuePostCommandHappyAnimation()
         return;
 
     queueAnimation(Animation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+}
+
+void Game::queueGiftAnimation()
+{
+    pet->changeMood(50);
+    queueAnimation(Animation(AnimationId::Gift, gameTick * 2.5, false, AnimationOwner::Command, AnimationPriority::High));
+
+    if (hasAnimation(AnimationId::GiftHappy))
+        queueAnimation(Animation(AnimationId::GiftHappy, gameTick * 1.5, false, AnimationOwner::Command, AnimationPriority::High));
+
+    queuePostCommandHappyAnimation();
+    markAnimationDirty();
 }
 
 void Game::clearAnimationsByOwner(AnimationOwner owner)
@@ -702,67 +821,149 @@ void Game::changePetMood(int delta)
     pet->changeMood(delta);
 }
 
-void Game::parse_command(Command command)
+void Game::executeNoOp()
 {
-    switch (command)
-    {
-    case Command::FeedPet:
-        pet->feedPet(40);
-        queueAnimation(Animation(AnimationId::Feed, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
-        queuePostCommandHappyAnimation();
-        markAnimationDirty();
-        break;
-    case Command::HaveFun:
-        clearAnimationsByOwner(AnimationOwner::Command);
+}
+
+void Game::executeFeedPet()
+{
+    pet->feedPet(40);
+    queueAnimation(Animation(AnimationId::Feed, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+    queuePostCommandHappyAnimation();
+    markAnimationDirty();
+}
+
+void Game::executePredict()
+{
+    queueAnimation(Animation(AnimationId::PredAnim, gameTick * 20, true, AnimationOwner::Command, AnimationPriority::High));
+    roll_fortune();
+    markAnimationDirty();
+}
+
+void Game::executeGift()
+{
+    queueGiftAnimation();
+}
+
+void Game::executeMedicine()
+{
+    pet->takeMedicine();
+    queueAnimation(Animation(AnimationId::Heal, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+    queuePostCommandHappyAnimation();
+    markAnimationDirty();
+}
+
+void Game::executeShower()
+{
+    pet->takeShower(250);
+    queueAnimation(Animation(AnimationId::Shower, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+    queuePostCommandHappyAnimation();
+    markAnimationDirty();
+}
+
+void Game::executeHaveFun()
+{
+    clearAnimationsByOwner(AnimationOwner::Command);
+#if ENABLE_GUESS_ITEM_GAME
+    if (canPlayGuessItemGame())
         guessItem->start();
-        break;
-    case Command::Clean:
-        pet->cleanEnv(500);
-        queueAnimation(Animation(AnimationId::Clean, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
-        queuePostCommandHappyAnimation();
-        markAnimationDirty();
-        break;
-    case Command::Medicine:
-        pet->takeMedicine();
-        queueAnimation(Animation(AnimationId::Heal, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
-        queuePostCommandHappyAnimation();
-        markAnimationDirty();
-        break;
-    case Command::Shower:
-        pet->takeShower(250);
-        queueAnimation(Animation(AnimationId::Shower, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
-        queuePostCommandHappyAnimation();
-        markAnimationDirty();
-        break;
-    case Command::Predict:
-        queueAnimation(Animation(AnimationId::PredAnim, gameTick * 20, true, AnimationOwner::Command, AnimationPriority::High));
-        roll_fortune();
-        markAnimationDirty();
-        break;
-    case Command::Gift:
-        pet->changeMood(50);
-        queueAnimation(Animation(AnimationId::Gift, gameTick * 2.5, false, AnimationOwner::Command, AnimationPriority::High));
-        queueAnimation(Animation(AnimationId::GiftHappy, gameTick * 1.5, false, AnimationOwner::Command, AnimationPriority::High));
-        queuePostCommandHappyAnimation();
-        markAnimationDirty();
-        break;
-    case Command::Status:
+    else
+#endif
+        queueGiftAnimation();
+}
+
+void Game::executeClean()
+{
+    pet->cleanEnv(500);
+    queueAnimation(Animation(AnimationId::Clean, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+    queuePostCommandHappyAnimation();
+    markAnimationDirty();
+}
+
+void Game::executeStatus()
+{
+    queueStatusAnimation();
+}
+
+void Game::queueStatusAnimation()
+{
+#if APP_STATUS_MODE == STATUS_MODE_PET_STATE
+    if (!queueStatusPetStateAnimation())
+        queueStatusAgeAnimation();
+#elif APP_STATUS_MODE == STATUS_MODE_RANDOM3
+    if (!queueStatusRandom3Animation())
+        queueStatusAgeAnimation();
+#else
+    queueStatusAgeAnimation();
+#endif
+}
+
+bool Game::queueStatusAgeAnimation()
+{
+    const AnimationId ageAnimation = pet->CurrentAgeAnimation();
+    const uint16_t maxFrame = renderer->frameCountFor(ageAnimation);
+    if (maxFrame == 0)
+        return false;
+
+    queueAnimation(Animation(ageAnimation, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet->CurrentAgeFrame(maxFrame)));
+    markAnimationDirty();
+    return true;
+}
+
+bool Game::queueStatusPetStateAnimation()
+{
+    const AnimationId statusAnimation = pet->CurrentAnimation();
+    if (!hasAnimation(statusAnimation))
+        return false;
+
+    queueAnimation(Animation(statusAnimation, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal));
+    markAnimationDirty();
+    return true;
+}
+
+bool Game::queueStatusRandom3Animation()
+{
+    AnimationId candidates[3] = {
+        pet->CurrentAgeAnimation(),
+        AnimationId::Happy,
+        AnimationId::Idle,
+    };
+
+    const uint8_t start = random(3);
+    for (uint8_t attempts = 0; attempts < 3; ++attempts)
     {
-        const AnimationId ageAnimation = pet->CurrentAgeAnimation();
-        const uint16_t maxFrame = renderer->frameCountFor(ageAnimation);
-        queueAnimation(Animation(ageAnimation, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet->CurrentAgeFrame(maxFrame)));
+        const uint8_t index = (start + attempts) % 3;
+        const AnimationId chosen = candidates[index];
+        if (!hasAnimation(chosen))
+            continue;
+
+        if (chosen == pet->CurrentAgeAnimation())
+        {
+            const uint16_t maxFrame = renderer->frameCountFor(chosen);
+            if (maxFrame == 0)
+                continue;
+
+            queueAnimation(Animation(chosen, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet->CurrentAgeFrame(maxFrame)));
+        }
+        else
+        {
+            queueAnimation(Animation(chosen, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal));
+        }
+
         markAnimationDirty();
-        break;
+        return true;
     }
-    case Command::Count:
-        break;
-    }
+
+    return false;
 }
 
 void Game::draw_all_layout()
 {
     for (int i = 0; i < commandCount(); ++i)
     {
+        if (commandForSlot(i) == Command::NoOp)
+            continue;
+
         int y_start = 0;
         if (i >= 4)
             y_start = 160 - 32;
@@ -774,10 +975,16 @@ void Game::draw_all_layout()
 void Game::draw_select_layout()
 {
     const int prevIdx = lastSelected;
-    const int y_prev = (prevIdx >= 4) ? (160 - 32) : 0;
-    renderer->ShowSDCardFrame("/layout", static_cast<uint16_t>(prevIdx + 1), (prevIdx % 4) * 32, y_prev);
+    if (commandForSlot(prevIdx) != Command::NoOp)
+    {
+        const int y_prev = (prevIdx >= 4) ? (160 - 32) : 0;
+        renderer->ShowSDCardFrame("/layout", static_cast<uint16_t>(prevIdx + 1), (prevIdx % 4) * 32, y_prev);
+    }
 
-    const int curIdx = static_cast<int>(nowCommand);
+    const int curIdx = selectedSlot;
+    if (commandForSlot(curIdx) == Command::NoOp)
+        return;
+
     const int y_cur = (curIdx >= 4) ? (160 - 32) : 0;
     renderer->ShowSDCardFrame("/layout_sel", static_cast<uint16_t>(curIdx + 1), (curIdx % 4) * 32, y_cur);
 }

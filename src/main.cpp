@@ -15,7 +15,7 @@ ButtonInput buttons(
     BoardConfig::PreviousCommandButtonPin,
     BoardConfig::NextCommandButtonPin,
     BoardConfig::ConfirmCommandButtonPin,
-    50);
+    150);
 
 // =========================
 // Low battery / PVD 設定
@@ -66,7 +66,7 @@ static void showSdInitError()
   digitalWrite(BoardConfig::TftBacklightPin, HIGH);
 }
 
-const unsigned long kSleepTimeoutMs = 10UL * 60UL * 1000UL; // 10分鐘會自動休眠
+const unsigned long kSleepTimeoutMs = 1UL * 60UL * 1000UL; // 1分鐘會自動休眠
 unsigned long g_lastInteractionMs = 0;
 bool g_isSleeping = false;
 
