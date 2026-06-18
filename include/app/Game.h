@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include <deque>
-#include <SdFat.h>
+#include "storage/AppearanceLoader.h"
 #include "app/AppProfile.h"
 #include "domain/Animation.h"
 #if ENABLE_GUESS_ITEM_GAME
@@ -14,6 +14,7 @@
 class Adafruit_ST7735;
 class Pet;
 class PetStorage;
+class Renderer;
 
 class Game
 #if ENABLE_GUESS_ITEM_GAME
@@ -21,7 +22,7 @@ class Game
 #endif
 {
 public:
-    Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD);
+    Game(Pet &pet, PetStorage &petStorage, Renderer &renderer, AppearanceLoader &appearanceLoader);
     ~Game();
 
     void setup_game();
@@ -77,10 +78,10 @@ private:
         CommandExecute execute;
     };
 
-    Pet *pet;
-    PetStorage *petStorage;
-    Renderer *renderer;
-    SdFat *sd;
+    Pet &pet;
+    PetStorage &petStorage;
+    Renderer &renderer;
+    AppearanceLoader &appearanceLoader;
 #if ENABLE_GUESS_ITEM_GAME
     GuessItemGame *guessItem;
 #endif

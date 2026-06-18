@@ -1,150 +1,20 @@
 #include "app/Game.h"
 
 #include <Arduino.h>
-#include <Adafruit_ST7735.h>
-#include <SdFat.h>
 #include <string.h>
 #include "domain/Pet.h"
 #include "storage/PetStorage.h"
 #include "render/Renderer.h"
 
-namespace
-{
-constexpr const char *kSpeciesByHealthyDaysPath = "/species_by_healthy_days.txt";
-constexpr uint32_t kNoMaxHealthyDays = 0xFFFFFFFFUL;
-
-bool isSpaceChar(char c)
-{
-    return c == ' ' || c == '\t';
-}
-
-char *trimField(char *text)
-{
-    while (text != nullptr && isSpaceChar(*text))
-        ++text;
-
-    if (text == nullptr || *text == '\0')
-        return text;
-
-    char *end = text + strlen(text) - 1;
-    while (end >= text && isSpaceChar(*end))
-    {
-        *end = '\0';
-        --end;
-    }
-    return text;
-}
-
-bool readConfigLine(File &file, char *line, size_t lineSize)
-{
-    if (line == nullptr || lineSize == 0)
-        return false;
-
-    size_t index = 0;
-    bool sawAny = false;
-    while (file.available())
-    {
-        const char c = static_cast<char>(file.read());
-        sawAny = true;
-        if (c == '\r')
-            continue;
-        if (c == '\n')
-            break;
-        if (index + 1 < lineSize)
-            line[index++] = c;
-    }
-
-    line[index] = '\0';
-    return sawAny || index > 0;
-}
-
-bool parseUnsignedField(const char *text, uint32_t &value)
-{
-    if (text == nullptr || text[0] == '\0')
-        return false;
-
-    uint32_t parsed = 0;
-    for (const char *cursor = text; *cursor != '\0'; ++cursor)
-    {
-        if (*cursor < '0' || *cursor > '9')
-            return false;
-        parsed = parsed * 10UL + static_cast<uint32_t>(*cursor - '0');
-    }
-
-    value = parsed;
-    return true;
-}
-
-bool isValidAppearanceCode(const char *code)
-{
-    if (code == nullptr || code[0] == '\0')
-        return false;
-
-    const size_t len = strlen(code);
-    if (len > 8)
-        return false;
-
-    for (size_t i = 0; i < len; ++i)
-    {
-        const char c = code[i];
-        const bool valid = (c >= 'a' && c <= 'z') ||
-                           (c >= 'A' && c <= 'Z') ||
-                           (c >= '0' && c <= '9') ||
-                           c == '_' || c == '-';
-        if (!valid)
-            return false;
-    }
-
-    return true;
-}
-
-bool splitSpeciesRule(char *line, uint32_t &minDays, uint32_t &maxDays, char *&speciesCode, char *&outfitCode)
-{
-    char *fields[4] = {};
-    fields[0] = line;
-    int fieldIndex = 1;
-
-    for (char *cursor = line; *cursor != '\0'; ++cursor)
-    {
-        if (*cursor != '|')
-            continue;
-        if (fieldIndex >= 4)
-            return false;
-        *cursor = '\0';
-        fields[fieldIndex++] = cursor + 1;
-    }
-
-    if (fieldIndex != 4)
-        return false;
-
-    for (int i = 0; i < 4; ++i)
-        fields[i] = trimField(fields[i]);
-
-    if (!parseUnsignedField(fields[0], minDays))
-        return false;
-
-    if (strcmp(fields[1], "*") == 0)
-        maxDays = kNoMaxHealthyDays;
-    else if (!parseUnsignedField(fields[1], maxDays))
-        return false;
-
-    speciesCode = fields[2];
-    outfitCode = fields[3];
-    return minDays <= maxDays &&
-           isValidAppearanceCode(speciesCode) &&
-           isValidAppearanceCode(outfitCode);
-}
-
-} // namespace
-
-Game::Game(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
-    : pet(new Pet()),
-      petStorage(new PetStorage(ref_SD)),
-      renderer(Renderer::create(ref_tft, ref_SD)),
+Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AppearanceLoader &appearanceLoaderRef)
+    : pet(petRef),
+      petStorage(petStorageRef),
+      renderer(rendererRef),
+      appearanceLoader(appearanceLoaderRef)
 #if ENABLE_GUESS_ITEM_GAME
-      guessItem(new GuessItemGame(*this)),
+      ,
+      guessItem(new GuessItemGame(*this))
 #endif
-      sd(ref_SD)
 {
 }
 
@@ -153,9 +23,6 @@ Game::~Game()
 #if ENABLE_GUESS_ITEM_GAME
     delete guessItem;
 #endif
-    delete renderer;
-    delete petStorage;
-    delete pet;
 }
 
 const Game::CommandSpec Game::commandRegistry[] = {
@@ -207,22 +74,22 @@ const Game::Command Game::profileCommands[] = {
 
 void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfitCode)
 {
-    if (pet->setSpeciesCode(speciesCode))
-        strncpy(defaultSpeciesCode, pet->speciesCode(), sizeof(defaultSpeciesCode) - 1);
+    if (pet.setSpeciesCode(speciesCode))
+        strncpy(defaultSpeciesCode, pet.speciesCode(), sizeof(defaultSpeciesCode) - 1);
     defaultSpeciesCode[sizeof(defaultSpeciesCode) - 1] = '\0';
 
-    if (pet->setOutfitCode(outfitCode))
-        strncpy(defaultOutfitCode, pet->outfitCode(), sizeof(defaultOutfitCode) - 1);
+    if (pet.setOutfitCode(outfitCode))
+        strncpy(defaultOutfitCode, pet.outfitCode(), sizeof(defaultOutfitCode) - 1);
     defaultOutfitCode[sizeof(defaultOutfitCode) - 1] = '\0';
 
-    renderer->setAssetAppearance(defaultSpeciesCode, defaultOutfitCode);
-    renderer->reloadManifest();
+    renderer.setAssetAppearance(defaultSpeciesCode, defaultOutfitCode);
+    renderer.reloadManifest();
     dirtyAnimation = true;
 }
 
 bool Game::saveNow()
 {
-    const bool saved = petStorage->save(*pet);
+    const bool saved = petStorage.save(pet);
     if (saved)
         saveCounter = 0;
     return saved;
@@ -230,7 +97,7 @@ bool Game::saveNow()
 
 bool Game::showBatteryScreen()
 {
-    return renderer->ShowSDCardFrame("/battery", 1,0,32);
+    return renderer.ShowSDCardFrame("/battery", 1,0,32);
 }
 
 void Game::startBatteryAnimation()
@@ -239,11 +106,11 @@ void Game::startBatteryAnimation()
     clearAnimationsByOwner(AnimationOwner::Minigame);
     clearAnimationsByOwner(AnimationOwner::System);
     showAnimationId = AnimationId::Battery;
-    frameInterval = renderer->frameIntervalFor(showAnimationId, frameIntervalSlow);
+    frameInterval = renderer.frameIntervalFor(showAnimationId, frameIntervalSlow);
     lastFrameTime = 0;
-    animateDone = !renderer->setAnimation(showAnimationId, false);
+    animateDone = !renderer.setAnimation(showAnimationId, false);
     if (!animateDone)
-        animateDone = renderer->advanceAnimationFrame();
+        animateDone = renderer.advanceAnimationFrame();
 }
 
 void Game::updateBatteryAnimation(unsigned long now)
@@ -252,7 +119,7 @@ void Game::updateBatteryAnimation(unsigned long now)
         return;
 
     lastFrameTime = now;
-    renderer->advanceAnimationFrame();
+    renderer.advanceAnimationFrame();
 }
 
 const char *Game::commandLabel(Command command)
@@ -314,10 +181,10 @@ AnimationId Game::fortuneToAnimationId(int fortuneIndex)
 
 void Game::setup_game()
 {
-    renderer->initAnimations();
+    renderer.initAnimations();
     lastSelected = selectedSlot;
-    baseAnimationId = pet->CurrentAnimation();
-    renderer->setAnimation(baseAnimationId, false);
+    baseAnimationId = pet.CurrentAnimation();
+    renderer.setAnimation(baseAnimationId, false);
     draw_all_layout();
 
     dirtySelect = true;
@@ -335,16 +202,16 @@ void Game::setup_game()
 #endif
     last_tick_time = millis();
 
-    if (!petStorage->load(*pet))
+    if (!petStorage.load(pet))
     {
-        pet->setDefaultState();
-        pet->setSpeciesCode(defaultSpeciesCode);
-        pet->setOutfitCode(defaultOutfitCode);
+        pet.setDefaultState();
+        pet.setSpeciesCode(defaultSpeciesCode);
+        pet.setOutfitCode(defaultOutfitCode);
     }
 
     applySpeciesForHealthyDays();
-    renderer->setAssetAppearance(pet->speciesCode(), pet->outfitCode());
-    renderer->reloadManifest();
+    renderer.setAssetAppearance(pet.speciesCode(), pet.outfitCode());
+    renderer.reloadManifest();
     refreshBaseAnimation();
 }
 
@@ -365,7 +232,7 @@ void Game::loop_game()
         if (animationQueue.empty())
         {
             roll_sick();
-            if (pet->dayPassed())
+            if (pet.dayPassed())
                 applySpeciesForHealthyDays();
         }
 
@@ -397,7 +264,7 @@ void Game::maybeDecayEnvironment(unsigned long elapsed)
     if (environmentCooldown > 0)
         return;
 
-    pet->decayEnvironment(environmentDecayAmount);
+    pet.decayEnvironment(environmentDecayAmount);
     environmentCooldown = random(3 * gameTick, 6 * gameTick);
 }
 
@@ -407,13 +274,13 @@ void Game::maybeSavePet()
     if (saveCounter < savePeriodTicks)
         return;
 
-    if (petStorage->save(*pet))
+    if (petStorage.save(pet))
         saveCounter = 0;
 }
 
 void Game::refreshBaseAnimation()
 {
-    const AnimationId candidateAnimation = pet->CurrentAnimation();
+    const AnimationId candidateAnimation = pet.CurrentAnimation();
     if (baseAnimationId != candidateAnimation)
     {
         baseAnimationId = candidateAnimation;
@@ -469,22 +336,22 @@ void Game::RenderGame(unsigned long current_time)
             showAnimationId = baseAnimationId;
         }
 
-        frameInterval = renderer->frameIntervalFor(showAnimationId, frameIntervalSlow);
+        frameInterval = renderer.frameIntervalFor(showAnimationId, frameIntervalSlow);
         if (hasActiveAnimation && activeAnimation.isFixedFrame())
         {
-            animateDone = !renderer->ShowAnimationFrame(showAnimationId, activeAnimation.frameIndex);
+            animateDone = !renderer.ShowAnimationFrame(showAnimationId, activeAnimation.frameIndex);
         }
         else
         {
-            animateDone = !renderer->setAnimation(showAnimationId, playOnce);
+            animateDone = !renderer.setAnimation(showAnimationId, playOnce);
             if (!animateDone)
-                animateDone = renderer->advanceAnimationFrame();
+                animateDone = renderer.advanceAnimationFrame();
         }
         dirtyAnimation = false;
     }
     else if (frame_due && !(hasActiveAnimation && activeAnimation.isFixedFrame()))
     {
-        animateDone |= renderer->advanceAnimationFrame();
+        animateDone |= renderer.advanceAnimationFrame();
     }
 
     if (dirtySelect)
@@ -496,68 +363,42 @@ void Game::RenderGame(unsigned long current_time)
 
 void Game::resetPet()
 {
-    pet->setDefaultState();
+    pet.setDefaultState();
     applySpeciesForHealthyDays();
-    renderer->setAssetAppearance(pet->speciesCode(), pet->outfitCode());
-    renderer->reloadManifest();
+    renderer.setAssetAppearance(pet.speciesCode(), pet.outfitCode());
+    renderer.reloadManifest();
     clearAnimationsByOwner(AnimationOwner::Command);
     clearAnimationsByOwner(AnimationOwner::Minigame);
     refreshBaseAnimation();
     dirtyAnimation = true;
     saveCounter = 0;
-    petStorage->save(*pet);
+    petStorage.save(pet);
 }
 
 bool Game::applySpeciesForHealthyDays()
 {
-    if (sd == nullptr || !sd->exists(kSpeciesByHealthyDaysPath))
+    AppearanceSelection selection = {};
+    if (!appearanceLoader.findForHealthyDays(pet.healthyDays(), selection))
         return false;
 
-    File file = sd->open(kSpeciesByHealthyDaysPath, FILE_READ);
-    if (!file)
+    if (strcmp(pet.speciesCode(), selection.speciesCode) == 0 &&
+        strcmp(pet.outfitCode(), selection.outfitCode) == 0)
         return false;
 
-    const uint32_t healthyDays = pet->healthyDays();
-    char line[80] = {};
-    while (readConfigLine(file, line, sizeof(line)))
-    {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
-            continue;
-
-        uint32_t minDays = 0;
-        uint32_t maxDays = 0;
-        char *speciesCode = nullptr;
-        char *outfitCode = nullptr;
-        if (!splitSpeciesRule(content, minDays, maxDays, speciesCode, outfitCode))
-            continue;
-
-        if (healthyDays < minDays || healthyDays > maxDays)
-            continue;
-
-        file.close();
-        if (strcmp(pet->speciesCode(), speciesCode) == 0 &&
-            strcmp(pet->outfitCode(), outfitCode) == 0)
-            return false;
-
-        return applyAppearance(speciesCode, outfitCode);
-    }
-
-    file.close();
-    return false;
+    return applyAppearance(selection.speciesCode, selection.outfitCode);
 }
 
 bool Game::applyAppearance(const char *speciesCode, const char *outfitCode)
 {
-    if (!pet->setSpeciesCode(speciesCode) || !pet->setOutfitCode(outfitCode))
+    if (!pet.setSpeciesCode(speciesCode) || !pet.setOutfitCode(outfitCode))
         return false;
 
-    renderer->setAssetAppearance(pet->speciesCode(), pet->outfitCode());
-    renderer->reloadManifest();
+    renderer.setAssetAppearance(pet.speciesCode(), pet.outfitCode());
+    renderer.reloadManifest();
     dirtyAnimation = true;
     showAnimationId = AnimationId::None;
     lastFrameTime = 0;
-    return petStorage->save(*pet);
+    return petStorage.save(pet);
 }
 
 void Game::OnLeftKey()
@@ -694,19 +535,19 @@ bool Game::canClean() const
 bool Game::canStatus() const
 {
 #if APP_STATUS_MODE == STATUS_MODE_PET_STATE
-    return hasAnimation(pet->CurrentAnimation());
+    return hasAnimation(pet.CurrentAnimation());
 #elif APP_STATUS_MODE == STATUS_MODE_RANDOM3
-    return hasAnimation(pet->CurrentAgeAnimation()) ||
+    return hasAnimation(pet.CurrentAgeAnimation()) ||
            hasAnimation(AnimationId::Happy) ||
            hasAnimation(AnimationId::Idle);
 #else
-    return hasAnimation(pet->CurrentAgeAnimation());
+    return hasAnimation(pet.CurrentAgeAnimation());
 #endif
 }
 
 bool Game::hasAnimation(AnimationId id) const
 {
-    return renderer->frameCountFor(id) > 0;
+    return renderer.frameCountFor(id) > 0;
 }
 
 bool Game::hasAnimations(const AnimationId *ids, size_t count) const
@@ -767,7 +608,7 @@ void Game::queuePostCommandHappyAnimation()
 
 void Game::queueGiftAnimation()
 {
-    pet->changeMood(50);
+    pet.changeMood(50);
     queueAnimation(Animation(AnimationId::Gift, gameTick * 2.5, false, AnimationOwner::Command, AnimationPriority::High));
 
     if (hasAnimation(AnimationId::GiftHappy))
@@ -818,7 +659,7 @@ void Game::markAnimationDirty()
 
 void Game::changePetMood(int delta)
 {
-    pet->changeMood(delta);
+    pet.changeMood(delta);
 }
 
 void Game::executeNoOp()
@@ -827,7 +668,7 @@ void Game::executeNoOp()
 
 void Game::executeFeedPet()
 {
-    pet->feedPet(40);
+    pet.feedPet(40);
     queueAnimation(Animation(AnimationId::Feed, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
     queuePostCommandHappyAnimation();
     markAnimationDirty();
@@ -847,7 +688,7 @@ void Game::executeGift()
 
 void Game::executeMedicine()
 {
-    pet->takeMedicine();
+    pet.takeMedicine();
     queueAnimation(Animation(AnimationId::Heal, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
     queuePostCommandHappyAnimation();
     markAnimationDirty();
@@ -855,7 +696,7 @@ void Game::executeMedicine()
 
 void Game::executeShower()
 {
-    pet->takeShower(250);
+    pet.takeShower(250);
     queueAnimation(Animation(AnimationId::Shower, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
     queuePostCommandHappyAnimation();
     markAnimationDirty();
@@ -874,7 +715,7 @@ void Game::executeHaveFun()
 
 void Game::executeClean()
 {
-    pet->cleanEnv(500);
+    pet.cleanEnv(500);
     queueAnimation(Animation(AnimationId::Clean, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
     queuePostCommandHappyAnimation();
     markAnimationDirty();
@@ -900,19 +741,19 @@ void Game::queueStatusAnimation()
 
 bool Game::queueStatusAgeAnimation()
 {
-    const AnimationId ageAnimation = pet->CurrentAgeAnimation();
-    const uint16_t maxFrame = renderer->frameCountFor(ageAnimation);
+    const AnimationId ageAnimation = pet.CurrentAgeAnimation();
+    const uint16_t maxFrame = renderer.frameCountFor(ageAnimation);
     if (maxFrame == 0)
         return false;
 
-    queueAnimation(Animation(ageAnimation, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet->CurrentAgeFrame(maxFrame)));
+    queueAnimation(Animation(ageAnimation, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet.CurrentAgeFrame(maxFrame)));
     markAnimationDirty();
     return true;
 }
 
 bool Game::queueStatusPetStateAnimation()
 {
-    const AnimationId statusAnimation = pet->CurrentAnimation();
+    const AnimationId statusAnimation = pet.CurrentAnimation();
     if (!hasAnimation(statusAnimation))
         return false;
 
@@ -924,7 +765,7 @@ bool Game::queueStatusPetStateAnimation()
 bool Game::queueStatusRandom3Animation()
 {
     AnimationId candidates[3] = {
-        pet->CurrentAgeAnimation(),
+        pet.CurrentAgeAnimation(),
         AnimationId::Happy,
         AnimationId::Idle,
     };
@@ -937,13 +778,13 @@ bool Game::queueStatusRandom3Animation()
         if (!hasAnimation(chosen))
             continue;
 
-        if (chosen == pet->CurrentAgeAnimation())
+        if (chosen == pet.CurrentAgeAnimation())
         {
-            const uint16_t maxFrame = renderer->frameCountFor(chosen);
+            const uint16_t maxFrame = renderer.frameCountFor(chosen);
             if (maxFrame == 0)
                 continue;
 
-            queueAnimation(Animation(chosen, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet->CurrentAgeFrame(maxFrame)));
+            queueAnimation(Animation(chosen, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet.CurrentAgeFrame(maxFrame)));
         }
         else
         {
@@ -968,7 +809,7 @@ void Game::draw_all_layout()
         if (i >= 4)
             y_start = 160 - 32;
 
-        renderer->ShowSDCardFrame("/layout", static_cast<uint16_t>(i + 1), (i % 4) * 32, y_start);
+        renderer.ShowSDCardFrame("/layout", static_cast<uint16_t>(i + 1), (i % 4) * 32, y_start);
     }
 }
 
@@ -978,7 +819,7 @@ void Game::draw_select_layout()
     if (commandForSlot(prevIdx) != Command::NoOp)
     {
         const int y_prev = (prevIdx >= 4) ? (160 - 32) : 0;
-        renderer->ShowSDCardFrame("/layout", static_cast<uint16_t>(prevIdx + 1), (prevIdx % 4) * 32, y_prev);
+        renderer.ShowSDCardFrame("/layout", static_cast<uint16_t>(prevIdx + 1), (prevIdx % 4) * 32, y_prev);
     }
 
     const int curIdx = selectedSlot;
@@ -986,7 +827,7 @@ void Game::draw_select_layout()
         return;
 
     const int y_cur = (curIdx >= 4) ? (160 - 32) : 0;
-    renderer->ShowSDCardFrame("/layout_sel", static_cast<uint16_t>(curIdx + 1), (curIdx % 4) * 32, y_cur);
+    renderer.ShowSDCardFrame("/layout_sel", static_cast<uint16_t>(curIdx + 1), (curIdx % 4) * 32, y_cur);
 }
 
 void Game::roll_sick()
@@ -994,7 +835,7 @@ void Game::roll_sick()
     const float probability = 0.001f;
     const float randValue = random(1001) / 1000.0f;
     if (randValue < probability)
-        pet->getSick();
+        pet.getSick();
 }
 
 void Game::roll_fortune()

@@ -2,6 +2,10 @@
 #include "hardware/ButtonInput.h"
 #include "hardware/CalibratedST7735.h"
 #include "app/Game.h"
+#include "storage/SdAppearanceLoader.h"
+#include "domain/Pet.h"
+#include "render/Renderer.h"
+#include "storage/PetStorage.h"
 #include <SdFat.h>
 #include "stm32f1xx.h"
 
@@ -10,7 +14,11 @@ SPIClass SPI_2(PB15, BoardConfig::TftRstPin, PB13);
 CalibratedST7735 tft(&SPI_2, BoardConfig::TftCsPin, BoardConfig::TftDcPin, BoardConfig::TftRstPin);
 
 SdFat SD;
-Game game(&tft, &SD);
+Pet pet;
+PetStorage petStorage(&SD);
+Renderer *renderer = Renderer::create(&tft, &SD);
+SdAppearanceLoader appearanceLoader(&SD);
+Game game(pet, petStorage, *renderer, appearanceLoader);
 ButtonInput buttons(
     BoardConfig::PreviousCommandButtonPin,
     BoardConfig::NextCommandButtonPin,
