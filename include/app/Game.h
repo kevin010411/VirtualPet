@@ -53,6 +53,7 @@ private:
     static constexpr uint8_t savePeriodTicks = 2;
     static constexpr unsigned int environmentDecayAmount = 5;
     static constexpr int maxFortune = 11;
+    static constexpr size_t maxOutfitOptions = 8;
 
     enum class Command
     {
@@ -64,6 +65,7 @@ private:
         Shower,
         HaveFun,
         Clean,
+        ChangeOutfit,
         Status,
         Count
     };
@@ -104,6 +106,16 @@ private:
     int selectedSlot = 0;
     char defaultSpeciesCode[9] = "dino";
     char defaultOutfitCode[9] = "base";
+    bool selectingOutfit = false;
+    char outfitOptions[maxOutfitOptions][9] = {};
+    size_t outfitOptionCount = 0;
+    size_t selectedOutfitIndex = 0;
+    OutfitPreview selectedOutfitPreview = {};
+    bool hasSelectedOutfitPreview = false;
+    uint16_t outfitPreviewFrame = 1;
+    unsigned long outfitPreviewInterval = frameIntervalSlow;
+    unsigned long lastOutfitPreviewFrameTime = 0;
+    bool dirtyOutfitPreview = false;
 
     static const CommandSpec commandRegistry[];
     static const Command profileCommands[];
@@ -139,11 +151,19 @@ private:
     bool canMedicine() const;
     bool canShower() const;
     bool canClean() const;
+    bool canChangeOutfit() const;
     bool canStatus() const;
     void queueStatusAnimation();
+    bool queueStatusDirectAnimation();
     bool queueStatusAgeAnimation();
     bool queueStatusPetStateAnimation();
     bool queueStatusRandom3Animation();
+    bool loadOutfitOptions();
+    bool loadSelectedOutfitPreview();
+    void changeOutfitSelection(int delta);
+    void renderOutfitPreview(unsigned long now);
+    void confirmOutfitSelection();
+    void exitOutfitSelection();
     void executeNoOp();
     void executeFeedPet();
     void executePredict();
@@ -152,6 +172,7 @@ private:
     void executeShower();
     void executeHaveFun();
     void executeClean();
+    void executeChangeOutfit();
     void executeStatus();
     bool hasAnimations(const AnimationId *ids, size_t count) const;
 };

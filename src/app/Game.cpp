@@ -38,18 +38,19 @@ const Game::CommandSpec Game::commandRegistry[] = {
     {"HAVE_FUN", &Game::canExecuteNever, &Game::executeNoOp},
 #endif
     {"CLEAN", &Game::canClean, &Game::executeClean},
+    {"CHANGE_OUTFIT", &Game::canChangeOutfit, &Game::executeChangeOutfit},
     {"STATUS", &Game::canStatus, &Game::executeStatus},
 };
 
 const Game::Command Game::profileCommands[] = {
-#if APP_PROFILE == APP_PROFILE_VENDOR_A
+#if APP_PROFILE == APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY
     Command::FeedPet,
-    Command::Predict,
-    Command::Gift,
+    Command::ChangeOutfit,
+    Command::NoOp,
     Command::Medicine,
     Command::Shower,
     Command::Gift,
-    Command::NoOp,
+    Command::Clean,
     Command::Status,
 #elif APP_PROFILE == APP_PROFILE_VENDOR_B
     Command::FeedPet,
@@ -197,6 +198,7 @@ void Game::setup_game()
     hasActiveAnimation = false;
     activeAnimation = Animation();
     animationQueue.clear();
+    exitOutfitSelection();
 #if ENABLE_GUESS_ITEM_GAME
     guessItem->reset();
 #endif
@@ -318,6 +320,17 @@ void Game::tryStartNextAnimation()
 
 void Game::RenderGame(unsigned long current_time)
 {
+    if (selectingOutfit)
+    {
+        renderOutfitPreview(current_time);
+        if (dirtySelect)
+        {
+            draw_select_layout();
+            dirtySelect = false;
+        }
+        return;
+    }
+
     const bool frame_due = (current_time - lastFrameTime >= frameInterval);
     if (frame_due)
         lastFrameTime = current_time;
@@ -381,8 +394,7 @@ bool Game::applySpeciesForHealthyDays()
     if (!appearanceLoader.findForHealthyDays(pet.healthyDays(), selection))
         return false;
 
-    if (strcmp(pet.speciesCode(), selection.speciesCode) == 0 &&
-        strcmp(pet.outfitCode(), selection.outfitCode) == 0)
+    if (strcmp(pet.speciesCode(), selection.speciesCode) == 0)
         return false;
 
     return applyAppearance(selection.speciesCode, selection.outfitCode);
@@ -403,6 +415,12 @@ bool Game::applyAppearance(const char *speciesCode, const char *outfitCode)
 
 void Game::OnLeftKey()
 {
+    if (selectingOutfit)
+    {
+        changeOutfitSelection(-1);
+        return;
+    }
+
 #if ENABLE_GUESS_ITEM_GAME
     if (guessItem->isActive())
         guessItem->onLeft();
@@ -413,6 +431,12 @@ void Game::OnLeftKey()
 
 void Game::OnRightKey()
 {
+    if (selectingOutfit)
+    {
+        changeOutfitSelection(1);
+        return;
+    }
+
 #if ENABLE_GUESS_ITEM_GAME
     if (guessItem->isActive())
         guessItem->onRight();
@@ -423,6 +447,12 @@ void Game::OnRightKey()
 
 void Game::OnConfirmKey()
 {
+    if (selectingOutfit)
+    {
+        confirmOutfitSelection();
+        return;
+    }
+
 #if ENABLE_GUESS_ITEM_GAME
     if (guessItem->isActive())
         guessItem->onMid();
@@ -532,8 +562,16 @@ bool Game::canClean() const
     return hasAnimation(AnimationId::Clean);
 }
 
+bool Game::canChangeOutfit() const
+{
+    return true;
+}
+
 bool Game::canStatus() const
 {
+    if (hasAnimation(AnimationId::Status))
+        return true;
+
 #if APP_STATUS_MODE == STATUS_MODE_PET_STATE
     return hasAnimation(pet.CurrentAnimation());
 #elif APP_STATUS_MODE == STATUS_MODE_RANDOM3
@@ -721,6 +759,24 @@ void Game::executeClean()
     markAnimationDirty();
 }
 
+void Game::executeChangeOutfit()
+{
+    if (!loadOutfitOptions())
+        return;
+
+    selectingOutfit = true;
+    clearAnimationsByOwner(AnimationOwner::Command);
+    hasActiveAnimation = false;
+    activeAnimation = Animation();
+    showAnimationId = AnimationId::None;
+    animateDone = true;
+    dirtyAnimation = false;
+    outfitPreviewFrame = 1;
+    lastOutfitPreviewFrameTime = 0;
+    dirtyOutfitPreview = true;
+    loadSelectedOutfitPreview();
+}
+
 void Game::executeStatus()
 {
     queueStatusAnimation();
@@ -728,6 +784,9 @@ void Game::executeStatus()
 
 void Game::queueStatusAnimation()
 {
+    if (queueStatusDirectAnimation())
+        return;
+
 #if APP_STATUS_MODE == STATUS_MODE_PET_STATE
     if (!queueStatusPetStateAnimation())
         queueStatusAgeAnimation();
@@ -737,6 +796,16 @@ void Game::queueStatusAnimation()
 #else
     queueStatusAgeAnimation();
 #endif
+}
+
+bool Game::queueStatusDirectAnimation()
+{
+    if (!hasAnimation(AnimationId::Status))
+        return false;
+
+    queueAnimation(Animation(AnimationId::Status, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal));
+    markAnimationDirty();
+    return true;
 }
 
 bool Game::queueStatusAgeAnimation()
@@ -798,13 +867,114 @@ bool Game::queueStatusRandom3Animation()
     return false;
 }
 
+bool Game::loadOutfitOptions()
+{
+    outfitOptionCount = 0;
+    selectedOutfitIndex = 0;
+    hasSelectedOutfitPreview = false;
+    if (!appearanceLoader.loadOutfits(pet.speciesCode(), outfitOptions, maxOutfitOptions, outfitOptionCount))
+        return false;
+
+    for (size_t i = 0; i < outfitOptionCount; ++i)
+    {
+        if (strcmp(outfitOptions[i], pet.outfitCode()) == 0)
+        {
+            selectedOutfitIndex = i;
+            break;
+        }
+    }
+
+    return outfitOptionCount > 0;
+}
+
+bool Game::loadSelectedOutfitPreview()
+{
+    hasSelectedOutfitPreview = false;
+    selectedOutfitPreview = {};
+    outfitPreviewFrame = 1;
+    if (selectedOutfitIndex >= outfitOptionCount)
+        return false;
+
+    hasSelectedOutfitPreview = appearanceLoader.findOutfitPreview(pet.speciesCode(), outfitOptions[selectedOutfitIndex], selectedOutfitPreview);
+    if (hasSelectedOutfitPreview)
+    {
+        outfitPreviewInterval = selectedOutfitPreview.frameIntervalMs == 0
+                                    ? frameIntervalSlow
+                                    : max(1UL, static_cast<unsigned long>(selectedOutfitPreview.frameIntervalMs));
+    }
+    else
+    {
+        outfitPreviewInterval = frameIntervalSlow;
+    }
+    dirtyOutfitPreview = true;
+    return hasSelectedOutfitPreview;
+}
+
+void Game::changeOutfitSelection(int delta)
+{
+    if (!selectingOutfit || outfitOptionCount == 0)
+        return;
+
+    if (delta < 0)
+        selectedOutfitIndex = (selectedOutfitIndex == 0) ? (outfitOptionCount - 1) : (selectedOutfitIndex - 1);
+    else
+        selectedOutfitIndex = (selectedOutfitIndex + 1) % outfitOptionCount;
+
+    loadSelectedOutfitPreview();
+    lastOutfitPreviewFrameTime = 0;
+}
+
+void Game::renderOutfitPreview(unsigned long now)
+{
+    if (!hasSelectedOutfitPreview)
+        return;
+
+    const bool frameDue = dirtyOutfitPreview || lastOutfitPreviewFrameTime == 0 || now - lastOutfitPreviewFrameTime >= outfitPreviewInterval;
+    if (!frameDue)
+        return;
+
+    lastOutfitPreviewFrameTime = now;
+    renderer.ShowSDCardFrame(selectedOutfitPreview.path, outfitPreviewFrame, 0, 32);
+    dirtyOutfitPreview = false;
+
+    ++outfitPreviewFrame;
+    if (outfitPreviewFrame > selectedOutfitPreview.frameCount)
+        outfitPreviewFrame = 1;
+}
+
+void Game::confirmOutfitSelection()
+{
+    if (outfitOptionCount == 0 || selectedOutfitIndex >= outfitOptionCount)
+    {
+        exitOutfitSelection();
+        return;
+    }
+
+    char selectedOutfit[9] = {};
+    strncpy(selectedOutfit, outfitOptions[selectedOutfitIndex], sizeof(selectedOutfit) - 1);
+    exitOutfitSelection();
+    applyAppearance(pet.speciesCode(), selectedOutfit);
+}
+
+void Game::exitOutfitSelection()
+{
+    selectingOutfit = false;
+    outfitOptionCount = 0;
+    selectedOutfitIndex = 0;
+    hasSelectedOutfitPreview = false;
+    selectedOutfitPreview = {};
+    outfitPreviewFrame = 1;
+    outfitPreviewInterval = frameIntervalSlow;
+    lastOutfitPreviewFrameTime = 0;
+    dirtyOutfitPreview = false;
+    dirtyAnimation = true;
+    showAnimationId = AnimationId::None;
+}
+
 void Game::draw_all_layout()
 {
     for (int i = 0; i < commandCount(); ++i)
     {
-        if (commandForSlot(i) == Command::NoOp)
-            continue;
-
         int y_start = 0;
         if (i >= 4)
             y_start = 160 - 32;

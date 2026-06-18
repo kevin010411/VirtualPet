@@ -252,9 +252,8 @@ uint16_t Renderer::frameCountFor(AnimationId id) const
 unsigned long Renderer::frameIntervalFor(AnimationId id, unsigned long defaultIntervalMs) const
 {
     const AnimationMeta *meta = state->manifest.metaFor(id);
-    if (id == AnimationId::None || !meta->configured || meta->fpsHint == 0)
+    if (id == AnimationId::None || !meta->configured || meta->frameIntervalMs == 0)
         return defaultIntervalMs;
 
-    const unsigned long intervalMs = 1000UL / static_cast<unsigned long>(meta->fpsHint);
-    return (intervalMs == 0) ? 1UL : intervalMs;
+    return max(1UL, static_cast<unsigned long>(meta->frameIntervalMs));
 }

@@ -17,7 +17,17 @@
 `main.txt` 放共用或系統資源，例如 `Battery`、`Layout`、`LayoutSel`。  
 `{species}_{outfit}.txt` 放該外觀的寵物動作與互動動畫，例如 `Idle`、`Feed`、`GuessWin`。
 
-不支援舊 `/index.txt`。不使用 `/index/{species}.txt`。
+換裝 command 另外會讀取：
+
+```txt
+/index/{species}.txt
+/index/{species}_outfit.txt
+```
+
+`{species}.txt` 放可選 outfit 清單，例如 `book|cemet|clap|movie`。  
+`{species}_outfit.txt` 放每個 outfit 在換裝畫面中的預覽動畫。
+
+不支援舊 `/index.txt`。
 
 ## Load order
 
@@ -51,7 +61,7 @@ Idle|bmp|3|128|96|6|/dino/base/idle
 
 - `id`
   - 必須與韌體中的 animation id 名稱完全相同
-  - 範例：`Idle`、`Hungry`、`Feed`、`GuessWin`、`Battery`
+  - 範例：`Idle`、`Hungry`、`Feed`、`Status`、`GuessWin`、`Battery`
 - `format`
   - 支援 `bmp` 與 `rle`
 - `frames`
@@ -105,3 +115,20 @@ GuessWin|bmp|5|128|96|10|/dino/guess_game/win
 Idle|bmp|7|128|96|8|/dino/hat/idle
 Happy|bmp|2|128|96|6|/dino/base/happy
 ```
+
+`/index/pet.txt`：
+
+```txt
+book|cemet|clap|movie
+```
+
+`/index/pet_outfit.txt`：
+
+```txt
+book|6|128|96|6|/pet/outfit/book
+cemet|6|128|96|6|/pet/outfit/cemet
+clap|6|128|96|6|/pet/outfit/clap
+movie|6|128|96|6|/pet/outfit/movie
+```
+
+`Status` animation 會被 status command 優先使用；如果目前外觀 manifest 沒有 `Status`，韌體會退回既有 profile 的 status 顯示策略。

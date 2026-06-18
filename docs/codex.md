@@ -8,7 +8,7 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run
 
 ```cmd
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e default
-C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e vendor_a
+C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e new_taipei_childrens_day
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e vendor_b
 ```
 

@@ -18,7 +18,7 @@ struct AnimationMeta
     uint16_t width;
     uint16_t height;
     uint16_t frameCount;
-    uint8_t fpsHint;
+    uint16_t frameIntervalMs;
     bool configured;
     bool singleFile;
 };

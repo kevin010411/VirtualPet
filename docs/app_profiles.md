@@ -16,18 +16,18 @@
 
 ```powershell
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e default
-C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e vendor_a
+C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e new_taipei_childrens_day
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e vendor_b
 ```
 
 目前環境：
 
-| Env | Profile | STATUS 模式 | 猜物小遊戲 |
-| --- | --- | --- | --- |
-| `default` | `APP_PROFILE_DEFAULT` | `STATUS_MODE_AGE` | 啟用 |
-| `vendor_a` | `APP_PROFILE_VENDOR_A` | `STATUS_MODE_PET_STATE` | 啟用 |
-| `vendor_b` | `APP_PROFILE_VENDOR_B` | `STATUS_MODE_RANDOM3` | 停用 |
-| `stm32` | 繼承 `default` | `STATUS_MODE_AGE` | 啟用 |
+| Env | 顯示名稱 | Profile | STATUS 模式 | 猜物小遊戲 |
+| --- | --- | --- | --- | --- |
+| `default` | 預設 | `APP_PROFILE_DEFAULT` | `STATUS_MODE_AGE` | 啟用 |
+| `new_taipei_childrens_day` | 新北兒童節 | `APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY` | `STATUS_MODE_PET_STATE` | 啟用 |
+| `vendor_b` | Vendor B | `APP_PROFILE_VENDOR_B` | `STATUS_MODE_RANDOM3` | 停用 |
+| `stm32` | 繼承 `default` | `APP_PROFILE_DEFAULT` | `STATUS_MODE_AGE` | 啟用 |
 
 `stm32` 保留為舊建置指令的相容名稱。
 
@@ -50,6 +50,7 @@ Command 被拆成兩個概念：
    - `Shower`
    - `HaveFun`
    - `Clean`
+   - `ChangeOutfit`
    - `Status`
 
 2. Menu Profile
@@ -88,7 +89,7 @@ Command 被拆成兩個概念：
     Command::Status,
 ```
 
-`Command::NoOp` 表示這個 slot 沒有 command。左右切換選單時會跳過 NoOp slot，也不會畫出該 slot 的 layout frame。
+`Command::NoOp` 表示這個 slot 沒有 command。左右切換選單時會跳過 NoOp slot，但仍會畫出該 slot 的一般 layout frame。
 
 ## STATUS 模式
 
@@ -102,13 +103,16 @@ Command 被拆成兩個概念：
 | `STATUS_MODE_PET_STATE` | 使用寵物目前狀態動畫，也就是 `Pet::CurrentAnimation()` |
 | `STATUS_MODE_RANDOM3` | 從三個候選狀態開始隨機選：年齡狀態、Happy、Idle |
 
+如果目前外觀 manifest 有 `Status` animation，`Status` command 會優先播放它；沒有時才使用上表的 profile strategy。
+
 在 `platformio.ini` 選擇模式：
 
 ```ini
-[env:vendor_a]
+; 新北兒童節
+[env:new_taipei_childrens_day]
 build_flags =
 	${common.build_flags}
-	-DAPP_PROFILE=APP_PROFILE_VENDOR_A
+	-DAPP_PROFILE=APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY
 	-DAPP_STATUS_MODE=STATUS_MODE_PET_STATE
 	-DENABLE_GUESS_ITEM_GAME=1
 ```
@@ -176,7 +180,7 @@ build_flags =
 3. 在 `Game::profileCommands` 加入該 profile 的 slot map。
 
    ```cpp
-   #elif APP_PROFILE == APP_PROFILE_VENDOR_C
+#elif APP_PROFILE == APP_PROFILE_VENDOR_C
        Command::FeedPet,
        Command::Predict,
        Command::Gift,
@@ -200,4 +204,3 @@ build_flags =
    ```powershell
    C:\Users\kevin\.platformio\packages\toolchain-gccarmnoneeabi\bin\arm-none-eabi-size.exe .pio\build\vendor_c\firmware.elf
    ```
-

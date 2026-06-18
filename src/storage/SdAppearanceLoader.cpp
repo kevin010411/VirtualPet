@@ -1,5 +1,6 @@
 #include "storage/SdAppearanceLoader.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 namespace
@@ -129,6 +130,69 @@ bool splitSpeciesRule(char *line, uint32_t &minDays, uint32_t &maxDays, char *&s
            isValidAppearanceCode(outfitCode);
 }
 
+bool buildSpeciesOutfitListPath(char *dest, size_t destSize, const char *speciesCode)
+{
+    if (dest == nullptr || destSize == 0 || !isValidAppearanceCode(speciesCode))
+        return false;
+
+    const int written = snprintf(dest, destSize, "/index/%s.txt", speciesCode);
+    return written >= 0 && written < static_cast<int>(destSize);
+}
+
+bool buildOutfitPreviewPath(char *dest, size_t destSize, const char *speciesCode)
+{
+    if (dest == nullptr || destSize == 0 || !isValidAppearanceCode(speciesCode))
+        return false;
+
+    const int written = snprintf(dest, destSize, "/index/%s_outfit.txt", speciesCode);
+    return written >= 0 && written < static_cast<int>(destSize);
+}
+
+bool copyText(char *dest, size_t destSize, const char *source)
+{
+    if (dest == nullptr || destSize == 0 || source == nullptr)
+        return false;
+
+    const size_t len = strlen(source);
+    if (len >= destSize)
+        return false;
+
+    memcpy(dest, source, len + 1);
+    return true;
+}
+
+bool splitOutfitPreviewRow(char *line, char *fields[], size_t fieldCount)
+{
+    size_t count = 0;
+    char *cursor = line;
+
+    while (count < fieldCount)
+    {
+        fields[count++] = cursor;
+        char *sep = strchr(cursor, '|');
+        if (sep == nullptr)
+            break;
+
+        *sep = '\0';
+        cursor = sep + 1;
+    }
+
+    if (count != fieldCount)
+        return false;
+
+    if (strchr(fields[fieldCount - 1], '|') != nullptr)
+        return false;
+
+    for (size_t i = 0; i < fieldCount; ++i)
+    {
+        fields[i] = trimField(fields[i]);
+        if (fields[i] == nullptr || fields[i][0] == '\0')
+            return false;
+    }
+
+    return true;
+}
+
 } // namespace
 
 SdAppearanceLoader::SdAppearanceLoader(SdFat *refSd) : sd(refSd)
@@ -165,6 +229,104 @@ bool SdAppearanceLoader::findForHealthyDays(uint32_t healthyDays, AppearanceSele
         selection.speciesCode[sizeof(selection.speciesCode) - 1] = '\0';
         strncpy(selection.outfitCode, outfitCode, sizeof(selection.outfitCode) - 1);
         selection.outfitCode[sizeof(selection.outfitCode) - 1] = '\0';
+        file.close();
+        return true;
+    }
+
+    file.close();
+    return false;
+}
+
+bool SdAppearanceLoader::loadOutfits(const char *speciesCode, char outfits[][9], size_t maxOutfits, size_t &outfitCount)
+{
+    outfitCount = 0;
+    if (sd == nullptr || outfits == nullptr || maxOutfits == 0)
+        return false;
+
+    char path[32] = {};
+    if (!buildSpeciesOutfitListPath(path, sizeof(path), speciesCode))
+        return false;
+
+    File file = sd->open(path, FILE_READ);
+    if (!file)
+        return false;
+
+    char line[128] = {};
+    while (readConfigLine(file, line, sizeof(line)))
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+
+        char *cursor = content;
+        while (cursor != nullptr && *cursor != '\0' && outfitCount < maxOutfits)
+        {
+            char *sep = strchr(cursor, '|');
+            if (sep != nullptr)
+                *sep = '\0';
+
+            char *outfitCode = trimField(cursor);
+            if (isValidAppearanceCode(outfitCode))
+            {
+                strncpy(outfits[outfitCount], outfitCode, 8);
+                outfits[outfitCount][8] = '\0';
+                ++outfitCount;
+            }
+
+            cursor = (sep == nullptr) ? nullptr : sep + 1;
+        }
+
+        if (outfitCount > 0 || outfitCount >= maxOutfits)
+            break;
+    }
+
+    file.close();
+    return outfitCount > 0;
+}
+
+bool SdAppearanceLoader::findOutfitPreview(const char *speciesCode, const char *outfitCode, OutfitPreview &preview)
+{
+    preview = {};
+    if (sd == nullptr || !isValidAppearanceCode(outfitCode))
+        return false;
+
+    char path[40] = {};
+    if (!buildOutfitPreviewPath(path, sizeof(path), speciesCode))
+        return false;
+
+    File file = sd->open(path, FILE_READ);
+    if (!file)
+        return false;
+
+    char line[192] = {};
+    while (readConfigLine(file, line, sizeof(line)))
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+
+        char *fields[6] = {};
+        if (!splitOutfitPreviewRow(content, fields, 6))
+            continue;
+
+        if (strcmp(fields[0], outfitCode) != 0)
+            continue;
+
+        const uint16_t frameCount = static_cast<uint16_t>(strtoul(fields[1], nullptr, 10));
+        const uint16_t frameIntervalMs = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
+        const uint16_t width = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
+        const uint16_t height = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
+        if (frameCount == 0 || width == 0 || height == 0)
+            continue;
+
+        if (!copyText(preview.outfitCode, sizeof(preview.outfitCode), fields[0]) ||
+            !copyText(preview.path, sizeof(preview.path), fields[5]))
+            continue;
+
+        preview.frameCount = frameCount;
+        preview.width = width;
+        preview.height = height;
+        preview.frameIntervalMs = frameIntervalMs;
         file.close();
         return true;
     }

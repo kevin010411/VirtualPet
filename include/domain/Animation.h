@@ -43,6 +43,7 @@ enum class AnimationId : uint8_t
     Predict9,
     Predict10,
     Predict11,
+    Status,
     AgeStatus,
     Battery,
     GuessItem4,

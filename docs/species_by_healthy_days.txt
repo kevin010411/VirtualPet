@@ -1,7 +1,8 @@
 # species_by_healthy_days.txt
 # Purpose:
-#   Let SD-card data decide which species/outfit should be used after the pet
-#   has lived a certain number of healthy days.
+#   Let SD-card data decide which species should be used after the pet has lived
+#   a certain number of healthy days. The outfit field is the default outfit for
+#   a newly selected species.
 #
 # Location suggestion on SD card:
 #   /species_by_healthy_days.txt
@@ -25,8 +26,11 @@
 #     Healthy. Hungry, Depressed, Dirty, Poop, or Sick days do not increase it.
 #   - Firmware checks this file after loading a pet, after resetting a pet, and
 #     after healthy_days increases.
-#   - The first matching row is applied. If the species/outfit is different from
-#     the current one, firmware reloads the animation manifest and saves state.
+#   - The first matching row is applied only when its species differs from the
+#     current species. When the species is unchanged, firmware keeps the current
+#     outfit so manual outfit changes are not overwritten.
+#   - When the species changes, firmware applies that row's outfit as the new
+#     species default outfit, reloads the animation manifest, and saves state.
 #   - If this file is missing, invalid, or has no matching row, firmware keeps
 #     the current species/outfit.
 #   - Old v2 state files did not store healthy_days. Firmware deletes those

@@ -152,10 +152,10 @@ bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPa
 
         AnimationMeta parsed = {};
         parsed.format = parseAssetFormat(fields[1]);
-        parsed.frameCount = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
-        parsed.width = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
-        parsed.height = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
-        parsed.fpsHint = static_cast<uint8_t>(strtoul(fields[5], nullptr, 10));
+        parsed.frameIntervalMs = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
+        parsed.frameCount = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
+        parsed.width = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
+        parsed.height = static_cast<uint16_t>(strtoul(fields[5], nullptr, 10));
         if (!copyManifestPath(parsed.path, sizeof(parsed.path), fields[6]))
             continue;
 
@@ -186,7 +186,7 @@ void AssetManifest::reset()
         meta.width = kDefaultAnimWidth;
         meta.height = kDefaultAnimHeight;
         meta.frameCount = 0;
-        meta.fpsHint = 0;
+        meta.frameIntervalMs = 0;
         meta.configured = false;
         meta.singleFile = false;
     }
