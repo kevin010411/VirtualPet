@@ -52,13 +52,13 @@ const Game::Command Game::profileCommands[] = {
     Command::Gift,
     Command::Clean,
     Command::Status,
-#elif APP_PROFILE == APP_PROFILE_VENDOR_B
+#elif APP_PROFILE == APP_PROFILE_DEFAULT_SMALL
     Command::FeedPet,
-    Command::Predict,
-    Command::Gift,
+    Command::NoOp,
+    Command::NoOp,
     Command::Medicine,
     Command::Shower,
-    Command::NoOp,
+    Command::HaveFun,
     Command::Clean,
     Command::Status,
 #else
@@ -803,7 +803,7 @@ bool Game::queueStatusDirectAnimation()
     if (!hasAnimation(AnimationId::Status))
         return false;
 
-    queueAnimation(Animation(AnimationId::Status, gameTick * 4, true, AnimationOwner::Command, AnimationPriority::Normal));
+    queueAnimation(Animation(AnimationId::Status, gameTick * 10, true, AnimationOwner::Command, AnimationPriority::Normal));
     markAnimationDirty();
     return true;
 }
