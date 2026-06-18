@@ -803,7 +803,7 @@ bool Game::queueStatusDirectAnimation()
     if (!hasAnimation(AnimationId::Status))
         return false;
 
-    queueAnimation(Animation(AnimationId::Status, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal));
+    queueAnimation(Animation(AnimationId::Status, gameTick * 4, true, AnimationOwner::Command, AnimationPriority::Normal));
     markAnimationDirty();
     return true;
 }

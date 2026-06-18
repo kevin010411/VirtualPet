@@ -173,7 +173,7 @@ AnimationId Pet::CurrentAnimation() const
 
 AnimationId Pet::CurrentAgeAnimation() const
 {
-    return AnimationId::AgeStatus;
+    return AnimationId::StatusAge;
 }
 
 uint16_t Pet::CurrentAgeFrame(uint16_t maxFrame) const

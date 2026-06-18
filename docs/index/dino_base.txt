@@ -36,7 +36,7 @@ GuessWin|bmp|5|128|96|10|/dino/guess_game/win
 GuessLoss|bmp|2|128|96|10|/dino/guess_game/loss
 
 # Age status animation
-AgeStatus|bmp|3|128|96|6|/status/age
+StatusAge|bmp|3|128|96|6|/status/age
 
 # Fortune animations
 PredAnim|bmp|23|128|96|10|/predict/anim
