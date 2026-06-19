@@ -101,9 +101,9 @@ Command 被拆成兩個概念：
 | --- | --- |
 | `STATUS_MODE_AGE` | 目前原本行為，使用 `Pet::CurrentAgeAnimation()` 與 `Pet::CurrentAgeFrame()` |
 | `STATUS_MODE_PET_STATE` | 使用寵物目前狀態動畫，也就是 `Pet::CurrentAnimation()` |
-| `STATUS_MODE_RANDOM3` | 從三個候選狀態開始隨機選：年齡狀態、Happy、Idle |
+| `STATUS_MODE_RANDOM3` | 從目前外觀 manifest 中存在的 `StatusAge`、`StatusHappy`、`StatusHungry` 隨機選，再依對應數值顯示固定 frame |
 
-如果目前外觀 manifest 有 `Status` animation，`Status` command 會優先播放它；沒有時才使用上表的 profile strategy。
+如果目前外觀 manifest 有 `Status` animation，`Status` command 會優先播放它；沒有時才使用上表的 profile strategy。`STATUS_MODE_RANDOM3` 由 `Status*` 素材列控制顯示候選，沒有列在 index 或沒有 frame 的項目不會被選到。`StatusAge` 依 age 選 frame，`StatusHappy` 依 mood 選 frame，`StatusHungry` 依 hungry value 選 frame。
 
 在 `platformio.ini` 選擇模式：
 

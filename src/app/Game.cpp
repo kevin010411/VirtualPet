@@ -575,9 +575,9 @@ bool Game::canStatus() const
 #if APP_STATUS_MODE == STATUS_MODE_PET_STATE
     return hasAnimation(pet.CurrentAnimation());
 #elif APP_STATUS_MODE == STATUS_MODE_RANDOM3
-    return hasAnimation(pet.CurrentAgeAnimation()) ||
-           hasAnimation(AnimationId::Happy) ||
-           hasAnimation(AnimationId::Idle);
+    return hasAnimation(AnimationId::StatusAge) ||
+           hasAnimation(AnimationId::StatusHappy) ||
+           hasAnimation(AnimationId::StatusHungry);
 #else
     return hasAnimation(pet.CurrentAgeAnimation());
 #endif
@@ -834,9 +834,9 @@ bool Game::queueStatusPetStateAnimation()
 bool Game::queueStatusRandom3Animation()
 {
     AnimationId candidates[3] = {
-        pet.CurrentAgeAnimation(),
-        AnimationId::Happy,
-        AnimationId::Idle,
+        AnimationId::StatusAge,
+        AnimationId::StatusHappy,
+        AnimationId::StatusHungry,
     };
 
     const uint8_t start = random(3);
@@ -847,19 +847,21 @@ bool Game::queueStatusRandom3Animation()
         if (!hasAnimation(chosen))
             continue;
 
-        if (chosen == pet.CurrentAgeAnimation())
-        {
-            const uint16_t maxFrame = renderer.frameCountFor(chosen);
-            if (maxFrame == 0)
-                continue;
+        const uint16_t maxFrame = renderer.frameCountFor(chosen);
+        if (maxFrame == 0)
+            continue;
 
-            queueAnimation(Animation(chosen, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet.CurrentAgeFrame(maxFrame)));
-        }
+        uint16_t frame = 1;
+        if (chosen == AnimationId::StatusAge)
+            frame = pet.CurrentAgeFrame(maxFrame);
+        else if (chosen == AnimationId::StatusHappy)
+            frame = pet.CurrentMoodFrame(maxFrame);
+        else if (chosen == AnimationId::StatusHungry)
+            frame = pet.CurrentHungerFrame(maxFrame);
         else
-        {
-            queueAnimation(Animation(chosen, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal));
-        }
+            continue;
 
+        queueAnimation(Animation(chosen, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, frame));
         markAnimationDirty();
         return true;
     }

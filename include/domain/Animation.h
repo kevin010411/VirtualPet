@@ -45,6 +45,8 @@ enum class AnimationId : uint8_t
     Predict11,
     Status,
     StatusAge,
+    StatusHappy,
+    StatusHungry,
     Battery,
     GuessItem4,
     GuessStart,

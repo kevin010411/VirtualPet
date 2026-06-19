@@ -23,7 +23,7 @@ ButtonInput buttons(
     BoardConfig::PreviousCommandButtonPin,
     BoardConfig::NextCommandButtonPin,
     BoardConfig::ConfirmCommandButtonPin,
-    150);
+    250);
 
 // =========================
 // Low battery / PVD 設定
@@ -247,6 +247,7 @@ void setup()
   if (!SD.begin(BoardConfig::SdCsPin, SD_SCK_MHZ(BoardConfig::SdSpiMhz)))
   {
     showSdInitError();
+    SD.initErrorPrint(&tft);
     return;
   }
 

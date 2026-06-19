@@ -72,6 +72,8 @@ public:
     AnimationId CurrentAnimation() const;
     AnimationId CurrentAgeAnimation() const;
     uint16_t CurrentAgeFrame(uint16_t maxFrame) const;
+    uint16_t CurrentMoodFrame(uint16_t maxFrame) const;
+    uint16_t CurrentHungerFrame(uint16_t maxFrame) const;
     String getAge();
     const char *speciesCode() const;
     const char *outfitCode() const;

@@ -186,6 +186,26 @@ uint16_t Pet::CurrentAgeFrame(uint16_t maxFrame) const
     return clampValue<uint16_t>(frame, 1, maxFrame);
 }
 
+uint16_t Pet::CurrentMoodFrame(uint16_t maxFrame) const
+{
+    if (maxFrame <= 1)
+        return 1;
+
+    const float normalized = cfg.max_mood == 0 ? 1.0f : clampValue<float>(static_cast<float>(st.mood) / static_cast<float>(cfg.max_mood), 0.0f, 1.0f);
+    const uint16_t frame = static_cast<uint16_t>(normalized * static_cast<float>(maxFrame)) + 1;
+    return clampValue<uint16_t>(frame, 1, maxFrame);
+}
+
+uint16_t Pet::CurrentHungerFrame(uint16_t maxFrame) const
+{
+    if (maxFrame <= 1)
+        return 1;
+
+    const float normalized = cfg.max_hunger == 0 ? 1.0f : clampValue<float>(static_cast<float>(st.hungry_value) / static_cast<float>(cfg.max_hunger), 0.0f, 1.0f);
+    const uint16_t frame = static_cast<uint16_t>(normalized * static_cast<float>(maxFrame)) + 1;
+    return clampValue<uint16_t>(frame, 1, maxFrame);
+}
+
 void Pet::setDefaultState()
 {
     st.magic = kPetStateMagic;
