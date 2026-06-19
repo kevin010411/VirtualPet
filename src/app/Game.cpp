@@ -516,6 +516,9 @@ void Game::ExecuteCommand()
     if (spec->execute == nullptr)
         return;
 
+    if (commandForSlot(selectedSlot) != Command::HaveFun)
+        clearAnimationsByOwner(AnimationOwner::Command);
+
     (this->*spec->execute)();
 }
 
