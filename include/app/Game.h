@@ -48,7 +48,7 @@ public:
     bool hasAnimationForOwner(AnimationOwner owner) const;
 
 private:
-    static constexpr unsigned long gameTick = 2400;
+    static constexpr unsigned long gameTick = 2000;
     static constexpr unsigned long frameIntervalSlow = 600;
     static constexpr uint8_t savePeriodTicks = 2;
     static constexpr unsigned int environmentDecayAmount = 5;
@@ -134,6 +134,7 @@ private:
     void draw_select_layout();
     void roll_sick();
     void roll_fortune();
+    AnimationId currentBaseAnimation() const;
     void refreshBaseAnimation();
     void maybeSavePet();
     void maybeDecayEnvironment(unsigned long elapsed);

@@ -4,23 +4,6 @@
 
 namespace
 {
-constexpr uint16_t kLegacyPetStateVersion = 1;
-
-struct PersistedPetStateV1
-{
-    uint32_t magic;
-    uint16_t version;
-
-    bool hasSick;
-    uint8_t status;
-    float age;
-
-    int32_t hungry_value;
-    int32_t mood;
-    int32_t clean_value;
-    int32_t env_value;
-};
-
 bool copyAppearanceCode(char *dest, size_t destSize, const char *source)
 {
     if (dest == nullptr || destSize == 0 || source == nullptr || source[0] == '\0')
@@ -210,6 +193,7 @@ void Pet::setDefaultState()
 {
     st.magic = kPetStateMagic;
     st.version = kPetStateVersion;
+    st.sequence = 0;
     st.hasSick = false;
     st.status = static_cast<uint8_t>(HealthStatus::Healthy);
     st.age = 0.0f;
@@ -220,6 +204,7 @@ void Pet::setDefaultState()
     strcpy(st.species, "dino");
     strcpy(st.outfit, "base");
     st.healthy_days = 0;
+    st.crc32 = 0;
 }
 
 String Pet::getAge()
@@ -272,35 +257,23 @@ bool Pet::setOutfitCode(const char *code)
 
 bool Pet::restoreState(const PersistedPetState &state)
 {
-    if (state.magic != kPetStateMagic)
+    if (state.magic != kPetStateMagic || state.version != kPetStateVersion)
         return false;
 
-    if (state.version == kPetStateVersion)
-    {
-        st = state;
-        if (st.species[0] == '\0')
-            strcpy(st.species, "dino");
-        if (st.outfit[0] == '\0')
-            strcpy(st.outfit, "base");
-    }
-    else if (state.version == kLegacyPetStateVersion)
-    {
-        const PersistedPetStateV1 *legacy = reinterpret_cast<const PersistedPetStateV1 *>(&state);
-        setDefaultState();
-        st.hasSick = legacy->hasSick;
-        st.status = legacy->status;
-        st.age = legacy->age;
-        st.hungry_value = legacy->hungry_value;
-        st.mood = legacy->mood;
-        st.clean_value = legacy->clean_value;
-        st.env_value = legacy->env_value;
-    }
-    else
-    {
-        return false;
-    }
-
+    st = state;
     st.version = kPetStateVersion;
+    st.age = clampValue<float>(st.age, 0.0f, cfg.max_age);
+    st.hungry_value = clampValue<int32_t>(st.hungry_value, 0, cfg.max_hunger);
+    st.mood = clampValue<int32_t>(st.mood, 0, cfg.max_mood);
+    st.clean_value = clampValue<int32_t>(st.clean_value, 0, cfg.max_clean);
+    st.env_value = clampValue<int32_t>(st.env_value, 0, cfg.max_env_clean);
+
+    char appearanceCode[9] = {};
+    if (!copyAppearanceCode(appearanceCode, sizeof(appearanceCode), st.species))
+        strcpy(st.species, "dino");
+    if (!copyAppearanceCode(appearanceCode, sizeof(appearanceCode), st.outfit))
+        strcpy(st.outfit, "base");
+
     refreshStatus();
     return true;
 }

@@ -25,6 +25,7 @@ struct PersistedPetState
 {
     uint32_t magic;
     uint16_t version;
+    uint32_t sequence;
 
     bool hasSick;
     uint8_t status;
@@ -37,6 +38,7 @@ struct PersistedPetState
     char species[9];
     char outfit[9];
     uint32_t healthy_days;
+    uint32_t crc32;
 };
 
 enum class HealthStatus
@@ -91,7 +93,7 @@ private:
     PersistedPetState st = {};
 
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 3;
+    static constexpr uint16_t kPetStateVersion = 4;
 };
 
 #endif

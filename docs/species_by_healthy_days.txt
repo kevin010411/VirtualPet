@@ -21,7 +21,8 @@
 #   - If no row matches, firmware should keep the current species/outfit.
 #
 # Evolution behavior:
-#   - healthy_days is stored in /state.bin with the pet state.
+#   - healthy_days is stored with the pet state in /state_a.bin or
+#     /state_b.bin.
 #   - healthy_days increases only when dayPassed() runs while the pet status is
 #     Healthy. Hungry, Depressed, Dirty, Poop, or Sick days do not increase it.
 #   - Firmware checks this file after loading a pet, after resetting a pet, and
@@ -33,8 +34,8 @@
 #     species default outfit, reloads the animation manifest, and saves state.
 #   - If this file is missing, invalid, or has no matching row, firmware keeps
 #     the current species/outfit.
-#   - Old v2 state files did not store healthy_days. Firmware deletes those
-#     files instead of guessing healthy_days, then starts from a fresh state.
+#   - Firmware no longer supports old state.bin/state.bak files. If neither
+#     state slot is valid, the pet starts from a fresh default state.
 #
 # Example:
 #   A pet starts as dino/base.

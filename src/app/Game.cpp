@@ -85,6 +85,7 @@ void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfi
 
     renderer.setAssetAppearance(defaultSpeciesCode, defaultOutfitCode);
     renderer.reloadManifest();
+    refreshBaseAnimation();
     dirtyAnimation = true;
 }
 
@@ -184,7 +185,7 @@ void Game::setup_game()
 {
     renderer.initAnimations();
     lastSelected = selectedSlot;
-    baseAnimationId = pet.CurrentAnimation();
+    baseAnimationId = currentBaseAnimation();
     renderer.setAnimation(baseAnimationId, false);
     draw_all_layout();
 
@@ -280,9 +281,21 @@ void Game::maybeSavePet()
         saveCounter = 0;
 }
 
-void Game::refreshBaseAnimation()
+AnimationId Game::currentBaseAnimation() const
 {
     const AnimationId candidateAnimation = pet.CurrentAnimation();
+    if (hasAnimation(candidateAnimation))
+        return candidateAnimation;
+
+    if (candidateAnimation != AnimationId::Idle && hasAnimation(AnimationId::Idle))
+        return AnimationId::Idle;
+
+    return candidateAnimation;
+}
+
+void Game::refreshBaseAnimation()
+{
+    const AnimationId candidateAnimation = currentBaseAnimation();
     if (baseAnimationId != candidateAnimation)
     {
         baseAnimationId = candidateAnimation;
@@ -407,6 +420,7 @@ bool Game::applyAppearance(const char *speciesCode, const char *outfitCode)
 
     renderer.setAssetAppearance(pet.speciesCode(), pet.outfitCode());
     renderer.reloadManifest();
+    refreshBaseAnimation();
     dirtyAnimation = true;
     showAnimationId = AnimationId::None;
     lastFrameTime = 0;

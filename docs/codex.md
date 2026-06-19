@@ -9,9 +9,11 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run
 ```cmd
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e default
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e new_taipei_childrens_day
-C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e vendor_b
+C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small
+C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_multi_status
 ```
 
-Command slot、STATUS mode、feature gate 的切換方式請看：
+Command slot、STATUS mode、feature gate 與存檔格式請看：
 
 - `docs/app_profiles.md`
+- `docs/pet_storage.md`

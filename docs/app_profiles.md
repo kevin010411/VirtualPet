@@ -17,7 +17,8 @@
 ```powershell
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e default
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e new_taipei_childrens_day
-C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e vendor_b
+C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small
+C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_multi_status
 ```
 
 目前環境：
@@ -25,8 +26,9 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e vendor_b
 | Env | 顯示名稱 | Profile | STATUS 模式 | 猜物小遊戲 |
 | --- | --- | --- | --- | --- |
 | `default` | 預設 | `APP_PROFILE_DEFAULT` | `STATUS_MODE_AGE` | 啟用 |
-| `new_taipei_childrens_day` | 新北兒童節 | `APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY` | `STATUS_MODE_STATUS` | 啟用 |
-| `vendor_b` | Vendor B | `APP_PROFILE_VENDOR_B` | `STATUS_MODE_RANDOM3` | 停用 |
+| `new_taipei_childrens_day` | 新北兒童節 | `APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY` | `STATUS_MODE_STATUS` | 停用 |
+| `small` | 小容量預設 | `APP_PROFILE_DEFAULT_SMALL` | `STATUS_MODE_AGE` | 啟用 |
+| `small_multi_status` | 小容量多狀態 | `APP_PROFILE_DEFAULT_SMALL` | `STATUS_MODE_RANDOM3` | 啟用 |
 | `stm32` | 繼承 `default` | `APP_PROFILE_DEFAULT` | `STATUS_MODE_AGE` | 啟用 |
 
 `stm32` 保留為舊建置指令的相容名稱。
@@ -78,14 +80,14 @@ Command 被拆成兩個概念：
 例子：
 
 ```cpp
-#elif APP_PROFILE == APP_PROFILE_VENDOR_B
+#elif APP_PROFILE == APP_PROFILE_DEFAULT_SMALL
     Command::FeedPet,
-    Command::Predict,
-    Command::Gift,
+    Command::NoOp,
+    Command::NoOp,
     Command::Medicine,
     Command::Shower,
-    Command::NoOp,   // slot 6 空白
-    Command::Clean,  // slot 7
+    Command::HaveFun,
+    Command::Clean,
     Command::Status,
 ```
 
@@ -114,7 +116,7 @@ build_flags =
 	${common.build_flags}
 	-DAPP_PROFILE=APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY
 	-DAPP_STATUS_MODE=STATUS_MODE_STATUS
-	-DENABLE_GUESS_ITEM_GAME=1
+	-DENABLE_GUESS_ITEM_GAME=0
 ```
 
 如果 `STATUS_MODE_RANDOM3` 沒有可用候選動畫，程式會 fallback 回年齡狀態。
@@ -133,13 +135,13 @@ build_flags =
 | `ENABLE_SD_BMP_ASSETS` | 編入 BMP renderer |
 | `ENABLE_SD_RLE_ASSETS` | 編入 RLE renderer |
 
-例子：針對某個 vendor profile 關閉猜物小遊戲：
+例子：針對某個 profile 關閉猜物小遊戲：
 
 ```ini
-[env:vendor_b]
+[env:vendor_without_game]
 build_flags =
 	${common.build_flags}
-	-DAPP_PROFILE=APP_PROFILE_VENDOR_B
+	-DAPP_PROFILE=APP_PROFILE_VENDOR_C
 	-DAPP_STATUS_MODE=STATUS_MODE_RANDOM3
 	-DENABLE_GUESS_ITEM_GAME=0
 ```

@@ -14,6 +14,7 @@
 | --- | ---: | ---: | ---: | ---: |
 | 最佳化前 | 60076 bytes | 91.7% | 7848 bytes | 38.3% |
 | 最佳化後 | 49504 bytes | 75.5% | 9352 bytes | 45.7% |
+| 目前 `small` | 51920 bytes | 79.2% | 9880 bytes | 48.2% |
 
 共節省 Flash：11072 bytes，約為 64 KB flash 空間的 16.9%。
 
@@ -41,20 +42,30 @@
 
 ## 驗證
 
-變更後 `platformio run` 已成功完成。
+目前 `platformio run` 已成功完成。
 
-最終 PlatformIO 記憶體報告：
+目前 `small` PlatformIO 記憶體報告：
 
 ```text
-text=49256, data=248, bss=9104
-Flash: 49504 bytes
-RAM:   9352 bytes
+text=51672, data=248, bss=9632
+Flash: 51920 bytes
+RAM:   9880 bytes
 ```
+
+目前各環境 ELF size：
+
+| Env | Flash text+data | RAM data+bss |
+| --- | ---: | ---: |
+| `small` | 51920 bytes | 9880 bytes |
+| `default` | 51920 bytes | 9880 bytes |
+| `new_taipei_childrens_day` | 50572 bytes | 9872 bytes |
+| `small_multi_status` | 52248 bytes | 9880 bytes |
 
 ## 注意事項與風險
 
 - FPS report 檔案產生功能目前在 release build 中停用。若要用於 profiling，請設定 `-DENABLE_RENDER_STATS=1`。
 - 序列埠開機訊息已移除。
+- Pet state 目前使用雙 slot、sequence number 與 bitwise CRC32，會增加少量程式碼與 state record 大小，但可提升斷電後恢復機率。
 - LTO 可能稍微增加建置時間，但本次產生了顯著的 Flash 降幅，而且韌體仍可成功建置。
 - 剩餘 warning 來自 Adafruit ST77xx library 使用 Arduino 已棄用的 `boolean` typedef；這不是本次最佳化造成的。
 

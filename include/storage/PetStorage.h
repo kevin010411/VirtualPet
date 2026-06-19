@@ -14,6 +14,8 @@ public:
 
 private:
     SdFat *sd;
+    uint32_t nextSequence = 1;
+    bool writeSlotA = true;
 };
 
 #endif
