@@ -48,7 +48,7 @@ public:
     bool hasAnimationForOwner(AnimationOwner owner) const;
 
 private:
-    static constexpr unsigned long gameTick = 1200;
+    static constexpr unsigned long gameTick = 2400;
     static constexpr unsigned long frameIntervalSlow = 600;
     static constexpr uint8_t savePeriodTicks = 2;
     static constexpr unsigned int environmentDecayAmount = 5;

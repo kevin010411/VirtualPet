@@ -91,11 +91,11 @@ bool Pet::dayPassed()
     if (getStatus() != HealthStatus::Healthy)
         return false;
 
-    st.hungry_value = clampValue<int>(st.hungry_value + 1, 0, cfg.max_hunger);
-    st.mood = clampValue<int>(st.mood - 1, 0, cfg.max_mood);
+    st.hungry_value = clampValue<int>(st.hungry_value + 3, 0, cfg.max_hunger);
+    st.mood = clampValue<int>(st.mood - 3, 0, cfg.max_mood);
     st.age = clampValue<float>(st.age + cfg.age_per_tick, 0.0f, cfg.max_age);
-    st.clean_value = clampValue<int>(st.clean_value - 1, 0, cfg.max_clean);
-    st.env_value = clampValue<int>(st.env_value - 1, 0, cfg.max_env_clean);
+    st.clean_value = clampValue<int>(st.clean_value - 3, 0, cfg.max_clean);
+    st.env_value = clampValue<int>(st.env_value - 3, 0, cfg.max_env_clean);
     st.healthy_days += 1;
     refreshStatus();
     return true;
