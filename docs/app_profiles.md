@@ -25,7 +25,7 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e vendor_b
 | Env | 顯示名稱 | Profile | STATUS 模式 | 猜物小遊戲 |
 | --- | --- | --- | --- | --- |
 | `default` | 預設 | `APP_PROFILE_DEFAULT` | `STATUS_MODE_AGE` | 啟用 |
-| `new_taipei_childrens_day` | 新北兒童節 | `APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY` | `STATUS_MODE_PET_STATE` | 啟用 |
+| `new_taipei_childrens_day` | 新北兒童節 | `APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY` | `STATUS_MODE_STATUS` | 啟用 |
 | `vendor_b` | Vendor B | `APP_PROFILE_VENDOR_B` | `STATUS_MODE_RANDOM3` | 停用 |
 | `stm32` | 繼承 `default` | `APP_PROFILE_DEFAULT` | `STATUS_MODE_AGE` | 啟用 |
 
@@ -100,10 +100,10 @@ Command 被拆成兩個概念：
 | Mode | 行為 |
 | --- | --- |
 | `STATUS_MODE_AGE` | 目前原本行為，使用 `Pet::CurrentAgeAnimation()` 與 `Pet::CurrentAgeFrame()` |
-| `STATUS_MODE_PET_STATE` | 使用寵物目前狀態動畫，也就是 `Pet::CurrentAnimation()` |
+| `STATUS_MODE_STATUS` | 播放目前外觀 manifest 中的 `Status` 動畫 |
 | `STATUS_MODE_RANDOM3` | 從目前外觀 manifest 中存在的 `StatusAge`、`StatusHappy`、`StatusHungry` 隨機選，再依對應數值顯示固定 frame |
 
-如果目前外觀 manifest 有 `Status` animation，`Status` command 會優先播放它；沒有時才使用上表的 profile strategy。`STATUS_MODE_RANDOM3` 由 `Status*` 素材列控制顯示候選，沒有列在 index 或沒有 frame 的項目不會被選到。`StatusAge` 依 age 選 frame，`StatusHappy` 依 mood 選 frame，`StatusHungry` 依 hungry value 選 frame。
+`Status` animation 只由 `STATUS_MODE_STATUS` 使用；其他 STATUS mode 不會先檢查或優先播放 `Status`。`STATUS_MODE_RANDOM3` 由 `Status*` 素材列控制顯示候選，沒有列在 index 或沒有 frame 的項目不會被選到。`StatusAge` 依 age 選 frame，`StatusHappy` 依 mood 選 frame，`StatusHungry` 依 hungry value 選 frame。
 
 在 `platformio.ini` 選擇模式：
 
@@ -113,11 +113,11 @@ Command 被拆成兩個概念：
 build_flags =
 	${common.build_flags}
 	-DAPP_PROFILE=APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY
-	-DAPP_STATUS_MODE=STATUS_MODE_PET_STATE
+	-DAPP_STATUS_MODE=STATUS_MODE_STATUS
 	-DENABLE_GUESS_ITEM_GAME=1
 ```
 
-如果選到的 STATUS 動畫素材不存在，程式會盡量 fallback 回年齡狀態。
+如果 `STATUS_MODE_RANDOM3` 沒有可用候選動畫，程式會 fallback 回年齡狀態。
 
 ## Feature Gate 與 Flash 控制
 

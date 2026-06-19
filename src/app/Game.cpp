@@ -569,11 +569,8 @@ bool Game::canChangeOutfit() const
 
 bool Game::canStatus() const
 {
-    if (hasAnimation(AnimationId::Status))
-        return true;
-
-#if APP_STATUS_MODE == STATUS_MODE_PET_STATE
-    return hasAnimation(pet.CurrentAnimation());
+#if APP_STATUS_MODE == STATUS_MODE_STATUS
+    return hasAnimation(AnimationId::Status);
 #elif APP_STATUS_MODE == STATUS_MODE_RANDOM3
     return hasAnimation(AnimationId::StatusAge) ||
            hasAnimation(AnimationId::StatusHappy) ||
@@ -784,12 +781,8 @@ void Game::executeStatus()
 
 void Game::queueStatusAnimation()
 {
-    if (queueStatusDirectAnimation())
-        return;
-
-#if APP_STATUS_MODE == STATUS_MODE_PET_STATE
-    if (!queueStatusPetStateAnimation())
-        queueStatusAgeAnimation();
+#if APP_STATUS_MODE == STATUS_MODE_STATUS
+    queueStatusDirectAnimation();
 #elif APP_STATUS_MODE == STATUS_MODE_RANDOM3
     if (!queueStatusRandom3Animation())
         queueStatusAgeAnimation();
@@ -816,17 +809,6 @@ bool Game::queueStatusAgeAnimation()
         return false;
 
     queueAnimation(Animation(ageAnimation, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal, pet.CurrentAgeFrame(maxFrame)));
-    markAnimationDirty();
-    return true;
-}
-
-bool Game::queueStatusPetStateAnimation()
-{
-    const AnimationId statusAnimation = pet.CurrentAnimation();
-    if (!hasAnimation(statusAnimation))
-        return false;
-
-    queueAnimation(Animation(statusAnimation, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal));
     markAnimationDirty();
     return true;
 }

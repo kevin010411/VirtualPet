@@ -156,7 +156,6 @@ private:
     void queueStatusAnimation();
     bool queueStatusDirectAnimation();
     bool queueStatusAgeAnimation();
-    bool queueStatusPetStateAnimation();
     bool queueStatusRandom3Animation();
     bool loadOutfitOptions();
     bool loadSelectedOutfitPreview();
