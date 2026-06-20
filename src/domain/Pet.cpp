@@ -75,7 +75,7 @@ bool Pet::dayPassed()
         return false;
 
     st.hungry_value = clampValue<int>(st.hungry_value + 3, 0, cfg.max_hunger);
-    st.mood = clampValue<int>(st.mood - 3, 0, cfg.max_mood);
+    st.mood = clampValue<int>(st.mood - 2, 0, cfg.max_mood);
     st.age = clampValue<float>(st.age + cfg.age_per_tick, 0.0f, cfg.max_age);
     st.clean_value = clampValue<int>(st.clean_value - 3, 0, cfg.max_clean);
     st.env_value = clampValue<int>(st.env_value - 3, 0, cfg.max_env_clean);
@@ -205,19 +205,6 @@ void Pet::setDefaultState()
     strcpy(st.outfit, "base");
     st.healthy_days = 0;
     st.crc32 = 0;
-}
-
-String Pet::getAge()
-{
-    switch (CurrentAgeFrame(3))
-    {
-    case 1:
-        return "0.1";
-    case 2:
-        return "0.5";
-    default:
-        return "1";
-    }
 }
 
 HealthStatus Pet::getStatus() const

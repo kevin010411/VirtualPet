@@ -50,11 +50,6 @@ bool Game::saveNow()
     return saved;
 }
 
-bool Game::showBatteryScreen()
-{
-    return renderer.ShowSDCardFrame("/battery", 1,0,32);
-}
-
 void Game::startBatteryAnimation()
 {
     clearAnimationsByOwner(AnimationOwner::Command);
@@ -412,11 +407,6 @@ void Game::OnConfirmKey()
     {
         commands.executeCurrent();
     }
-}
-
-String Game::NowCommand()
-{
-    return commands.currentLabel();
 }
 
 bool Game::hasAnimation(AnimationId id) const

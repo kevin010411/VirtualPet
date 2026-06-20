@@ -112,23 +112,6 @@ std::vector<uint16_t> &Renderer::lineBuffer()
     return state->lineBuffer;
 }
 
-bool Renderer::ShowSDCardImage(const char *img_path, int xmin, int ymin, int batch_lines)
-{
-    if (img_path == nullptr || img_path[0] == '\0')
-    {
-        FrameDecoder::showResourceError(tft);
-        return false;
-    }
-
-    char resolvedPath[128];
-    const bool hasPath = FrameDecoder::replaceOrAppendExtension(resolvedPath, sizeof(resolvedPath), img_path, assetExtension());
-    const bool ok = hasPath && showImageFile(resolvedPath, xmin, ymin, batch_lines, nullptr);
-
-    if (!ok)
-        FrameDecoder::showResourceError(tft);
-    return ok;
-}
-
 bool Renderer::ShowSDCardFrame(const char *base_path, uint16_t frame_index, int xmin, int ymin, int batch_lines)
 {
     if (base_path == nullptr || base_path[0] == '\0')

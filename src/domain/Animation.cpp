@@ -16,14 +16,6 @@ constexpr const char *kAnimationNames[kAnimationIdCount] = {
 };
 } // namespace
 
-const char *animationIdName(AnimationId id)
-{
-    const size_t index = static_cast<size_t>(id);
-    if (index >= kAnimationIdCount)
-        return kAnimationNames[0];
-    return kAnimationNames[index];
-}
-
 AnimationId animationIdFromName(const char *name)
 {
     if (name == nullptr)

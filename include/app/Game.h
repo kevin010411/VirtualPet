@@ -32,11 +32,9 @@ public:
     void requestFullRedraw();
     void setRendererAssetAppearance(const char *speciesCode, const char *outfitCode);
     bool saveNow();
-    bool showBatteryScreen();
     void startBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
 
-    String NowCommand();
     void OnLeftKey();
     void OnRightKey();
     void OnConfirmKey();

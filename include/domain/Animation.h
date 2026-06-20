@@ -57,7 +57,6 @@ enum class AnimationId : uint8_t
 
 constexpr size_t kAnimationIdCount = static_cast<size_t>(AnimationId::Count);
 
-const char *animationIdName(AnimationId id);
 AnimationId animationIdFromName(const char *name);
 
 enum class AnimationOwner : uint8_t

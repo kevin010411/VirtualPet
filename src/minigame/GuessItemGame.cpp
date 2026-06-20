@@ -96,16 +96,6 @@ bool GuessItemGame::isActive() const
     return state != GuessItemState::Inactive;
 }
 
-bool GuessItemGame::isFinished() const
-{
-    return state == GuessItemState::Win || state == GuessItemState::Lose || state == GuessItemState::Cancel;
-}
-
-bool GuessItemGame::isWin() const
-{
-    return state == GuessItemState::Win;
-}
-
 void GuessItemGame::update()
 {
     if (state == GuessItemState::Inactive)

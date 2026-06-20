@@ -50,8 +50,6 @@ public:
     void onRight();
     void onMid();
     bool isActive() const;
-    bool isFinished() const;
-    bool isWin() const;
 
 private:
     void queuePromptAnimation();
