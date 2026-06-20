@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <deque>
+#include "app/CommandController.h"
 #include "storage/AppearanceLoader.h"
 #include "app/AppProfile.h"
 #include "domain/Animation.h"
@@ -16,9 +17,10 @@ class Pet;
 class PetStorage;
 class Renderer;
 
-class Game
+class Game : public CommandHost
 #if ENABLE_GUESS_ITEM_GAME
-    : public GuessItemGameHost
+    ,
+             public GuessItemGameHost
 #endif
 {
 public:
@@ -55,35 +57,11 @@ private:
     static constexpr int maxFortune = 11;
     static constexpr size_t maxOutfitOptions = 8;
 
-    enum class Command
-    {
-        NoOp,
-        FeedPet,
-        Predict,
-        Gift,
-        Medicine,
-        Shower,
-        HaveFun,
-        Clean,
-        ChangeOutfit,
-        Status,
-        Count
-    };
-
-    typedef bool (Game::*CommandCanExecute)() const;
-    typedef void (Game::*CommandExecute)();
-
-    struct CommandSpec
-    {
-        const char *label;
-        CommandCanExecute canExecute;
-        CommandExecute execute;
-    };
-
     Pet &pet;
     PetStorage &petStorage;
     Renderer &renderer;
     AppearanceLoader &appearanceLoader;
+    CommandController commands;
 #if ENABLE_GUESS_ITEM_GAME
     GuessItemGame *guessItem;
 #endif
@@ -94,7 +72,6 @@ private:
     bool hasActiveAnimation = false;
     AnimationId baseAnimationId = AnimationId::Idle;
     long displayDuration = 0;
-    int lastSelected = 0;
     uint8_t saveCounter = 0;
     long environmentCooldown = 0;
     bool dirtySelect = true;
@@ -103,7 +80,6 @@ private:
     unsigned long frameInterval = frameIntervalSlow;
     unsigned long lastFrameTime = 0;
     AnimationId showAnimationId = AnimationId::None;
-    int selectedSlot = 0;
     char defaultSpeciesCode[9] = "dino";
     char defaultOutfitCode[9] = "base";
     bool selectingOutfit = false;
@@ -117,17 +93,8 @@ private:
     unsigned long lastOutfitPreviewFrameTime = 0;
     bool dirtyOutfitPreview = false;
 
-    static const CommandSpec commandRegistry[];
-    static const Command profileCommands[];
-    static const char *commandLabel(Command command);
-    static int commandCount();
-    static const CommandSpec *commandSpec(Command command);
-    static Command commandForSlot(int slot);
     static AnimationId fortuneToAnimationId(int fortuneIndex);
 
-    void NextCommand();
-    void PrevCommand();
-    void ExecuteCommand();
     void ControlAnimation(unsigned long elapsed);
     void RenderGame(unsigned long now);
     void draw_all_layout();
@@ -144,16 +111,6 @@ private:
     bool canPlayGuessItemGame() const;
     bool applyAppearance(const char *speciesCode, const char *outfitCode);
     bool applySpeciesForHealthyDays();
-    bool isCommandEnabled(Command command);
-    bool canAlwaysExecute() const;
-    bool canExecuteNever() const;
-    bool canFeedPet() const;
-    bool canPredict() const;
-    bool canMedicine() const;
-    bool canShower() const;
-    bool canClean() const;
-    bool canChangeOutfit() const;
-    bool canStatus() const;
     void queueStatusAnimation();
     bool queueStatusDirectAnimation();
     bool queueStatusAgeAnimation();
@@ -164,17 +121,22 @@ private:
     void renderOutfitPreview(unsigned long now);
     void confirmOutfitSelection();
     void exitOutfitSelection();
-    void executeNoOp();
-    void executeFeedPet();
-    void executePredict();
-    void executeGift();
-    void executeMedicine();
-    void executeShower();
-    void executeHaveFun();
-    void executeClean();
-    void executeChangeOutfit();
-    void executeStatus();
     bool hasAnimations(const AnimationId *ids, size_t count) const;
+
+    bool commandHasAnimation(AnimationId id) const override;
+    AnimationId commandCurrentAgeAnimation() const override;
+    void commandClearCommandAnimations() override;
+    void commandFeedPet() override;
+    void commandPredict() override;
+    void commandGift() override;
+    void commandMedicine() override;
+    void commandShower() override;
+#if ENABLE_GUESS_ITEM_GAME
+    void commandHaveFun() override;
+#endif
+    void commandClean() override;
+    void commandChangeOutfit() override;
+    void commandStatus() override;
 };
 
 #endif // GAME_H
