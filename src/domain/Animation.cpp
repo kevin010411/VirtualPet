@@ -12,7 +12,7 @@ constexpr const char *kAnimationNames[kAnimationIdCount] = {
     "GuessRL", "GuessRR", "Predict1", "Predict2", "Predict3", "Predict4",
     "Predict5", "Predict6", "Predict7", "Predict8", "Predict9", "Predict10",
     "Predict11", "Status", "StatusAge", "StatusHappy", "StatusHungry", "Battery", "GuessItem4",
-    "GuessStart", "Layout", "LayoutSel"
+    "GuessStart", "Layout", "LayoutSel", "Start"
 };
 } // namespace
 

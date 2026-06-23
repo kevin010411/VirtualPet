@@ -50,6 +50,28 @@ bool Game::saveNow()
     return saved;
 }
 
+bool Game::startStartupAnimation()
+{
+#if ENABLE_STARTUP_ANIMATION
+    if (!hasAnimation(AnimationId::Start))
+        return false;
+
+    clearAnimationsByOwner(AnimationOwner::Command);
+    clearAnimationsByOwner(AnimationOwner::Minigame);
+    clearAnimationsByOwner(AnimationOwner::System);
+
+    const unsigned long startupDuration = max(
+        gameTick,
+        static_cast<unsigned long>(renderer.frameCountFor(AnimationId::Start)) *
+            renderer.frameIntervalFor(AnimationId::Start, frameIntervalSlow));
+    queueAnimation(Animation(AnimationId::Start, startupDuration, true, AnimationOwner::System, AnimationPriority::Critical));
+    markAnimationDirty();
+    return true;
+#else
+    return false;
+#endif
+}
+
 void Game::startBatteryAnimation()
 {
     clearAnimationsByOwner(AnimationOwner::Command);

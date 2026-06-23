@@ -52,6 +52,7 @@ enum class AnimationId : uint8_t
     GuessStart,
     Layout,
     LayoutSel,
+    Start,
     Count
 };
 

@@ -256,6 +256,7 @@ void setup()
   game.setup_game();
   delay(1000);
   digitalWrite(BoardConfig::TftBacklightPin, HIGH);
+  game.startStartupAnimation();
   noteInteraction();
 }
 

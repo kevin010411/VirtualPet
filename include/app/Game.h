@@ -32,6 +32,7 @@ public:
     void requestFullRedraw();
     void setRendererAssetAppearance(const char *speciesCode, const char *outfitCode);
     bool saveNow();
+    bool startStartupAnimation();
     void startBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
 
