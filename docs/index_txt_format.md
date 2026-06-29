@@ -25,7 +25,7 @@
 ```
 
 `{species}.txt` 放可選 outfit 清單，例如 `book|cemet|clap|movie`。  
-`{species}_outfit.txt` 放每個 outfit 在換裝畫面中的預覽動畫。
+`{species}_outfit.txt` 放每個 outfit 在換裝畫面中的預覽動畫。若有確認選擇後的動畫，使用 `outfit` 後面加 `c` 的 key。
 
 不支援舊 `/index.txt`。
 
@@ -125,10 +125,18 @@ book|cemet|clap|movie
 `/index/pet_outfit.txt`：
 
 ```txt
-book|6|128|96|6|/pet/outfit/book
-cemet|6|128|96|6|/pet/outfit/cemet
-clap|6|128|96|6|/pet/outfit/clap
-movie|6|128|96|6|/pet/outfit/movie
+book|6|167|128|96|/pet/outfit/book/base
+bookc|10|167|128|96|/pet/outfit/book/choose
+cemet|6|167|128|96|/pet/outfit/cemet/base
+cemetc|10|167|128|96|/pet/outfit/cemet/choose
+clap|6|167|128|96|/pet/outfit/clap/base
+clapc|10|167|128|96|/pet/outfit/clap/choose
+movie|6|167|128|96|/pet/outfit/movie/base
+moviec|10|167|128|96|/pet/outfit/movie/choose
 ```
+
+每一列都是 `outfit|frames|frame_ms|width|height|path`。
+`book` 代表選單預覽動畫，`bookc` 代表選到 `book` 後播放的確認動畫。
+如果韌體有定義 `ENABLE_OUTFIT_CHOOSE_ANIMATION=1`，確認選取後會查找 `{outfit}c` 並播放對應動畫。
 
 `Status` animation 會被 status command 優先使用；如果目前外觀 manifest 沒有 `Status`，韌體會退回既有 profile 的 status 顯示策略。

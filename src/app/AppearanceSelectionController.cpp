@@ -1,6 +1,7 @@
 #include "app/AppearanceSelectionController.h"
 
 #include <string.h>
+#include "app/AppProfile.h"
 #include "render/Renderer.h"
 
 AppearanceSelectionController::AppearanceSelectionController(Renderer &rendererRef, AppearanceLoader &appearanceLoaderRef)
@@ -101,6 +102,7 @@ bool AppearanceSelectionController::onConfirm(char *selectedOutfit, size_t selec
 
     strncpy(selectedOutfit, outfitOptions[selectedOutfitIndex], selectedOutfitSize - 1);
     selectedOutfit[selectedOutfitSize - 1] = '\0';
+    playSelectedChooseAnimation();
     exit();
     return true;
 }
@@ -120,6 +122,7 @@ bool AppearanceSelectionController::onConfirmSpecies(char *selectedSpecies, size
     selectedSpecies[selectedSpeciesSize - 1] = '\0';
     strncpy(selectedOutfit, speciesDefaultOutfits[selectedSpeciesIndex], selectedOutfitSize - 1);
     selectedOutfit[selectedOutfitSize - 1] = '\0';
+    playSelectedChooseAnimation();
     exit();
     return true;
 }
@@ -205,6 +208,38 @@ bool AppearanceSelectionController::loadSelectedSpeciesPreview()
     }
     dirtyOutfitPreview = true;
     return hasSelectedOutfitPreview;
+}
+
+void AppearanceSelectionController::playSelectedChooseAnimation()
+{
+#if ENABLE_OUTFIT_CHOOSE_ANIMATION
+    if (!hasSelectedOutfitPreview)
+        return;
+
+    const size_t outfitLen = strlen(selectedOutfitPreview.outfitCode);
+    if (outfitLen == 0 || outfitLen + 1 >= sizeof(selectedOutfitPreview.outfitCode))
+        return;
+
+    char chooseOutfitCode[9] = {};
+    strncpy(chooseOutfitCode, selectedOutfitPreview.outfitCode, sizeof(chooseOutfitCode) - 2);
+    chooseOutfitCode[sizeof(chooseOutfitCode) - 2] = '\0';
+    strcat(chooseOutfitCode, "c");
+
+    const char *previewSpeciesCode = selectingSpecies ? speciesOptions[selectedSpeciesIndex] : speciesCode;
+    OutfitPreview choosePreview = {};
+    if (!appearanceLoader.findOutfitPreview(previewSpeciesCode, chooseOutfitCode, choosePreview))
+        return;
+
+    const unsigned long interval = choosePreview.frameIntervalMs == 0
+                                       ? frameIntervalSlow
+                                       : max(1UL, static_cast<unsigned long>(choosePreview.frameIntervalMs));
+    for (uint16_t frame = 1; frame <= choosePreview.frameCount; ++frame)
+    {
+        renderer.ShowSDCardFrame(choosePreview.path, frame, 0, 32);
+        if (frame < choosePreview.frameCount)
+            delay(interval);
+    }
+#endif
 }
 
 void AppearanceSelectionController::changeSelection(int delta)

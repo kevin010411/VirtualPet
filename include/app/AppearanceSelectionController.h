@@ -48,6 +48,7 @@ private:
 
     bool loadSelectedOutfitPreview();
     bool loadSelectedSpeciesPreview();
+    void playSelectedChooseAnimation();
     void changeSelection(int delta);
 };
 
