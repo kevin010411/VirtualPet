@@ -237,6 +237,52 @@ bool SdAppearanceLoader::findForHealthyDays(uint32_t healthyDays, AppearanceSele
     return false;
 }
 
+bool SdAppearanceLoader::loadSpecies(char species[][9], size_t maxSpecies, size_t &speciesCount)
+{
+    speciesCount = 0;
+    if (sd == nullptr || species == nullptr || maxSpecies == 0 || !sd->exists(kSpeciesByHealthyDaysPath))
+        return false;
+
+    File file = sd->open(kSpeciesByHealthyDaysPath, FILE_READ);
+    if (!file)
+        return false;
+
+    char line[80] = {};
+    while (readConfigLine(file, line, sizeof(line)) && speciesCount < maxSpecies)
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+
+        uint32_t minDays = 0;
+        uint32_t maxDays = 0;
+        char *speciesCode = nullptr;
+        char *outfitCode = nullptr;
+        if (!splitSpeciesRule(content, minDays, maxDays, speciesCode, outfitCode))
+            continue;
+
+        bool duplicate = false;
+        for (size_t i = 0; i < speciesCount; ++i)
+        {
+            if (strcmp(species[i], speciesCode) == 0)
+            {
+                duplicate = true;
+                break;
+            }
+        }
+
+        if (duplicate)
+            continue;
+
+        strncpy(species[speciesCount], speciesCode, 8);
+        species[speciesCount][8] = '\0';
+        ++speciesCount;
+    }
+
+    file.close();
+    return speciesCount > 0;
+}
+
 bool SdAppearanceLoader::loadOutfits(const char *speciesCode, char outfits[][9], size_t maxOutfits, size_t &outfitCount)
 {
     outfitCount = 0;

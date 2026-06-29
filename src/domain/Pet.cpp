@@ -204,6 +204,7 @@ void Pet::setDefaultState()
     strcpy(st.species, "dino");
     strcpy(st.outfit, "base");
     st.healthy_days = 0;
+    st.flowFlags = 0;
     st.crc32 = 0;
 }
 
@@ -240,6 +241,21 @@ bool Pet::setSpeciesCode(const char *code)
 bool Pet::setOutfitCode(const char *code)
 {
     return copyAppearanceCode(st.outfit, sizeof(st.outfit), code);
+}
+
+bool Pet::isFirstLaunchComplete() const
+{
+    return (st.flowFlags & 0x1UL) != 0;
+}
+
+void Pet::markFirstLaunchComplete()
+{
+    st.flowFlags |= 0x1UL;
+}
+
+void Pet::resetFirstLaunch()
+{
+    st.flowFlags &= ~0x1UL;
 }
 
 bool Pet::restoreState(const PersistedPetState &state)

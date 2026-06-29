@@ -4,11 +4,11 @@
 
 namespace
 {
-#define COMMAND_SLOT(label, canFn, execFn, clearFirst) \
-    { label, &CommandController::canFn, &CommandController::execFn, true, clearFirst }
+#define COMMAND_SLOT(commandId, label, canFn, execFn, clearFirst) \
+    { commandId, label, &CommandController::canFn, &CommandController::execFn, true, clearFirst }
 
 #if ENABLE_GUESS_ITEM_GAME
-#define COMMAND_SLOT_HAVE_FUN COMMAND_SLOT("HAVE_FUN", canAlwaysExecute, executeHaveFun, false)
+#define COMMAND_SLOT_HAVE_FUN COMMAND_SLOT(AppCommandId::HaveFun, "HAVE_FUN", canAlwaysExecute, executeHaveFun, false)
 #else
 #define COMMAND_SLOT_HAVE_FUN CommandController::emptySlot()
 #endif
@@ -16,37 +16,38 @@ namespace
 
 constexpr CommandController::CommandSlot CommandController::emptySlot()
 {
-    return {"NO_OP", nullptr, nullptr, false, false};
+    return {AppCommandId::None, "NO_OP", nullptr, nullptr, false, false};
 }
 
 const CommandController::CommandSlot CommandController::slots[] = {
 #if APP_PROFILE == APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY
-    COMMAND_SLOT("FEED_PET", canFeedPet, executeFeedPet, true),
-    COMMAND_SLOT("CHANGE_OUTFIT", canAlwaysExecute, executeChangeOutfit, true),
+    COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
     CommandController::emptySlot(),
-    COMMAND_SLOT("MEDICINE", canMedicine, executeMedicine, true),
-    COMMAND_SLOT("SHOWER", canShower, executeShower, true),
-    COMMAND_SLOT("GIFT", canAlwaysExecute, executeGift, true),
-    COMMAND_SLOT("CLEAN", canClean, executeClean, true),
-    COMMAND_SLOT("STATUS", canStatus, executeStatus, true),
+    CommandController::emptySlot(),
+    // COMMAND_SLOT(AppCommandId::ChangeSpecies, "CHANGE_SPECIES", canAlwaysExecute, executeChangeSpecies, true),
+    COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
+    COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
+    COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),
+    COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true),
+    COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true),
 #elif APP_PROFILE == APP_PROFILE_DEFAULT_SMALL
-    COMMAND_SLOT("FEED_PET", canFeedPet, executeFeedPet, true),
+    COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
+    COMMAND_SLOT(AppCommandId::ChangeSpecies, "CHANGE_SPECIES", canAlwaysExecute, executeChangeSpecies, true),
     CommandController::emptySlot(),
-    CommandController::emptySlot(),
-    COMMAND_SLOT("MEDICINE", canMedicine, executeMedicine, true),
-    COMMAND_SLOT("SHOWER", canShower, executeShower, true),
+    COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
+    COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
     COMMAND_SLOT_HAVE_FUN,
-    COMMAND_SLOT("CLEAN", canClean, executeClean, true),
-    COMMAND_SLOT("STATUS", canStatus, executeStatus, true),
+    COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true),
+    COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true),
 #else
-    COMMAND_SLOT("FEED_PET", canFeedPet, executeFeedPet, true),
-    COMMAND_SLOT("PREDICT", canPredict, executePredict, true),
-    COMMAND_SLOT("GIFT", canAlwaysExecute, executeGift, true),
-    COMMAND_SLOT("MEDICINE", canMedicine, executeMedicine, true),
-    COMMAND_SLOT("SHOWER", canShower, executeShower, true),
+    COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
+    COMMAND_SLOT(AppCommandId::Predict, "PREDICT", canPredict, executePredict, true),
+    COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),
+    COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
+    COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
     COMMAND_SLOT_HAVE_FUN,
-    COMMAND_SLOT("CLEAN", canClean, executeClean, true),
-    COMMAND_SLOT("STATUS", canStatus, executeStatus, true),
+    COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true),
+    COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true),
 #endif
 };
 
@@ -85,24 +86,46 @@ void CommandController::prev()
     }
 }
 
-void CommandController::executeCurrent()
+bool CommandController::executeCurrent()
 {
     const CommandSlot &slot = slotAt(selected);
     if (!slot.visible || slot.execute == nullptr)
-        return;
+        return false;
 
     if (slot.canExecute != nullptr && !(this->*slot.canExecute)())
-        return;
+        return false;
 
     if (slot.clearCommandAnimations)
         host.commandClearCommandAnimations();
 
     (this->*slot.execute)();
+    return true;
 }
 
 const char *CommandController::currentLabel() const
 {
     return slotAt(selected).label;
+}
+
+AppCommandId CommandController::currentCommandId() const
+{
+    return slotAt(selected).id;
+}
+
+bool CommandController::selectCommand(AppCommandId commandId)
+{
+    for (int i = 0; i < commandCount(); ++i)
+    {
+        const CommandSlot &slot = slotAt(i);
+        if (slot.visible && slot.id == commandId)
+        {
+            previous = selected;
+            selected = i;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int CommandController::commandCount() const
@@ -242,6 +265,11 @@ void CommandController::executeClean()
 void CommandController::executeChangeOutfit()
 {
     host.commandChangeOutfit();
+}
+
+void CommandController::executeChangeSpecies()
+{
+    host.commandChangeSpecies();
 }
 
 void CommandController::executeStatus()

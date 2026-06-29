@@ -53,7 +53,7 @@ bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
     if (readCount != stateSize)
         return false;
 
-    if (state.magic != 0x50455431UL || state.version != 4)
+    if (state.magic != 0x50455431UL || state.version != 5)
         return false;
 
     return calculateStateCrc(state) == state.crc32;

@@ -6,6 +6,21 @@
 #include "app/AppProfile.h"
 #include "domain/Animation.h"
 
+enum class AppCommandId : uint8_t
+{
+    None = APP_COMMAND_NONE,
+    FeedPet = APP_COMMAND_FEED_PET,
+    Predict = APP_COMMAND_PREDICT,
+    Gift = APP_COMMAND_GIFT,
+    Medicine = APP_COMMAND_MEDICINE,
+    Shower = APP_COMMAND_SHOWER,
+    HaveFun = APP_COMMAND_HAVE_FUN,
+    Clean = APP_COMMAND_CLEAN,
+    ChangeOutfit = APP_COMMAND_CHANGE_OUTFIT,
+    Status = APP_COMMAND_STATUS,
+    ChangeSpecies = APP_COMMAND_CHANGE_SPECIES,
+};
+
 class CommandHost
 {
 public:
@@ -25,6 +40,7 @@ public:
 #endif
     virtual void commandClean() = 0;
     virtual void commandChangeOutfit() = 0;
+    virtual void commandChangeSpecies() = 0;
     virtual void commandStatus() = 0;
 };
 
@@ -36,9 +52,11 @@ public:
     void resetSelection();
     void next();
     void prev();
-    void executeCurrent();
+    bool executeCurrent();
 
     const char *currentLabel() const;
+    AppCommandId currentCommandId() const;
+    bool selectCommand(AppCommandId commandId);
     int commandCount() const;
     int selectedSlot() const;
     int previousSlot() const;
@@ -50,6 +68,7 @@ private:
 
     struct CommandSlot
     {
+        AppCommandId id;
         const char *label;
         CanExecute canExecute;
         Execute execute;
@@ -84,6 +103,7 @@ private:
 #endif
     void executeClean();
     void executeChangeOutfit();
+    void executeChangeSpecies();
     void executeStatus();
 };
 

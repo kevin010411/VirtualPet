@@ -38,6 +38,7 @@ struct PersistedPetState
     char species[9];
     char outfit[9];
     uint32_t healthy_days;
+    uint32_t flowFlags;
     uint32_t crc32;
 };
 
@@ -81,6 +82,9 @@ public:
     uint32_t healthyDays() const;
     bool setSpeciesCode(const char *code);
     bool setOutfitCode(const char *code);
+    bool isFirstLaunchComplete() const;
+    void markFirstLaunchComplete();
+    void resetFirstLaunch();
 
     const PersistedPetState &persistentState() const;
     bool restoreState(const PersistedPetState &state);
@@ -92,7 +96,7 @@ private:
     PersistedPetState st = {};
 
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 4;
+    static constexpr uint16_t kPetStateVersion = 5;
 };
 
 #endif
