@@ -28,3 +28,12 @@ AnimationId animationIdFromName(const char *name)
     }
     return AnimationId::None;
 }
+
+const char *animationNameFromId(AnimationId id)
+{
+    const size_t index = static_cast<size_t>(id);
+    if (index >= kAnimationIdCount)
+        return "None";
+
+    return kAnimationNames[index];
+}

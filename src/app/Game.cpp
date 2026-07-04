@@ -4,6 +4,7 @@
 #include "app/AnimationController.h"
 #include "app/CommandController.h"
 #include "app/CommandExecutor.h"
+#include "app/LayoutRenderer.h"
 #include "app/MinigameController.h"
 #include "app/AppearanceSelectionController.h"
 #include "app/PetActionController.h"
@@ -20,6 +21,7 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       animations(new AnimationController(renderer)),
       commandExecutor(new CommandExecutor(*petActions, *animations)),
       commands(new CommandController(*commandExecutor)),
+      layout(new LayoutRenderer(renderer, *commands)),
       appearanceSelection(new AppearanceSelectionController(renderer, appearanceLoader))
 #if ENABLE_GUESS_ITEM_GAME
       ,
@@ -34,6 +36,7 @@ Game::~Game()
     delete minigame;
 #endif
     delete appearanceSelection;
+    delete layout;
     delete commands;
     delete commandExecutor;
     delete animations;
@@ -44,7 +47,8 @@ void Game::setup_game()
 {
     commands->resetSelection();
     animations->setup(currentBaseAnimation());
-    draw_all_layout();
+    layout->begin();
+    layout->drawAll();
 
     dirtySelect = true;
     environmentCooldown = 0;
@@ -99,16 +103,19 @@ void Game::loop_game()
         appearanceSelection->render(now);
         if (dirtySelect)
         {
-            draw_select_layout();
+            layout->drawSelection();
             dirtySelect = false;
         }
         return;
     }
 
     animations->render(now);
+    if (layout->isActionActive() && !animations->hasAnimationForOwner(AnimationOwner::Command))
+        layout->endAction();
+
     if (dirtySelect)
     {
-        draw_select_layout();
+        layout->drawSelection();
         dirtySelect = false;
     }
 }
@@ -271,9 +278,10 @@ void Game::OnConfirmKey()
         return;
 
     const AppCommandId commandId = commands->currentCommandId();
+    const int selectedSlot = commands->selectedSlot();
     commandExecutor->begin(commandId);
     const bool executed = commands->executeCurrent();
-    handleCommandResult(commandExecutor->complete(executed));
+    handleCommandResult(commandExecutor->complete(executed), selectedSlot);
 }
 
 void Game::resetPet()
@@ -316,39 +324,12 @@ AnimationId Game::currentBaseAnimation() const
     return candidateAnimation;
 }
 
-void Game::draw_all_layout()
-{
-    for (int i = 0; i < commands->commandCount(); ++i)
-    {
-        int y_start = 0;
-        if (i >= 4)
-            y_start = 160 - 32;
-
-        renderer.ShowSDCardFrame("/layout", static_cast<uint16_t>(i + 1), (i % 4) * 32, y_start);
-    }
-}
-
-void Game::draw_select_layout()
-{
-    const int prevIdx = commands->previousSlot();
-    if (commands->isSlotVisible(prevIdx))
-    {
-        const int y_prev = (prevIdx >= 4) ? (160 - 32) : 0;
-        renderer.ShowSDCardFrame("/layout", static_cast<uint16_t>(prevIdx + 1), (prevIdx % 4) * 32, y_prev);
-    }
-
-    const int curIdx = commands->selectedSlot();
-    if (!commands->isSlotVisible(curIdx))
-        return;
-
-    const int y_cur = (curIdx >= 4) ? (160 - 32) : 0;
-    renderer.ShowSDCardFrame("/layout_sel", static_cast<uint16_t>(curIdx + 1), (curIdx % 4) * 32, y_cur);
-}
-
-void Game::handleCommandResult(const CommandResult &result)
+void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
 {
     if (!result.executed)
         return;
+
+    layout->enterAction(result.layoutId, selectedSlot);
 
     if (result.requestedOutfit)
     {

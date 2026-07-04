@@ -10,6 +10,7 @@ class AnimationController;
 class CommandController;
 class CommandExecutor;
 struct CommandResult;
+class LayoutRenderer;
 class MinigameController;
 class AppearanceSelectionController;
 class Pet;
@@ -49,6 +50,7 @@ private:
     AnimationController *animations;
     CommandExecutor *commandExecutor;
     CommandController *commands;
+    LayoutRenderer *layout;
     AppearanceSelectionController *appearanceSelection;
 #if ENABLE_GUESS_ITEM_GAME
     MinigameController *minigame;
@@ -62,9 +64,7 @@ private:
 
     void refreshBaseAnimation();
     AnimationId currentBaseAnimation() const;
-    void draw_all_layout();
-    void draw_select_layout();
-    void handleCommandResult(const CommandResult &result);
+    void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
     void maybeTickPet(unsigned long elapsed);
     bool isFirstLaunchSelectionPending() const;

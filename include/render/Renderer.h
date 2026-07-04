@@ -24,6 +24,7 @@ public:
     bool advanceAnimationFrame();
     uint16_t frameCountFor(AnimationId id) const;
     unsigned long frameIntervalFor(AnimationId id, unsigned long defaultIntervalMs) const;
+    SdFat *sdCard() const;
 
 private:
     struct AnimationState;
@@ -39,7 +40,6 @@ protected:
                                const AnimationMeta *meta) = 0;
 
     Adafruit_ST7735 *display() const;
-    SdFat *sdCard() const;
     std::vector<uint8_t> &rowBuffer();
     std::vector<uint16_t> &lineBuffer();
 

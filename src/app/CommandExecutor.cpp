@@ -84,6 +84,7 @@ void CommandExecutor::commandClearCommandAnimations()
 
 void CommandExecutor::commandFeedPet()
 {
+    currentResult.layoutId = AnimationId::Feed;
     petActions.feedPet(40);
     animations.queueAnimation(Animation(AnimationId::Feed, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
     queuePostCommandHappyAnimation();
@@ -92,6 +93,7 @@ void CommandExecutor::commandFeedPet()
 
 void CommandExecutor::commandPredict()
 {
+    currentResult.layoutId = AnimationId::PredAnim;
     animations.queueAnimation(Animation(AnimationId::PredAnim, gameTick * 20, true, AnimationOwner::Command, AnimationPriority::High));
     animations.queueAnimation(Animation(fortuneToAnimationId(random(1, maxFortune + 1)), gameTick * 2.4, false, AnimationOwner::Command, AnimationPriority::High));
     animations.markDirty();
@@ -99,11 +101,13 @@ void CommandExecutor::commandPredict()
 
 void CommandExecutor::commandGift()
 {
+    currentResult.layoutId = AnimationId::Gift;
     queueGiftAnimation();
 }
 
 void CommandExecutor::commandMedicine()
 {
+    currentResult.layoutId = AnimationId::Heal;
     petActions.takeMedicine();
     animations.queueAnimation(Animation(AnimationId::Heal, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
     queuePostCommandHappyAnimation();
@@ -112,6 +116,7 @@ void CommandExecutor::commandMedicine()
 
 void CommandExecutor::commandShower()
 {
+    currentResult.layoutId = AnimationId::Shower;
     petActions.takeShower(250);
     animations.queueAnimation(Animation(AnimationId::Shower, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
     queuePostCommandHappyAnimation();
@@ -131,6 +136,7 @@ void CommandExecutor::commandHaveFun()
 
 void CommandExecutor::commandClean()
 {
+    currentResult.layoutId = AnimationId::Clean;
     petActions.cleanEnvironment(500);
     animations.queueAnimation(Animation(AnimationId::Clean, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
     queuePostCommandHappyAnimation();
@@ -149,6 +155,7 @@ void CommandExecutor::commandChangeSpecies()
 
 void CommandExecutor::commandStatus()
 {
+    currentResult.layoutId = AnimationId::Status;
     queueStatusAnimation();
 }
 

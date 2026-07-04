@@ -10,6 +10,7 @@ struct CommandResult
 {
     bool executed = false;
     AppCommandId commandId = AppCommandId::None;
+    AnimationId layoutId = AnimationId::None;
     bool requestedOutfit = false;
     bool requestedSpecies = false;
     bool requestedMinigame = false;
