@@ -37,6 +37,12 @@ static const unsigned long kLowBatteryAnimationMs = 5000;
 static unsigned long g_lowBatteryRecoveredSince = 0;
 static const unsigned long kLowBatteryRecoverConfirmMs = 500;
 static const bool kForceLowBatteryTest = false; // 測試 low battery 時改成 true
+static const unsigned long kStartupPowerSettleMs = 300;
+static const unsigned long kStartupPostSetupMs = 0;
+static const unsigned long kTftPowerSettleMs = 150;
+static const unsigned long kTftRetryGapMs = 60;
+static const unsigned long kTftStartupResetLowMs = 120;
+static const unsigned long kTftStartupResetHighMs = 120;
 
 static void initLowBatteryDetector()
 {
@@ -80,7 +86,9 @@ bool g_isSleeping = false;
 
 void playButtonBeep()
 {
-  tone(BoardConfig::buzzerPin, 2400, 35);
+  digitalWrite(BoardConfig::buzzerPin, HIGH);
+  delay(35);
+  digitalWrite(BoardConfig::buzzerPin, LOW);
 }
 
 void noteInteraction(unsigned long now = millis())
@@ -126,25 +134,53 @@ void onConfirmButton()
   noteInteraction();
 }
 
-static void TFT_Reset200ms()
+static void TFT_Reset(unsigned long lowMs, unsigned long highMs)
 {
   pinMode(BoardConfig::TftRstPin, OUTPUT);
   digitalWrite(BoardConfig::TftRstPin, HIGH);
   delay(10);
   digitalWrite(BoardConfig::TftRstPin, LOW);
-  delay(200);
+  delay(lowMs);
   digitalWrite(BoardConfig::TftRstPin, HIGH);
-  delay(200);
+  delay(highMs);
+}
+
+static void TFT_Reset200ms()
+{
+  TFT_Reset(200, 200);
+}
+
+static void initializeTftDisplay(bool retryAfterPowerOn)
+{
+  digitalWrite(BoardConfig::TftBacklightPin, LOW);
+
+  if (retryAfterPowerOn)
+    delay(kTftPowerSettleMs);
+
+  const uint8_t initAttempts = retryAfterPowerOn ? 2 : 1;
+  for (uint8_t attempt = 0; attempt < initAttempts; ++attempt)
+  {
+    if (retryAfterPowerOn)
+      TFT_Reset(kTftStartupResetLowMs, kTftStartupResetHighMs);
+    else
+      TFT_Reset200ms();
+
+    tft.initR(BoardConfig::TftInitTab);
+    tft.setDisplayOffset(BoardConfig::TftColOffset, BoardConfig::TftRowOffset);
+    tft.setRotation(2);
+    tft.fillScreen(ST77XX_BLACK);
+
+    if (attempt + 1 < initAttempts)
+      delay(kTftRetryGapMs);
+  }
+
+  tft.setTextColor(ST77XX_RED);
 }
 
 void onConfirmLongPress()
 {
   noteInteraction();
-  digitalWrite(BoardConfig::TftBacklightPin, LOW);
-  TFT_Reset200ms();
-  tft.initR(BoardConfig::TftInitTab);
-  tft.setDisplayOffset(BoardConfig::TftColOffset, BoardConfig::TftRowOffset);
-  tft.setRotation(2);
+  initializeTftDisplay(false);
   digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   game.setup_game();
 }
@@ -222,7 +258,7 @@ static void updateLowBatteryMode(unsigned long now)
 
 void setup()
 {
-  delay(1000);
+  delay(kStartupPowerSettleMs);
 
   randomSeed(analogRead(0));
 
@@ -231,13 +267,9 @@ void setup()
 
   // 初始化 TFT 螢幕
   pinMode(BoardConfig::TftBacklightPin, OUTPUT);
-  pinMode(BoardConfig::buzzerPin, OUTPUT);
-  TFT_Reset200ms();
-  tft.initR(BoardConfig::TftInitTab);
   digitalWrite(BoardConfig::TftBacklightPin, LOW);
-  tft.setDisplayOffset(BoardConfig::TftColOffset, BoardConfig::TftRowOffset);
-  tft.setRotation(2);
-  tft.setTextColor(ST77XX_RED);
+  pinMode(BoardConfig::buzzerPin, OUTPUT);
+  initializeTftDisplay(true);
 
   // 初始化 low battery 偵測
   initLowBatteryDetector();
@@ -254,7 +286,8 @@ void setup()
   g_sdReady = true;
   game.setRendererAssetAppearance(BoardConfig::DefaultSpeciesCode, BoardConfig::DefaultOutfitCode);
   game.setup_game();
-  delay(1000);
+  if (kStartupPostSetupMs > 0)
+    delay(kStartupPostSetupMs);
   digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   game.startStartupAnimation();
   noteInteraction();

@@ -53,8 +53,11 @@ void ButtonInput::update(bool isSleeping,
     if (anyPressPending)
     {
         anyPressPending = false;
-        if (onAnyPress != nullptr)
+        if (now - lastAnyPressTime >= cooldownMs && onAnyPress != nullptr)
+        {
             onAnyPress();
+            lastAnyPressTime = now;
+        }
     }
 
     if (isPreviousNextComboHeld())

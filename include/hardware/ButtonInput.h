@@ -42,6 +42,7 @@ private:
     unsigned long lastPreviousPressTime = 0;
     unsigned long lastNextPressTime = 0;
     unsigned long lastConfirmPressTime = 0;
+    unsigned long lastAnyPressTime = 0;
     unsigned long longPressStartTime[20] = {};
     bool longPressFired[20] = {};
     unsigned long comboStartTime = 0;
