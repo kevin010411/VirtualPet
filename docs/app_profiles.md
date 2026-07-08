@@ -17,8 +17,11 @@
 ```powershell
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e default
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e new_taipei_childrens_day
+C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e kuromu
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_multi_status
+C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_status_anime
+C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_start
 ```
 
 目前環境：
@@ -27,8 +30,11 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_multi_status
 | --- | --- | --- | --- | --- |
 | `default` | 預設 | `APP_PROFILE_DEFAULT` | `STATUS_MODE_AGE` | 啟用 |
 | `new_taipei_childrens_day` | 新北兒童節 | `APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY` | `STATUS_MODE_STATUS` | 停用 |
+| `kuromu` | Kuromu | `APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY` | `STATUS_MODE_COMPOSITE` | 停用 |
 | `small` | 小容量預設 | `APP_PROFILE_DEFAULT_SMALL` | `STATUS_MODE_AGE` | 啟用 |
 | `small_multi_status` | 小容量多狀態 | `APP_PROFILE_DEFAULT_SMALL` | `STATUS_MODE_RANDOM3` | 啟用 |
+| `small_status_anime` | 小容量 Status 動畫 | `APP_PROFILE_DEFAULT_SMALL` | `STATUS_MODE_STATUS` | 啟用 |
+| `small_start` | 小容量啟動畫面 | `APP_PROFILE_DEFAULT_SMALL` | `STATUS_MODE_AGE` | 啟用 |
 | `stm32` | 繼承 `default` | `APP_PROFILE_DEFAULT` | `STATUS_MODE_AGE` | 啟用 |
 
 `stm32` 保留為舊建置指令的相容名稱。
@@ -104,6 +110,7 @@ Command 被拆成兩個概念：
 | `STATUS_MODE_AGE` | 目前原本行為，使用 `Pet::CurrentAgeAnimation()` 與 `Pet::CurrentAgeFrame()` |
 | `STATUS_MODE_STATUS` | 播放目前外觀 manifest 中的 `Status` 動畫 |
 | `STATUS_MODE_RANDOM3` | 從目前外觀 manifest 中存在的 `StatusAge`、`StatusHappy`、`StatusHungry` 隨機選，再依對應數值顯示固定 frame |
+| `STATUS_MODE_COMPOSITE` | 依 `Pet::isMoodDepressed()` 與目前主要狀態選擇 10 種 `StatusGood*` / `StatusDepressed*` 動畫之一 |
 
 `Status` animation 只由 `STATUS_MODE_STATUS` 使用；其他 STATUS mode 不會先檢查或優先播放 `Status`。`STATUS_MODE_RANDOM3` 由 `Status*` 素材列控制顯示候選，沒有列在 index 或沒有 frame 的項目不會被選到。`StatusAge` 依 age 選 frame，`StatusHappy` 依 mood 選 frame，`StatusHungry` 依 hungry value 選 frame。
 
@@ -120,6 +127,32 @@ build_flags =
 ```
 
 如果 `STATUS_MODE_RANDOM3` 沒有可用候選動畫，程式會 fallback 回年齡狀態。
+
+`STATUS_MODE_COMPOSITE` 不做 fallback。執行 `STATUS` 時會先讀取目前 mood：
+
+- `mood <= depressed_threshold` 時使用 `StatusDepressed*`
+- 其他情況使用 `StatusGood*`
+
+主要狀態仍然只會選一個：`Healthy`、`Sick`、`Hungry`、`Poop`、`Dirty`。舊有 `HealthStatus::Depressed` 在 composite 顯示中視為 `Depressed + Healthy`，因為 mood 已經由 `isMoodDepressed()` 獨立判斷。
+
+Composite mode 需要在目前外觀 manifest 中提供下列動畫 id：
+
+```txt
+StatusGoodHealthy
+StatusGoodSick
+StatusGoodHungry
+StatusGoodPoop
+StatusGoodDirty
+StatusDepressedHealthy
+StatusDepressedSick
+StatusDepressedHungry
+StatusDepressedPoop
+StatusDepressedDirty
+```
+
+若選出的 composite animation 沒有列在 index、frame count 為 `0`，或資源讀取失敗，韌體會直接在 TFT 顯示 `resource error`，不會退回 `StatusAge`、`Status`、`Idle` 或其他動畫。
+
+Composite mode 也會改變 `dayPassed()` 在非健康狀態下的行為：只有 `APP_STATUS_MODE=STATUS_MODE_COMPOSITE` 時，非 `Healthy` 仍會讓 mood 自然下降；其他 STATUS mode 維持原本「非 Healthy 時完全不更新」的行為。非健康時即使 mood 下降，`hunger`、`age`、`clean`、`env` 與 `healthy_days` 都不會增加或變化。
 
 ## Feature Gate 與 Flash 控制
 

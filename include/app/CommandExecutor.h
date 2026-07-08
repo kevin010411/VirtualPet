@@ -39,6 +39,8 @@ private:
     bool queueStatusDirectAnimation();
     bool queueStatusAgeAnimation();
     bool queueStatusRandom3Animation();
+    bool queueCompositeStatusAnimation();
+    AnimationId compositeStatusAnimationId() const;
     bool canPlayGuessItemGame() const;
 
     bool commandHasAnimation(AnimationId id) const override;

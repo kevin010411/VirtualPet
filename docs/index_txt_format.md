@@ -61,7 +61,7 @@ Idle|bmp|3|128|96|6|/dino/base/idle
 
 - `id`
   - 必須與韌體中的 animation id 名稱完全相同
-  - 範例：`Idle`、`Hungry`、`Feed`、`Status`、`GuessWin`、`Battery`
+  - 範例：`Idle`、`Hungry`、`Feed`、`Status`、`StatusGoodHealthy`、`GuessWin`、`Battery`
 - `format`
   - 支援 `bmp` 與 `rle`
 - `frames`
@@ -139,4 +139,11 @@ moviec|10|167|128|96|/pet/outfit/movie/choose
 `book` 代表選單預覽動畫，`bookc` 代表選到 `book` 後播放的確認動畫。
 如果韌體有定義 `ENABLE_OUTFIT_CHOOSE_ANIMATION=1`，確認選取後會查找 `{outfit}c` 並播放對應動畫。
 
-`Status` animation 會被 status command 優先使用；如果目前外觀 manifest 沒有 `Status`，韌體會退回既有 profile 的 status 顯示策略。
+STATUS command 的素材需求由 `APP_STATUS_MODE` 決定：
+
+- `STATUS_MODE_STATUS` 使用 `Status`。
+- `STATUS_MODE_AGE` 使用 `StatusAge`。
+- `STATUS_MODE_RANDOM3` 從 `StatusAge`、`StatusHappy`、`StatusHungry` 中選擇可用項目。
+- `STATUS_MODE_COMPOSITE` 使用 `StatusGoodHealthy`、`StatusGoodSick`、`StatusGoodHungry`、`StatusGoodPoop`、`StatusGoodDirty`、`StatusDepressedHealthy`、`StatusDepressedSick`、`StatusDepressedHungry`、`StatusDepressedPoop`、`StatusDepressedDirty`。
+
+`STATUS_MODE_COMPOSITE` 不會 fallback；選出的 composite animation 缺少 index row 或 frame 時，TFT 會顯示 `resource error`。

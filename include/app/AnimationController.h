@@ -22,6 +22,7 @@ public:
     bool hasAnimationForOwner(AnimationOwner owner) const;
     void markDirty();
     void requestFullRedraw();
+    void showResourceError();
     void updateElapsed(unsigned long elapsed);
     void render(unsigned long now);
     void startBatteryAnimation();

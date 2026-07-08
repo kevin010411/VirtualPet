@@ -52,6 +52,9 @@ void Game::setup_game()
 
     dirtySelect = true;
     environmentCooldown = 0;
+    pendingEvolution = false;
+    pendingEvolutionSpeciesCode[0] = '\0';
+    pendingEvolutionOutfitCode[0] = '\0';
     last_tick_time = millis();
     appearanceSelection->exit();
 #if ENABLE_GUESS_ITEM_GAME
@@ -287,6 +290,9 @@ void Game::OnConfirmKey()
 void Game::resetPet()
 {
     petActions->reset();
+    pendingEvolution = false;
+    pendingEvolutionSpeciesCode[0] = '\0';
+    pendingEvolutionOutfitCode[0] = '\0';
     petActions->applySpeciesForHealthyDays();
     renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
     renderer.reloadManifest();
@@ -416,6 +422,12 @@ bool Game::startFirstLaunchRequiredCommand()
 
 void Game::maybeTickPet(unsigned long elapsed)
 {
+    if (completePendingEvolutionIfReady())
+        return;
+
+    if (pendingEvolution)
+        return;
+
     environmentCooldown -= static_cast<long>(elapsed);
     if (environmentCooldown <= 0)
     {
@@ -433,11 +445,65 @@ void Game::maybeTickPet(unsigned long elapsed)
             petActions->getSick();
 
         if (petActions->dayPassed())
-            petActions->applySpeciesForHealthyDays();
+        {
+            handleHealthyDaysEvolution();
+            if (pendingEvolution)
+                return;
+        }
     }
 
     refreshBaseAnimation();
     petActions->maybeSave();
+}
+
+bool Game::completePendingEvolutionIfReady()
+{
+    if (!pendingEvolution)
+        return false;
+
+    if (animations->hasAnimationForOwner(AnimationOwner::System))
+        return false;
+
+    const bool applied = petActions->applyAppearance(pendingEvolutionSpeciesCode, pendingEvolutionOutfitCode);
+    pendingEvolution = false;
+    pendingEvolutionSpeciesCode[0] = '\0';
+    pendingEvolutionOutfitCode[0] = '\0';
+    if (applied)
+    {
+        refreshBaseAnimation();
+        animations->requestFullRedraw();
+    }
+    return true;
+}
+
+void Game::handleHealthyDaysEvolution()
+{
+    AppearanceSelection selection = {};
+    if (!petActions->findSpeciesForHealthyDays(selection))
+        return;
+
+    if (!beginEvolutionAnimation(selection))
+        petActions->applyAppearance(selection.speciesCode, selection.outfitCode);
+}
+
+bool Game::beginEvolutionAnimation(const AppearanceSelection &selection)
+{
+    if (!animations->hasAnimation(AnimationId::Evolution))
+        return false;
+
+    strncpy(pendingEvolutionSpeciesCode, selection.speciesCode, sizeof(pendingEvolutionSpeciesCode) - 1);
+    pendingEvolutionSpeciesCode[sizeof(pendingEvolutionSpeciesCode) - 1] = '\0';
+    strncpy(pendingEvolutionOutfitCode, selection.outfitCode, sizeof(pendingEvolutionOutfitCode) - 1);
+    pendingEvolutionOutfitCode[sizeof(pendingEvolutionOutfitCode) - 1] = '\0';
+    pendingEvolution = true;
+
+    const unsigned long evolutionDuration = max(
+        gameTick,
+        static_cast<unsigned long>(animations->frameCountFor(AnimationId::Evolution)) *
+            animations->frameIntervalFor(AnimationId::Evolution));
+    animations->queueAnimation(Animation(AnimationId::Evolution, evolutionDuration, true, AnimationOwner::System, AnimationPriority::Critical));
+    animations->markDirty();
+    return true;
 }
 
 bool Game::beginStartupAnimation()

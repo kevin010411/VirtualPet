@@ -223,6 +223,11 @@ bool Renderer::advanceAnimationFrame()
     return !ok;
 }
 
+void Renderer::showResourceError()
+{
+    FrameDecoder::showResourceError(tft);
+}
+
 uint16_t Renderer::frameCountFor(AnimationId id) const
 {
     const AnimationMeta *meta = state->manifest.metaFor(id);

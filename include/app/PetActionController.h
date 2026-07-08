@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include "domain/Animation.h"
+#include "domain/Pet.h"
 #include "storage/AppearanceLoader.h"
 
 class Pet;
@@ -20,6 +21,7 @@ public:
     void maybeSave();
     void decayEnvironment();
     bool dayPassed();
+    bool findSpeciesForHealthyDays(AppearanceSelection &selection) const;
     bool applySpeciesForHealthyDays();
     bool applyAppearance(const char *speciesCode, const char *outfitCode);
 
@@ -37,6 +39,8 @@ public:
     const char *speciesCode() const;
     const char *outfitCode() const;
     uint32_t healthyDays() const;
+    HealthStatus currentStatus() const;
+    bool isMoodDepressed() const;
     AnimationId currentAnimation() const;
     AnimationId currentAgeAnimation() const;
     uint16_t currentAgeFrame(uint16_t maxFrame) const;

@@ -118,6 +118,11 @@ void AnimationController::requestFullRedraw()
     lastFrameTime = 0;
 }
 
+void AnimationController::showResourceError()
+{
+    renderer.showResourceError();
+}
+
 void AnimationController::updateElapsed(unsigned long elapsed)
 {
     if (!hasActiveAnimation)

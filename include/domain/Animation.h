@@ -47,12 +47,23 @@ enum class AnimationId : uint8_t
     StatusAge,
     StatusHappy,
     StatusHungry,
+    StatusGoodHealthy,
+    StatusGoodSick,
+    StatusGoodHungry,
+    StatusGoodPoop,
+    StatusGoodDirty,
+    StatusDepressedHealthy,
+    StatusDepressedSick,
+    StatusDepressedHungry,
+    StatusDepressedPoop,
+    StatusDepressedDirty,
     Battery,
     GuessItem4,
     GuessStart,
     Layout,
     LayoutSel,
     Start,
+    Evolution,
     Count
 };
 

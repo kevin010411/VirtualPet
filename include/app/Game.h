@@ -59,14 +59,20 @@ private:
     unsigned long last_tick_time = 0;
     long environmentCooldown = 0;
     bool dirtySelect = true;
+    bool pendingEvolution = false;
     char defaultSpeciesCode[9] = "dino";
     char defaultOutfitCode[9] = "base";
+    char pendingEvolutionSpeciesCode[9] = {};
+    char pendingEvolutionOutfitCode[9] = {};
 
     void refreshBaseAnimation();
     AnimationId currentBaseAnimation() const;
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
     void maybeTickPet(unsigned long elapsed);
+    bool completePendingEvolutionIfReady();
+    void handleHealthyDaysEvolution();
+    bool beginEvolutionAnimation(const AppearanceSelection &selection);
     bool isFirstLaunchSelectionPending() const;
     bool startFirstLaunchRequiredCommand();
     bool beginStartupAnimation();

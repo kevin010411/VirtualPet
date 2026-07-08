@@ -12,7 +12,8 @@ namespace
 constexpr const char *kLayoutIndexPath = "/layout/index.txt";
 constexpr const char *kLegacyLayoutPath = "/layout";
 constexpr const char *kLegacySelectedLayoutPath = "/layout_sel";
-constexpr const char *kBaseLayoutPath = "/layout/base";
+constexpr const char *kBaseSelectedLayoutPath = "/layout/base_on";
+constexpr const char *kBaseLayoutPath = "/layout/base_off";
 
 void trimLine(char *line)
 {
@@ -63,8 +64,12 @@ void LayoutRenderer::begin()
 
 void LayoutRenderer::drawAll()
 {
+    const int selectedSlot = activeAction != AnimationId::None
+                                 ? commands.selectedSlot()
+                                 : activeActionSlot;
+
     for (int slot = 0; slot < commands.commandCount(); ++slot)
-        drawSlot(slot, activeAction != AnimationId::None && slot == activeActionSlot);
+        drawSlot(slot, activeAction != AnimationId::None && slot == selectedSlot);
 }
 
 void LayoutRenderer::drawSelection()
@@ -176,7 +181,7 @@ void LayoutRenderer::drawSlot(int slot, bool selected)
         return;
     }
 
-    drawSlotFromPath(slot, kBaseLayoutPath);
+    drawSlotFromPath(slot, selected ? kBaseSelectedLayoutPath : kBaseLayoutPath);
 #else
     drawSlotFromPath(slot, selected ? kLegacySelectedLayoutPath : kLegacyLayoutPath);
 #endif

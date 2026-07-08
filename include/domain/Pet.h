@@ -72,6 +72,7 @@ public:
     void setConfig(const PetConfig &newConfig);
 
     HealthStatus getStatus() const;
+    bool isMoodDepressed() const;
     AnimationId CurrentAnimation() const;
     AnimationId CurrentAgeAnimation() const;
     uint16_t CurrentAgeFrame(uint16_t maxFrame) const;

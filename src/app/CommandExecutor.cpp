@@ -161,7 +161,9 @@ void CommandExecutor::commandStatus()
 
 void CommandExecutor::queueStatusAnimation()
 {
-#if APP_STATUS_MODE == STATUS_MODE_STATUS
+#if APP_STATUS_MODE == STATUS_MODE_COMPOSITE
+    queueCompositeStatusAnimation();
+#elif APP_STATUS_MODE == STATUS_MODE_STATUS
     queueStatusDirectAnimation();
 #elif APP_STATUS_MODE == STATUS_MODE_RANDOM3
     if (!queueStatusRandom3Animation())
@@ -229,6 +231,46 @@ bool CommandExecutor::queueStatusRandom3Animation()
     }
 
     return false;
+}
+
+bool CommandExecutor::queueCompositeStatusAnimation()
+{
+    const AnimationId statusAnimation = compositeStatusAnimationId();
+    if (animations.frameCountFor(statusAnimation) == 0)
+    {
+        animations.showResourceError();
+        return false;
+    }
+
+    animations.queueAnimation(Animation(statusAnimation, gameTick * 4, false, AnimationOwner::Command, AnimationPriority::Normal));
+    animations.markDirty();
+    return true;
+}
+
+AnimationId CommandExecutor::compositeStatusAnimationId() const
+{
+    HealthStatus bodyStatus = petActions.currentStatus();
+    if (bodyStatus == HealthStatus::Depressed)
+        bodyStatus = HealthStatus::Healthy;
+
+    const bool depressed = petActions.isMoodDepressed();
+    switch (bodyStatus)
+    {
+    case HealthStatus::Healthy:
+        return depressed ? AnimationId::StatusDepressedHealthy : AnimationId::StatusGoodHealthy;
+    case HealthStatus::Sick:
+        return depressed ? AnimationId::StatusDepressedSick : AnimationId::StatusGoodSick;
+    case HealthStatus::Hungry:
+        return depressed ? AnimationId::StatusDepressedHungry : AnimationId::StatusGoodHungry;
+    case HealthStatus::Poop:
+        return depressed ? AnimationId::StatusDepressedPoop : AnimationId::StatusGoodPoop;
+    case HealthStatus::Dirty:
+        return depressed ? AnimationId::StatusDepressedDirty : AnimationId::StatusGoodDirty;
+    case HealthStatus::Depressed:
+        break;
+    }
+
+    return depressed ? AnimationId::StatusDepressedHealthy : AnimationId::StatusGoodHealthy;
 }
 
 bool CommandExecutor::canPlayGuessItemGame() const

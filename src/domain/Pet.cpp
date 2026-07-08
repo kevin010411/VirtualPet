@@ -1,6 +1,7 @@
 #include "domain/Pet.h"
 
 #include <string.h>
+#include "app/AppProfile.h"
 
 namespace
 {
@@ -72,7 +73,13 @@ void Pet::refreshStatus()
 bool Pet::dayPassed()
 {
     if (getStatus() != HealthStatus::Healthy)
+    {
+#if APP_STATUS_MODE == STATUS_MODE_COMPOSITE
+        st.mood = clampValue<int>(st.mood - 2, 0, cfg.max_mood);
+        refreshStatus();
+#endif
         return false;
+    }
 
     st.hungry_value = clampValue<int>(st.hungry_value + 3, 0, cfg.max_hunger);
     st.mood = clampValue<int>(st.mood - 2, 0, cfg.max_mood);
@@ -211,6 +218,11 @@ void Pet::setDefaultState()
 HealthStatus Pet::getStatus() const
 {
     return static_cast<HealthStatus>(st.status);
+}
+
+bool Pet::isMoodDepressed() const
+{
+    return st.mood <= cfg.depressed_threshold;
 }
 
 const PersistedPetState &Pet::persistentState() const

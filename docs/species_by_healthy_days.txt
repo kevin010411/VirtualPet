@@ -25,6 +25,8 @@
 #     /state_b.bin.
 #   - healthy_days increases only when dayPassed() runs while the pet status is
 #     Healthy. Hungry, Depressed, Dirty, Poop, or Sick days do not increase it.
+#     In STATUS_MODE_COMPOSITE, non-Healthy days may still reduce mood, but they
+#     still do not increase healthy_days.
 #   - Firmware checks this file after loading a pet, after resetting a pet, and
 #     after healthy_days increases.
 #   - The first matching row is applied only when its species differs from the

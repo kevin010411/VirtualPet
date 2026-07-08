@@ -11,8 +11,10 @@ constexpr const char *kAnimationNames[kAnimationIdCount] = {
     "GuessWrong", "GuessItem1", "GuessItem2", "GuessItem3", "GuessLL", "GuessLR",
     "GuessRL", "GuessRR", "Predict1", "Predict2", "Predict3", "Predict4",
     "Predict5", "Predict6", "Predict7", "Predict8", "Predict9", "Predict10",
-    "Predict11", "Status", "StatusAge", "StatusHappy", "StatusHungry", "Battery", "GuessItem4",
-    "GuessStart", "Layout", "LayoutSel", "Start"
+    "Predict11", "Status", "StatusAge", "StatusHappy", "StatusHungry",
+    "StatusGoodHealthy", "StatusGoodSick", "StatusGoodHungry", "StatusGoodPoop", "StatusGoodDirty",
+    "StatusDepressedHealthy", "StatusDepressedSick", "StatusDepressedHungry", "StatusDepressedPoop", "StatusDepressedDirty",
+    "Battery", "GuessItem4", "GuessStart", "Layout", "LayoutSel", "Start", "Evolution"
 };
 } // namespace
 

@@ -59,13 +59,18 @@ bool PetActionController::dayPassed()
     return pet.dayPassed();
 }
 
-bool PetActionController::applySpeciesForHealthyDays()
+bool PetActionController::findSpeciesForHealthyDays(AppearanceSelection &selection) const
 {
-    AppearanceSelection selection = {};
     if (!appearanceLoader.findForHealthyDays(pet.healthyDays(), selection))
         return false;
 
-    if (strcmp(pet.speciesCode(), selection.speciesCode) == 0)
+    return strcmp(pet.speciesCode(), selection.speciesCode) != 0;
+}
+
+bool PetActionController::applySpeciesForHealthyDays()
+{
+    AppearanceSelection selection = {};
+    if (!findSpeciesForHealthyDays(selection))
         return false;
 
     return applyAppearance(selection.speciesCode, selection.outfitCode);
@@ -139,6 +144,16 @@ const char *PetActionController::outfitCode() const
 uint32_t PetActionController::healthyDays() const
 {
     return pet.healthyDays();
+}
+
+HealthStatus PetActionController::currentStatus() const
+{
+    return pet.getStatus();
+}
+
+bool PetActionController::isMoodDepressed() const
+{
+    return pet.isMoodDepressed();
 }
 
 AnimationId PetActionController::currentAnimation() const
