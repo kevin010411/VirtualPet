@@ -126,7 +126,7 @@ bool showBmpImage(SdFat *sd,
 #if ENABLE_SD_RLE_ASSETS
 namespace
 {
-constexpr size_t kRleReadBufferBytes = 512;
+constexpr size_t kRleReadBufferBytes = 1024;
 
 class RleBufferedReader
 {
@@ -262,11 +262,9 @@ bool showRleImage(SdFat *sd,
 
                 const size_t remainingLine = static_cast<size_t>(width) - lineCount;
                 const size_t copyCount = (runLength < remainingLine) ? runLength : remainingLine;
+                uint16_t *dest = destLine + (static_cast<size_t>(width) - 1) - lineCount;
                 for (size_t i = 0; i < copyCount; ++i)
-                {
-                    const size_t destX = (static_cast<size_t>(width) - 1) - (lineCount + i);
-                    destLine[destX] = runColor;
-                }
+                    *dest-- = runColor;
 
                 lineCount += copyCount;
                 pixelsWritten += copyCount;

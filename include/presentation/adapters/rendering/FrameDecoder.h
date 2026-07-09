@@ -12,7 +12,7 @@ namespace FrameDecoder
 {
 constexpr uint16_t kDefaultAnimWidth = 128;
 constexpr uint16_t kDefaultAnimHeight = 96;
-constexpr uint16_t kWorkingBatchLines = 4;
+constexpr uint16_t kWorkingBatchLines = 12;
 
 void showResourceError(Adafruit_ST7735 *tft);
 bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, const char *ext);

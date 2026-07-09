@@ -19,7 +19,7 @@ constexpr int ConfirmCommandButtonPin = PA11;
 
 constexpr int buzzerPin = PA4;
 
-constexpr uint32_t SdSpiMhz = 16;
+constexpr uint32_t SdSpiMhz = 24;
 constexpr uint8_t TftInitTab = INITR_BLACKTAB;
 constexpr int8_t TftColOffset = 2;
 constexpr int8_t TftRowOffset = 1;
