@@ -16,6 +16,7 @@ public:
     void drawAll();
     void drawSelection();
     bool enterAction(AnimationId id, int activeSlot);
+    bool updateAction(AnimationId id);
     bool endAction();
     bool isActionActive() const;
 
@@ -27,6 +28,7 @@ private:
     Renderer &renderer;
     CommandController &commands;
     bool actionLayouts[kAnimationIdCount] = {};
+    bool actionMode = false;
     AnimationId activeAction = AnimationId::None;
     int activeActionSlot = -1;
 

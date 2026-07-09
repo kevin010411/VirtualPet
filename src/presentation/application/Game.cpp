@@ -113,6 +113,7 @@ void Game::loop_game()
     }
 
     animations->render(now);
+    syncActionLayoutWithAnimationQueue();
     if (layout->isActionActive() && !animations->hasAnimationForOwner(AnimationOwner::Command))
         layout->endAction();
 
@@ -330,12 +331,17 @@ AnimationId Game::currentBaseAnimation() const
     return candidateAnimation;
 }
 
+void Game::syncActionLayoutWithAnimationQueue()
+{
+    layout->updateAction(animations->currentCommandAnimationId());
+}
+
 void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
 {
     if (!result.executed)
         return;
 
-    layout->enterAction(result.layoutId, selectedSlot);
+    layout->enterAction(animations->currentCommandAnimationId(), selectedSlot);
 
     if (result.requestedOutfit)
     {

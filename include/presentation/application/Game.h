@@ -67,6 +67,7 @@ private:
 
     void refreshBaseAnimation();
     AnimationId currentBaseAnimation() const;
+    void syncActionLayoutWithAnimationQueue();
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
     void maybeTickPet(unsigned long elapsed);

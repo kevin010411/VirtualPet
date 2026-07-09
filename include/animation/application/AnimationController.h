@@ -20,6 +20,7 @@ public:
     void queueAnimation(const Animation &animation);
     void clearByOwner(AnimationOwner owner);
     bool hasAnimationForOwner(AnimationOwner owner) const;
+    AnimationId currentCommandAnimationId() const;
     void markDirty();
     void requestFullRedraw();
     void showResourceError();

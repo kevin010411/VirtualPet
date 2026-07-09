@@ -51,6 +51,7 @@ LayoutRenderer::LayoutRenderer(Renderer &rendererRef, CommandController &command
 
 void LayoutRenderer::begin()
 {
+    actionMode = false;
     activeAction = AnimationId::None;
     activeActionSlot = -1;
 
@@ -64,18 +65,16 @@ void LayoutRenderer::begin()
 
 void LayoutRenderer::drawAll()
 {
-    const int selectedSlot = activeAction != AnimationId::None
-                                 ? commands.selectedSlot()
-                                 : activeActionSlot;
+    const int selectedSlot = commands.selectedSlot();
 
     for (int slot = 0; slot < commands.commandCount(); ++slot)
-        drawSlot(slot, activeAction != AnimationId::None && slot == selectedSlot);
+        drawSlot(slot, slot == selectedSlot);
 }
 
 void LayoutRenderer::drawSelection()
 {
 #if ENABLE_DYNAMIC_ACTION_LAYOUT
-    if (activeAction != AnimationId::None)
+    if (actionMode)
     {
         drawAll();
         return;
@@ -94,10 +93,8 @@ void LayoutRenderer::drawSelection()
 bool LayoutRenderer::enterAction(AnimationId id, int activeSlot)
 {
 #if ENABLE_DYNAMIC_ACTION_LAYOUT
-    if (!hasActionLayout(id))
-        return false;
-
-    activeAction = id;
+    actionMode = true;
+    activeAction = hasActionLayout(id) ? id : AnimationId::None;
     activeActionSlot = activeSlot;
     drawAll();
     return true;
@@ -108,11 +105,31 @@ bool LayoutRenderer::enterAction(AnimationId id, int activeSlot)
 #endif
 }
 
-bool LayoutRenderer::endAction()
+bool LayoutRenderer::updateAction(AnimationId id)
 {
-    if (activeAction == AnimationId::None)
+#if ENABLE_DYNAMIC_ACTION_LAYOUT
+    if (!actionMode)
         return false;
 
+    const AnimationId nextAction = hasActionLayout(id) ? id : AnimationId::None;
+    if (activeAction == nextAction)
+        return false;
+
+    activeAction = nextAction;
+    drawAll();
+    return true;
+#else
+    (void)id;
+    return false;
+#endif
+}
+
+bool LayoutRenderer::endAction()
+{
+    if (!actionMode)
+        return false;
+
+    actionMode = false;
     activeAction = AnimationId::None;
     activeActionSlot = -1;
     drawAll();
@@ -121,7 +138,7 @@ bool LayoutRenderer::endAction()
 
 bool LayoutRenderer::isActionActive() const
 {
-    return activeAction != AnimationId::None;
+    return actionMode;
 }
 
 void LayoutRenderer::loadActionLayouts()

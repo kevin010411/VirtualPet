@@ -105,6 +105,20 @@ bool AnimationController::hasAnimationForOwner(AnimationOwner owner) const
     return false;
 }
 
+AnimationId AnimationController::currentCommandAnimationId() const
+{
+    if (hasActiveAnimation && activeAnimation.owner == AnimationOwner::Command)
+        return activeAnimation.id;
+
+    for (const Animation &animation : animationQueue)
+    {
+        if (animation.owner == AnimationOwner::Command)
+            return animation.id;
+    }
+
+    return AnimationId::None;
+}
+
 void AnimationController::markDirty()
 {
     dirtyAnimation = true;

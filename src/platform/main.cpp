@@ -52,9 +52,9 @@ static void initLowBatteryDetector()
   // 清掉 PLS[7:5]
   PWR->CR &= ~(7U << 5);
 
-  // 設最高門檻（較早警告）
-  // 若之後覺得太早，可改成 6U 或 5U
-  PWR->CR |= (8U << 5);
+  // STM32F1 PVD PLS[7:5] 只有 3 bits，最高有效門檻是 7U（約 2.9V）。
+  // 若之後覺得太早，可改成 6U 或 5U。
+  PWR->CR |= (7U << 5);
 
   // 啟用 PVD
   PWR->CR |= PWR_CR_PVDE;
