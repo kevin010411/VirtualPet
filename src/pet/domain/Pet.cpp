@@ -87,6 +87,7 @@ bool Pet::dayPassed()
     st.clean_value = clampValue<int>(st.clean_value - 3, 0, cfg.max_clean);
     st.env_value = clampValue<int>(st.env_value - 3, 0, cfg.max_env_clean);
     st.healthy_days += 1;
+    st.stage_healthy_days += 1;
     refreshStatus();
     return true;
 }
@@ -211,6 +212,9 @@ void Pet::setDefaultState()
     strcpy(st.species, "dino");
     strcpy(st.outfit, "base");
     st.healthy_days = 0;
+    st.stage_healthy_days = 0;
+    for (size_t i = 0; i < PetStatSnapshot::kCustomStatCount; ++i)
+        st.customStats[i] = 0;
     st.flowFlags = 0;
     st.crc32 = 0;
 }
@@ -245,9 +249,70 @@ uint32_t Pet::healthyDays() const
     return st.healthy_days;
 }
 
+uint32_t Pet::stageHealthyDays() const
+{
+    return st.stage_healthy_days;
+}
+
+PetStatSnapshot Pet::statSnapshot() const
+{
+    PetStatSnapshot snapshot = {};
+    snapshot.healthy_days = st.healthy_days;
+    snapshot.stage_healthy_days = st.stage_healthy_days;
+    strncpy(snapshot.species, speciesCode(), sizeof(snapshot.species) - 1);
+    snapshot.species[sizeof(snapshot.species) - 1] = '\0';
+    strncpy(snapshot.outfit, outfitCode(), sizeof(snapshot.outfit) - 1);
+    snapshot.outfit[sizeof(snapshot.outfit) - 1] = '\0';
+    snapshot.age = static_cast<int32_t>(st.age);
+    snapshot.hunger = st.hungry_value;
+    snapshot.mood = st.mood;
+    snapshot.clean = st.clean_value;
+    snapshot.env = st.env_value;
+    snapshot.sick = st.hasSick ? 1 : 0;
+    snapshot.status = static_cast<int32_t>(getStatus());
+    for (size_t i = 0; i < PetStatSnapshot::kCustomStatCount; ++i)
+        snapshot.customStats[i] = st.customStats[i];
+    return snapshot;
+}
+
+int16_t Pet::customStat(uint8_t index) const
+{
+    if (index >= PetStatSnapshot::kCustomStatCount)
+        return 0;
+
+    return st.customStats[index];
+}
+
+bool Pet::setCustomStat(uint8_t index, int16_t value)
+{
+    if (index >= PetStatSnapshot::kCustomStatCount)
+        return false;
+
+    st.customStats[index] = value;
+    return true;
+}
+
+bool Pet::changeCustomStat(uint8_t index, int16_t delta)
+{
+    if (index >= PetStatSnapshot::kCustomStatCount)
+        return false;
+
+    st.customStats[index] = static_cast<int16_t>(st.customStats[index] + delta);
+    return true;
+}
+
 bool Pet::setSpeciesCode(const char *code)
 {
-    return copyAppearanceCode(st.species, sizeof(st.species), code);
+    char nextSpecies[sizeof(st.species)] = {};
+    if (!copyAppearanceCode(nextSpecies, sizeof(nextSpecies), code))
+        return false;
+
+    if (strcmp(st.species, nextSpecies) != 0)
+    {
+        strcpy(st.species, nextSpecies);
+        st.stage_healthy_days = 0;
+    }
+    return true;
 }
 
 bool Pet::setOutfitCode(const char *code)

@@ -36,14 +36,17 @@ private:
     void queuePostCommandHappyAnimation();
     void queueGiftAnimation();
     void queueStatusAnimation();
+    void showStatusNotFound();
     bool queueStatusDirectAnimation();
-    bool queueStatusAgeAnimation();
-    bool queueStatusRandom3Animation();
+    bool queueStatusSingleMeterAnimation();
+    bool queueStatusRandomMetersAnimation();
+    bool queueStatusTripleMeterAnimation();
     bool queueCompositeStatusAnimation();
     AnimationId compositeStatusAnimationId() const;
     bool canPlayGuessItemGame() const;
 
     bool commandHasAnimation(AnimationId id) const override;
+    bool commandCanStatus() const override;
     AnimationId commandCurrentAgeAnimation() const override;
     void commandClearCommandAnimations() override;
     void commandFeedPet() override;

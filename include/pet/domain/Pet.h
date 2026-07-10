@@ -38,8 +38,28 @@ struct PersistedPetState
     char species[9];
     char outfit[9];
     uint32_t healthy_days;
+    uint32_t stage_healthy_days;
+    int16_t customStats[8];
     uint32_t flowFlags;
     uint32_t crc32;
+};
+
+struct PetStatSnapshot
+{
+    static constexpr size_t kCustomStatCount = 8;
+
+    uint32_t healthy_days;
+    uint32_t stage_healthy_days;
+    char species[9];
+    char outfit[9];
+    int32_t age;
+    int32_t hunger;
+    int32_t mood;
+    int32_t clean;
+    int32_t env;
+    int32_t sick;
+    int32_t status;
+    int16_t customStats[kCustomStatCount];
 };
 
 enum class HealthStatus
@@ -81,6 +101,11 @@ public:
     const char *speciesCode() const;
     const char *outfitCode() const;
     uint32_t healthyDays() const;
+    uint32_t stageHealthyDays() const;
+    PetStatSnapshot statSnapshot() const;
+    int16_t customStat(uint8_t index) const;
+    bool setCustomStat(uint8_t index, int16_t value);
+    bool changeCustomStat(uint8_t index, int16_t delta);
     bool setSpeciesCode(const char *code);
     bool setOutfitCode(const char *code);
     bool isFirstLaunchComplete() const;
@@ -97,7 +122,7 @@ private:
     PersistedPetState st = {};
 
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 5;
+    static constexpr uint16_t kPetStateVersion = 7;
 };
 
 #endif

@@ -27,6 +27,7 @@ public:
     virtual ~CommandHost() = default;
 
     virtual bool commandHasAnimation(AnimationId id) const = 0;
+    virtual bool commandCanStatus() const = 0;
     virtual AnimationId commandCurrentAgeAnimation() const = 0;
     virtual void commandClearCommandAnimations() = 0;
 

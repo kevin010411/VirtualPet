@@ -1,0 +1,52 @@
+# evolution_rules.txt
+# Purpose:
+#   Let SD-card data decide which species/outfit should be used when the pet
+#   matches one or more state conditions.
+#
+# Location on SD card:
+#   /evolution_rules.txt
+#
+# Line format:
+#   from|species|outfit|conditions
+#
+# Fields:
+#   - from is the current source species required by this rule.
+#   - Use * for from to allow any source species.
+#   - species and outfit are the target appearance.
+#   - conditions are comma-separated name=value or name=min..max filters.
+#
+# Conditions:
+#   - Use * for an open range endpoint:
+#       stage_healthy_days=6..*
+#       mood=*..30
+#   - Empty conditions match all states for the matching source species.
+#   - The first matching row wins.
+#   - If this file is missing, invalid, or has no matching row, firmware keeps
+#     the current species/outfit.
+#
+# Built-in condition names:
+#   healthy_days, stage_healthy_days, age, hunger, mood, clean, env, sick, status
+#
+# Custom condition names:
+#   custom0 through custom7 are stored with the pet state.
+#   /state_schema.txt may define aliases for custom slots, such as intimacy or
+#   alcohol, so character data can differ between devices without code changes.
+#
+# Evolution behavior:
+#   - healthy_days is lifetime healthy days.
+#   - stage_healthy_days is healthy days since the current species was chosen.
+#   - Firmware checks this file after loading a pet, after resetting a pet, and
+#     after dayPassed() advances the pet.
+#   - When the species changes, stage_healthy_days resets to 0, the row's outfit
+#     is applied as the new species default, the manifest reloads, and state is
+#     saved.
+#   - If the current appearance has an Evolution animation, firmware plays it
+#     before applying the new species/outfit.
+
+andrea|gigi|base|stage_healthy_days=2..3,intimacy=2..3
+andrea|dita|base|alcohol=3
+andrea|jessi|base|
+gigi|regina|base|stage_healthy_days=2..3,intimacy=2..3
+gigi|amanda|base|stage_healthy_days=2..3,intimacy=0..1
+gigi|nyx|base|alcohol=3
+gigi|river|base|

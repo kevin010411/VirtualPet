@@ -1,0 +1,26 @@
+# state_schema.txt
+# Purpose:
+#   Give device-specific names to the pet's custom state slots.
+#
+# Location on SD card:
+#   /state_schema.txt
+#
+# Line format:
+#   alias|slot|min|max|default
+#
+# Rules:
+#   - alias may use A-Z, a-z, 0-9, _ and -.
+#   - slot must be custom0 through custom7.
+#   - min, max, and default are signed integers.
+#   - min <= default <= max.
+#   - Duplicate aliases keep the first valid row.
+#   - Missing or invalid rows are ignored.
+#   - The current firmware uses aliases when evaluating /evolution_rules.txt.
+#     Custom stat mutation is exposed by the pet state model and can be wired
+#     into commands or minigames as each device's gameplay requires.
+
+money|custom0|0|999|0
+record|custom1|0|999|0
+fatigue|custom2|0|100|0
+alcohol|custom3|0|3|0
+intimacy|custom4|0|100|0

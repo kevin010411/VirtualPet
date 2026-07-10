@@ -2,6 +2,7 @@
 #define ANIMATION_CONTROLLER_H
 
 #include <Arduino.h>
+#include <SdFat.h>
 #include <deque>
 #include "animation/domain/Animation.h"
 
@@ -24,6 +25,7 @@ public:
     void markDirty();
     void requestFullRedraw();
     void showResourceError();
+    void showStatusNotFound();
     void updateElapsed(unsigned long elapsed);
     void render(unsigned long now);
     void startBatteryAnimation();
@@ -31,6 +33,7 @@ public:
     unsigned long defaultFrameInterval() const;
     unsigned long frameIntervalFor(AnimationId id) const;
     uint16_t frameCountFor(AnimationId id) const;
+    SdFat *sdCard() const;
 
 private:
     static constexpr unsigned long frameIntervalSlow = 600;

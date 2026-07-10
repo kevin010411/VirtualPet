@@ -62,7 +62,7 @@ void Game::setup_game()
 #endif
 
     petActions->loadOrDefault(defaultSpeciesCode, defaultOutfitCode);
-    petActions->applySpeciesForHealthyDays();
+    petActions->applyEvolutionTarget();
     renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
     renderer.reloadManifest();
     refreshBaseAnimation();
@@ -294,7 +294,7 @@ void Game::resetPet()
     pendingEvolution = false;
     pendingEvolutionSpeciesCode[0] = '\0';
     pendingEvolutionOutfitCode[0] = '\0';
-    petActions->applySpeciesForHealthyDays();
+    petActions->applyEvolutionTarget();
     renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
     renderer.reloadManifest();
     animations->clearByOwner(AnimationOwner::Command);
@@ -452,7 +452,7 @@ void Game::maybeTickPet(unsigned long elapsed)
 
         if (petActions->dayPassed())
         {
-            handleHealthyDaysEvolution();
+            handleEvolution();
             if (pendingEvolution)
                 return;
         }
@@ -482,10 +482,10 @@ bool Game::completePendingEvolutionIfReady()
     return true;
 }
 
-void Game::handleHealthyDaysEvolution()
+void Game::handleEvolution()
 {
     AppearanceSelection selection = {};
-    if (!petActions->findSpeciesForHealthyDays(selection))
+    if (!petActions->findEvolutionTarget(selection))
         return;
 
     if (!beginEvolutionAnimation(selection))

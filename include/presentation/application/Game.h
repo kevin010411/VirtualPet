@@ -72,7 +72,7 @@ private:
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
     void maybeTickPet(unsigned long elapsed);
     bool completePendingEvolutionIfReady();
-    void handleHealthyDaysEvolution();
+    void handleEvolution();
     bool beginEvolutionAnimation(const AppearanceSelection &selection);
     bool isFirstLaunchSelectionPending() const;
     bool startFirstLaunchRequiredCommand();

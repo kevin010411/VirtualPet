@@ -16,6 +16,17 @@ void showResourceError(Adafruit_ST7735 *tft)
     tft->print("resource error");
 }
 
+void showStatusNotFound(Adafruit_ST7735 *tft)
+{
+    if (tft == nullptr)
+        return;
+
+    tft->fillRect(0, 32, kDefaultAnimWidth, kDefaultAnimHeight, ST77XX_BLACK);
+    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
+    tft->setCursor(8, 72);
+    tft->print("status not found");
+}
+
 bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, const char *ext)
 {
     if (dest == nullptr || destSize == 0 || path == nullptr || ext == nullptr)

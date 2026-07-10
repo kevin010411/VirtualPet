@@ -23,6 +23,7 @@ public:
     bool setAnimation(AnimationId id, bool playOnce);
     bool advanceAnimationFrame();
     void showResourceError();
+    void showStatusNotFound();
     uint16_t frameCountFor(AnimationId id) const;
     unsigned long frameIntervalFor(AnimationId id, unsigned long defaultIntervalMs) const;
     SdFat *sdCard() const;

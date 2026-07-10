@@ -5,8 +5,20 @@
 
 namespace
 {
-constexpr const char *kSpeciesByHealthyDaysPath = "/species_by_healthy_days.txt";
-constexpr uint32_t kNoMaxHealthyDays = 0xFFFFFFFFUL;
+constexpr const char *kEvolutionRulesPath = "/evolution_rules.txt";
+constexpr const char *kStateSchemaPath = "/state_schema.txt";
+constexpr int32_t kMinConditionValue = -2147483647L - 1L;
+constexpr int32_t kMaxConditionValue = 2147483647L;
+constexpr size_t kMaxStateAliases = 8;
+
+struct StateAlias
+{
+    char name[16];
+    uint8_t customIndex;
+    int32_t minValue;
+    int32_t maxValue;
+    int32_t defaultValue;
+};
 
 bool isSpaceChar(char c)
 {
@@ -70,6 +82,33 @@ bool parseUnsignedField(const char *text, uint32_t &value)
     return true;
 }
 
+bool parseSignedField(const char *text, int32_t &value)
+{
+    if (text == nullptr || text[0] == '\0')
+        return false;
+
+    bool negative = false;
+    const char *cursor = text;
+    if (*cursor == '-')
+    {
+        negative = true;
+        ++cursor;
+    }
+    if (*cursor == '\0')
+        return false;
+
+    int32_t parsed = 0;
+    for (; *cursor != '\0'; ++cursor)
+    {
+        if (*cursor < '0' || *cursor > '9')
+            return false;
+        parsed = parsed * 10L + static_cast<int32_t>(*cursor - '0');
+    }
+
+    value = negative ? -parsed : parsed;
+    return true;
+}
+
 bool isValidAppearanceCode(const char *code)
 {
     if (code == nullptr || code[0] == '\0')
@@ -93,39 +132,299 @@ bool isValidAppearanceCode(const char *code)
     return true;
 }
 
-bool splitSpeciesRule(char *line, uint32_t &minDays, uint32_t &maxDays, char *&speciesCode, char *&outfitCode)
+bool isValidStatName(const char *name)
 {
-    char *fields[4] = {};
-    fields[0] = line;
-    int fieldIndex = 1;
+    if (name == nullptr || name[0] == '\0')
+        return false;
 
-    for (char *cursor = line; *cursor != '\0'; ++cursor)
+    const size_t len = strlen(name);
+    if (len > 15)
+        return false;
+
+    for (size_t i = 0; i < len; ++i)
     {
-        if (*cursor != '|')
-            continue;
-        if (fieldIndex >= 4)
+        const char c = name[i];
+        const bool valid = (c >= 'a' && c <= 'z') ||
+                           (c >= 'A' && c <= 'Z') ||
+                           (c >= '0' && c <= '9') ||
+                           c == '_' || c == '-';
+        if (!valid)
             return false;
-        *cursor = '\0';
-        fields[fieldIndex++] = cursor + 1;
     }
 
-    if (fieldIndex != 4)
+    return true;
+}
+
+bool splitFields(char *line, char *fields[], size_t fieldCount)
+{
+    size_t count = 0;
+    char *cursor = line;
+
+    while (count < fieldCount)
+    {
+        fields[count++] = cursor;
+        char *sep = strchr(cursor, '|');
+        if (sep == nullptr)
+            break;
+
+        *sep = '\0';
+        cursor = sep + 1;
+    }
+
+    if (count != fieldCount)
         return false;
 
-    for (int i = 0; i < 4; ++i)
+    if (strchr(fields[fieldCount - 1], '|') != nullptr)
+        return false;
+
+    for (size_t i = 0; i < fieldCount; ++i)
+    {
         fields[i] = trimField(fields[i]);
+        if (fields[i] == nullptr)
+            return false;
+    }
 
-    if (!parseUnsignedField(fields[0], minDays))
+    return true;
+}
+
+bool parseCustomSlot(const char *text, uint8_t &index)
+{
+    if (text == nullptr || strncmp(text, "custom", 6) != 0 || text[6] == '\0' || text[7] != '\0')
         return false;
 
-    if (strcmp(fields[1], "*") == 0)
-        maxDays = kNoMaxHealthyDays;
-    else if (!parseUnsignedField(fields[1], maxDays))
+    const char digit = text[6];
+    if (digit < '0' || digit > '7')
         return false;
 
-    speciesCode = fields[2];
-    outfitCode = fields[3];
-    return minDays <= maxDays &&
+    index = static_cast<uint8_t>(digit - '0');
+    return true;
+}
+
+bool parseStateSchemaRow(char *line, StateAlias &alias)
+{
+    char *fields[5] = {};
+    if (!splitFields(line, fields, 5))
+        return false;
+
+    uint8_t customIndex = 0;
+    int32_t minValue = 0;
+    int32_t maxValue = 0;
+    int32_t defaultValue = 0;
+    if (!isValidStatName(fields[0]) ||
+        !parseCustomSlot(fields[1], customIndex) ||
+        !parseSignedField(fields[2], minValue) ||
+        !parseSignedField(fields[3], maxValue) ||
+        !parseSignedField(fields[4], defaultValue) ||
+        minValue > maxValue ||
+        defaultValue < minValue ||
+        defaultValue > maxValue)
+    {
+        return false;
+    }
+
+    strncpy(alias.name, fields[0], sizeof(alias.name) - 1);
+    alias.name[sizeof(alias.name) - 1] = '\0';
+    alias.customIndex = customIndex;
+    alias.minValue = minValue;
+    alias.maxValue = maxValue;
+    alias.defaultValue = defaultValue;
+    return true;
+}
+
+void loadStateAliases(SdFat *sd, StateAlias aliases[], size_t maxAliases, size_t &aliasCount)
+{
+    aliasCount = 0;
+    if (sd == nullptr || aliases == nullptr || maxAliases == 0 || !sd->exists(kStateSchemaPath))
+        return;
+
+    File file = sd->open(kStateSchemaPath, FILE_READ);
+    if (!file)
+        return;
+
+    char line[96] = {};
+    while (readConfigLine(file, line, sizeof(line)) && aliasCount < maxAliases)
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+
+        StateAlias alias = {};
+        if (!parseStateSchemaRow(content, alias))
+            continue;
+
+        bool duplicate = false;
+        for (size_t i = 0; i < aliasCount; ++i)
+        {
+            if (strcmp(aliases[i].name, alias.name) == 0)
+            {
+                duplicate = true;
+                break;
+            }
+        }
+        if (duplicate)
+            continue;
+
+        aliases[aliasCount++] = alias;
+    }
+
+    file.close();
+}
+
+bool statValueByName(const char *name, const PetStatSnapshot &stats, const StateAlias aliases[], size_t aliasCount, int32_t &value)
+{
+    if (name == nullptr)
+        return false;
+
+    if (strcmp(name, "healthy_days") == 0)
+        value = static_cast<int32_t>(stats.healthy_days);
+    else if (strcmp(name, "stage_healthy_days") == 0)
+        value = static_cast<int32_t>(stats.stage_healthy_days);
+    else if (strcmp(name, "age") == 0)
+        value = stats.age;
+    else if (strcmp(name, "hunger") == 0)
+        value = stats.hunger;
+    else if (strcmp(name, "mood") == 0)
+        value = stats.mood;
+    else if (strcmp(name, "clean") == 0)
+        value = stats.clean;
+    else if (strcmp(name, "env") == 0)
+        value = stats.env;
+    else if (strcmp(name, "sick") == 0)
+        value = stats.sick;
+    else if (strcmp(name, "status") == 0)
+        value = stats.status;
+    else
+    {
+        uint8_t customIndex = 0;
+        if (parseCustomSlot(name, customIndex))
+            value = stats.customStats[customIndex];
+        else
+        {
+            for (size_t i = 0; i < aliasCount; ++i)
+            {
+                if (strcmp(name, aliases[i].name) != 0)
+                    continue;
+
+                value = stats.customStats[aliases[i].customIndex];
+                return true;
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool sourceMatches(const char *sourceSpecies, const PetStatSnapshot &stats)
+{
+    if (sourceSpecies == nullptr)
+        return false;
+    if (strcmp(sourceSpecies, "*") == 0)
+        return true;
+    return strcmp(sourceSpecies, stats.species) == 0;
+}
+
+bool parseConditionRange(char *text, int32_t &minValue, int32_t &maxValue)
+{
+    text = trimField(text);
+    if (text == nullptr || text[0] == '\0')
+        return false;
+
+    if (strcmp(text, "*") == 0)
+    {
+        minValue = kMinConditionValue;
+        maxValue = kMaxConditionValue;
+        return true;
+    }
+
+    char *rangeSep = strstr(text, "..");
+    if (rangeSep == nullptr)
+    {
+        if (!parseSignedField(text, minValue))
+            return false;
+        maxValue = minValue;
+        return true;
+    }
+
+    *rangeSep = '\0';
+    char *minText = trimField(text);
+    char *maxText = trimField(rangeSep + 2);
+    if (strcmp(minText, "*") == 0)
+        minValue = kMinConditionValue;
+    else if (!parseSignedField(minText, minValue))
+        return false;
+
+    if (strcmp(maxText, "*") == 0)
+        maxValue = kMaxConditionValue;
+    else if (!parseSignedField(maxText, maxValue))
+        return false;
+
+    return minValue <= maxValue;
+}
+
+bool conditionMatches(char *condition, const PetStatSnapshot &stats, const StateAlias aliases[], size_t aliasCount)
+{
+    char *equals = strchr(condition, '=');
+    if (equals == nullptr)
+        return false;
+
+    *equals = '\0';
+    char *name = trimField(condition);
+    char *rangeText = trimField(equals + 1);
+    if (!isValidStatName(name))
+        return false;
+
+    int32_t statValue = 0;
+    int32_t minValue = 0;
+    int32_t maxValue = 0;
+    if (!statValueByName(name, stats, aliases, aliasCount, statValue) ||
+        !parseConditionRange(rangeText, minValue, maxValue))
+    {
+        return false;
+    }
+
+    return statValue >= minValue && statValue <= maxValue;
+}
+
+bool conditionsMatch(char *conditions, const PetStatSnapshot &stats, const StateAlias aliases[], size_t aliasCount)
+{
+    conditions = trimField(conditions);
+    if (conditions == nullptr)
+        return false;
+    if (conditions[0] == '\0')
+        return true;
+
+    char *cursor = conditions;
+    while (cursor != nullptr && *cursor != '\0')
+    {
+        char *sep = strchr(cursor, ',');
+        if (sep != nullptr)
+            *sep = '\0';
+
+        char *condition = trimField(cursor);
+        if (condition == nullptr || condition[0] == '\0' ||
+            !conditionMatches(condition, stats, aliases, aliasCount))
+        {
+            return false;
+        }
+
+        cursor = (sep == nullptr) ? nullptr : sep + 1;
+    }
+
+    return true;
+}
+
+bool splitEvolutionRule(char *line, char *&sourceSpecies, char *&speciesCode, char *&outfitCode, char *&conditions)
+{
+    char *fields[4] = {};
+    if (!splitFields(line, fields, 4))
+        return false;
+
+    sourceSpecies = fields[0];
+    speciesCode = fields[1];
+    outfitCode = fields[2];
+    conditions = fields[3];
+    return (strcmp(sourceSpecies, "*") == 0 || isValidAppearanceCode(sourceSpecies)) &&
            isValidAppearanceCode(speciesCode) &&
            isValidAppearanceCode(outfitCode);
 }
@@ -199,30 +498,37 @@ SdAppearanceLoader::SdAppearanceLoader(SdFat *refSd) : sd(refSd)
 {
 }
 
-bool SdAppearanceLoader::findForHealthyDays(uint32_t healthyDays, AppearanceSelection &selection)
+bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection)
 {
-    if (sd == nullptr || !sd->exists(kSpeciesByHealthyDaysPath))
+    if (sd == nullptr || !sd->exists(kEvolutionRulesPath))
         return false;
 
-    File file = sd->open(kSpeciesByHealthyDaysPath, FILE_READ);
+    StateAlias aliases[kMaxStateAliases] = {};
+    size_t aliasCount = 0;
+    loadStateAliases(sd, aliases, kMaxStateAliases, aliasCount);
+
+    File file = sd->open(kEvolutionRulesPath, FILE_READ);
     if (!file)
         return false;
 
-    char line[80] = {};
+    char line[192] = {};
     while (readConfigLine(file, line, sizeof(line)))
     {
         char *content = trimField(line);
         if (content == nullptr || content[0] == '\0' || content[0] == '#')
             continue;
 
-        uint32_t minDays = 0;
-        uint32_t maxDays = 0;
         char *speciesCode = nullptr;
         char *outfitCode = nullptr;
-        if (!splitSpeciesRule(content, minDays, maxDays, speciesCode, outfitCode))
+        char *sourceSpecies = nullptr;
+        char *conditions = nullptr;
+        if (!splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions))
             continue;
 
-        if (healthyDays < minDays || healthyDays > maxDays)
+        if (!sourceMatches(sourceSpecies, stats))
+            continue;
+
+        if (!conditionsMatch(conditions, stats, aliases, aliasCount))
             continue;
 
         strncpy(selection.speciesCode, speciesCode, sizeof(selection.speciesCode) - 1);
@@ -240,25 +546,25 @@ bool SdAppearanceLoader::findForHealthyDays(uint32_t healthyDays, AppearanceSele
 bool SdAppearanceLoader::loadSpecies(char species[][9], size_t maxSpecies, size_t &speciesCount)
 {
     speciesCount = 0;
-    if (sd == nullptr || species == nullptr || maxSpecies == 0 || !sd->exists(kSpeciesByHealthyDaysPath))
+    if (sd == nullptr || species == nullptr || maxSpecies == 0 || !sd->exists(kEvolutionRulesPath))
         return false;
 
-    File file = sd->open(kSpeciesByHealthyDaysPath, FILE_READ);
+    File file = sd->open(kEvolutionRulesPath, FILE_READ);
     if (!file)
         return false;
 
-    char line[80] = {};
+    char line[192] = {};
     while (readConfigLine(file, line, sizeof(line)) && speciesCount < maxSpecies)
     {
         char *content = trimField(line);
         if (content == nullptr || content[0] == '\0' || content[0] == '#')
             continue;
 
-        uint32_t minDays = 0;
-        uint32_t maxDays = 0;
         char *speciesCode = nullptr;
         char *outfitCode = nullptr;
-        if (!splitSpeciesRule(content, minDays, maxDays, speciesCode, outfitCode))
+        char *sourceSpecies = nullptr;
+        char *conditions = nullptr;
+        if (!splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions))
             continue;
 
         bool duplicate = false;

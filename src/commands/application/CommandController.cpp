@@ -210,17 +210,7 @@ bool CommandController::canClean() const
 
 bool CommandController::canStatus() const
 {
-#if APP_STATUS_MODE == STATUS_MODE_COMPOSITE
-    return true;
-#elif APP_STATUS_MODE == STATUS_MODE_STATUS
-    return host.commandHasAnimation(AnimationId::Status);
-#elif APP_STATUS_MODE == STATUS_MODE_RANDOM3
-    return host.commandHasAnimation(AnimationId::StatusAge) ||
-           host.commandHasAnimation(AnimationId::StatusHappy) ||
-           host.commandHasAnimation(AnimationId::StatusHungry);
-#else
-    return host.commandHasAnimation(host.commandCurrentAgeAnimation());
-#endif
+    return host.commandCanStatus();
 }
 
 bool CommandController::hasAnimations(const AnimationId *ids, size_t count) const

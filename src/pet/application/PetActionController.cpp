@@ -59,18 +59,18 @@ bool PetActionController::dayPassed()
     return pet.dayPassed();
 }
 
-bool PetActionController::findSpeciesForHealthyDays(AppearanceSelection &selection) const
+bool PetActionController::findEvolutionTarget(AppearanceSelection &selection) const
 {
-    if (!appearanceLoader.findForHealthyDays(pet.healthyDays(), selection))
+    if (!appearanceLoader.findEvolutionTarget(pet.statSnapshot(), selection))
         return false;
 
     return strcmp(pet.speciesCode(), selection.speciesCode) != 0;
 }
 
-bool PetActionController::applySpeciesForHealthyDays()
+bool PetActionController::applyEvolutionTarget()
 {
     AppearanceSelection selection = {};
-    if (!findSpeciesForHealthyDays(selection))
+    if (!findEvolutionTarget(selection))
         return false;
 
     return applyAppearance(selection.speciesCode, selection.outfitCode);
@@ -114,6 +114,21 @@ void PetActionController::cleanEnvironment(unsigned int clearValue)
 void PetActionController::getSick()
 {
     pet.getSick();
+}
+
+int16_t PetActionController::customStat(uint8_t index) const
+{
+    return pet.customStat(index);
+}
+
+bool PetActionController::setCustomStat(uint8_t index, int16_t value)
+{
+    return pet.setCustomStat(index, value);
+}
+
+bool PetActionController::changeCustomStat(uint8_t index, int16_t delta)
+{
+    return pet.changeCustomStat(index, delta);
 }
 
 bool PetActionController::isFirstLaunchComplete() const
@@ -179,4 +194,9 @@ uint16_t PetActionController::currentMoodFrame(uint16_t maxFrame) const
 uint16_t PetActionController::currentHungerFrame(uint16_t maxFrame) const
 {
     return pet.CurrentHungerFrame(maxFrame);
+}
+
+PetStatSnapshot PetActionController::statSnapshot() const
+{
+    return pet.statSnapshot();
 }

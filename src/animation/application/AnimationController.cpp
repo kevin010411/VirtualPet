@@ -137,6 +137,11 @@ void AnimationController::showResourceError()
     renderer.showResourceError();
 }
 
+void AnimationController::showStatusNotFound()
+{
+    renderer.showStatusNotFound();
+}
+
 void AnimationController::updateElapsed(unsigned long elapsed)
 {
     if (!hasActiveAnimation)
@@ -239,4 +244,9 @@ unsigned long AnimationController::frameIntervalFor(AnimationId id) const
 uint16_t AnimationController::frameCountFor(AnimationId id) const
 {
     return renderer.frameCountFor(id);
+}
+
+SdFat *AnimationController::sdCard() const
+{
+    return renderer.sdCard();
 }

@@ -20,10 +20,12 @@ Each slot contains one binary `PersistedPetState` record:
 - `species`
 - `outfit`
 - `healthy_days`
+- `stage_healthy_days`
+- `customStats[8]`
 - `flowFlags`
 - `crc32`
 
-`version` is currently `5`.
+`version` is currently `7`.
 
 `flowFlags` stores app-flow state. Bit `0` marks the first-launch flow as
 complete.

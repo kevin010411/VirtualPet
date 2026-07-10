@@ -228,6 +228,11 @@ void Renderer::showResourceError()
     FrameDecoder::showResourceError(tft);
 }
 
+void Renderer::showStatusNotFound()
+{
+    FrameDecoder::showStatusNotFound(tft);
+}
+
 uint16_t Renderer::frameCountFor(AnimationId id) const
 {
     const AnimationMeta *meta = state->manifest.metaFor(id);
