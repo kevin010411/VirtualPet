@@ -228,6 +228,11 @@ void Renderer::showResourceError()
     FrameDecoder::showResourceError(tft);
 }
 
+void Renderer::showInitPetNotExist()
+{
+    FrameDecoder::showInitPetNotExist(tft);
+}
+
 void Renderer::showStatusNotFound()
 {
     FrameDecoder::showStatusNotFound(tft);

@@ -39,6 +39,16 @@ const CommandController::CommandSlot CommandController::slots[] = {
     COMMAND_SLOT_HAVE_FUN,
     COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true),
     COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true),
+#elif APP_PROFILE == APP_PROFILE_DIPSYHO
+    COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
+    CommandController::emptySlot(),
+    CommandController::emptySlot(),
+    COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true),
+    COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),
+    COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
+    COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true),
+    COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
+    
 #elif APP_PROFILE == APP_PROFILE_KUROMU
     COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
     COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),

@@ -138,6 +138,31 @@ uint8_t splitCsv(char *text, char values[][16], uint8_t maxValues)
     return count;
 }
 
+bool splitStatusDisplayRow(char *line, char *&mode, char *&animationsText, char *&sourcesText)
+{
+    if (line == nullptr)
+        return false;
+
+    char *firstSep = strchr(line, '|');
+    if (firstSep == nullptr)
+        return false;
+    *firstSep = '\0';
+
+    char *secondSep = strchr(firstSep + 1, '|');
+    if (secondSep == nullptr)
+        return false;
+    *secondSep = '\0';
+
+    if (strchr(secondSep + 1, '|') != nullptr)
+        return false;
+
+    mode = trimField(line);
+    animationsText = trimField(firstSep + 1);
+    sourcesText = trimField(secondSep + 1);
+    return mode != nullptr && animationsText != nullptr && sourcesText != nullptr &&
+           mode[0] != '\0' && animationsText[0] != '\0';
+}
+
 uint8_t loadStateAliases(SdFat *sd, StateAlias *aliases, uint8_t maxAliases)
 {
     if (sd == nullptr || aliases == nullptr || maxAliases == 0)
@@ -325,15 +350,12 @@ bool loadStatusDisplayConfig(SdFat *sd, StatusDisplayConfig &config)
         if (content == nullptr || content[0] == '\0' || content[0] == '#')
             continue;
 
-        char *mode = strtok(content, "|");
-        char *animationsText = strtok(nullptr, "|");
-        char *sourcesText = strtok(nullptr, "|");
-        if (mode == nullptr || animationsText == nullptr || sourcesText == nullptr)
+        char *mode = nullptr;
+        char *animationsText = nullptr;
+        char *sourcesText = nullptr;
+        if (!splitStatusDisplayRow(content, mode, animationsText, sourcesText))
             continue;
 
-        mode = trimField(mode);
-        animationsText = trimField(animationsText);
-        sourcesText = trimField(sourcesText);
         if (strcmp(mode, kCompiledStatusModeName) != 0)
             continue;
 
@@ -641,6 +663,7 @@ bool CommandExecutor::queueStatusTripleMeterAnimation()
 {
 #if APP_STATUS_MODE == STATUS_MODE_TRIPLE_METER
     StatusDisplayConfig config = {};
+
     if (!loadStatusDisplayConfig(animations.sdCard(), config))
         return false;
 

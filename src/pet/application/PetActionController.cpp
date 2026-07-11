@@ -13,14 +13,14 @@ PetActionController::PetActionController(Pet &petRef, PetStorage &petStorageRef,
 {
 }
 
-bool PetActionController::loadOrDefault(const char *defaultSpeciesCode, const char *defaultOutfitCode)
+bool PetActionController::loadOrInitial(const AppearanceSelection &initialAppearance)
 {
     const bool loaded = petStorage.load(pet);
     if (!loaded)
     {
         pet.setDefaultState();
-        pet.setSpeciesCode(defaultSpeciesCode);
-        pet.setOutfitCode(defaultOutfitCode);
+        pet.setSpeciesCode(initialAppearance.speciesCode);
+        pet.setOutfitCode(initialAppearance.outfitCode);
     }
     return loaded;
 }

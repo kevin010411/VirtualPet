@@ -16,6 +16,7 @@ constexpr uint16_t kWorkingBatchLines = 12;
 
 void showResourceError(Adafruit_ST7735 *tft);
 void showStatusNotFound(Adafruit_ST7735 *tft);
+void showInitPetNotExist(Adafruit_ST7735 *tft);
 bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, const char *ext);
 bool buildFramePath(char *dest, size_t destSize, const char *basePath, uint16_t frameIndex, const char *ext);
 

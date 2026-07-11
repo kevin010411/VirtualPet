@@ -22,6 +22,7 @@ public:
     bool ShowAnimationFrame(AnimationId id, uint16_t frame_index, int xmin = 0, int ymin = 32, int batch_lines = 4);
     bool setAnimation(AnimationId id, bool playOnce);
     bool advanceAnimationFrame();
+    void showInitPetNotExist();
     void showResourceError();
     void showStatusNotFound();
     uint16_t frameCountFor(AnimationId id) const;

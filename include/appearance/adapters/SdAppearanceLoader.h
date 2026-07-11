@@ -9,6 +9,7 @@ class SdAppearanceLoader : public AppearanceLoader
 public:
     explicit SdAppearanceLoader(SdFat *refSd);
 
+    bool findInitialAppearance(AppearanceSelection &selection) override;
     bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) override;
     bool loadSpecies(char species[][9], size_t maxSpecies, size_t &speciesCount) override;
     bool loadOutfits(const char *speciesCode, char outfits[][9], size_t maxOutfits, size_t &outfitCount) override;

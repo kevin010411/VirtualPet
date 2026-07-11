@@ -11,6 +11,7 @@
 #include "pet/domain/Pet.h"
 #include "presentation/adapters/rendering/Renderer.h"
 #include "pet/adapters/PetStorage.h"
+#include "shared/config/AppProfile.h"
 
 Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AppearanceLoader &appearanceLoaderRef)
     : pet(petRef),
@@ -43,8 +44,9 @@ Game::~Game()
     delete petActions;
 }
 
-void Game::setup_game()
+bool Game::setup_game()
 {
+    initialized = false;
     commands->resetSelection();
     animations->setup(currentBaseAnimation());
     layout->begin();
@@ -61,17 +63,24 @@ void Game::setup_game()
     minigame->reset();
 #endif
 
-    petActions->loadOrDefault(defaultSpeciesCode, defaultOutfitCode);
+    if (!loadInitialPetState(true))
+        return false;
+
     petActions->applyEvolutionTarget();
     renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
     renderer.reloadManifest();
     refreshBaseAnimation();
 
+    initialized = true;
     enterCommand();
+    return true;
 }
 
 void Game::loop_game()
 {
+    if (!initialized)
+        return;
+
     const unsigned long now = millis();
     const unsigned long elapsed = now - last_tick_time;
 
@@ -132,19 +141,14 @@ void Game::requestFullRedraw()
 
 void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfitCode)
 {
-    if (pet.setSpeciesCode(speciesCode))
+    if (!pet.setSpeciesCode(speciesCode) || !pet.setOutfitCode(outfitCode))
     {
-        strncpy(defaultSpeciesCode, pet.speciesCode(), sizeof(defaultSpeciesCode) - 1);
-        defaultSpeciesCode[sizeof(defaultSpeciesCode) - 1] = '\0';
+        initialized = false;
+        renderer.showInitPetNotExist();
+        return;
     }
 
-    if (pet.setOutfitCode(outfitCode))
-    {
-        strncpy(defaultOutfitCode, pet.outfitCode(), sizeof(defaultOutfitCode) - 1);
-        defaultOutfitCode[sizeof(defaultOutfitCode) - 1] = '\0';
-    }
-
-    renderer.setAssetAppearance(defaultSpeciesCode, defaultOutfitCode);
+    renderer.setAssetAppearance(pet.speciesCode(), pet.outfitCode());
     renderer.reloadManifest();
     refreshBaseAnimation();
     animations->markDirty();
@@ -288,9 +292,12 @@ void Game::OnConfirmKey()
     handleCommandResult(commandExecutor->complete(executed), selectedSlot);
 }
 
-void Game::resetPet()
+bool Game::resetPet()
 {
-    petActions->reset();
+    initialized = false;
+    if (!loadInitialPetState(false))
+        return false;
+
     pendingEvolution = false;
     pendingEvolutionSpeciesCode[0] = '\0';
     pendingEvolutionOutfitCode[0] = '\0';
@@ -312,6 +319,8 @@ void Game::resetPet()
         enterFirstLaunch();
     else
         enterCommand();
+    initialized = true;
+    return true;
 }
 
 void Game::refreshBaseAnimation()
@@ -398,6 +407,28 @@ bool Game::isFirstLaunchSelectionPending() const
     return ENABLE_FIRST_LAUNCH_SELECTION && !petActions->isFirstLaunchComplete();
 }
 
+bool Game::loadInitialPetState(bool allowSavedState)
+{
+    if (allowSavedState && petStorage.load(pet))
+        return true;
+
+    AppearanceSelection initialAppearance = {};
+    if (!appearanceLoader.findInitialAppearance(initialAppearance))
+    {
+        strncpy(initialAppearance.speciesCode, APP_INITIAL_SPECIES, sizeof(initialAppearance.speciesCode) - 1);
+        initialAppearance.speciesCode[sizeof(initialAppearance.speciesCode) - 1] = '\0';
+        strncpy(initialAppearance.outfitCode, APP_INITIAL_OUTFIT, sizeof(initialAppearance.outfitCode) - 1);
+        initialAppearance.outfitCode[sizeof(initialAppearance.outfitCode) - 1] = '\0';
+    }
+
+    pet.setDefaultState();
+    const bool applied = pet.setSpeciesCode(initialAppearance.speciesCode) &&
+                         pet.setOutfitCode(initialAppearance.outfitCode);
+    if (!applied)
+        renderer.showInitPetNotExist();
+    return applied;
+}
+
 bool Game::startFirstLaunchRequiredCommand()
 {
     switch (flow.firstLaunchRequiredCommand())
@@ -434,6 +465,15 @@ void Game::maybeTickPet(unsigned long elapsed)
     if (pendingEvolution)
         return;
 
+    if (!animations->hasAnimationForOwner(AnimationOwner::Command) &&
+        !animations->hasAnimationForOwner(AnimationOwner::Minigame) &&
+        !animations->hasAnimationForOwner(AnimationOwner::System))
+    {
+        handleEvolution();
+        if (pendingEvolution)
+            return;
+    }
+
     environmentCooldown -= static_cast<long>(elapsed);
     if (environmentCooldown <= 0)
     {
@@ -447,15 +487,15 @@ void Game::maybeTickPet(unsigned long elapsed)
     {
         const int probability = 1;
         const int randValue = random(1001);
-        if (randValue < probability)
-            petActions->getSick();
-
         if (petActions->dayPassed())
         {
             handleEvolution();
             if (pendingEvolution)
                 return;
         }
+
+        if (randValue < probability)
+            petActions->getSick();
     }
 
     refreshBaseAnimation();

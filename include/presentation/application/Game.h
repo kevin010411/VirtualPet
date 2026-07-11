@@ -24,7 +24,7 @@ public:
     Game(Pet &pet, PetStorage &petStorage, Renderer &renderer, AppearanceLoader &appearanceLoader);
     ~Game();
 
-    void setup_game();
+    bool setup_game();
     void loop_game();
     void requestFullRedraw();
     void setRendererAssetAppearance(const char *speciesCode, const char *outfitCode);
@@ -36,7 +36,7 @@ public:
     void OnLeftKey();
     void OnRightKey();
     void OnConfirmKey();
-    void resetPet();
+    bool resetPet();
 
 private:
     static constexpr unsigned long gameTick = 2000;
@@ -60,8 +60,7 @@ private:
     long environmentCooldown = 0;
     bool dirtySelect = true;
     bool pendingEvolution = false;
-    char defaultSpeciesCode[9] = "dino";
-    char defaultOutfitCode[9] = "base";
+    bool initialized = false;
     char pendingEvolutionSpeciesCode[9] = {};
     char pendingEvolutionOutfitCode[9] = {};
 
@@ -70,6 +69,7 @@ private:
     void syncActionLayoutWithAnimationQueue();
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
+    bool loadInitialPetState(bool allowSavedState);
     void maybeTickPet(unsigned long elapsed);
     bool completePendingEvolutionIfReady();
     void handleEvolution();

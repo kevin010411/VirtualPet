@@ -11,6 +11,7 @@
 #
 # Fields:
 #   - from is the current source species required by this rule.
+#   - Use init for from to define the first pet when no saved state exists.
 #   - Use * for from to allow any source species.
 #   - species and outfit are the target appearance.
 #   - conditions are comma-separated name=value or name=min..max filters.
@@ -43,6 +44,7 @@
 #   - If the current appearance has an Evolution animation, firmware plays it
 #     before applying the new species/outfit.
 
+init|andrea|base|
 andrea|gigi|base|stage_healthy_days=2..3,intimacy=2..3
 andrea|dita|base|alcohol=3
 andrea|jessi|base|

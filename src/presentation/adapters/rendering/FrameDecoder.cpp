@@ -27,6 +27,17 @@ void showStatusNotFound(Adafruit_ST7735 *tft)
     tft->print("status not found");
 }
 
+void showInitPetNotExist(Adafruit_ST7735 *tft)
+{
+    if (tft == nullptr)
+        return;
+
+    tft->fillScreen(ST77XX_BLACK);
+    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
+    tft->setCursor(8, 72);
+    tft->print("init pet not exist");
+}
+
 bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, const char *ext)
 {
     if (dest == nullptr || destSize == 0 || path == nullptr || ext == nullptr)

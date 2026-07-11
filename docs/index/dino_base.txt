@@ -38,6 +38,9 @@ GuessLoss|bmp|2|128|96|10|/dino/guess_game/loss
 # Age status animation
 StatusAge|bmp|3|128|96|6|/status/age
 
+# Triple meter status animation
+Status|bmp|64|128|96|6|/status
+
 # Fortune animations
 PredAnim|bmp|23|128|96|10|/predict/anim
 Predict1|bmp|2|128|96|8|/predict/1

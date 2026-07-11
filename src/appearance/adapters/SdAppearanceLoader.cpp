@@ -1,5 +1,6 @@
 #include "appearance/adapters/SdAppearanceLoader.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -10,10 +11,11 @@ constexpr const char *kStateSchemaPath = "/state_schema.txt";
 constexpr int32_t kMinConditionValue = -2147483647L - 1L;
 constexpr int32_t kMaxConditionValue = 2147483647L;
 constexpr size_t kMaxStateAliases = 8;
+constexpr size_t kMaxStatNameLength = 23;
 
 struct StateAlias
 {
-    char name[16];
+    char name[kMaxStatNameLength + 1];
     uint8_t customIndex;
     int32_t minValue;
     int32_t maxValue;
@@ -138,7 +140,7 @@ bool isValidStatName(const char *name)
         return false;
 
     const size_t len = strlen(name);
-    if (len > 15)
+    if (len > kMaxStatNameLength)
         return false;
 
     for (size_t i = 0; i < len; ++i)
@@ -319,6 +321,8 @@ bool sourceMatches(const char *sourceSpecies, const PetStatSnapshot &stats)
 {
     if (sourceSpecies == nullptr)
         return false;
+    if (strcmp(sourceSpecies, "init") == 0)
+        return false;
     if (strcmp(sourceSpecies, "*") == 0)
         return true;
     return strcmp(sourceSpecies, stats.species) == 0;
@@ -362,7 +366,10 @@ bool parseConditionRange(char *text, int32_t &minValue, int32_t &maxValue)
     return minValue <= maxValue;
 }
 
-bool conditionMatches(char *condition, const PetStatSnapshot &stats, const StateAlias aliases[], size_t aliasCount)
+bool conditionMatches(char *condition,
+                      const PetStatSnapshot &stats,
+                      const StateAlias aliases[],
+                      size_t aliasCount)
 {
     char *equals = strchr(condition, '=');
     if (equals == nullptr)
@@ -386,7 +393,10 @@ bool conditionMatches(char *condition, const PetStatSnapshot &stats, const State
     return statValue >= minValue && statValue <= maxValue;
 }
 
-bool conditionsMatch(char *conditions, const PetStatSnapshot &stats, const StateAlias aliases[], size_t aliasCount)
+bool conditionsMatch(char *conditions,
+                     const PetStatSnapshot &stats,
+                     const StateAlias aliases[],
+                     size_t aliasCount)
 {
     conditions = trimField(conditions);
     if (conditions == nullptr)
@@ -498,8 +508,48 @@ SdAppearanceLoader::SdAppearanceLoader(SdFat *refSd) : sd(refSd)
 {
 }
 
+bool SdAppearanceLoader::findInitialAppearance(AppearanceSelection &selection)
+{
+    selection = {};
+    if (sd == nullptr || !sd->exists(kEvolutionRulesPath))
+        return false;
+
+    File file = sd->open(kEvolutionRulesPath, FILE_READ);
+    if (!file)
+        return false;
+
+    char line[192] = {};
+    while (readConfigLine(file, line, sizeof(line)))
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+
+        char *speciesCode = nullptr;
+        char *outfitCode = nullptr;
+        char *sourceSpecies = nullptr;
+        char *conditions = nullptr;
+        if (!splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions))
+            continue;
+
+        if (strcmp(sourceSpecies, "init") != 0)
+            continue;
+
+        strncpy(selection.speciesCode, speciesCode, sizeof(selection.speciesCode) - 1);
+        selection.speciesCode[sizeof(selection.speciesCode) - 1] = '\0';
+        strncpy(selection.outfitCode, outfitCode, sizeof(selection.outfitCode) - 1);
+        selection.outfitCode[sizeof(selection.outfitCode) - 1] = '\0';
+        file.close();
+        return true;
+    }
+
+    file.close();
+    return false;
+}
+
 bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection)
 {
+    selection = {};
     if (sd == nullptr || !sd->exists(kEvolutionRulesPath))
         return false;
 

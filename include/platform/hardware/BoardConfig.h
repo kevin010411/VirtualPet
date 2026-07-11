@@ -19,13 +19,11 @@ constexpr int ConfirmCommandButtonPin = PA11;
 
 constexpr int buzzerPin = PA4;
 
-constexpr uint32_t SdSpiMhz = 24;
+constexpr uint32_t SdSpiMhz = 21;
 constexpr uint8_t TftInitTab = INITR_BLACKTAB;
 constexpr int8_t TftColOffset = 2;
 constexpr int8_t TftRowOffset = 1;
 
-constexpr const char *DefaultSpeciesCode = "dino";
-constexpr const char *DefaultOutfitCode = "base";
 } // namespace BoardConfig
 
 #endif

@@ -29,6 +29,7 @@ ButtonInput buttons(
 // Low battery / PVD 設定
 // =========================
 static bool g_sdReady = false;
+static bool g_gameReady = false;
 static bool g_lowBatteryMode = false;
 static unsigned long g_lowBatterySince = 0;
 static unsigned long g_lowBatteryEnteredAt = 0;
@@ -182,14 +183,14 @@ void onConfirmLongPress()
   noteInteraction();
   initializeTftDisplay(false);
   digitalWrite(BoardConfig::TftBacklightPin, HIGH);
-  game.setup_game();
+  g_gameReady = game.setup_game();
 }
 
 static void onLRComboLongPress()
 {
   noteInteraction();
   digitalWrite(BoardConfig::TftBacklightPin, LOW);
-  game.resetPet();
+  g_gameReady = game.resetPet();
   delay(1000);
   digitalWrite(BoardConfig::TftBacklightPin, HIGH);
 }
@@ -284,8 +285,9 @@ void setup()
   }
 
   g_sdReady = true;
-  game.setRendererAssetAppearance(BoardConfig::DefaultSpeciesCode, BoardConfig::DefaultOutfitCode);
-  game.setup_game();
+  g_gameReady = game.setup_game();
+  if (!g_gameReady)
+    return;
   if (kStartupPostSetupMs > 0)
     delay(kStartupPostSetupMs);
   digitalWrite(BoardConfig::TftBacklightPin, HIGH);
@@ -302,6 +304,9 @@ void loop()
   const unsigned long now = millis();
 
   if (!g_sdReady)
+    return;
+
+  if (!g_gameReady)
     return;
 
   updateLowBatteryMode(now);

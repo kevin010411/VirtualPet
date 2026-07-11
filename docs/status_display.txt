@@ -47,4 +47,4 @@ alcohol, or intimacy.
 
 DipsyHo example:
 
-triple_meter|StatusAge|stage_progress,satiety,mood
+triple_meter|Status|stage_progress,satiety,mood

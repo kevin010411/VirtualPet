@@ -15,7 +15,7 @@ class PetActionController
 public:
     PetActionController(Pet &pet, PetStorage &petStorage, Renderer &renderer, AppearanceLoader &appearanceLoader);
 
-    bool loadOrDefault(const char *defaultSpeciesCode, const char *defaultOutfitCode);
+    bool loadOrInitial(const AppearanceSelection &initialAppearance);
     bool saveNow();
     void reset();
     void maybeSave();
