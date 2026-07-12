@@ -1,9 +1,7 @@
-# Copy this file to SD card path: /index/dino_base.txt
-# Format: id|format|frames|width|height|fps|path
-# This file stores the dino/base appearance animations.
-# Paths are literal SD-card paths. Token replacement is not supported.
+# dino/base 外觀動畫 manifest；放在 SD 卡：/index/dino_base.txt
+# 格式：動畫名稱|格式(bmp/rle)|影格數|寬|高|影格間隔毫秒|SD 資源路徑
 
-# Base state animations
+# 基本狀態動畫
 Idle|bmp|3|128|96|6|/dino/base/idle
 Happy|bmp|2|128|96|6|/dino/base/happy
 Hungry|bmp|2|128|96|6|/dino/base/hungry
@@ -13,14 +11,14 @@ Clean|bmp|2|128|96|6|/dino/base/clean
 Sick|bmp|2|128|96|6|/dino/base/sick
 Poop|bmp|2|128|96|6|/dino/base/poop
 
-# Command animations
+# 指令動畫
 Feed|bmp|2|128|96|8|/dino/base/feed
 Heal|bmp|2|128|96|8|/dino/base/heal
 Shower|bmp|2|128|96|8|/dino/base/shower
 Gift|bmp|3|128|96|8|/dino/base/gift
 GiftHappy|bmp|2|128|96|8|/dino/base/gift_happy
 
-# Guess game animations
+# 猜物小遊戲動畫
 GuessStart|bmp|2|128|96|8|/dino/guess_game/guess_start
 GuessItem1|bmp|4|128|96|8|/dino/guess_game/1
 GuessItem2|bmp|4|128|96|8|/dino/guess_game/2
@@ -35,13 +33,11 @@ GuessWrong|bmp|4|128|96|10|/dino/guess_game/wrong
 GuessWin|bmp|5|128|96|10|/dino/guess_game/win
 GuessLoss|bmp|2|128|96|10|/dino/guess_game/loss
 
-# Age status animation
+# 狀態畫面動畫
 StatusAge|bmp|3|128|96|6|/status/age
-
-# Triple meter status animation
 Status|bmp|64|128|96|6|/status
 
-# Fortune animations
+# 預言動畫
 PredAnim|bmp|23|128|96|10|/predict/anim
 Predict1|bmp|2|128|96|8|/predict/1
 Predict2|bmp|2|128|96|8|/predict/2

@@ -6,6 +6,7 @@ namespace
 {
 #define COMMAND_SLOT(commandId, label, canFn, execFn, clearFirst) \
     { commandId, label, &CommandController::canFn, &CommandController::execFn, true, clearFirst }
+#define COMMAND_SLOT_CUSTOM(slot) COMMAND_SLOT(AppCommandId::Custom##slot, "CUSTOM" #slot, canCustom##slot, executeCustom##slot, true)
 
 #if ENABLE_GUESS_ITEM_GAME
 #define COMMAND_SLOT_HAVE_FUN COMMAND_SLOT(AppCommandId::HaveFun, "HAVE_FUN", canAlwaysExecute, executeHaveFun, false)
@@ -51,7 +52,7 @@ const CommandController::CommandSlot CommandController::slots[] = {
     
 #elif APP_PROFILE == APP_PROFILE_KUROMU
     COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
-    COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),
+    COMMAND_SLOT_CUSTOM(0),
     COMMAND_SLOT(AppCommandId::ChangeOutfit, "CHANGE_OUTFIT", canAlwaysExecute, executeChangeOutfit, true),
     COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),
     COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
@@ -223,6 +224,15 @@ bool CommandController::canStatus() const
     return host.commandCanStatus();
 }
 
+bool CommandController::canCustom0() const { return host.commandCanCustomAction(0); }
+bool CommandController::canCustom1() const { return host.commandCanCustomAction(1); }
+bool CommandController::canCustom2() const { return host.commandCanCustomAction(2); }
+bool CommandController::canCustom3() const { return host.commandCanCustomAction(3); }
+bool CommandController::canCustom4() const { return host.commandCanCustomAction(4); }
+bool CommandController::canCustom5() const { return host.commandCanCustomAction(5); }
+bool CommandController::canCustom6() const { return host.commandCanCustomAction(6); }
+bool CommandController::canCustom7() const { return host.commandCanCustomAction(7); }
+
 bool CommandController::hasAnimations(const AnimationId *ids, size_t count) const
 {
     if (ids == nullptr)
@@ -287,3 +297,12 @@ void CommandController::executeStatus()
 {
     host.commandStatus();
 }
+
+void CommandController::executeCustom0() { host.commandCustomAction(0); }
+void CommandController::executeCustom1() { host.commandCustomAction(1); }
+void CommandController::executeCustom2() { host.commandCustomAction(2); }
+void CommandController::executeCustom3() { host.commandCustomAction(3); }
+void CommandController::executeCustom4() { host.commandCustomAction(4); }
+void CommandController::executeCustom5() { host.commandCustomAction(5); }
+void CommandController::executeCustom6() { host.commandCustomAction(6); }
+void CommandController::executeCustom7() { host.commandCustomAction(7); }

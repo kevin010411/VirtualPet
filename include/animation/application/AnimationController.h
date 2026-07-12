@@ -17,8 +17,14 @@ public:
     void setBaseAnimation(AnimationId baseAnimation);
     AnimationId baseAnimation() const;
     bool hasAnimation(AnimationId id) const;
+    bool hasNamedAnimation(const char *name) const;
     bool hasAnimations(const AnimationId *ids, size_t count) const;
     void queueAnimation(const Animation &animation);
+    void queueNamedAnimation(const char *name,
+                             unsigned long durationMs,
+                             bool playOnce,
+                             AnimationOwner owner,
+                             AnimationPriority priority);
     void clearByOwner(AnimationOwner owner);
     bool hasAnimationForOwner(AnimationOwner owner) const;
     AnimationId currentCommandAnimationId() const;
@@ -32,7 +38,9 @@ public:
     void updateBatteryAnimation(unsigned long now);
     unsigned long defaultFrameInterval() const;
     unsigned long frameIntervalFor(AnimationId id) const;
+    unsigned long frameIntervalForName(const char *name) const;
     uint16_t frameCountFor(AnimationId id) const;
+    uint16_t frameCountForName(const char *name) const;
     SdFat *sdCard() const;
 
 private:
@@ -49,6 +57,8 @@ private:
     unsigned long frameInterval = frameIntervalSlow;
     unsigned long lastFrameTime = 0;
     AnimationId showAnimationId = AnimationId::None;
+    bool showUsesNamedAnimation = false;
+    char showNamedAnimation[16] = {};
 
     void tryStartNextAnimation();
 };

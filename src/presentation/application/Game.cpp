@@ -4,6 +4,7 @@
 #include "animation/application/AnimationController.h"
 #include "commands/application/CommandController.h"
 #include "commands/application/CommandExecutor.h"
+#include "custom_rules/domain/CustomRules.h"
 #include "presentation/application/LayoutRenderer.h"
 #include "minigames/guess_item/application/MinigameController.h"
 #include "appearance/application/AppearanceSelectionController.h"
@@ -18,9 +19,9 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       petStorage(petStorageRef),
       renderer(rendererRef),
       appearanceLoader(appearanceLoaderRef),
-      petActions(std::make_unique<PetActionController>(pet, petStorage, renderer, appearanceLoader)),
-      animations(std::make_unique<AnimationController>(renderer)),
-      commandExecutor(std::make_unique<CommandExecutor>(*petActions, *animations)),
+       petActions(std::make_unique<PetActionController>(pet, petStorage, renderer, appearanceLoader)),
+       animations(std::make_unique<AnimationController>(renderer)),
+       commandExecutor(std::make_unique<CommandExecutor>(*petActions, *animations, customRules)),
       commands(std::make_unique<CommandController>(*commandExecutor)),
       layout(std::make_unique<LayoutRenderer>(renderer, *commands)),
       appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader))
@@ -53,6 +54,7 @@ bool Game::setup_game()
     minigame->reset();
 #endif
 
+    customRules.load(animations->sdCard(), &renderer.debugDisplay());
     if (!loadInitialPetState(true))
         return false;
 
@@ -121,6 +123,7 @@ void Game::loop_game()
         layout->drawSelection();
         dirtySelect = false;
     }
+    renderer.renderDebugOverlay();
 }
 
 void Game::requestFullRedraw()
@@ -400,7 +403,9 @@ bool Game::isFirstLaunchSelectionPending() const
 bool Game::loadInitialPetState(bool allowSavedState)
 {
     if (allowSavedState && petStorage.load(pet))
+    {
         return true;
+    }
 
     AppearanceSelection initialAppearance = {};
     if (!appearanceLoader.findInitialAppearance(initialAppearance))

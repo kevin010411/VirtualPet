@@ -131,6 +131,11 @@ bool PetActionController::changeCustomStat(uint8_t index, int16_t delta)
     return pet.changeCustomStat(index, delta);
 }
 
+bool PetActionController::changeCustomStatClamped(uint8_t index, int16_t delta, int16_t minValue, int16_t maxValue)
+{
+    return pet.changeCustomStatClamped(index, delta, minValue, maxValue);
+}
+
 bool PetActionController::isFirstLaunchComplete() const
 {
     return pet.isFirstLaunchComplete();

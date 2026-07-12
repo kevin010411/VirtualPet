@@ -1,0 +1,11 @@
+# 自訂數值別名；放在 SD 卡根目錄：/state_schema.txt
+# 格式：別名|slot|最小值|最大值|預設值
+# 別名可使用 A-Z、a-z、0-9、_、-；slot 必須是 custom0～custom7。
+# 最小值、最大值與預設值皆為有號整數，且必須符合 最小值 <= 預設值 <= 最大值。
+# 重複別名保留第一個有效列；遺失或無效列會被忽略。
+
+money|custom0|0|999|0
+record|custom1|0|999|0
+fatigue|custom2|0|100|0
+alcohol|custom3|0|3|0
+intimacy|custom4|0|100|0

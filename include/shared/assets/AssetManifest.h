@@ -13,7 +13,7 @@ enum class AssetFormat : uint8_t
 
 struct AnimationMeta
 {
-    char path[96];
+    char path[64];
     AssetFormat format;
     uint16_t width;
     uint16_t height;
@@ -26,11 +26,16 @@ struct AnimationMeta
 class AssetManifest
 {
 public:
+    static constexpr uint8_t kMaxNamedAnimations = 4;
+    static constexpr uint8_t kMaxAnimationNameLength = 15;
+
     void reset();
     bool load(SdFat *sd, const char *speciesCode, const char *outfitCode);
 
     AnimationMeta *metaFor(AnimationId id);
     const AnimationMeta *metaFor(AnimationId id) const;
+    AnimationMeta *metaForName(const char *name);
+    const AnimationMeta *metaForName(const char *name) const;
 };
 
 #endif

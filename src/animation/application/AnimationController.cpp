@@ -1,5 +1,6 @@
 #include "animation/application/AnimationController.h"
 
+#include <string.h>
 #include "presentation/adapters/rendering/Renderer.h"
 
 AnimationController::AnimationController(Renderer &rendererRef)
@@ -20,6 +21,8 @@ void AnimationController::setup(AnimationId baseAnimation)
     frameInterval = frameIntervalSlow;
     lastFrameTime = 0;
     showAnimationId = AnimationId::None;
+    showUsesNamedAnimation = false;
+    showNamedAnimation[0] = '\0';
     renderer.setAnimation(baseAnimationId, false);
 }
 
@@ -42,6 +45,11 @@ bool AnimationController::hasAnimation(AnimationId id) const
     return renderer.frameCountFor(id) > 0;
 }
 
+bool AnimationController::hasNamedAnimation(const char *name) const
+{
+    return renderer.frameCountForName(name) > 0;
+}
+
 bool AnimationController::hasAnimations(const AnimationId *ids, size_t count) const
 {
     if (ids == nullptr)
@@ -57,8 +65,15 @@ bool AnimationController::hasAnimations(const AnimationId *ids, size_t count) co
 
 void AnimationController::queueAnimation(const Animation &animation)
 {
-    if (animation.id != AnimationId::None && !hasAnimation(animation.id))
+    if (animation.usesNamedAnimation)
+    {
+        if (!hasNamedAnimation(animation.namedAnimation))
+            return;
+    }
+    else if (animation.id != AnimationId::None && !hasAnimation(animation.id))
+    {
         return;
+    }
 
     auto insertIt = animationQueue.end();
     for (auto it = animationQueue.begin(); it != animationQueue.end(); ++it)
@@ -70,6 +85,22 @@ void AnimationController::queueAnimation(const Animation &animation)
         }
     }
     animationQueue.insert(insertIt, animation);
+}
+
+void AnimationController::queueNamedAnimation(const char *name,
+                                              unsigned long durationMs,
+                                              bool playOnce,
+                                              AnimationOwner owner,
+                                              AnimationPriority priority)
+{
+    if (name == nullptr || name[0] == '\0' || !hasNamedAnimation(name))
+        return;
+
+    Animation animation(AnimationId::None, durationMs, playOnce, owner, priority);
+    animation.usesNamedAnimation = true;
+    strncpy(animation.namedAnimation, name, sizeof(animation.namedAnimation) - 1);
+    animation.namedAnimation[sizeof(animation.namedAnimation) - 1] = '\0';
+    queueAnimation(animation);
 }
 
 void AnimationController::clearByOwner(AnimationOwner owner)
@@ -89,6 +120,8 @@ void AnimationController::clearByOwner(AnimationOwner owner)
         displayDuration = 0;
         animateDone = true;
         showAnimationId = AnimationId::None;
+        showUsesNamedAnimation = false;
+        showNamedAnimation[0] = '\0';
     }
 }
 
@@ -128,6 +161,8 @@ void AnimationController::requestFullRedraw()
 {
     dirtyAnimation = true;
     showAnimationId = AnimationId::None;
+    showUsesNamedAnimation = false;
+    showNamedAnimation[0] = '\0';
     animateDone = true;
     lastFrameTime = 0;
 }
@@ -176,28 +211,47 @@ void AnimationController::render(unsigned long now)
     if (frameDue)
         lastFrameTime = now;
 
-    if (dirtyAnimation || showAnimationId == AnimationId::None)
+    if (dirtyAnimation || (!showUsesNamedAnimation && showAnimationId == AnimationId::None))
     {
         bool playOnce = false;
         tryStartNextAnimation();
         if (hasActiveAnimation)
         {
-            showAnimationId = activeAnimation.id;
+            showUsesNamedAnimation = activeAnimation.usesNamedAnimation;
+            if (showUsesNamedAnimation)
+            {
+                strncpy(showNamedAnimation, activeAnimation.namedAnimation, sizeof(showNamedAnimation) - 1);
+                showNamedAnimation[sizeof(showNamedAnimation) - 1] = '\0';
+                showAnimationId = AnimationId::None;
+            }
+            else
+            {
+                showNamedAnimation[0] = '\0';
+                showAnimationId = activeAnimation.id;
+            }
             playOnce = activeAnimation.playOnce;
         }
         else
         {
+            showUsesNamedAnimation = false;
+            showNamedAnimation[0] = '\0';
             showAnimationId = baseAnimationId;
         }
 
-        frameInterval = renderer.frameIntervalFor(showAnimationId, frameIntervalSlow);
+        frameInterval = showUsesNamedAnimation
+                            ? renderer.frameIntervalForName(showNamedAnimation, frameIntervalSlow)
+                            : renderer.frameIntervalFor(showAnimationId, frameIntervalSlow);
         if (hasActiveAnimation && activeAnimation.isFixedFrame())
         {
-            animateDone = !renderer.ShowAnimationFrame(showAnimationId, activeAnimation.frameIndex);
+            animateDone = showUsesNamedAnimation
+                              ? !renderer.ShowNamedAnimationFrame(showNamedAnimation, activeAnimation.frameIndex)
+                              : !renderer.ShowAnimationFrame(showAnimationId, activeAnimation.frameIndex);
         }
         else
         {
-            animateDone = !renderer.setAnimation(showAnimationId, playOnce);
+            animateDone = showUsesNamedAnimation
+                              ? !renderer.setNamedAnimation(showNamedAnimation, playOnce)
+                              : !renderer.setAnimation(showAnimationId, playOnce);
             if (!animateDone)
                 animateDone = renderer.advanceAnimationFrame();
         }
@@ -215,6 +269,8 @@ void AnimationController::startBatteryAnimation()
     clearByOwner(AnimationOwner::Minigame);
     clearByOwner(AnimationOwner::System);
     showAnimationId = AnimationId::Battery;
+    showUsesNamedAnimation = false;
+    showNamedAnimation[0] = '\0';
     frameInterval = renderer.frameIntervalFor(showAnimationId, frameIntervalSlow);
     lastFrameTime = 0;
     animateDone = !renderer.setAnimation(showAnimationId, false);
@@ -241,9 +297,19 @@ unsigned long AnimationController::frameIntervalFor(AnimationId id) const
     return renderer.frameIntervalFor(id, frameIntervalSlow);
 }
 
+unsigned long AnimationController::frameIntervalForName(const char *name) const
+{
+    return renderer.frameIntervalForName(name, frameIntervalSlow);
+}
+
 uint16_t AnimationController::frameCountFor(AnimationId id) const
 {
     return renderer.frameCountFor(id);
+}
+
+uint16_t AnimationController::frameCountForName(const char *name) const
+{
+    return renderer.frameCountForName(name);
 }
 
 SdFat *AnimationController::sdCard() const

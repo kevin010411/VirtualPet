@@ -10,6 +10,8 @@ constexpr uint16_t kDefaultAnimHeight = 96;
 constexpr const char *kMainManifestPath = "/index/main.txt";
 
 AnimationMeta gAnimationRegistry[kAnimationIdCount] = {};
+char gNamedAnimationNames[AssetManifest::kMaxNamedAnimations][AssetManifest::kMaxAnimationNameLength + 1] = {};
+AnimationMeta gNamedAnimationRegistry[AssetManifest::kMaxNamedAnimations] = {};
 
 void trimWhitespace(char *text)
 {
@@ -107,6 +109,30 @@ bool copyManifestPath(char *dest, size_t destSize, const char *source)
     return true;
 }
 
+bool copyAnimationName(char *dest, size_t destSize, const char *source)
+{
+    if (dest == nullptr || destSize == 0 || source == nullptr || source[0] == '\0')
+        return false;
+
+    const size_t len = strlen(source);
+    if (len >= destSize)
+        return false;
+
+    for (size_t i = 0; i < len; ++i)
+    {
+        const char c = source[i];
+        const bool valid = (c >= 'A' && c <= 'Z') ||
+                           (c >= 'a' && c <= 'z') ||
+                           (c >= '0' && c <= '9') ||
+                           c == '_' || c == '-';
+        if (!valid)
+            return false;
+    }
+
+    memcpy(dest, source, len + 1);
+    return true;
+}
+
 bool buildAppearanceManifestPath(char *dest, size_t destSize, const char *speciesCode, const char *outfitCode)
 {
     if (dest == nullptr || destSize == 0)
@@ -141,10 +167,6 @@ bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPa
         if (!splitManifestFields(line, fields, 7))
             continue;
 
-        const AnimationId targetId = animationIdFromName(fields[0]);
-        if (targetId == AnimationId::None)
-            continue;
-
         const bool isBmp = strcmp(fields[1], "bmp") == 0;
         const bool isRle = strcmp(fields[1], "rle") == 0;
         if (!isBmp && !isRle)
@@ -168,7 +190,18 @@ bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPa
             parsed.frameCount = 1;
 
         parsed.configured = true;
-        *registry.metaFor(targetId) = parsed;
+
+        const AnimationId targetId = animationIdFromName(fields[0]);
+        if (targetId != AnimationId::None)
+        {
+            *registry.metaFor(targetId) = parsed;
+        }
+        else
+        {
+            AnimationMeta *namedMeta = registry.metaForName(fields[0]);
+            if (namedMeta != nullptr)
+                *namedMeta = parsed;
+        }
     }
 
     manifest.close();
@@ -181,6 +214,20 @@ void AssetManifest::reset()
     for (size_t i = 0; i < kAnimationIdCount; ++i)
     {
         AnimationMeta &meta = gAnimationRegistry[i];
+        meta.path[0] = '\0';
+        meta.format = AssetFormat::BmpSequence;
+        meta.width = kDefaultAnimWidth;
+        meta.height = kDefaultAnimHeight;
+        meta.frameCount = 0;
+        meta.frameIntervalMs = 0;
+        meta.configured = false;
+        meta.singleFile = false;
+    }
+
+    for (size_t i = 0; i < kMaxNamedAnimations; ++i)
+    {
+        gNamedAnimationNames[i][0] = '\0';
+        AnimationMeta &meta = gNamedAnimationRegistry[i];
         meta.path[0] = '\0';
         meta.format = AssetFormat::BmpSequence;
         meta.width = kDefaultAnimWidth;
@@ -223,4 +270,42 @@ const AnimationMeta *AssetManifest::metaFor(AnimationId id) const
     if (index >= kAnimationIdCount)
         return &gAnimationRegistry[0];
     return &gAnimationRegistry[index];
+}
+
+AnimationMeta *AssetManifest::metaForName(const char *name)
+{
+    if (name == nullptr || name[0] == '\0')
+        return nullptr;
+
+    for (size_t i = 0; i < kMaxNamedAnimations; ++i)
+    {
+        if (strcmp(gNamedAnimationNames[i], name) == 0)
+            return &gNamedAnimationRegistry[i];
+    }
+
+    for (size_t i = 0; i < kMaxNamedAnimations; ++i)
+    {
+        if (gNamedAnimationNames[i][0] != '\0')
+            continue;
+
+        if (!copyAnimationName(gNamedAnimationNames[i], sizeof(gNamedAnimationNames[i]), name))
+            return nullptr;
+        return &gNamedAnimationRegistry[i];
+    }
+
+    return nullptr;
+}
+
+const AnimationMeta *AssetManifest::metaForName(const char *name) const
+{
+    if (name == nullptr || name[0] == '\0')
+        return nullptr;
+
+    for (size_t i = 0; i < kMaxNamedAnimations; ++i)
+    {
+        if (strcmp(gNamedAnimationNames[i], name) == 0)
+            return &gNamedAnimationRegistry[i];
+    }
+
+    return nullptr;
 }

@@ -21,6 +21,7 @@ struct Renderer::AnimationState
     std::vector<uint8_t> rowBuffer;
     std::vector<uint16_t> lineBuffer;
     AssetManifest manifest;
+    const AnimationMeta *namedAnimationMeta = nullptr;
 #if ENABLE_RENDER_STATS
     RenderStats stats;
 #endif
@@ -36,7 +37,7 @@ Renderer *Renderer::create(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
 }
 
 Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
-    : tft(ref_tft), SD(ref_SD), state(new AnimationState())
+    : tft(ref_tft), SD(ref_SD), state(new AnimationState()), debug(ref_tft)
 {
 }
 
@@ -159,8 +160,35 @@ bool Renderer::ShowAnimationFrame(AnimationId id, uint16_t frame_index, int xmin
     return ok;
 }
 
+bool Renderer::ShowNamedAnimationFrame(const char *name, uint16_t frame_index, int xmin, int ymin, int batch_lines)
+{
+    const AnimationMeta *meta = state->manifest.metaForName(name);
+    if (name == nullptr || name[0] == '\0' || meta == nullptr || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
+    {
+        FrameDecoder::showResourceError(tft);
+        return false;
+    }
+
+    const uint16_t maxFrame = meta->singleFile ? 1 : meta->frameCount;
+    uint16_t safeFrame = frame_index;
+    if (safeFrame < 1)
+        safeFrame = 1;
+    if (safeFrame > maxFrame)
+        safeFrame = maxFrame;
+
+    char framePath[128];
+    const bool hasFramePath = meta->singleFile
+                                  ? FrameDecoder::replaceOrAppendExtension(framePath, sizeof(framePath), meta->path, assetExtension())
+                                  : FrameDecoder::buildFramePath(framePath, sizeof(framePath), meta->path, safeFrame, assetExtension());
+    const bool ok = hasFramePath && showImageFile(framePath, xmin, ymin, batch_lines, meta);
+    if (!ok)
+        FrameDecoder::showResourceError(tft);
+    return ok;
+}
+
 bool Renderer::setAnimation(AnimationId id, bool playOnce)
 {
+    state->namedAnimationMeta = nullptr;
     AnimationMeta *meta = state->manifest.metaFor(id);
     if (id == AnimationId::None || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
     {
@@ -178,9 +206,30 @@ bool Renderer::setAnimation(AnimationId id, bool playOnce)
     return true;
 }
 
+bool Renderer::setNamedAnimation(const char *name, bool playOnce)
+{
+    const AnimationMeta *meta = state->manifest.metaForName(name);
+    if (name == nullptr || name[0] == '\0' || meta == nullptr || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
+    {
+        state->namedAnimationMeta = nullptr;
+        state->nowAnimId = AnimationId::None;
+        state->animationIndex = 1;
+        state->maxFrame = 1;
+        state->playOnce = true;
+        return true;
+    }
+
+    state->namedAnimationMeta = meta;
+    state->nowAnimId = AnimationId::None;
+    state->animationIndex = 1;
+    state->maxFrame = meta->singleFile ? 1 : meta->frameCount;
+    state->playOnce = playOnce;
+    return true;
+}
+
 bool Renderer::advanceAnimationFrame()
 {
-    if (state->nowAnimId == AnimationId::None || state->maxFrame == 0)
+    if ((state->nowAnimId == AnimationId::None && state->namedAnimationMeta == nullptr) || state->maxFrame == 0)
         return true;
 
     if (state->animationIndex > state->maxFrame)
@@ -193,7 +242,9 @@ bool Renderer::advanceAnimationFrame()
 #if ENABLE_RENDER_STATS
     const unsigned long frameStartUs = micros();
 #endif
-    AnimationMeta *meta = state->manifest.metaFor(state->nowAnimId);
+    const AnimationMeta *meta = state->namedAnimationMeta != nullptr
+                                    ? state->namedAnimationMeta
+                                    : state->manifest.metaFor(state->nowAnimId);
     bool ok = false;
 
     if (!meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
@@ -238,6 +289,16 @@ void Renderer::showStatusNotFound()
     FrameDecoder::showStatusNotFound(tft);
 }
 
+DebugDisplay &Renderer::debugDisplay()
+{
+    return debug;
+}
+
+void Renderer::renderDebugOverlay()
+{
+    debug.render();
+}
+
 uint16_t Renderer::frameCountFor(AnimationId id) const
 {
     const AnimationMeta *meta = state->manifest.metaFor(id);
@@ -247,10 +308,28 @@ uint16_t Renderer::frameCountFor(AnimationId id) const
     return meta->singleFile ? 1 : meta->frameCount;
 }
 
+uint16_t Renderer::frameCountForName(const char *name) const
+{
+    const AnimationMeta *meta = state->manifest.metaForName(name);
+    if (name == nullptr || name[0] == '\0' || meta == nullptr || !meta->configured || meta->frameCount == 0)
+        return 0;
+
+    return meta->singleFile ? 1 : meta->frameCount;
+}
+
 unsigned long Renderer::frameIntervalFor(AnimationId id, unsigned long defaultIntervalMs) const
 {
     const AnimationMeta *meta = state->manifest.metaFor(id);
     if (id == AnimationId::None || !meta->configured || meta->frameIntervalMs == 0)
+        return defaultIntervalMs;
+
+    return max(1UL, static_cast<unsigned long>(meta->frameIntervalMs));
+}
+
+unsigned long Renderer::frameIntervalForName(const char *name, unsigned long defaultIntervalMs) const
+{
+    const AnimationMeta *meta = state->manifest.metaForName(name);
+    if (name == nullptr || name[0] == '\0' || meta == nullptr || !meta->configured || meta->frameIntervalMs == 0)
         return defaultIntervalMs;
 
     return max(1UL, static_cast<unsigned long>(meta->frameIntervalMs));

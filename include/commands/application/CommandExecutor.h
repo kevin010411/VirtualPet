@@ -6,6 +6,8 @@
 #include "commands/application/CommandController.h"
 #include "pet/application/PetActionController.h"
 
+class CustomRules;
+
 struct CommandResult
 {
     bool executed = false;
@@ -19,7 +21,7 @@ struct CommandResult
 class CommandExecutor : public CommandHost
 {
 public:
-    CommandExecutor(PetActionController &petActions, AnimationController &animations);
+    CommandExecutor(PetActionController &petActions, AnimationController &animations, CustomRules &customRules);
 
     void begin(AppCommandId commandId);
     CommandResult complete(bool executed);
@@ -30,8 +32,10 @@ private:
 
     PetActionController &petActions;
     AnimationController &animations;
+    CustomRules &customRules;
     CommandResult currentResult = {};
 
+    bool executeCustomAction(const char *actionKey);
     static AnimationId fortuneToAnimationId(int fortuneIndex);
     void queuePostCommandHappyAnimation();
     void queueGiftAnimation();
@@ -47,6 +51,7 @@ private:
 
     bool commandHasAnimation(AnimationId id) const override;
     bool commandCanStatus() const override;
+    bool commandCanCustomAction(uint8_t slot) const override;
     AnimationId commandCurrentAgeAnimation() const override;
     void commandClearCommandAnimations() override;
     void commandFeedPet() override;
@@ -61,6 +66,7 @@ private:
     void commandChangeOutfit() override;
     void commandChangeSpecies() override;
     void commandStatus() override;
+    void commandCustomAction(uint8_t slot) override;
 };
 
 #endif // COMMAND_EXECUTOR_H

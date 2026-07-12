@@ -1,0 +1,7 @@
+# 共用／系統動畫 manifest；放在 SD 卡：/index/main.txt
+# 格式：動畫名稱|格式(bmp/rle)|影格數|寬|高|影格間隔毫秒|SD 資源路徑
+# 路徑為 SD 卡上的實際路徑，不支援 token 替換。
+
+Battery|bmp|2|128|96|6|/battery
+Layout|bmp|8|32|32|0|/layout
+LayoutSel|bmp|8|32|32|0|/layout_sel

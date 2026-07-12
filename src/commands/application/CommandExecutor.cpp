@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "custom_rules/domain/CustomRules.h"
 
 namespace
 {
@@ -386,9 +387,10 @@ bool loadStatusDisplayConfig(SdFat *sd, StatusDisplayConfig &config)
 #endif
 } // namespace
 
-CommandExecutor::CommandExecutor(PetActionController &petActionsRef, AnimationController &animationsRef)
+CommandExecutor::CommandExecutor(PetActionController &petActionsRef, AnimationController &animationsRef, CustomRules &customRulesRef)
     : petActions(petActionsRef),
-      animations(animationsRef)
+      animations(animationsRef),
+      customRules(customRulesRef)
 {
 }
 
@@ -396,11 +398,12 @@ void CommandExecutor::begin(AppCommandId commandId)
 {
     currentResult = {};
     currentResult.commandId = commandId;
+    currentResult.executed = true;
 }
 
 CommandResult CommandExecutor::complete(bool executed)
 {
-    currentResult.executed = executed;
+    currentResult.executed = executed && currentResult.executed;
     return currentResult;
 }
 
@@ -465,6 +468,15 @@ bool CommandExecutor::commandCanStatus() const
 #else
     return false;
 #endif
+}
+
+bool CommandExecutor::commandCanCustomAction(uint8_t slot) const
+{
+    if (slot > 7)
+        return false;
+    char key[8] = {};
+    snprintf(key, sizeof(key), "CUSTOM%u", slot);
+    return customRules.hasAction(key);
 }
 
 AnimationId CommandExecutor::commandCurrentAgeAnimation() const
@@ -552,6 +564,18 @@ void CommandExecutor::commandStatus()
 {
     currentResult.layoutId = AnimationId::Status;
     queueStatusAnimation();
+}
+
+void CommandExecutor::commandCustomAction(uint8_t slot)
+{
+    if (slot > 7)
+    {
+        currentResult.executed = false;
+        return;
+    }
+    char key[8] = {};
+    snprintf(key, sizeof(key), "CUSTOM%u", slot);
+    currentResult.executed = executeCustomAction(key);
 }
 
 void CommandExecutor::queueStatusAnimation()
@@ -750,4 +774,8 @@ bool CommandExecutor::canPlayGuessItemGame() const
 #else
     return false;
 #endif
+}
+bool CommandExecutor::executeCustomAction(const char *actionKey)
+{
+    return customRules.executeAction(actionKey, petActions, animations);
 }

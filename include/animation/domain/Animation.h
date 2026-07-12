@@ -96,6 +96,8 @@ struct Animation
     AnimationOwner owner;
     AnimationPriority priority;
     uint16_t frameIndex;
+    bool usesNamedAnimation;
+    char namedAnimation[16];
 
     Animation(AnimationId animationId = AnimationId::None,
               unsigned long duration = 0,
@@ -108,7 +110,9 @@ struct Animation
           playOnce(once),
           owner(animationOwner),
           priority(animationPriority),
-          frameIndex(fixedFrameIndex) {}
+          frameIndex(fixedFrameIndex),
+          usesNamedAnimation(false),
+          namedAnimation{} {}
 
     bool isFixedFrame() const { return frameIndex != 0; }
 };

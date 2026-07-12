@@ -34,6 +34,7 @@ public:
     int16_t customStat(uint8_t index) const;
     bool setCustomStat(uint8_t index, int16_t value);
     bool changeCustomStat(uint8_t index, int16_t delta);
+    bool changeCustomStatClamped(uint8_t index, int16_t delta, int16_t minValue, int16_t maxValue);
 
     bool isFirstLaunchComplete() const;
     void markFirstLaunchComplete();

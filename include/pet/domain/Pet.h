@@ -106,11 +106,14 @@ public:
     int16_t customStat(uint8_t index) const;
     bool setCustomStat(uint8_t index, int16_t value);
     bool changeCustomStat(uint8_t index, int16_t delta);
+    bool changeCustomStatClamped(uint8_t index, int16_t delta, int16_t minValue, int16_t maxValue);
     bool setSpeciesCode(const char *code);
     bool setOutfitCode(const char *code);
     bool isFirstLaunchComplete() const;
     void markFirstLaunchComplete();
     void resetFirstLaunch();
+    bool isCustomRulesInitialized() const;
+    void markCustomRulesInitialized();
 
     const PersistedPetState &persistentState() const;
     bool restoreState(const PersistedPetState &state);

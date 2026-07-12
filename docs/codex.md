@@ -18,5 +18,6 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_start
 
 Command slot、STATUS mode、feature gate 與存檔格式請看：
 
-- `docs/app_profiles.md`
-- `docs/pet_storage.md`
+- [應用程式 profile](app_profiles.md)
+- [寵物存檔格式](pet_storage.md)
+- [完整文件索引](README.md)

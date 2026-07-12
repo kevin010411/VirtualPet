@@ -178,6 +178,37 @@ static void initializeTftDisplay(bool retryAfterPowerOn)
   tft.setTextColor(ST77XX_RED);
 }
 
+static void beginTftStartupReset()
+{
+  digitalWrite(BoardConfig::TftBacklightPin, LOW);
+  delay(kTftPowerSettleMs);
+  pinMode(BoardConfig::TftRstPin, OUTPUT);
+  digitalWrite(BoardConfig::TftRstPin, HIGH);
+  delay(10);
+  digitalWrite(BoardConfig::TftRstPin, LOW);
+}
+
+static void finishTftStartupResetAndInitialize(unsigned long resetLowStartedAt)
+{
+  const unsigned long elapsedLow = millis() - resetLowStartedAt;
+  if (elapsedLow < kTftStartupResetLowMs)
+    delay(kTftStartupResetLowMs - elapsedLow);
+
+  digitalWrite(BoardConfig::TftRstPin, HIGH);
+  delay(kTftStartupResetHighMs);
+  tft.initR(BoardConfig::TftInitTab);
+  tft.setDisplayOffset(BoardConfig::TftColOffset, BoardConfig::TftRowOffset);
+  tft.setRotation(2);
+  tft.fillScreen(ST77XX_BLACK);
+
+  TFT_Reset(kTftStartupResetLowMs, kTftStartupResetHighMs);
+  tft.initR(BoardConfig::TftInitTab);
+  tft.setDisplayOffset(BoardConfig::TftColOffset, BoardConfig::TftRowOffset);
+  tft.setRotation(2);
+  tft.fillScreen(ST77XX_BLACK);
+  tft.setTextColor(ST77XX_RED);
+}
+
 void onConfirmLongPress()
 {
   noteInteraction();
@@ -266,11 +297,13 @@ void setup()
   SPI.begin();   // SPI1
   SPI_2.begin(); // SPI2
 
-  // 初始化 TFT 螢幕
+  // Keep the first TFT reset-low period useful: SD initialization can safely
+  // run while the TFT is held in reset because they use separate chip-selects.
   pinMode(BoardConfig::TftBacklightPin, OUTPUT);
   digitalWrite(BoardConfig::TftBacklightPin, LOW);
   pinMode(BoardConfig::buzzerPin, OUTPUT);
-  initializeTftDisplay(true);
+  beginTftStartupReset();
+  const unsigned long tftResetLowStartedAt = millis();
 
   // 初始化 low battery 偵測
   initLowBatteryDetector();
@@ -279,10 +312,13 @@ void setup()
 
   if (!SD.begin(BoardConfig::SdCsPin, SD_SCK_MHZ(BoardConfig::SdSpiMhz)))
   {
+    finishTftStartupResetAndInitialize(tftResetLowStartedAt);
     showSdInitError();
     SD.initErrorPrint(&tft);
     return;
   }
+
+  finishTftStartupResetAndInitialize(tftResetLowStartedAt);
 
   g_sdReady = true;
   g_gameReady = game.setup_game();

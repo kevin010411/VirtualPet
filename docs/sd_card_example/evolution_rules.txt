@@ -1,0 +1,17 @@
+# 演化規則；放在 SD 卡根目錄：/evolution_rules.txt
+# 格式：來源物種|目標物種|目標服裝|條件
+# 來源物種可用 init（沒有存檔時的初始寵物）或 *（任何來源物種）。
+# 條件以逗號分隔，格式為 名稱=值 或 名稱=最小值..最大值；* 表示沒有上下限。
+# 空白條件代表該來源物種的所有狀態都符合；第一個符合的規則優先。
+# 檔案遺失、無效或沒有符合規則時，韌體會保留目前物種與服裝。
+# 內建條件：healthy_days、stage_healthy_days、age、hunger、mood、clean、env、sick、status。
+# custom0～custom7 可使用 state_schema.txt 定義的別名，例如 intimacy 或 alcohol。
+
+init|andrea|base|
+andrea|gigi|base|stage_healthy_days=2..3,intimacy=2..3
+andrea|dita|base|alcohol=3
+andrea|jessi|base|
+gigi|regina|base|stage_healthy_days=2..3,intimacy=2..3
+gigi|amanda|base|stage_healthy_days=2..3,intimacy=0..1
+gigi|nyx|base|alcohol=3
+gigi|river|base|

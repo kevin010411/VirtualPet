@@ -5,6 +5,9 @@
 
 namespace
 {
+constexpr uint32_t kFirstLaunchCompleteFlag = 0x1UL;
+constexpr uint32_t kCustomRulesInitializedFlag = 0x2UL;
+
 bool copyAppearanceCode(char *dest, size_t destSize, const char *source)
 {
     if (dest == nullptr || destSize == 0 || source == nullptr || source[0] == '\0')
@@ -301,6 +304,16 @@ bool Pet::changeCustomStat(uint8_t index, int16_t delta)
     return true;
 }
 
+bool Pet::changeCustomStatClamped(uint8_t index, int16_t delta, int16_t minValue, int16_t maxValue)
+{
+    if (index >= PetStatSnapshot::kCustomStatCount || minValue > maxValue)
+        return false;
+
+    const int32_t next = static_cast<int32_t>(st.customStats[index]) + delta;
+    st.customStats[index] = static_cast<int16_t>(clampValue<int32_t>(next, minValue, maxValue));
+    return true;
+}
+
 bool Pet::setSpeciesCode(const char *code)
 {
     char nextSpecies[sizeof(st.species)] = {};
@@ -322,17 +335,27 @@ bool Pet::setOutfitCode(const char *code)
 
 bool Pet::isFirstLaunchComplete() const
 {
-    return (st.flowFlags & 0x1UL) != 0;
+    return (st.flowFlags & kFirstLaunchCompleteFlag) != 0;
 }
 
 void Pet::markFirstLaunchComplete()
 {
-    st.flowFlags |= 0x1UL;
+    st.flowFlags |= kFirstLaunchCompleteFlag;
 }
 
 void Pet::resetFirstLaunch()
 {
-    st.flowFlags &= ~0x1UL;
+    st.flowFlags &= ~kFirstLaunchCompleteFlag;
+}
+
+bool Pet::isCustomRulesInitialized() const
+{
+    return (st.flowFlags & kCustomRulesInitializedFlag) != 0;
+}
+
+void Pet::markCustomRulesInitialized()
+{
+    st.flowFlags |= kCustomRulesInitializedFlag;
 }
 
 bool Pet::restoreState(const PersistedPetState &state)
