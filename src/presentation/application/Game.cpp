@@ -18,31 +18,21 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       petStorage(petStorageRef),
       renderer(rendererRef),
       appearanceLoader(appearanceLoaderRef),
-      petActions(new PetActionController(pet, petStorage, renderer, appearanceLoader)),
-      animations(new AnimationController(renderer)),
-      commandExecutor(new CommandExecutor(*petActions, *animations)),
-      commands(new CommandController(*commandExecutor)),
-      layout(new LayoutRenderer(renderer, *commands)),
-      appearanceSelection(new AppearanceSelectionController(renderer, appearanceLoader))
+      petActions(std::make_unique<PetActionController>(pet, petStorage, renderer, appearanceLoader)),
+      animations(std::make_unique<AnimationController>(renderer)),
+      commandExecutor(std::make_unique<CommandExecutor>(*petActions, *animations)),
+      commands(std::make_unique<CommandController>(*commandExecutor)),
+      layout(std::make_unique<LayoutRenderer>(renderer, *commands)),
+      appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader))
 #if ENABLE_GUESS_ITEM_GAME
       ,
-      minigame(new MinigameController(*petActions, *animations))
+      minigame(std::make_unique<MinigameController>(*petActions, *animations))
 #endif
 {
 }
 
 Game::~Game()
-{
-#if ENABLE_GUESS_ITEM_GAME
-    delete minigame;
-#endif
-    delete appearanceSelection;
-    delete layout;
-    delete commands;
-    delete commandExecutor;
-    delete animations;
-    delete petActions;
-}
+    = default;
 
 bool Game::setup_game()
 {

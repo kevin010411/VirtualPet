@@ -2,6 +2,7 @@
 #define GAME_H
 
 #include <Arduino.h>
+#include <memory>
 #include "presentation/application/AppFlowController.h"
 #include "animation/domain/Animation.h"
 #include "appearance/ports/AppearanceLoader.h"
@@ -23,6 +24,9 @@ class Game
 public:
     Game(Pet &pet, PetStorage &petStorage, Renderer &renderer, AppearanceLoader &appearanceLoader);
     ~Game();
+
+    Game(const Game &) = delete;
+    Game &operator=(const Game &) = delete;
 
     bool setup_game();
     void loop_game();
@@ -46,14 +50,14 @@ private:
     Renderer &renderer;
     AppearanceLoader &appearanceLoader;
     AppFlowController flow;
-    PetActionController *petActions;
-    AnimationController *animations;
-    CommandExecutor *commandExecutor;
-    CommandController *commands;
-    LayoutRenderer *layout;
-    AppearanceSelectionController *appearanceSelection;
+    std::unique_ptr<PetActionController> petActions;
+    std::unique_ptr<AnimationController> animations;
+    std::unique_ptr<CommandExecutor> commandExecutor;
+    std::unique_ptr<CommandController> commands;
+    std::unique_ptr<LayoutRenderer> layout;
+    std::unique_ptr<AppearanceSelectionController> appearanceSelection;
 #if ENABLE_GUESS_ITEM_GAME
-    MinigameController *minigame;
+    std::unique_ptr<MinigameController> minigame;
 #endif
 
     unsigned long last_tick_time = 0;
