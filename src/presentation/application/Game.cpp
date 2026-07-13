@@ -7,7 +7,9 @@
 #include "custom_rules/domain/CustomRules.h"
 #include "presentation/application/LayoutRenderer.h"
 #include "minigames/guess_item/application/MinigameController.h"
+#if ENABLE_APPEARANCE_SELECTION
 #include "appearance/application/AppearanceSelectionController.h"
+#endif
 #include "pet/application/PetActionController.h"
 #include "pet/domain/Pet.h"
 #include "presentation/adapters/rendering/Renderer.h"
@@ -21,10 +23,13 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       appearanceLoader(appearanceLoaderRef),
        petActions(std::make_unique<PetActionController>(pet, petStorage, renderer, appearanceLoader)),
        animations(std::make_unique<AnimationController>(renderer)),
-       commandExecutor(std::make_unique<CommandExecutor>(*petActions, *animations, customRules)),
+      commandExecutor(std::make_unique<CommandExecutor>(*petActions, *animations, customRules)),
       commands(std::make_unique<CommandController>(*commandExecutor)),
-      layout(std::make_unique<LayoutRenderer>(renderer, *commands)),
+      layout(std::make_unique<LayoutRenderer>(renderer, *commands))
+#if ENABLE_APPEARANCE_SELECTION
+      ,
       appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader))
+#endif
 #if ENABLE_GUESS_ITEM_GAME
       ,
       minigame(std::make_unique<MinigameController>(*petActions, *animations))
@@ -49,7 +54,9 @@ bool Game::setup_game()
     pendingEvolutionSpeciesCode[0] = '\0';
     pendingEvolutionOutfitCode[0] = '\0';
     last_tick_time = millis();
+#if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
+#endif
 #if ENABLE_GUESS_ITEM_GAME
     minigame->reset();
 #endif
@@ -102,6 +109,7 @@ void Game::loop_game()
     }
 #endif
 
+#if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
         appearanceSelection->render(now);
@@ -112,6 +120,7 @@ void Game::loop_game()
         }
         return;
     }
+#endif
 
     animations->render(now);
     syncActionLayoutWithAnimationQueue();
@@ -172,11 +181,13 @@ void Game::updateBatteryAnimation(unsigned long now)
 
 void Game::OnLeftKey()
 {
+#if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
         appearanceSelection->onLeft();
         return;
     }
+#endif
 
     if (flow.isFirstLaunch())
     {
@@ -200,11 +211,13 @@ void Game::OnLeftKey()
 
 void Game::OnRightKey()
 {
+#if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
         appearanceSelection->onRight();
         return;
     }
+#endif
 
     if (flow.isFirstLaunch())
     {
@@ -228,6 +241,7 @@ void Game::OnRightKey()
 
 void Game::OnConfirmKey()
 {
+#if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
         if (appearanceSelection->isSelectingSpecies())
@@ -260,6 +274,7 @@ void Game::OnConfirmKey()
         completeFirstLaunchIfNeeded(AppCommandId::ChangeOutfit);
         return;
     }
+#endif
 
 #if ENABLE_GUESS_ITEM_GAME
     if (flow.isMinigame())
@@ -345,6 +360,7 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
 
     layout->enterAction(animations->currentCommandAnimationId(), selectedSlot);
 
+#if ENABLE_COMMAND_OUTFIT
     if (result.requestedOutfit)
     {
         if (appearanceSelection->start(petActions->speciesCode(), petActions->outfitCode()))
@@ -354,7 +370,9 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
         }
         return;
     }
+#endif
 
+#if ENABLE_COMMAND_SPECIES
     if (result.requestedSpecies)
     {
         if (appearanceSelection->startSpecies(petActions->speciesCode()))
@@ -364,6 +382,7 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
         }
         return;
     }
+#endif
 
 #if ENABLE_GUESS_ITEM_GAME
     if (result.requestedMinigame && !flow.isFirstLaunch())
@@ -397,7 +416,7 @@ void Game::completeFirstLaunchIfNeeded(AppCommandId commandId)
 
 bool Game::isFirstLaunchSelectionPending() const
 {
-    return ENABLE_FIRST_LAUNCH_SELECTION && !petActions->isFirstLaunchComplete();
+    return ENABLE_APPEARANCE_SELECTION && ENABLE_FIRST_LAUNCH_SELECTION && !petActions->isFirstLaunchComplete();
 }
 
 bool Game::loadInitialPetState(bool allowSavedState)
@@ -426,6 +445,7 @@ bool Game::loadInitialPetState(bool allowSavedState)
 
 bool Game::startFirstLaunchRequiredCommand()
 {
+#if ENABLE_APPEARANCE_SELECTION
     switch (flow.firstLaunchRequiredCommand())
     {
     case AppCommandId::ChangeOutfit:
@@ -447,6 +467,7 @@ bool Game::startFirstLaunchRequiredCommand()
     default:
         break;
     }
+#endif
 
     completeFirstLaunchIfNeeded(flow.firstLaunchRequiredCommand());
     return false;

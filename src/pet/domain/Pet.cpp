@@ -8,6 +8,18 @@ namespace
 constexpr uint32_t kFirstLaunchCompleteFlag = 0x1UL;
 constexpr uint32_t kCustomRulesInitializedFlag = 0x2UL;
 
+uint16_t frameForRatio(uint32_t value, uint32_t maximum, uint16_t maxFrame)
+{
+    if (maxFrame <= 1)
+        return 1;
+    if (maximum == 0)
+        return maxFrame;
+
+    const uint32_t clampedValue = value > maximum ? maximum : value;
+    const uint16_t frame = static_cast<uint16_t>((clampedValue * maxFrame) / maximum + 1U);
+    return clampValue<uint16_t>(frame, 1, maxFrame);
+}
+
 bool copyAppearanceCode(char *dest, size_t destSize, const char *source)
 {
     if (dest == nullptr || destSize == 0 || source == nullptr || source[0] == '\0')
@@ -49,16 +61,17 @@ HealthStatus decide_state(
     return HealthStatus::Healthy;
 }
 
-Pet::Pet(float age)
+Pet::Pet(uint32_t ageTenths)
 {
     setDefaultState();
-    st.age = clampValue<float>(age, 0.0f, cfg.max_age);
+    st.ageTenths = clampValue<uint32_t>(ageTenths, 0, cfg.maxAgeTenths);
     refreshStatus();
 }
 
 void Pet::setConfig(const PetConfig &newConfig)
 {
     cfg = newConfig;
+    st.ageTenths = clampValue<uint32_t>(st.ageTenths, 0, cfg.maxAgeTenths);
     refreshStatus();
 }
 
@@ -86,7 +99,7 @@ bool Pet::dayPassed()
 
     st.hungry_value = clampValue<int>(st.hungry_value + 3, 0, cfg.max_hunger);
     st.mood = clampValue<int>(st.mood - 2, 0, cfg.max_mood);
-    st.age = clampValue<float>(st.age + cfg.age_per_tick, 0.0f, cfg.max_age);
+    st.ageTenths = clampValue<uint32_t>(st.ageTenths + cfg.ageTenthsPerTick, 0, cfg.maxAgeTenths);
     st.clean_value = clampValue<int>(st.clean_value - 3, 0, cfg.max_clean);
     st.env_value = clampValue<int>(st.env_value - 3, 0, cfg.max_env_clean);
     st.healthy_days += 1;
@@ -172,32 +185,17 @@ AnimationId Pet::CurrentAgeAnimation() const
 
 uint16_t Pet::CurrentAgeFrame(uint16_t maxFrame) const
 {
-    if (maxFrame <= 1)
-        return 1;
-
-    const float normalized = cfg.max_age <= 0.0f ? 1.0f : clampValue<float>(st.age / cfg.max_age, 0.0f, 1.0f);
-    const uint16_t frame = static_cast<uint16_t>(normalized * static_cast<float>(maxFrame)) + 1;
-    return clampValue<uint16_t>(frame, 1, maxFrame);
+    return frameForRatio(st.ageTenths, cfg.maxAgeTenths, maxFrame);
 }
 
 uint16_t Pet::CurrentMoodFrame(uint16_t maxFrame) const
 {
-    if (maxFrame <= 1)
-        return 1;
-
-    const float normalized = cfg.max_mood == 0 ? 1.0f : clampValue<float>(static_cast<float>(st.mood) / static_cast<float>(cfg.max_mood), 0.0f, 1.0f);
-    const uint16_t frame = static_cast<uint16_t>(normalized * static_cast<float>(maxFrame)) + 1;
-    return clampValue<uint16_t>(frame, 1, maxFrame);
+    return frameForRatio(static_cast<uint32_t>(st.mood), cfg.max_mood, maxFrame);
 }
 
 uint16_t Pet::CurrentHungerFrame(uint16_t maxFrame) const
 {
-    if (maxFrame <= 1)
-        return 1;
-
-    const float normalized = cfg.max_hunger == 0 ? 1.0f : clampValue<float>(static_cast<float>(st.hungry_value) / static_cast<float>(cfg.max_hunger), 0.0f, 1.0f);
-    const uint16_t frame = static_cast<uint16_t>(normalized * static_cast<float>(maxFrame)) + 1;
-    return clampValue<uint16_t>(frame, 1, maxFrame);
+    return frameForRatio(static_cast<uint32_t>(st.hungry_value), cfg.max_hunger, maxFrame);
 }
 
 void Pet::setDefaultState()
@@ -207,7 +205,7 @@ void Pet::setDefaultState()
     st.sequence = 0;
     st.hasSick = false;
     st.status = static_cast<uint8_t>(HealthStatus::Healthy);
-    st.age = 0.0f;
+    st.ageTenths = 0;
     st.hungry_value = 0;
     st.mood = 70;
     st.clean_value = 200;
@@ -266,7 +264,7 @@ PetStatSnapshot Pet::statSnapshot() const
     snapshot.species[sizeof(snapshot.species) - 1] = '\0';
     strncpy(snapshot.outfit, outfitCode(), sizeof(snapshot.outfit) - 1);
     snapshot.outfit[sizeof(snapshot.outfit) - 1] = '\0';
-    snapshot.age = static_cast<int32_t>(st.age);
+    snapshot.age = static_cast<int32_t>(st.ageTenths / kAgeScale);
     snapshot.hunger = st.hungry_value;
     snapshot.mood = st.mood;
     snapshot.clean = st.clean_value;
@@ -365,7 +363,7 @@ bool Pet::restoreState(const PersistedPetState &state)
 
     st = state;
     st.version = kPetStateVersion;
-    st.age = clampValue<float>(st.age, 0.0f, cfg.max_age);
+    st.ageTenths = clampValue<uint32_t>(st.ageTenths, 0, cfg.maxAgeTenths);
     st.hungry_value = clampValue<int32_t>(st.hungry_value, 0, cfg.max_hunger);
     st.mood = clampValue<int32_t>(st.mood, 0, cfg.max_mood);
     st.clean_value = clampValue<int32_t>(st.clean_value, 0, cfg.max_clean);

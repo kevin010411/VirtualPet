@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "shared/utils/TextBuffer.h"
 
 namespace
 {
@@ -177,8 +178,9 @@ bool buildAppearanceManifestPath(char *dest, size_t destSize, const char *specie
 
     const char *species = (speciesCode != nullptr && speciesCode[0] != '\0') ? speciesCode : "dino";
     const char *outfit = (outfitCode != nullptr && outfitCode[0] != '\0') ? outfitCode : "base";
-    const int written = snprintf(dest, destSize, "/index/%s_%s.txt", species, outfit);
-    return written >= 0 && written < static_cast<int>(destSize);
+    TextBuffer path(dest, destSize);
+    return path.append("/index/") && path.append(species) && path.append("_") &&
+           path.append(outfit) && path.append(".txt") && path.ok();
 }
 
 void resetMeta(AnimationMeta &meta)

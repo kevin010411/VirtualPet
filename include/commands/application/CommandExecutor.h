@@ -43,7 +43,9 @@ private:
                             char *selectedName = nullptr,
                             size_t selectedNameSize = 0);
     void queuePostCommandHappyAnimation();
+#if ENABLE_COMMAND_GIFT || ENABLE_GUESS_ITEM_GAME
     void queueGiftAnimation();
+#endif
     void queueStatusAnimation();
     void showStatusNotFound();
     bool queueStatusDirectAnimation();
@@ -60,16 +62,24 @@ private:
     AnimationId commandCurrentAgeAnimation() const override;
     void commandClearCommandAnimations() override;
     void commandFeedPet() override;
+#if ENABLE_COMMAND_PREDICT
     void commandPredict() override;
+#endif
+#if ENABLE_COMMAND_GIFT
     void commandGift() override;
+#endif
     void commandMedicine() override;
     void commandShower() override;
 #if ENABLE_GUESS_ITEM_GAME
     void commandHaveFun() override;
 #endif
     void commandClean() override;
+#if ENABLE_COMMAND_OUTFIT
     void commandChangeOutfit() override;
+#endif
+#if ENABLE_COMMAND_SPECIES
     void commandChangeSpecies() override;
+#endif
     void commandStatus() override;
     void commandCustomAction(uint8_t slot) override;
 };

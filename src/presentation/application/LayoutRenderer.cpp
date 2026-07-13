@@ -1,9 +1,9 @@
 #include "presentation/application/LayoutRenderer.h"
 
 #include <SdFat.h>
-#include <stdio.h>
 #include <string.h>
 #include "shared/config/AppProfile.h"
+#include "shared/utils/TextBuffer.h"
 #include "commands/application/CommandController.h"
 #include "presentation/adapters/rendering/Renderer.h"
 
@@ -189,13 +189,13 @@ void LayoutRenderer::drawSlot(int slot, bool selected)
     if (activeAction != AnimationId::None)
     {
         char path[48];
-        snprintf(path,
-                 sizeof(path),
-                 "/layout/%s_%s",
-                 animationNameFromId(activeAction),
-                 selected ? "on" : "off");
-        drawSlotFromPath(slot, path);
-        return;
+        TextBuffer layoutPath(path, sizeof(path));
+        if (layoutPath.append("/layout/") && layoutPath.append(animationNameFromId(activeAction)) &&
+            layoutPath.append("_") && layoutPath.append(selected ? "on" : "off") && layoutPath.ok())
+        {
+            drawSlotFromPath(slot, path);
+            return;
+        }
     }
 
     drawSlotFromPath(slot, selected ? kBaseSelectedLayoutPath : kBaseLayoutPath);

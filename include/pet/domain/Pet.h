@@ -9,12 +9,12 @@ static inline T clampValue(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi 
 
 struct PetConfig
 {
-    float max_age = 100;               // 歲
+    uint32_t maxAgeTenths = 1000;      // 100.0 歲，單位為 0.1 歲
     uint8_t max_hunger = 100;          // 0=不餓, 100=超餓
     uint8_t max_mood = 100;            // 0=極差, 100=極好
     unsigned int max_clean = 300;      // 0=極差, 300=極好
     unsigned int max_env_clean = 1000; // 0=極差, 1000=極好
-    float age_per_tick = 0.2f;         // 每 tick 增齡
+    uint16_t ageTenthsPerTick = 2;     // 每 tick 增齡 0.2 歲
     uint8_t hungry_threshold = 70;
     uint8_t depressed_threshold = 30;
     unsigned int dirty_threshold = 100;
@@ -29,7 +29,7 @@ struct PersistedPetState
 
     bool hasSick;
     uint8_t status;
-    float age;
+    uint32_t ageTenths;
 
     int32_t hungry_value;
     int32_t mood;
@@ -78,7 +78,11 @@ HealthStatus decide_state(uint8_t hunger, uint8_t mood, unsigned int env_value,
 class Pet
 {
 public:
-    Pet(float age = 0);
+    static constexpr uint32_t kAgeScale = 10;
+    static constexpr uint32_t kPetStateMagic = 0x50455431;
+    static constexpr uint16_t kPetStateVersion = 8;
+
+    Pet(uint32_t ageTenths = 0);
 
     bool dayPassed();
     void feedPet(int add_satiety);
@@ -124,8 +128,6 @@ private:
     PetConfig cfg;
     PersistedPetState st = {};
 
-    static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 7;
 };
 
 #endif

@@ -407,6 +407,7 @@ CommandResult CommandExecutor::complete(bool executed)
     return currentResult;
 }
 
+#if ENABLE_COMMAND_PREDICT
 AnimationId CommandExecutor::fortuneToAnimationId(int fortuneIndex)
 {
     switch (fortuneIndex)
@@ -435,6 +436,7 @@ AnimationId CommandExecutor::fortuneToAnimationId(int fortuneIndex)
         return AnimationId::Predict11;
     }
 }
+#endif
 
 bool CommandExecutor::queueCommandAction(AnimationId id,
                                          unsigned long durationMs,
@@ -457,6 +459,7 @@ void CommandExecutor::queuePostCommandHappyAnimation()
     animations.queueActionAnimation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High);
 }
 
+#if ENABLE_COMMAND_GIFT || ENABLE_GUESS_ITEM_GAME
 void CommandExecutor::queueGiftAnimation()
 {
     char selectedAnimation[16] = {};
@@ -470,6 +473,7 @@ void CommandExecutor::queueGiftAnimation()
     queuePostCommandHappyAnimation();
     animations.markDirty();
 }
+#endif
 
 bool CommandExecutor::commandHasAnimation(AnimationId id) const
 {
@@ -489,8 +493,7 @@ bool CommandExecutor::commandCanCustomAction(uint8_t slot) const
 {
     if (slot > 7)
         return false;
-    char key[8] = {};
-    snprintf(key, sizeof(key), "CUSTOM%u", slot);
+    const char key[] = {'C', 'U', 'S', 'T', 'O', 'M', static_cast<char>('0' + slot), '\0'};
     return customRules.hasAction(key);
 }
 
@@ -513,6 +516,7 @@ void CommandExecutor::commandFeedPet()
     animations.markDirty();
 }
 
+#if ENABLE_COMMAND_PREDICT
 void CommandExecutor::commandPredict()
 {
     currentResult.layoutId = AnimationId::PredAnim;
@@ -520,12 +524,15 @@ void CommandExecutor::commandPredict()
     animations.queueAnimation(Animation(fortuneToAnimationId(random(1, maxFortune + 1)), gameTick * 2.4, false, AnimationOwner::Command, AnimationPriority::High));
     animations.markDirty();
 }
+#endif
 
+#if ENABLE_COMMAND_GIFT
 void CommandExecutor::commandGift()
 {
     currentResult.layoutId = AnimationId::Gift;
     queueGiftAnimation();
 }
+#endif
 
 void CommandExecutor::commandMedicine()
 {
@@ -565,15 +572,19 @@ void CommandExecutor::commandClean()
     animations.markDirty();
 }
 
+#if ENABLE_COMMAND_OUTFIT
 void CommandExecutor::commandChangeOutfit()
 {
     currentResult.requestedOutfit = true;
 }
+#endif
 
+#if ENABLE_COMMAND_SPECIES
 void CommandExecutor::commandChangeSpecies()
 {
     currentResult.requestedSpecies = true;
 }
+#endif
 
 void CommandExecutor::commandStatus()
 {
@@ -588,8 +599,7 @@ void CommandExecutor::commandCustomAction(uint8_t slot)
         currentResult.executed = false;
         return;
     }
-    char key[8] = {};
-    snprintf(key, sizeof(key), "CUSTOM%u", slot);
+    const char key[] = {'C', 'U', 'S', 'T', 'O', 'M', static_cast<char>('0' + slot), '\0'};
     currentResult.executed = executeCustomAction(key);
 }
 

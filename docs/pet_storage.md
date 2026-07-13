@@ -25,7 +25,9 @@ Each slot contains one binary `PersistedPetState` record:
 - `flowFlags`
 - `crc32`
 
-`version` is currently `7`.
+`version` is currently `8`. Age is stored as an unsigned integer in tenths of a
+year (`1000` means `100.0` years), so normal firmware operation does not need
+floating-point support.
 
 `flowFlags` stores app-flow state. Bit `0` marks the first-launch flow as
 complete.
@@ -58,7 +60,7 @@ the previous valid slot should remain available for the next boot.
 
 ## Compatibility
 
-Old state formats are intentionally unsupported. To reset a device that still
-has old state files, remove `/state.bin` and `/state.bak` or leave them in place;
-the current firmware ignores them and creates `/state_a.bin` and `/state_b.bin`
-on future saves.
+The legacy single-slot `/state.bin` and `/state.bak` files remain unsupported.
+Version `7` dual-slot records are accepted once: their IEEE-754 age value is
+converted to tenths without using floating-point code, then subsequent normal
+saves update the dual-slot records as version `8`.

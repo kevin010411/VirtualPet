@@ -1,7 +1,7 @@
 #include "presentation/adapters/rendering/FrameDecoder.h"
 
-#include <stdio.h>
 #include <string.h>
+#include "shared/utils/TextBuffer.h"
 
 namespace FrameDecoder
 {
@@ -69,15 +69,18 @@ bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, con
     const char *slash = strrchr(path, '/');
     const bool hasExt = (dot != nullptr) && (slash == nullptr || dot > slash);
 
-    if (hasExt)
-        return snprintf(dest, destSize, "%.*s%s", static_cast<int>(dot - path), path, ext) < static_cast<int>(destSize);
-
-    return snprintf(dest, destSize, "%s%s", path, ext) < static_cast<int>(destSize);
+    TextBuffer result(dest, destSize);
+    return hasExt ? result.append(path, static_cast<size_t>(dot - path)) && result.append(ext) && result.ok()
+                  : result.append(path) && result.append(ext) && result.ok();
 }
 
 bool buildFramePath(char *dest, size_t destSize, const char *basePath, uint16_t frameIndex, const char *ext)
 {
-    return snprintf(dest, destSize, "%s/%u%s", basePath, static_cast<unsigned>(frameIndex), ext) < static_cast<int>(destSize);
+    if (dest == nullptr || destSize == 0 || basePath == nullptr || ext == nullptr)
+        return false;
+
+    TextBuffer result(dest, destSize);
+    return result.append(basePath) && result.append("/") && result.appendUnsigned(frameIndex) && result.append(ext) && result.ok();
 }
 
 namespace

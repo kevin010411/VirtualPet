@@ -294,7 +294,6 @@ void setup()
   {
     finishTftStartupResetAndInitialize(tftResetLowStartedAt);
     showSdInitError();
-    SD.initErrorPrint(&tft);
     return;
   }
 

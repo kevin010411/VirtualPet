@@ -8,6 +8,30 @@ namespace
     { commandId, label, &CommandController::canFn, &CommandController::execFn, true, clearFirst }
 #define COMMAND_SLOT_CUSTOM(slot) COMMAND_SLOT(AppCommandId::Custom##slot, "CUSTOM" #slot, canCustom##slot, executeCustom##slot, true)
 
+#if ENABLE_COMMAND_PREDICT
+#define COMMAND_SLOT_PREDICT COMMAND_SLOT(AppCommandId::Predict, "PREDICT", canPredict, executePredict, true)
+#else
+#define COMMAND_SLOT_PREDICT CommandController::emptySlot()
+#endif
+
+#if ENABLE_COMMAND_GIFT
+#define COMMAND_SLOT_GIFT COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true)
+#else
+#define COMMAND_SLOT_GIFT CommandController::emptySlot()
+#endif
+
+#if ENABLE_COMMAND_OUTFIT
+#define COMMAND_SLOT_CHANGE_OUTFIT COMMAND_SLOT(AppCommandId::ChangeOutfit, "CHANGE_OUTFIT", canAlwaysExecute, executeChangeOutfit, true)
+#else
+#define COMMAND_SLOT_CHANGE_OUTFIT CommandController::emptySlot()
+#endif
+
+#if ENABLE_COMMAND_SPECIES
+#define COMMAND_SLOT_CHANGE_SPECIES COMMAND_SLOT(AppCommandId::ChangeSpecies, "CHANGE_SPECIES", canAlwaysExecute, executeChangeSpecies, true)
+#else
+#define COMMAND_SLOT_CHANGE_SPECIES CommandController::emptySlot()
+#endif
+
 #if ENABLE_GUESS_ITEM_GAME
 #define COMMAND_SLOT_HAVE_FUN COMMAND_SLOT(AppCommandId::HaveFun, "HAVE_FUN", canAlwaysExecute, executeHaveFun, false)
 #else
@@ -25,15 +49,15 @@ const CommandController::CommandSlot CommandController::slots[] = {
     COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
     CommandController::emptySlot(),
     CommandController::emptySlot(),
-    // COMMAND_SLOT(AppCommandId::ChangeSpecies, "CHANGE_SPECIES", canAlwaysExecute, executeChangeSpecies, true),
+    // COMMAND_SLOT_CHANGE_SPECIES,
     COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
     COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
-    COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),
+    COMMAND_SLOT_GIFT,
     COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true),
     COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true),
 #elif APP_PROFILE == APP_PROFILE_DEFAULT_SMALL
     COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
-    COMMAND_SLOT(AppCommandId::ChangeSpecies, "CHANGE_SPECIES", canAlwaysExecute, executeChangeSpecies, true),
+    COMMAND_SLOT_CHANGE_SPECIES,
     CommandController::emptySlot(),
     COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
     COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
@@ -45,7 +69,7 @@ const CommandController::CommandSlot CommandController::slots[] = {
     CommandController::emptySlot(),
     CommandController::emptySlot(),
     COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true),
-    COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),
+    COMMAND_SLOT_GIFT,
     COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
     COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true),
     COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
@@ -53,16 +77,16 @@ const CommandController::CommandSlot CommandController::slots[] = {
 #elif APP_PROFILE == APP_PROFILE_KUROMU
     COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
     COMMAND_SLOT_CUSTOM(0),
-    COMMAND_SLOT(AppCommandId::ChangeOutfit, "CHANGE_OUTFIT", canAlwaysExecute, executeChangeOutfit, true),
-    COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),
+    COMMAND_SLOT_CHANGE_OUTFIT,
+    COMMAND_SLOT_GIFT,
     COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
     COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true),
     COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
     COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true),
 #else
     COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
-    COMMAND_SLOT(AppCommandId::Predict, "PREDICT", canPredict, executePredict, true),
-    COMMAND_SLOT(AppCommandId::Gift, "GIFT", canAlwaysExecute, executeGift, true),
+    COMMAND_SLOT_PREDICT,
+    COMMAND_SLOT_GIFT,
     COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true),
     COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
     COMMAND_SLOT_HAVE_FUN,
@@ -186,6 +210,7 @@ bool CommandController::canFeedPet() const
     return true;
 }
 
+#if ENABLE_COMMAND_PREDICT
 bool CommandController::canPredict() const
 {
     const AnimationId required[] = {
@@ -203,6 +228,7 @@ bool CommandController::canPredict() const
         AnimationId::Predict11};
     return hasAnimations(required, sizeof(required) / sizeof(required[0]));
 }
+#endif
 
 bool CommandController::canMedicine() const
 {
@@ -251,15 +277,19 @@ void CommandController::executeFeedPet()
     host.commandFeedPet();
 }
 
+#if ENABLE_COMMAND_PREDICT
 void CommandController::executePredict()
 {
     host.commandPredict();
 }
+#endif
 
+#if ENABLE_COMMAND_GIFT
 void CommandController::executeGift()
 {
     host.commandGift();
 }
+#endif
 
 void CommandController::executeMedicine()
 {
@@ -283,15 +313,19 @@ void CommandController::executeClean()
     host.commandClean();
 }
 
+#if ENABLE_COMMAND_OUTFIT
 void CommandController::executeChangeOutfit()
 {
     host.commandChangeOutfit();
 }
+#endif
 
+#if ENABLE_COMMAND_SPECIES
 void CommandController::executeChangeSpecies()
 {
     host.commandChangeSpecies();
 }
+#endif
 
 void CommandController::executeStatus()
 {

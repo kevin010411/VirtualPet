@@ -7,6 +7,37 @@ namespace
 {
 constexpr const char *kStateSlotAPath = "/state_a.bin";
 constexpr const char *kStateSlotBPath = "/state_b.bin";
+constexpr uint16_t kLegacyPetStateVersion = 7;
+
+uint32_t legacyAgeTenthsFromFloatBits(uint32_t bits)
+{
+    // Version 7 stored age as a non-negative IEEE-754 float. Decode only the
+    // bounded persisted value without introducing floating-point support again.
+    if ((bits & 0x80000000UL) != 0)
+        return 0;
+
+    const uint32_t exponentBits = (bits >> 23) & 0xFFUL;
+    if (exponentBits == 0)
+        return 0;
+    if (exponentBits >= 255 || exponentBits > 140)
+        return UINT32_MAX;
+
+    const int32_t exponent = static_cast<int32_t>(exponentBits) - 127;
+    const int32_t denominatorShift = 23 - exponent;
+    const uint32_t significand = (1UL << 23) | (bits & 0x7FFFFFUL);
+    const uint32_t scaled = significand * Pet::kAgeScale;
+
+    if (denominatorShift <= 0)
+    {
+        if (denominatorShift < -4)
+            return UINT32_MAX;
+        return scaled << static_cast<uint32_t>(-denominatorShift);
+    }
+    if (denominatorShift >= 32)
+        return 0;
+
+    return (scaled + (1UL << static_cast<uint32_t>(denominatorShift - 1))) >> static_cast<uint32_t>(denominatorShift);
+}
 
 uint32_t crc32Bitwise(const uint8_t *data, size_t length)
 {
@@ -53,10 +84,21 @@ bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
     if (readCount != stateSize)
         return false;
 
-    if (state.magic != 0x50455431UL || state.version != 7)
+    if (state.magic != Pet::kPetStateMagic)
         return false;
 
-    return calculateStateCrc(state) == state.crc32;
+    if (calculateStateCrc(state) != state.crc32)
+        return false;
+
+    if (state.version == kLegacyPetStateVersion)
+    {
+        state.ageTenths = legacyAgeTenthsFromFloatBits(state.ageTenths);
+        state.version = Pet::kPetStateVersion;
+        state.crc32 = 0;
+        return true;
+    }
+
+    return state.version == Pet::kPetStateVersion;
 }
 
 bool writeStateSlot(SdFat *sd, const char *path, const PersistedPetState &state)

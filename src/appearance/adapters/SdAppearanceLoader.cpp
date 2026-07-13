@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "shared/utils/TextBuffer.h"
 
 namespace
 {
@@ -444,8 +445,8 @@ bool buildSpeciesOutfitListPath(char *dest, size_t destSize, const char *species
     if (dest == nullptr || destSize == 0 || !isValidAppearanceCode(speciesCode))
         return false;
 
-    const int written = snprintf(dest, destSize, "/index/%s.txt", speciesCode);
-    return written >= 0 && written < static_cast<int>(destSize);
+    TextBuffer path(dest, destSize);
+    return path.append("/index/") && path.append(speciesCode) && path.append(".txt") && path.ok();
 }
 
 bool buildOutfitPreviewPath(char *dest, size_t destSize, const char *speciesCode)
@@ -453,8 +454,8 @@ bool buildOutfitPreviewPath(char *dest, size_t destSize, const char *speciesCode
     if (dest == nullptr || destSize == 0 || !isValidAppearanceCode(speciesCode))
         return false;
 
-    const int written = snprintf(dest, destSize, "/index/%s_outfit.txt", speciesCode);
-    return written >= 0 && written < static_cast<int>(destSize);
+    TextBuffer path(dest, destSize);
+    return path.append("/index/") && path.append(speciesCode) && path.append("_outfit.txt") && path.ok();
 }
 
 bool copyText(char *dest, size_t destSize, const char *source)

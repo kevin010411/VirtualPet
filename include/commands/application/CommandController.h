@@ -41,16 +41,24 @@ public:
     virtual void commandClearCommandAnimations() = 0;
 
     virtual void commandFeedPet() = 0;
+#if ENABLE_COMMAND_PREDICT
     virtual void commandPredict() = 0;
+#endif
+#if ENABLE_COMMAND_GIFT
     virtual void commandGift() = 0;
+#endif
     virtual void commandMedicine() = 0;
     virtual void commandShower() = 0;
 #if ENABLE_GUESS_ITEM_GAME
     virtual void commandHaveFun() = 0;
 #endif
     virtual void commandClean() = 0;
+#if ENABLE_COMMAND_OUTFIT
     virtual void commandChangeOutfit() = 0;
+#endif
+#if ENABLE_COMMAND_SPECIES
     virtual void commandChangeSpecies() = 0;
+#endif
     virtual void commandStatus() = 0;
     virtual void commandCustomAction(uint8_t slot) = 0;
 };
@@ -97,7 +105,9 @@ private:
 
     bool canAlwaysExecute() const;
     bool canFeedPet() const;
+#if ENABLE_COMMAND_PREDICT
     bool canPredict() const;
+#endif
     bool canMedicine() const;
     bool canShower() const;
     bool canClean() const;
@@ -113,16 +123,24 @@ private:
     bool hasAnimations(const AnimationId *ids, size_t count) const;
 
     void executeFeedPet();
+#if ENABLE_COMMAND_PREDICT
     void executePredict();
+#endif
+#if ENABLE_COMMAND_GIFT
     void executeGift();
+#endif
     void executeMedicine();
     void executeShower();
 #if ENABLE_GUESS_ITEM_GAME
     void executeHaveFun();
 #endif
     void executeClean();
+#if ENABLE_COMMAND_OUTFIT
     void executeChangeOutfit();
+#endif
+#if ENABLE_COMMAND_SPECIES
     void executeChangeSpecies();
+#endif
     void executeStatus();
     void executeCustom0();
     void executeCustom1();

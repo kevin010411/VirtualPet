@@ -57,7 +57,9 @@ private:
     std::unique_ptr<CommandExecutor> commandExecutor;
     std::unique_ptr<CommandController> commands;
     std::unique_ptr<LayoutRenderer> layout;
+#if ENABLE_APPEARANCE_SELECTION
     std::unique_ptr<AppearanceSelectionController> appearanceSelection;
+#endif
 #if ENABLE_GUESS_ITEM_GAME
     std::unique_ptr<MinigameController> minigame;
 #endif

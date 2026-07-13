@@ -7,6 +7,7 @@
 #include "pet/application/PetActionController.h"
 #include "pet/domain/Pet.h"
 #include "shared/debug/DebugDisplay.h"
+#include "shared/utils/TextBuffer.h"
 
 namespace
 {
@@ -21,9 +22,18 @@ void showLoadError(DebugDisplay *debug, uint16_t lineNumber, const char *reason)
 
     char detail[24] = {};
     if (lineNumber > 0)
-        snprintf(detail, sizeof(detail), "L%u %s", static_cast<unsigned>(lineNumber), reason);
+    {
+        TextBuffer text(detail, sizeof(detail));
+        text.append("L");
+        text.appendUnsigned(lineNumber);
+        text.append(" ");
+        text.append(reason);
+    }
     else
-        snprintf(detail, sizeof(detail), "%s", reason);
+    {
+        TextBuffer text(detail, sizeof(detail));
+        text.append(reason);
+    }
 
     debug->showMessage("custom_rules", detail);
 }
