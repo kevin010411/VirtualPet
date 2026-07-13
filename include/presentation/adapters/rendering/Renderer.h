@@ -17,9 +17,9 @@ public:
     void initAnimations();
     void setAssetAppearance(const char *speciesCode, const char *outfitCode);
     bool reloadManifest();
-    bool ShowSDCardFrame(const char *base_path, uint16_t frame_index, int xmin = 0, int ymin = 0, int batch_lines = 4);
+    bool ShowSDCardFrame(const char *base_path, uint16_t frame_index, int xmin = 0, int ymin = 0, int batch_lines = 12);
     bool ShowAnimationFrame(AnimationId id, uint16_t frame_index, int xmin = 0, int ymin = 32, int batch_lines = 4);
-    bool ShowNamedAnimationFrame(const char *name, uint16_t frame_index, int xmin = 0, int ymin = 32, int batch_lines = 4);
+    bool ShowNamedAnimationFrame(const char *name, uint16_t frame_index, int xmin = 0, int ymin = 32, int batch_lines = 12);
     bool setAnimation(AnimationId id, bool playOnce);
     bool setNamedAnimation(const char *name, bool playOnce);
     bool advanceAnimationFrame();
