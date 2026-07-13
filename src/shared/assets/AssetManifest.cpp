@@ -22,6 +22,16 @@ uint8_t gAnimationRegistryCount = 0;
 AnimationMeta gEmptyAnimationMeta = {};
 char gNamedAnimationNames[AssetManifest::kMaxNamedAnimations][AssetManifest::kMaxAnimationNameLength + 1] = {};
 AnimationMeta gNamedAnimationRegistry[AssetManifest::kMaxNamedAnimations] = {};
+
+struct AnimationVariantEntry
+{
+    char baseName[AssetManifest::kMaxAnimationNameLength + 1] = {};
+    char name[AssetManifest::kMaxAnimationNameLength + 1] = {};
+    AnimationMeta meta = {};
+};
+
+AnimationVariantEntry gAnimationVariants[AssetManifest::kMaxAnimationVariants] = {};
+uint8_t gAnimationVariantCount = 0;
 bool gPathError = false;
 bool gCapacityError = false;
 
@@ -138,6 +148,28 @@ bool copyAnimationName(char *dest, size_t destSize, const char *source)
     return true;
 }
 
+bool splitVariantAnimationName(const char *name, char *baseName, size_t baseNameSize)
+{
+    if (name == nullptr || baseName == nullptr || baseNameSize == 0)
+        return false;
+
+    const size_t length = strlen(name);
+    if (length < 2)
+        return false;
+
+    size_t suffixStart = length;
+    while (suffixStart > 0 && name[suffixStart - 1] >= '0' && name[suffixStart - 1] <= '9')
+        --suffixStart;
+
+    // A version suffix is a positive decimal number, so names like Dance0 and 1Dance stay named animations.
+    if (suffixStart == 0 || suffixStart == length || name[suffixStart] == '0' || suffixStart >= baseNameSize)
+        return false;
+
+    memcpy(baseName, name, suffixStart);
+    baseName[suffixStart] = '\0';
+    return true;
+}
+
 bool buildAppearanceManifestPath(char *dest, size_t destSize, const char *speciesCode, const char *outfitCode)
 {
     if (dest == nullptr || destSize == 0)
@@ -204,7 +236,7 @@ bool upsertMeta(AnimationId id, const AnimationMeta &meta)
     return true;
 }
 
-bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPath)
+bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPath, bool allowVariants)
 {
     if (sd == nullptr || manifestPath == nullptr || manifestPath[0] == '\0')
         return false;
@@ -257,9 +289,11 @@ bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPa
         }
         else
         {
-            AnimationMeta *namedMeta = registry.metaForName(fields[0]);
-            if (namedMeta != nullptr)
-                *namedMeta = parsed;
+            char baseName[AssetManifest::kMaxAnimationNameLength + 1] = {};
+            if (allowVariants && splitVariantAnimationName(fields[0], baseName, sizeof(baseName)))
+                registry.registerVariantAnimation(baseName, fields[0], parsed);
+            else
+                registry.registerNamedAnimation(fields[0], parsed);
         }
     }
 
@@ -281,6 +315,14 @@ void AssetManifest::reset()
         AnimationMeta &meta = gNamedAnimationRegistry[i];
         resetMeta(meta);
     }
+
+    gAnimationVariantCount = 0;
+    for (size_t i = 0; i < kMaxAnimationVariants; ++i)
+    {
+        gAnimationVariants[i].baseName[0] = '\0';
+        gAnimationVariants[i].name[0] = '\0';
+        resetMeta(gAnimationVariants[i].meta);
+    }
 }
 
 bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitCode)
@@ -294,10 +336,10 @@ bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitC
     if (!buildAppearanceManifestPath(appearanceManifestPath, sizeof(appearanceManifestPath), speciesCode, outfitCode))
         return false;
 
-    if (!loadManifestFile(sd, *this, kMainManifestPath))
+    if (!loadManifestFile(sd, *this, kMainManifestPath, false))
         return false;
 
-    return loadManifestFile(sd, *this, appearanceManifestPath);
+    return loadManifestFile(sd, *this, appearanceManifestPath, true);
 }
 
 bool AssetManifest::hasPathError() const
@@ -326,17 +368,11 @@ AnimationMeta *AssetManifest::metaForName(const char *name)
         if (strcmp(gNamedAnimationNames[i], name) == 0)
             return &gNamedAnimationRegistry[i];
     }
-
-    for (size_t i = 0; i < kMaxNamedAnimations; ++i)
+    for (uint8_t i = 0; i < gAnimationVariantCount; ++i)
     {
-        if (gNamedAnimationNames[i][0] != '\0')
-            continue;
-
-        if (!copyAnimationName(gNamedAnimationNames[i], sizeof(gNamedAnimationNames[i]), name))
-            return nullptr;
-        return &gNamedAnimationRegistry[i];
+        if (strcmp(gAnimationVariants[i].name, name) == 0)
+            return &gAnimationVariants[i].meta;
     }
-
     return nullptr;
 }
 
@@ -350,6 +386,101 @@ const AnimationMeta *AssetManifest::metaForName(const char *name) const
         if (strcmp(gNamedAnimationNames[i], name) == 0)
             return &gNamedAnimationRegistry[i];
     }
+    for (uint8_t i = 0; i < gAnimationVariantCount; ++i)
+    {
+        if (strcmp(gAnimationVariants[i].name, name) == 0)
+            return &gAnimationVariants[i].meta;
+    }
 
     return nullptr;
+}
+
+uint8_t AssetManifest::variantCountFor(const char *baseName) const
+{
+    if (baseName == nullptr || baseName[0] == '\0')
+        return 0;
+
+    uint8_t count = 0;
+    for (uint8_t i = 0; i < gAnimationVariantCount; ++i)
+    {
+        if (strcmp(gAnimationVariants[i].baseName, baseName) == 0)
+            ++count;
+    }
+    return count;
+}
+
+const char *AssetManifest::variantNameFor(const char *baseName, uint8_t index) const
+{
+    if (baseName == nullptr || baseName[0] == '\0')
+        return nullptr;
+
+    uint8_t matched = 0;
+    for (uint8_t i = 0; i < gAnimationVariantCount; ++i)
+    {
+        if (strcmp(gAnimationVariants[i].baseName, baseName) != 0)
+            continue;
+        if (matched == index)
+            return gAnimationVariants[i].name;
+        ++matched;
+    }
+    return nullptr;
+}
+
+bool AssetManifest::registerNamedAnimation(const char *name, const AnimationMeta &meta)
+{
+    if (name == nullptr || name[0] == '\0')
+        return false;
+
+    for (size_t i = 0; i < kMaxNamedAnimations; ++i)
+    {
+        if (strcmp(gNamedAnimationNames[i], name) == 0)
+        {
+            gNamedAnimationRegistry[i] = meta;
+            return true;
+        }
+    }
+
+    for (size_t i = 0; i < kMaxNamedAnimations; ++i)
+    {
+        if (gNamedAnimationNames[i][0] != '\0')
+            continue;
+        if (!copyAnimationName(gNamedAnimationNames[i], sizeof(gNamedAnimationNames[i]), name))
+            return false;
+        gNamedAnimationRegistry[i] = meta;
+        return true;
+    }
+
+    gCapacityError = true;
+    return false;
+}
+
+bool AssetManifest::registerVariantAnimation(const char *baseName, const char *name, const AnimationMeta &meta)
+{
+    if (baseName == nullptr || name == nullptr || baseName[0] == '\0' || name[0] == '\0')
+        return false;
+
+    for (uint8_t i = 0; i < gAnimationVariantCount; ++i)
+    {
+        if (strcmp(gAnimationVariants[i].name, name) == 0)
+        {
+            gAnimationVariants[i].meta = meta;
+            return true;
+        }
+    }
+
+    if (gAnimationVariantCount >= kMaxAnimationVariants)
+    {
+        gCapacityError = true;
+        return false;
+    }
+
+    AnimationVariantEntry &entry = gAnimationVariants[gAnimationVariantCount];
+    if (!copyAnimationName(entry.baseName, sizeof(entry.baseName), baseName) ||
+        !copyAnimationName(entry.name, sizeof(entry.name), name))
+    {
+        return false;
+    }
+    entry.meta = meta;
+    ++gAnimationVariantCount;
+    return true;
 }

@@ -3,6 +3,7 @@
 # 任一非註解行格式錯誤時，整套自訂規則都會停用。
 # slot 範圍為 0..7；每個 slot 與 action key 只能各定義一次；數值為 int16。
 # daily 與 action 使用的 slot 都必須先有 stat 定義；動畫名稱必須在 manifest 中有資源。
+# variant_effect 會依實際隨機選到的動畫版本套用效果；目前支援 mood。
 
 # stat|slot|標籤|初始值|最小值|最大值
 stat|0|money|100|0|9999
@@ -15,3 +16,8 @@ daily|1|-5
 # 指令鍵只能是 CUSTOM0～CUSTOM7；CUSTOM0 固定修改 custom0，以此類推。
 # 原本的 FEED_PET、GIFT、MEDICINE 等指令不會修改 custom slot。
 action|CUSTOM0|1|10|20|Gift
+
+# variant_effect|動畫版本名稱|數值|變化量
+# Gift command 選到 Gift1 或 Gift2 時，會以這裡的 mood 效果取代內建的 +50。
+variant_effect|Gift1|mood|10
+variant_effect|Gift2|mood|-10

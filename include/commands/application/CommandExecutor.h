@@ -37,6 +37,11 @@ private:
 
     bool executeCustomAction(const char *actionKey);
     static AnimationId fortuneToAnimationId(int fortuneIndex);
+    bool queueCommandAction(AnimationId id,
+                            unsigned long durationMs,
+                            bool playOnce = false,
+                            char *selectedName = nullptr,
+                            size_t selectedNameSize = 0);
     void queuePostCommandHappyAnimation();
     void queueGiftAnimation();
     void queueStatusAnimation();

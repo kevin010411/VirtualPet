@@ -17,6 +17,8 @@ public:
     AnimationId baseAnimation() const;
     bool hasAnimation(AnimationId id) const;
     bool hasNamedAnimation(const char *name) const;
+    bool hasActionAnimation(AnimationId id) const;
+    bool hasActionAnimation(const char *baseName) const;
     bool hasAnimations(const AnimationId *ids, size_t count) const;
     void queueAnimation(const Animation &animation);
     void queueNamedAnimation(const char *name,
@@ -24,6 +26,30 @@ public:
                              bool playOnce,
                              AnimationOwner owner,
                              AnimationPriority priority);
+    bool queueActionAnimation(AnimationId id,
+                              unsigned long durationMs,
+                              bool playOnce,
+                              AnimationOwner owner,
+                              AnimationPriority priority);
+    bool queueActionAnimation(const char *baseName,
+                              unsigned long durationMs,
+                              bool playOnce,
+                              AnimationOwner owner,
+                              AnimationPriority priority);
+    bool queueActionAnimation(AnimationId id,
+                              unsigned long durationMs,
+                              bool playOnce,
+                              AnimationOwner owner,
+                              AnimationPriority priority,
+                              char *selectedName,
+                              size_t selectedNameSize);
+    bool queueActionAnimation(const char *baseName,
+                              unsigned long durationMs,
+                              bool playOnce,
+                              AnimationOwner owner,
+                              AnimationPriority priority,
+                              char *selectedName,
+                              size_t selectedNameSize);
     void clearByOwner(AnimationOwner owner);
     bool hasAnimationForOwner(AnimationOwner owner) const;
     AnimationId currentCommandAnimationId() const;

@@ -50,6 +50,24 @@ bool AnimationController::hasNamedAnimation(const char *name) const
     return renderer.frameCountForName(name) > 0;
 }
 
+bool AnimationController::hasActionAnimation(AnimationId id) const
+{
+    if (id == AnimationId::None)
+        return false;
+    return hasActionAnimation(animationNameFromId(id));
+}
+
+bool AnimationController::hasActionAnimation(const char *baseName) const
+{
+    if (baseName == nullptr || baseName[0] == '\0')
+        return false;
+    if (renderer.variantCountFor(baseName) > 0)
+        return true;
+
+    const AnimationId id = animationIdFromName(baseName);
+    return id != AnimationId::None ? hasAnimation(id) : hasNamedAnimation(baseName);
+}
+
 bool AnimationController::hasAnimations(const AnimationId *ids, size_t count) const
 {
     if (ids == nullptr)
@@ -113,6 +131,90 @@ void AnimationController::queueNamedAnimation(const char *name,
     strncpy(animation.namedAnimation, name, sizeof(animation.namedAnimation) - 1);
     animation.namedAnimation[sizeof(animation.namedAnimation) - 1] = '\0';
     queueAnimation(animation);
+}
+
+bool AnimationController::queueActionAnimation(AnimationId id,
+                                                unsigned long durationMs,
+                                                bool playOnce,
+                                                AnimationOwner owner,
+                                                AnimationPriority priority)
+{
+    if (id == AnimationId::None)
+        return false;
+    return queueActionAnimation(animationNameFromId(id), durationMs, playOnce, owner, priority, nullptr, 0);
+}
+
+bool AnimationController::queueActionAnimation(const char *baseName,
+                                                unsigned long durationMs,
+                                                bool playOnce,
+                                                AnimationOwner owner,
+                                                AnimationPriority priority)
+{
+    return queueActionAnimation(baseName, durationMs, playOnce, owner, priority, nullptr, 0);
+}
+
+bool AnimationController::queueActionAnimation(AnimationId id,
+                                                unsigned long durationMs,
+                                                bool playOnce,
+                                                AnimationOwner owner,
+                                                AnimationPriority priority,
+                                                char *selectedName,
+                                                size_t selectedNameSize)
+{
+    if (id == AnimationId::None)
+        return false;
+    return queueActionAnimation(animationNameFromId(id), durationMs, playOnce, owner, priority, selectedName, selectedNameSize);
+}
+
+bool AnimationController::queueActionAnimation(const char *baseName,
+                                                unsigned long durationMs,
+                                                bool playOnce,
+                                                AnimationOwner owner,
+                                                AnimationPriority priority,
+                                                char *selectedName,
+                                                size_t selectedNameSize)
+{
+    if (baseName == nullptr || baseName[0] == '\0')
+        return false;
+
+    const uint8_t variantCount = renderer.variantCountFor(baseName);
+    if (variantCount > 0)
+    {
+        const char *variantName = renderer.variantNameFor(baseName, static_cast<uint8_t>(random(variantCount)));
+        if (variantName == nullptr || !hasNamedAnimation(variantName))
+            return false;
+        queueNamedAnimation(variantName, durationMs, playOnce, owner, priority);
+        if (selectedName != nullptr && selectedNameSize > 0)
+        {
+            strncpy(selectedName, variantName, selectedNameSize - 1);
+            selectedName[selectedNameSize - 1] = '\0';
+        }
+        return true;
+    }
+
+    const AnimationId id = animationIdFromName(baseName);
+    if (id != AnimationId::None)
+    {
+        if (!hasAnimation(id))
+            return false;
+        queueAnimation(Animation(id, durationMs, playOnce, owner, priority));
+        if (selectedName != nullptr && selectedNameSize > 0)
+        {
+            strncpy(selectedName, baseName, selectedNameSize - 1);
+            selectedName[selectedNameSize - 1] = '\0';
+        }
+        return true;
+    }
+
+    if (!hasNamedAnimation(baseName))
+        return false;
+    queueNamedAnimation(baseName, durationMs, playOnce, owner, priority);
+    if (selectedName != nullptr && selectedNameSize > 0)
+    {
+        strncpy(selectedName, baseName, selectedNameSize - 1);
+        selectedName[selectedNameSize - 1] = '\0';
+    }
+    return true;
 }
 
 void AnimationController::clearByOwner(AnimationOwner owner)

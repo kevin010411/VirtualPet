@@ -436,21 +436,36 @@ AnimationId CommandExecutor::fortuneToAnimationId(int fortuneIndex)
     }
 }
 
+bool CommandExecutor::queueCommandAction(AnimationId id,
+                                         unsigned long durationMs,
+                                         bool playOnce,
+                                         char *selectedName,
+                                         size_t selectedNameSize)
+{
+    const bool queued = animations.queueActionAnimation(
+        id, durationMs, playOnce, AnimationOwner::Command, AnimationPriority::High, selectedName, selectedNameSize);
+    if (!queued)
+        animations.showResourceError();
+    return queued;
+}
+
 void CommandExecutor::queuePostCommandHappyAnimation()
 {
-    if (!animations.hasAnimation(AnimationId::Happy))
+    if (!animations.hasActionAnimation(AnimationId::Happy))
         return;
 
-    animations.queueAnimation(Animation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+    animations.queueActionAnimation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High);
 }
 
 void CommandExecutor::queueGiftAnimation()
 {
-    petActions.changeMood(50);
-    animations.queueAnimation(Animation(AnimationId::Gift, gameTick * 2.5, false, AnimationOwner::Command, AnimationPriority::High));
+    char selectedAnimation[16] = {};
+    const bool queued = queueCommandAction(AnimationId::Gift, gameTick * 2.5, false, selectedAnimation, sizeof(selectedAnimation));
+    if (!queued || !customRules.applyVariantEffect(selectedAnimation, petActions))
+        petActions.changeMood(50);
 
-    if (animations.hasAnimation(AnimationId::GiftHappy))
-        animations.queueAnimation(Animation(AnimationId::GiftHappy, gameTick * 1.5, false, AnimationOwner::Command, AnimationPriority::High));
+    if (animations.hasActionAnimation(AnimationId::GiftHappy))
+        animations.queueActionAnimation(AnimationId::GiftHappy, gameTick * 1.5, false, AnimationOwner::Command, AnimationPriority::High);
 
     queuePostCommandHappyAnimation();
     animations.markDirty();
@@ -458,7 +473,7 @@ void CommandExecutor::queueGiftAnimation()
 
 bool CommandExecutor::commandHasAnimation(AnimationId id) const
 {
-    return animations.hasAnimation(id);
+    return animations.hasActionAnimation(id);
 }
 
 bool CommandExecutor::commandCanStatus() const
@@ -493,7 +508,7 @@ void CommandExecutor::commandFeedPet()
 {
     currentResult.layoutId = AnimationId::Feed;
     petActions.feedPet(40);
-    animations.queueAnimation(Animation(AnimationId::Feed, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+    queueCommandAction(AnimationId::Feed, gameTick * 1.2);
     queuePostCommandHappyAnimation();
     animations.markDirty();
 }
@@ -516,7 +531,7 @@ void CommandExecutor::commandMedicine()
 {
     currentResult.layoutId = AnimationId::Heal;
     petActions.takeMedicine();
-    animations.queueAnimation(Animation(AnimationId::Heal, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+    queueCommandAction(AnimationId::Heal, gameTick * 1.2);
     queuePostCommandHappyAnimation();
     animations.markDirty();
 }
@@ -525,7 +540,7 @@ void CommandExecutor::commandShower()
 {
     currentResult.layoutId = AnimationId::Shower;
     petActions.takeShower(250);
-    animations.queueAnimation(Animation(AnimationId::Shower, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+    queueCommandAction(AnimationId::Shower, gameTick * 1.2);
     queuePostCommandHappyAnimation();
     animations.markDirty();
 }
@@ -545,7 +560,7 @@ void CommandExecutor::commandClean()
 {
     currentResult.layoutId = AnimationId::Clean;
     petActions.cleanEnvironment(500);
-    animations.queueAnimation(Animation(AnimationId::Clean, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High));
+    queueCommandAction(AnimationId::Clean, gameTick * 1.2);
     queuePostCommandHappyAnimation();
     animations.markDirty();
 }

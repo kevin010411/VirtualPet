@@ -165,6 +165,16 @@ bool hasActionKey(const CustomRules::ActionRule *rules, uint8_t count, const cha
     }
     return false;
 }
+
+bool hasVariantEffectAnimation(const CustomRules::VariantEffect *effects, uint8_t count, const char *animation)
+{
+    for (uint8_t index = 0; index < count; ++index)
+    {
+        if (strcmp(effects[index].animation, animation) == 0)
+            return true;
+    }
+    return false;
+}
 } // namespace
 
 void CustomRules::clear()
@@ -172,8 +182,10 @@ void CustomRules::clear()
     memset(stats, 0, sizeof(stats));
     memset(dailyRules, 0, sizeof(dailyRules));
     memset(actionRules, 0, sizeof(actionRules));
+    memset(variantEffects, 0, sizeof(variantEffects));
     dailyRuleCount = 0;
     actionRuleCount = 0;
+    variantEffectCount = 0;
     enabled = false;
 }
 
@@ -377,6 +389,51 @@ bool CustomRules::load(SdFat *sd, DebugDisplay *debug)
                 }
             }
         }
+        else if (strcmp(type, "variant_effect") == 0)
+        {
+            char *fields[3] = {};
+            if (!splitFields(row, fields, 3))
+            {
+                showLoadError(debug, lineNumber, "bad variant row");
+                valid = false;
+                break;
+            }
+            if (variantEffectCount >= kMaxVariantEffects)
+            {
+                showLoadError(debug, lineNumber, "too many variants");
+                valid = false;
+                break;
+            }
+
+            int16_t moodDelta = 0;
+            if (strcmp(fields[1], "mood") != 0)
+            {
+                showLoadError(debug, lineNumber, "bad variant stat");
+                valid = false;
+            }
+            else if (!parseInt16(fields[2], moodDelta))
+            {
+                showLoadError(debug, lineNumber, "bad variant value");
+                valid = false;
+            }
+            else if (hasVariantEffectAnimation(variantEffects, variantEffectCount, fields[0]))
+            {
+                showLoadError(debug, lineNumber, "dup variant");
+                valid = false;
+            }
+            else if (!copyToken(variantEffects[variantEffectCount].animation,
+                                sizeof(variantEffects[variantEffectCount].animation),
+                                fields[0]))
+            {
+                showLoadError(debug, lineNumber, "bad variant name");
+                valid = false;
+            }
+            else
+            {
+                variantEffects[variantEffectCount].moodDelta = moodDelta;
+                ++variantEffectCount;
+            }
+        }
         else
         {
             showLoadError(debug, lineNumber, "unknown type");
@@ -465,17 +522,37 @@ void CustomRules::applyDaily(PetActionController &petActions) const
     }
 }
 
+bool CustomRules::applyVariantEffect(const char *animationName, PetActionController &petActions) const
+{
+    const VariantEffect *effect = findVariantEffect(animationName);
+    if (effect == nullptr)
+        return false;
+
+    petActions.changeMood(effect->moodDelta);
+    return true;
+}
+
 bool CustomRules::executeAction(const char *key, PetActionController &petActions, AnimationController &animations) const
 {
     const ActionRule *rule = findAction(key);
-    if (rule == nullptr || petActions.customStat(rule->requiredSlot) < rule->requiredMin || !animations.hasNamedAnimation(rule->animation))
+    if (rule == nullptr || petActions.customStat(rule->requiredSlot) < rule->requiredMin)
         return false;
 
     const StatRule &stat = stats[rule->targetSlot];
     if (!petActions.changeCustomStatClamped(rule->targetSlot, rule->delta, stat.minValue, stat.maxValue))
         return false;
 
-    animations.queueNamedAnimation(rule->animation, kActionDurationMs, false, AnimationOwner::Command, AnimationPriority::High);
+    char selectedAnimation[16] = {};
+    if (!animations.queueActionAnimation(rule->animation,
+                                         kActionDurationMs,
+                                         false,
+                                         AnimationOwner::Command,
+                                         AnimationPriority::High,
+                                         selectedAnimation,
+                                         sizeof(selectedAnimation)))
+        animations.showResourceError();
+    else
+        applyVariantEffect(selectedAnimation, petActions);
     animations.markDirty();
     return true;
 }
@@ -489,6 +566,19 @@ const CustomRules::ActionRule *CustomRules::findAction(const char *key) const
     {
         if (strcmp(actionRules[index].key, key) == 0)
             return &actionRules[index];
+    }
+    return nullptr;
+}
+
+const CustomRules::VariantEffect *CustomRules::findVariantEffect(const char *animationName) const
+{
+    if (!enabled || animationName == nullptr || animationName[0] == '\0')
+        return nullptr;
+
+    for (uint8_t index = 0; index < variantEffectCount; ++index)
+    {
+        if (strcmp(variantEffects[index].animation, animationName) == 0)
+            return &variantEffects[index];
     }
     return nullptr;
 }

@@ -183,7 +183,7 @@ bool CommandController::canAlwaysExecute() const
 
 bool CommandController::canFeedPet() const
 {
-    return host.commandHasAnimation(AnimationId::Feed);
+    return true;
 }
 
 bool CommandController::canPredict() const
@@ -206,17 +206,17 @@ bool CommandController::canPredict() const
 
 bool CommandController::canMedicine() const
 {
-    return host.commandHasAnimation(AnimationId::Heal);
+    return true;
 }
 
 bool CommandController::canShower() const
 {
-    return host.commandHasAnimation(AnimationId::Shower);
+    return true;
 }
 
 bool CommandController::canClean() const
 {
-    return host.commandHasAnimation(AnimationId::Clean);
+    return true;
 }
 
 bool CommandController::canStatus() const

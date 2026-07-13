@@ -338,6 +338,16 @@ uint16_t Renderer::frameCountForName(const char *name) const
     return meta->singleFile ? 1 : meta->frameCount;
 }
 
+uint8_t Renderer::variantCountFor(const char *baseName) const
+{
+    return state->manifest.variantCountFor(baseName);
+}
+
+const char *Renderer::variantNameFor(const char *baseName, uint8_t index) const
+{
+    return state->manifest.variantNameFor(baseName, index);
+}
+
 unsigned long Renderer::frameIntervalFor(AnimationId id, unsigned long defaultIntervalMs) const
 {
     const AnimationMeta *meta = state->manifest.metaFor(id);

@@ -30,6 +30,8 @@ public:
     void renderDebugOverlay();
     uint16_t frameCountFor(AnimationId id) const;
     uint16_t frameCountForName(const char *name) const;
+    uint8_t variantCountFor(const char *baseName) const;
+    const char *variantNameFor(const char *baseName, uint8_t index) const;
     unsigned long frameIntervalFor(AnimationId id, unsigned long defaultIntervalMs) const;
     unsigned long frameIntervalForName(const char *name, unsigned long defaultIntervalMs) const;
     SdFat *sdCard() const;

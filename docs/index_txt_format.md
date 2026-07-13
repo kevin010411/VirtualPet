@@ -15,7 +15,7 @@
 ```
 
 `main.txt` 放共用或系統資源，例如 `Battery`、`Layout`、`LayoutSel`。  
-`{species}_{outfit}.txt` 放該外觀的寵物動作與互動動畫，例如 `Idle`、`Feed`、`GuessWin`。
+`{species}_{outfit}.txt` 放該外觀的寵物動作與互動動畫，例如 `Idle`、`Feed`、`GuessWin`，以及行為的多版本動畫。
 
 換裝 command 另外會讀取：
 
@@ -46,13 +46,13 @@
 每一個非空行都必須使用固定欄位順序：
 
 ```txt
-id|format|frames|width|height|fps|path
+id|format|frame_ms|frames|width|height|path
 ```
 
 範例：
 
 ```txt
-Idle|bmp|3|128|96|6|/dino/base/idle
+Idle|rle|167|3|128|96|/dino/base/idle
 ```
 
 以 `#` 開頭的行是註解。空行會被忽略。
@@ -63,16 +63,16 @@ Idle|bmp|3|128|96|6|/dino/base/idle
   - 必須與韌體中的 animation id 名稱完全相同
   - 範例：`Idle`、`Hungry`、`Feed`、`Status`、`StatusGoodHealthy`、`GuessWin`、`Battery`
 - `format`
-  - 支援 `bmp` 與 `rle`
+  - 目前韌體只支援 `rle`
+- `frame_ms`
+  - 每一影格的播放間隔（毫秒）
+  - `0` 表示使用韌體預設影格間隔
 - `frames`
   - 總影格數，必須大於 `0`
 - `width`
   - 影格寬度，必須大於 `0`
 - `height`
   - 影格高度，必須大於 `0`
-- `fps`
-  - 播放 FPS
-  - `0` 表示使用韌體預設影格間隔
 - `path`
   - 動畫資源的實際資料夾、基礎路徑，或單一檔案路徑
   - 不支援 `{species}`、`{outfit}`、`{animal}` token
@@ -84,7 +84,8 @@ Idle|bmp|3|128|96|6|/dino/base/idle
 ## Validation
 
 - 每一行必須剛好包含 7 個欄位
-- 未知 `id` 會被忽略
+- 未知且不以數字結尾的 `id` 會成為 named animation，供 `custom_rules.txt` 的自訂 action 使用
+- `{行為名稱}{正整數}` 的未知 `id`（例如 `Gift1`、`Dance2`）會成為該行為的版本動畫；已定義的 enum 名稱如 `Predict1`、`GuessItem1` 不適用此規則
 - 未知 `format` 會被忽略
 - `frames`、`width` 或 `height` 等於 `0` 時會被忽略
 - 空的 `path` 會被忽略
@@ -103,18 +104,37 @@ LayoutSel|bmp|8|32|32|0|/layout_sel
 `/index/dino_base.txt`：
 
 ```txt
-Idle|bmp|3|128|96|6|/dino/base/idle
-Happy|bmp|2|128|96|6|/dino/base/happy
-Feed|bmp|2|128|96|8|/dino/base/feed
-GuessWin|bmp|5|128|96|10|/dino/guess_game/win
+Idle|rle|167|3|128|96|/dino/base/idle
+Happy|rle|167|2|128|96|/dino/base/happy
+Feed|rle|125|2|128|96|/dino/base/feed
+GuessWin|rle|100|5|128|96|/dino/guess_game/win
 ```
 
 `/index/dino_hat.txt` 可以指向不同資料夾，也可以重用 base 資源：
 
 ```txt
-Idle|bmp|7|128|96|8|/dino/hat/idle
-Happy|bmp|2|128|96|6|/dino/base/happy
+Idle|rle|125|7|128|96|/dino/hat/idle
+Happy|rle|167|2|128|96|/dino/base/happy
 ```
+
+## 行為多版本動畫
+
+多版本只由外觀 manifest（`/index/{species}_{outfit}.txt`）載入。以行為的既有名稱加上正整數後綴宣告版本：
+
+```txt
+Gift1|rle|167|3|128|96|/dino/base/gift_1
+Gift2|rle|167|3|128|96|/dino/base/gift_2
+Shower1|rle|125|2|128|96|/dino/base/shower_1
+Dance1|rle|167|4|128|96|/dino/base/dance_1
+Dance2|rle|167|4|128|96|/dino/base/dance_2
+```
+
+- 同一行為有一個或多個版本時，韌體優先使用版本；多個版本以等機率隨機挑選，單一版本固定播放。
+- 沒有版本時，韌體會播放同名的固定動畫，例如 `Gift`。
+- 內建行為與 `custom_rules.txt` 的自訂 action 都適用；例如自訂 rule 設定動畫為 `Dance` 時，會選擇 `Dance1` 或 `Dance2`。
+- 固定動畫與版本動畫都缺少時，行為數值仍會更新，TFT 會顯示 `resource error`。
+- 每個已載入外觀最多 16 個版本動畫；第 17 筆會觸發資源容量錯誤。切換外觀時會清空並重新使用這個固定容量，不會配置 heap。
+- 若 `/custom_rules.txt` 定義 `variant_effect|Gift1|mood|10`，Gift command 隨機選到 `Gift1` 時會套用 `mood +10`；有定義版本效果時，它會取代 Gift 內建的 `mood +50`。
 
 `/index/pet.txt`：
 
