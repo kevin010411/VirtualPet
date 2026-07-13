@@ -217,10 +217,10 @@ bool LayoutRenderer::hasActionLayout(AnimationId id) const
 
 int LayoutRenderer::slotX(int slot)
 {
-    return (slot % 4) * tileSize;
+    return (3 - (slot % 4)) * tileSize;
 }
 
 int LayoutRenderer::slotY(int slot)
 {
-    return (slot >= 4) ? (screenHeight - tileSize) : 0;
+    return (slot < 4) ? (screenHeight - tileSize) : 0;
 }

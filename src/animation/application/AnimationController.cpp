@@ -11,7 +11,7 @@ AnimationController::AnimationController(Renderer &rendererRef)
 void AnimationController::setup(AnimationId baseAnimation)
 {
     renderer.initAnimations();
-    animationQueue.clear();
+    animationQueueCount = 0;
     activeAnimation = Animation();
     hasActiveAnimation = false;
     baseAnimationId = baseAnimation;
@@ -75,16 +75,28 @@ void AnimationController::queueAnimation(const Animation &animation)
         return;
     }
 
-    auto insertIt = animationQueue.end();
-    for (auto it = animationQueue.begin(); it != animationQueue.end(); ++it)
+    uint8_t insertAt = animationQueueCount;
+    for (uint8_t index = 0; index < animationQueueCount; ++index)
     {
-        if (static_cast<uint8_t>(animation.priority) > static_cast<uint8_t>(it->priority))
+        if (static_cast<uint8_t>(animation.priority) > static_cast<uint8_t>(animationQueue[index].priority))
         {
-            insertIt = it;
+            insertAt = index;
             break;
         }
     }
-    animationQueue.insert(insertIt, animation);
+
+    if (animationQueueCount == kMaxQueuedAnimations)
+    {
+        if (insertAt >= kMaxQueuedAnimations)
+            return;
+        --animationQueueCount;
+    }
+
+    for (uint8_t index = animationQueueCount; index > insertAt; --index)
+        animationQueue[index] = animationQueue[index - 1];
+
+    animationQueue[insertAt] = animation;
+    ++animationQueueCount;
 }
 
 void AnimationController::queueNamedAnimation(const char *name,
@@ -105,12 +117,18 @@ void AnimationController::queueNamedAnimation(const char *name,
 
 void AnimationController::clearByOwner(AnimationOwner owner)
 {
-    for (auto it = animationQueue.begin(); it != animationQueue.end();)
+    for (uint8_t index = 0; index < animationQueueCount;)
     {
-        if (it->owner == owner)
-            it = animationQueue.erase(it);
+        if (animationQueue[index].owner == owner)
+        {
+            for (uint8_t move = index + 1; move < animationQueueCount; ++move)
+                animationQueue[move - 1] = animationQueue[move];
+            --animationQueueCount;
+        }
         else
-            ++it;
+        {
+            ++index;
+        }
     }
 
     if (hasActiveAnimation && activeAnimation.owner == owner)
@@ -130,9 +148,9 @@ bool AnimationController::hasAnimationForOwner(AnimationOwner owner) const
     if (hasActiveAnimation && activeAnimation.owner == owner)
         return true;
 
-    for (const Animation &animation : animationQueue)
+    for (uint8_t index = 0; index < animationQueueCount; ++index)
     {
-        if (animation.owner == owner)
+        if (animationQueue[index].owner == owner)
             return true;
     }
     return false;
@@ -143,10 +161,10 @@ AnimationId AnimationController::currentCommandAnimationId() const
     if (hasActiveAnimation && activeAnimation.owner == AnimationOwner::Command)
         return activeAnimation.id;
 
-    for (const Animation &animation : animationQueue)
+    for (uint8_t index = 0; index < animationQueueCount; ++index)
     {
-        if (animation.owner == AnimationOwner::Command)
-            return animation.id;
+        if (animationQueue[index].owner == AnimationOwner::Command)
+            return animationQueue[index].id;
     }
 
     return AnimationId::None;
@@ -196,11 +214,13 @@ void AnimationController::updateElapsed(unsigned long elapsed)
 
 void AnimationController::tryStartNextAnimation()
 {
-    if (hasActiveAnimation || animationQueue.empty())
+    if (hasActiveAnimation || animationQueueCount == 0)
         return;
 
-    activeAnimation = animationQueue.front();
-    animationQueue.pop_front();
+    activeAnimation = animationQueue[0];
+    for (uint8_t index = 1; index < animationQueueCount; ++index)
+        animationQueue[index - 1] = animationQueue[index];
+    --animationQueueCount;
     hasActiveAnimation = true;
     displayDuration = static_cast<long>(activeAnimation.durationMs);
 }

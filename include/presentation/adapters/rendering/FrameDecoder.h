@@ -4,38 +4,30 @@
 #include <Arduino.h>
 #include <Adafruit_ST7735.h>
 #include <SdFat.h>
-#include <vector>
 #include "shared/assets/AssetManifest.h"
-#include "shared/assets/AssetFormatConfig.h"
 
 namespace FrameDecoder
 {
 constexpr uint16_t kDefaultAnimWidth = 128;
 constexpr uint16_t kDefaultAnimHeight = 96;
 constexpr uint16_t kWorkingBatchLines = 12;
+constexpr size_t kRleReadBufferBytes = 1024;
+constexpr size_t kLineBufferPixels = static_cast<size_t>(kDefaultAnimWidth) * kWorkingBatchLines;
 
 void showResourceError(Adafruit_ST7735 *tft);
+void showPathError(Adafruit_ST7735 *tft);
+void showRegistryFullError(Adafruit_ST7735 *tft);
 void showStatusNotFound(Adafruit_ST7735 *tft);
 void showInitPetNotExist(Adafruit_ST7735 *tft);
 bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, const char *ext);
 bool buildFramePath(char *dest, size_t destSize, const char *basePath, uint16_t frameIndex, const char *ext);
 
-#if ENABLE_SD_BMP_ASSETS
-bool showBmpImage(SdFat *sd,
-                  Adafruit_ST7735 *tft,
-                  std::vector<uint8_t> &rowBuffer,
-                  std::vector<uint16_t> &lineBuffer,
-                  const char *imgPath,
-                  int xmin,
-                  int ymin,
-                  int batchLines);
-#endif
-
-#if ENABLE_SD_RLE_ASSETS
 bool showRleImage(SdFat *sd,
                   Adafruit_ST7735 *tft,
-                  std::vector<uint8_t> &readBuffer,
-                  std::vector<uint16_t> &lineBuffer,
+                  uint8_t *readBuffer,
+                  size_t readBufferSize,
+                  uint16_t *lineBuffer,
+                  size_t lineBufferPixels,
                   const char *imgPath,
                   uint16_t expectedWidth,
                   uint16_t expectedHeight,
@@ -43,7 +35,6 @@ bool showRleImage(SdFat *sd,
                   int xmin,
                   int ymin,
                   int batchLines);
-#endif
 } // namespace FrameDecoder
 
 #endif

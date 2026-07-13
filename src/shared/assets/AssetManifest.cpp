@@ -9,9 +9,21 @@ constexpr uint16_t kDefaultAnimWidth = 128;
 constexpr uint16_t kDefaultAnimHeight = 96;
 constexpr const char *kMainManifestPath = "/index/main.txt";
 
-AnimationMeta gAnimationRegistry[kAnimationIdCount] = {};
+constexpr uint8_t kMaxLoadedAnimations = 48;
+
+struct AnimationRegistryEntry
+{
+    AnimationId id = AnimationId::None;
+    AnimationMeta meta = {};
+};
+
+AnimationRegistryEntry gAnimationRegistry[kMaxLoadedAnimations] = {};
+uint8_t gAnimationRegistryCount = 0;
+AnimationMeta gEmptyAnimationMeta = {};
 char gNamedAnimationNames[AssetManifest::kMaxNamedAnimations][AssetManifest::kMaxAnimationNameLength + 1] = {};
 AnimationMeta gNamedAnimationRegistry[AssetManifest::kMaxNamedAnimations] = {};
+bool gPathError = false;
+bool gCapacityError = false;
 
 void trimWhitespace(char *text)
 {
@@ -31,13 +43,6 @@ void trimWhitespace(char *text)
         text[len - 1] = '\0';
         --len;
     }
-}
-
-AssetFormat parseAssetFormat(const char *text)
-{
-    if (strcmp(text, "rle") == 0)
-        return AssetFormat::RleRgb565Sequence;
-    return AssetFormat::BmpSequence;
 }
 
 bool endsWithIgnoreCase(const char *text, const char *suffix)
@@ -144,6 +149,61 @@ bool buildAppearanceManifestPath(char *dest, size_t destSize, const char *specie
     return written >= 0 && written < static_cast<int>(destSize);
 }
 
+void resetMeta(AnimationMeta &meta)
+{
+    meta.path[0] = '\0';
+    meta.width = kDefaultAnimWidth;
+    meta.height = kDefaultAnimHeight;
+    meta.frameCount = 0;
+    meta.frameIntervalMs = 0;
+    meta.configured = false;
+    meta.singleFile = false;
+}
+
+AnimationMeta *findMeta(AnimationId id)
+{
+    for (uint8_t i = 0; i < gAnimationRegistryCount; ++i)
+    {
+        if (gAnimationRegistry[i].id == id)
+            return &gAnimationRegistry[i].meta;
+    }
+    return nullptr;
+}
+
+const AnimationMeta *findMetaConst(AnimationId id)
+{
+    for (uint8_t i = 0; i < gAnimationRegistryCount; ++i)
+    {
+        if (gAnimationRegistry[i].id == id)
+            return &gAnimationRegistry[i].meta;
+    }
+    return nullptr;
+}
+
+bool upsertMeta(AnimationId id, const AnimationMeta &meta)
+{
+    if (id == AnimationId::None)
+        return false;
+
+    AnimationMeta *existing = findMeta(id);
+    if (existing != nullptr)
+    {
+        *existing = meta;
+        return true;
+    }
+
+    if (gAnimationRegistryCount >= kMaxLoadedAnimations)
+    {
+        gCapacityError = true;
+        return false;
+    }
+
+    AnimationRegistryEntry &entry = gAnimationRegistry[gAnimationRegistryCount++];
+    entry.id = id;
+    entry.meta = meta;
+    return true;
+}
+
 bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPath)
 {
     if (sd == nullptr || manifestPath == nullptr || manifestPath[0] == '\0')
@@ -167,25 +227,24 @@ bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPa
         if (!splitManifestFields(line, fields, 7))
             continue;
 
-        const bool isBmp = strcmp(fields[1], "bmp") == 0;
-        const bool isRle = strcmp(fields[1], "rle") == 0;
-        if (!isBmp && !isRle)
+        if (strcmp(fields[1], "rle") != 0)
             continue;
 
         AnimationMeta parsed = {};
-        parsed.format = parseAssetFormat(fields[1]);
         parsed.frameIntervalMs = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
         parsed.frameCount = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
         parsed.width = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
         parsed.height = static_cast<uint16_t>(strtoul(fields[5], nullptr, 10));
         if (!copyManifestPath(parsed.path, sizeof(parsed.path), fields[6]))
+        {
+            gPathError = true;
             continue;
+        }
 
         if (parsed.frameCount == 0 || parsed.width == 0 || parsed.height == 0 || parsed.path[0] == '\0')
             continue;
 
-        parsed.singleFile = endsWithIgnoreCase(parsed.path, ".bmp") ||
-                            endsWithIgnoreCase(parsed.path, ".rle");
+        parsed.singleFile = endsWithIgnoreCase(parsed.path, ".rle");
         if (parsed.singleFile)
             parsed.frameCount = 1;
 
@@ -194,7 +253,7 @@ bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPa
         const AnimationId targetId = animationIdFromName(fields[0]);
         if (targetId != AnimationId::None)
         {
-            *registry.metaFor(targetId) = parsed;
+            upsertMeta(targetId, parsed);
         }
         else
         {
@@ -211,31 +270,16 @@ bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPa
 
 void AssetManifest::reset()
 {
-    for (size_t i = 0; i < kAnimationIdCount; ++i)
-    {
-        AnimationMeta &meta = gAnimationRegistry[i];
-        meta.path[0] = '\0';
-        meta.format = AssetFormat::BmpSequence;
-        meta.width = kDefaultAnimWidth;
-        meta.height = kDefaultAnimHeight;
-        meta.frameCount = 0;
-        meta.frameIntervalMs = 0;
-        meta.configured = false;
-        meta.singleFile = false;
-    }
+    gPathError = false;
+    gCapacityError = false;
+    gAnimationRegistryCount = 0;
+    resetMeta(gEmptyAnimationMeta);
 
     for (size_t i = 0; i < kMaxNamedAnimations; ++i)
     {
         gNamedAnimationNames[i][0] = '\0';
         AnimationMeta &meta = gNamedAnimationRegistry[i];
-        meta.path[0] = '\0';
-        meta.format = AssetFormat::BmpSequence;
-        meta.width = kDefaultAnimWidth;
-        meta.height = kDefaultAnimHeight;
-        meta.frameCount = 0;
-        meta.frameIntervalMs = 0;
-        meta.configured = false;
-        meta.singleFile = false;
+        resetMeta(meta);
     }
 }
 
@@ -256,20 +300,20 @@ bool AssetManifest::load(SdFat *sd, const char *speciesCode, const char *outfitC
     return loadManifestFile(sd, *this, appearanceManifestPath);
 }
 
-AnimationMeta *AssetManifest::metaFor(AnimationId id)
+bool AssetManifest::hasPathError() const
 {
-    const size_t index = static_cast<size_t>(id);
-    if (index >= kAnimationIdCount)
-        return &gAnimationRegistry[0];
-    return &gAnimationRegistry[index];
+    return gPathError;
+}
+
+bool AssetManifest::hasCapacityError() const
+{
+    return gCapacityError;
 }
 
 const AnimationMeta *AssetManifest::metaFor(AnimationId id) const
 {
-    const size_t index = static_cast<size_t>(id);
-    if (index >= kAnimationIdCount)
-        return &gAnimationRegistry[0];
-    return &gAnimationRegistry[index];
+    const AnimationMeta *meta = findMetaConst(id);
+    return meta != nullptr ? meta : &gEmptyAnimationMeta;
 }
 
 AnimationMeta *AssetManifest::metaForName(const char *name)

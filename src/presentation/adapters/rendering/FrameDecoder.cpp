@@ -16,6 +16,28 @@ void showResourceError(Adafruit_ST7735 *tft)
     tft->print("resource error");
 }
 
+void showPathError(Adafruit_ST7735 *tft)
+{
+    if (tft == nullptr)
+        return;
+
+    tft->fillRect(0, 32, kDefaultAnimWidth, kDefaultAnimHeight, ST77XX_BLACK);
+    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
+    tft->setCursor(8, 72);
+    tft->print("path error");
+}
+
+void showRegistryFullError(Adafruit_ST7735 *tft)
+{
+    if (tft == nullptr)
+        return;
+
+    tft->fillRect(0, 32, kDefaultAnimWidth, kDefaultAnimHeight, ST77XX_BLACK);
+    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
+    tft->setCursor(8, 72);
+    tft->print("registry full");
+}
+
 void showStatusNotFound(Adafruit_ST7735 *tft)
 {
     if (tft == nullptr)
@@ -58,106 +80,15 @@ bool buildFramePath(char *dest, size_t destSize, const char *basePath, uint16_t 
     return snprintf(dest, destSize, "%s/%u%s", basePath, static_cast<unsigned>(frameIndex), ext) < static_cast<int>(destSize);
 }
 
-#if ENABLE_SD_BMP_ASSETS
-bool showBmpImage(SdFat *sd,
-                  Adafruit_ST7735 *tft,
-                  std::vector<uint8_t> &rowBuffer,
-                  std::vector<uint16_t> &lineBuffer,
-                  const char *imgPath,
-                  int xmin,
-                  int ymin,
-                  int batchLines)
-{
-    File bmpFile = sd->open(imgPath);
-    if (!bmpFile)
-        return false;
-
-    if (bmpFile.read() != 'B' || bmpFile.read() != 'M')
-    {
-        bmpFile.close();
-        return false;
-    }
-
-    bmpFile.seek(10);
-    const uint32_t pixelDataOffset = bmpFile.read() |
-                                     (bmpFile.read() << 8) |
-                                     (bmpFile.read() << 16) |
-                                     (bmpFile.read() << 24);
-
-    bmpFile.seek(18);
-    const int32_t bmpWidth = bmpFile.read() |
-                             (bmpFile.read() << 8) |
-                             (bmpFile.read() << 16) |
-                             (bmpFile.read() << 24);
-    const int32_t bmpHeight = bmpFile.read() |
-                              (bmpFile.read() << 8) |
-                              (bmpFile.read() << 16) |
-                              (bmpFile.read() << 24);
-
-    bmpFile.seek(28);
-    const uint16_t bitsPerPixel = bmpFile.read() | (bmpFile.read() << 8);
-    if (bitsPerPixel != 24 || bmpWidth <= 0 || bmpHeight <= 0)
-    {
-        bmpFile.close();
-        return false;
-    }
-
-    const int rowSize = ((bmpWidth * 3 + 3) / 4) * 4;
-    const size_t rowCapacity = static_cast<size_t>(rowSize) * batchLines;
-    const size_t lineCapacity = static_cast<size_t>(bmpWidth) * batchLines;
-    if (rowBuffer.size() < rowCapacity)
-        rowBuffer.resize(rowCapacity);
-    if (lineBuffer.size() < lineCapacity)
-        lineBuffer.resize(lineCapacity);
-
-    bmpFile.seek(pixelDataOffset);
-    for (int y = 0; y < bmpHeight; y += batchLines)
-    {
-        const int actualLines = (y + batchLines > bmpHeight) ? (bmpHeight - y) : batchLines;
-        for (int i = 0; i < actualLines; i++)
-        {
-            const int bytesRead = bmpFile.read(&rowBuffer[i * rowSize], rowSize);
-            if (bytesRead != rowSize)
-            {
-                bmpFile.close();
-                return false;
-            }
-
-            for (int x = 0; x < bmpWidth; x++)
-            {
-                const int j = x * 3;
-                const uint8_t b = rowBuffer[i * rowSize + j];
-                const uint8_t g = rowBuffer[i * rowSize + j + 1];
-                const uint8_t r = rowBuffer[i * rowSize + j + 2];
-                const int destX = bmpWidth - 1 - x;
-                lineBuffer[i * bmpWidth + destX] = ((r & 0xF8) << 8) |
-                                                   ((g & 0xFC) << 3) |
-                                                   (b >> 3);
-            }
-        }
-
-        for (int i = 0; i < actualLines; i++)
-            tft->drawRGBBitmap(xmin, ymin + y + i, &lineBuffer[i * bmpWidth], bmpWidth, 1);
-    }
-
-    bmpFile.close();
-    return true;
-}
-#endif
-
-#if ENABLE_SD_RLE_ASSETS
 namespace
 {
-constexpr size_t kRleReadBufferBytes = 1024;
-
 class RleBufferedReader
 {
 public:
-    RleBufferedReader(File &source, std::vector<uint8_t> &buffer)
+    RleBufferedReader(File &source, uint8_t *buffer, size_t bufferSize)
         : file(source), readBuffer(buffer)
     {
-        if (readBuffer.size() < kRleReadBufferBytes)
-            readBuffer.resize(kRleReadBufferBytes);
+        readBufferSize = bufferSize;
     }
 
     bool readU16LE(uint16_t &value)
@@ -188,7 +119,10 @@ private:
 
     bool refill()
     {
-        const int bytesRead = file.read(readBuffer.data(), readBuffer.size());
+        if (readBuffer == nullptr || readBufferSize == 0)
+            return false;
+
+        const int bytesRead = file.read(readBuffer, readBufferSize);
         if (bytesRead <= 0)
             return false;
 
@@ -198,7 +132,8 @@ private:
     }
 
     File &file;
-    std::vector<uint8_t> &readBuffer;
+    uint8_t *readBuffer;
+    size_t readBufferSize = 0;
     size_t readPosition = 0;
     size_t readLength = 0;
 };
@@ -206,8 +141,10 @@ private:
 
 bool showRleImage(SdFat *sd,
                   Adafruit_ST7735 *tft,
-                  std::vector<uint8_t> &readBuffer,
-                  std::vector<uint16_t> &lineBuffer,
+                  uint8_t *readBuffer,
+                  size_t readBufferSize,
+                  uint16_t *lineBuffer,
+                  size_t lineBufferPixels,
                   const char *imgPath,
                   uint16_t expectedWidth,
                   uint16_t expectedHeight,
@@ -216,14 +153,14 @@ bool showRleImage(SdFat *sd,
                   int ymin,
                   int batchLines)
 {
-    if (sd == nullptr || tft == nullptr)
+    if (sd == nullptr || tft == nullptr || readBuffer == nullptr || lineBuffer == nullptr)
         return false;
 
     File frameFile = sd->open(imgPath);
     if (!frameFile)
         return false;
 
-    RleBufferedReader reader(frameFile, readBuffer);
+    RleBufferedReader reader(frameFile, readBuffer, readBufferSize);
 
     uint16_t width = 0;
     uint16_t height = 0;
@@ -247,8 +184,11 @@ bool showRleImage(SdFat *sd,
 
     const int safeBatchLines = (batchLines < 1) ? 1 : batchLines;
     const size_t lineCapacity = static_cast<size_t>(width) * static_cast<size_t>(safeBatchLines);
-    if (lineBuffer.size() < lineCapacity)
-        lineBuffer.resize(lineCapacity);
+    if (lineBufferPixels < lineCapacity)
+    {
+        frameFile.close();
+        return false;
+    }
 
     uint16_t runLength = 0;
     uint16_t runColor = 0;
@@ -261,8 +201,7 @@ bool showRleImage(SdFat *sd,
 
         for (int rowOffset = 0; rowOffset < actualLines; ++rowOffset)
         {
-            const size_t bufferRow = static_cast<size_t>(actualLines - 1 - rowOffset);
-            uint16_t *destLine = &lineBuffer[bufferRow * width];
+            uint16_t *destLine = &lineBuffer[static_cast<size_t>(rowOffset) * width];
             size_t lineCount = 0;
 
             while (lineCount < width)
@@ -284,9 +223,9 @@ bool showRleImage(SdFat *sd,
 
                 const size_t remainingLine = static_cast<size_t>(width) - lineCount;
                 const size_t copyCount = (runLength < remainingLine) ? runLength : remainingLine;
-                uint16_t *dest = destLine + (static_cast<size_t>(width) - 1) - lineCount;
+                uint16_t *dest = destLine + lineCount;
                 for (size_t i = 0; i < copyCount; ++i)
-                    *dest-- = runColor;
+                    *dest++ = runColor;
 
                 lineCount += copyCount;
                 pixelsWritten += copyCount;
@@ -294,8 +233,7 @@ bool showRleImage(SdFat *sd,
             }
         }
 
-        const int y = static_cast<int>(height - batchStartRow - actualLines);
-        tft->drawRGBBitmap(xmin, ymin + y, lineBuffer.data(), width, actualLines);
+        tft->drawRGBBitmap(xmin, ymin + batchStartRow, lineBuffer, width, actualLines);
     }
 
     if (pixelsWritten != totalPixels || runLength != 0 || reader.hasTrailingData())
@@ -307,5 +245,4 @@ bool showRleImage(SdFat *sd,
     frameFile.close();
     return true;
 }
-#endif
 } // namespace FrameDecoder

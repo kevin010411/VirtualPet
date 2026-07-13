@@ -1,6 +1,6 @@
 # Renderer 資源格式說明
 
-目前專案從 SD 卡渲染 BMP 或 RLE 圖片序列。為了降低 flash，韌體一次只編入其中一種 renderer。
+目前韌體從 SD 卡渲染 RLE 圖片序列。BMP 可保留在資源工具流程中作為開發檢查或中間格式，但不再編入韌體 runtime。
 
 資源流程建議使用適合串流讀取的格式：
 
@@ -11,8 +11,7 @@
 
 2. BMP 圖片序列
 - 最容易人工檢查與替換。
-- 需要執行期間解析 BMP，並把 24-bit 色彩轉成 16-bit。
-- 適合開發期間或資源檢查 build。
+- 僅適合開發期間或資源檢查，不是韌體 runtime 格式。
 
 3. Sprite sheet / atlas
 - 將多個影格存放在同一個資源中，降低檔案系統開銷。
@@ -20,10 +19,9 @@
 - 開發期間仍可使用 BMP，但不應作為長期的高 FPS 格式。
 
 目前實作策略：
-- `ENABLE_SD_RLE_ASSETS=1` 時只編入 `RLERenderer`。
-- `ENABLE_SD_BMP_ASSETS=1` 時只編入 `BMPRenderer`。
-- 兩個 define 必須剛好只有一個為 `1`。
-- `index.txt` 的格式欄位仍接受 `bmp` 與 `rle`，但實際讀取副檔名由目前編入的 renderer 決定。
+- 韌體 runtime 固定只編入 `RLERenderer`。
+- `index.txt` 的格式欄位必須是 `rle`；`bmp` 行會被忽略。
+- manifest 路徑超過韌體 path buffer 時，TFT 會顯示 `path error`。
 
 Renderer 使用的 RLE 檔案配置：
 

@@ -5,16 +5,11 @@
 #include <SdFat.h>
 #include "animation/domain/Animation.h"
 
-enum class AssetFormat : uint8_t
-{
-    BmpSequence,
-    RleRgb565Sequence
-};
-
 struct AnimationMeta
 {
-    char path[64];
-    AssetFormat format;
+    static constexpr uint8_t kMaxPathLength = 47;
+
+    char path[kMaxPathLength + 1];
     uint16_t width;
     uint16_t height;
     uint16_t frameCount;
@@ -31,8 +26,9 @@ public:
 
     void reset();
     bool load(SdFat *sd, const char *speciesCode, const char *outfitCode);
+    bool hasPathError() const;
+    bool hasCapacityError() const;
 
-    AnimationMeta *metaFor(AnimationId id);
     const AnimationMeta *metaFor(AnimationId id) const;
     AnimationMeta *metaForName(const char *name);
     const AnimationMeta *metaForName(const char *name) const;

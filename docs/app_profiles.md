@@ -165,8 +165,7 @@ Composite mode 也會改變 `dayPassed()` 在非健康狀態下的行為：只�
 | `ENABLE_GUESS_ITEM_GAME` | 編入或排除猜物小遊戲邏輯 |
 | `ENABLE_GUESS_GAME_SINGLE_ROUND` | 控制猜物小遊戲回合數 |
 | `ENABLE_RENDER_STATS` | 編入或排除 renderer 統計報表 |
-| `ENABLE_SD_BMP_ASSETS` | 編入 BMP renderer |
-| `ENABLE_SD_RLE_ASSETS` | 編入 RLE renderer |
+| `ENABLE_SD_RLE_ASSETS` | 必須為 `1`，韌體 runtime 固定使用 RLE renderer |
 
 例子：針對某個 profile 關閉猜物小遊戲：
 

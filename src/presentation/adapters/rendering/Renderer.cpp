@@ -4,10 +4,7 @@
 #include <Adafruit_ST7735.h>
 #include <SdFat.h>
 #include <string.h>
-#include <vector>
-#include "presentation/adapters/rendering/BMPRenderer.h"
 #include "presentation/adapters/rendering/FrameDecoder.h"
-#include "presentation/adapters/rendering/RLERenderer.h"
 #include "presentation/adapters/rendering/RenderStatsReporter.h"
 
 struct Renderer::AnimationState
@@ -18,23 +15,14 @@ struct Renderer::AnimationState
     bool playOnce = false;
     char speciesCode[9] = "dino";
     char outfitCode[9] = "base";
-    std::vector<uint8_t> rowBuffer;
-    std::vector<uint16_t> lineBuffer;
+    uint8_t readBuffer[FrameDecoder::kRleReadBufferBytes] = {};
+    uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
     AssetManifest manifest;
     const AnimationMeta *namedAnimationMeta = nullptr;
 #if ENABLE_RENDER_STATS
     RenderStats stats;
 #endif
 };
-
-Renderer *Renderer::create(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
-{
-#if ENABLE_SD_RLE_ASSETS
-    return new RLERenderer(ref_tft, ref_SD);
-#elif ENABLE_SD_BMP_ASSETS
-    return new BMPRenderer(ref_tft, ref_SD);
-#endif
-}
 
 Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
     : tft(ref_tft), SD(ref_SD), state(new AnimationState()), debug(ref_tft)
@@ -44,6 +32,25 @@ Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
 Renderer::~Renderer()
 {
     delete state;
+}
+
+const char *Renderer::assetExtension() const
+{
+    return ".rle";
+}
+
+bool Renderer::showImageFile(const char *imgPath,
+                             int xmin,
+                             int ymin,
+                             int batchLines,
+                             const AnimationMeta *meta)
+{
+    const bool validateSize = meta != nullptr;
+    const uint16_t expectedWidth = validateSize ? meta->width : 0;
+    const uint16_t expectedHeight = validateSize ? meta->height : 0;
+    return FrameDecoder::showRleImage(
+        sdCard(), display(), readBuffer(), readBufferSize(), lineBuffer(), lineBufferPixels(),
+        imgPath, expectedWidth, expectedHeight, validateSize, xmin, ymin, batchLines);
 }
 
 void Renderer::initAnimations()
@@ -57,9 +64,6 @@ void Renderer::initAnimations()
 #endif
     reloadManifest();
 
-    const int rowCapacity = ((FrameDecoder::kDefaultAnimWidth * 3 + 3) / 4) * 4 * FrameDecoder::kWorkingBatchLines;
-    state->rowBuffer.assign(rowCapacity, 0);
-    state->lineBuffer.assign(FrameDecoder::kDefaultAnimWidth * FrameDecoder::kWorkingBatchLines, 0);
 }
 
 void Renderer::setAssetAppearance(const char *speciesCode, const char *outfitCode)
@@ -90,7 +94,14 @@ bool Renderer::reloadManifest()
     state->manifest.reset();
     state->animationIndex = 1;
     state->maxFrame = 0;
-    return state->manifest.load(SD, state->speciesCode, state->outfitCode);
+    const bool loaded = state->manifest.load(SD, state->speciesCode, state->outfitCode);
+    if (state->manifest.hasPathError())
+        FrameDecoder::showPathError(tft);
+    else if (state->manifest.hasCapacityError())
+        FrameDecoder::showRegistryFullError(tft);
+    else if (!loaded)
+        FrameDecoder::showResourceError(tft);
+    return loaded && !state->manifest.hasPathError() && !state->manifest.hasCapacityError();
 }
 
 Adafruit_ST7735 *Renderer::display() const
@@ -103,14 +114,24 @@ SdFat *Renderer::sdCard() const
     return SD;
 }
 
-std::vector<uint8_t> &Renderer::rowBuffer()
+uint8_t *Renderer::readBuffer()
 {
-    return state->rowBuffer;
+    return state->readBuffer;
 }
 
-std::vector<uint16_t> &Renderer::lineBuffer()
+size_t Renderer::readBufferSize() const
+{
+    return sizeof(state->readBuffer);
+}
+
+uint16_t *Renderer::lineBuffer()
 {
     return state->lineBuffer;
+}
+
+size_t Renderer::lineBufferPixels() const
+{
+    return sizeof(state->lineBuffer) / sizeof(state->lineBuffer[0]);
 }
 
 bool Renderer::ShowSDCardFrame(const char *base_path, uint16_t frame_index, int xmin, int ymin, int batch_lines)
@@ -136,7 +157,7 @@ bool Renderer::ShowSDCardFrame(const char *base_path, uint16_t frame_index, int 
 
 bool Renderer::ShowAnimationFrame(AnimationId id, uint16_t frame_index, int xmin, int ymin, int batch_lines)
 {
-    AnimationMeta *meta = state->manifest.metaFor(id);
+    const AnimationMeta *meta = state->manifest.metaFor(id);
     if (id == AnimationId::None || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
     {
         FrameDecoder::showResourceError(tft);
@@ -189,7 +210,7 @@ bool Renderer::ShowNamedAnimationFrame(const char *name, uint16_t frame_index, i
 bool Renderer::setAnimation(AnimationId id, bool playOnce)
 {
     state->namedAnimationMeta = nullptr;
-    AnimationMeta *meta = state->manifest.metaFor(id);
+    const AnimationMeta *meta = state->manifest.metaFor(id);
     if (id == AnimationId::None || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
     {
         state->nowAnimId = id;

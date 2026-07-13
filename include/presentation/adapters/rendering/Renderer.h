@@ -4,17 +4,15 @@
 #include <Arduino.h>
 #include <Adafruit_ST7735.h>
 #include <SdFat.h>
-#include <vector>
 #include "animation/domain/Animation.h"
 #include "shared/assets/AssetManifest.h"
-#include "shared/assets/AssetFormatConfig.h"
 #include "presentation/adapters/rendering/TftDebugDisplay.h"
 
 class Renderer
 {
 public:
-    static Renderer *create(Adafruit_ST7735 *ref_tft, SdFat *ref_SD);
-    virtual ~Renderer();
+    Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD);
+    ~Renderer();
 
     void initAnimations();
     void setAssetAppearance(const char *speciesCode, const char *outfitCode);
@@ -39,21 +37,18 @@ public:
 private:
     struct AnimationState;
 
-protected:
-    Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD);
-
-    virtual const char *assetExtension() const = 0;
-    virtual bool showImageFile(const char *imgPath,
-                               int xmin,
-                               int ymin,
-                               int batchLines,
-                               const AnimationMeta *meta) = 0;
-
+    const char *assetExtension() const;
+    bool showImageFile(const char *imgPath,
+                       int xmin,
+                       int ymin,
+                       int batchLines,
+                       const AnimationMeta *meta);
     Adafruit_ST7735 *display() const;
-    std::vector<uint8_t> &rowBuffer();
-    std::vector<uint16_t> &lineBuffer();
+    uint8_t *readBuffer();
+    size_t readBufferSize() const;
+    uint16_t *lineBuffer();
+    size_t lineBufferPixels() const;
 
-private:
     Adafruit_ST7735 *tft;
     SdFat *SD;
     AnimationState *state;

@@ -3,7 +3,6 @@
 
 #include <Arduino.h>
 #include <SdFat.h>
-#include <deque>
 #include "animation/domain/Animation.h"
 
 class Renderer;
@@ -45,9 +44,11 @@ public:
 
 private:
     static constexpr unsigned long frameIntervalSlow = 600;
+    static constexpr uint8_t kMaxQueuedAnimations = 8;
 
     Renderer &renderer;
-    std::deque<Animation> animationQueue = {};
+    Animation animationQueue[kMaxQueuedAnimations] = {};
+    uint8_t animationQueueCount = 0;
     Animation activeAnimation = {};
     bool hasActiveAnimation = false;
     AnimationId baseAnimationId = AnimationId::Idle;
