@@ -37,8 +37,8 @@ clean
 env
 sick
 status
-healthy_days
-stage_healthy_days
+stage_days
+health
 stage_progress
 custom0..custom7
 

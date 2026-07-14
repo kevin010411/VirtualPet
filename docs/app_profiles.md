@@ -152,7 +152,7 @@ StatusDepressedDirty
 
 若選出的 composite animation 沒有列在 index、frame count 為 `0`，或資源讀取失敗，韌體會直接在 TFT 顯示 `resource error`，不會退回 `StatusAge`、`Status`、`Idle` 或其他動畫。
 
-Composite mode 也會改變 `dayPassed()` 在非健康狀態下的行為：只有 `APP_STATUS_MODE=STATUS_MODE_COMPOSITE` 時，非 `Healthy` 仍會讓 mood 自然下降；其他 STATUS mode 維持原本「非 Healthy 時完全不更新」的行為。非健康時即使 mood 下降，`hunger`、`age`、`clean`、`env` 與 `healthy_days` 都不會增加或變化。
+Composite mode 也會改變 `dayPassed()` 在非健康狀態下的行為：只有 `APP_STATUS_MODE=STATUS_MODE_COMPOSITE` 時，非 `Healthy` 仍會讓 mood 自然下降；其他 STATUS mode 維持原本「非 Healthy 時不更新 hunger、age 與 clean」的行為。所有模式都會讓 `stage_days` 增加；健康時 `health +1`，非健康時 `health -1`，範圍限制為 `0..100`。環境值仍由獨立的環境衰退計時器更新。
 
 ## Feature Gate 與 Flash 控制
 

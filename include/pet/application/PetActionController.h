@@ -20,7 +20,7 @@ public:
     void reset();
     void maybeSave();
     void decayEnvironment();
-    bool dayPassed();
+    void dayPassed();
     bool findEvolutionTarget(AppearanceSelection &selection) const;
     bool applyEvolutionTarget();
     bool applyAppearance(const char *speciesCode, const char *outfitCode);
@@ -42,7 +42,6 @@ public:
 
     const char *speciesCode() const;
     const char *outfitCode() const;
-    uint32_t healthyDays() const;
     HealthStatus currentStatus() const;
     bool isMoodDepressed() const;
     AnimationId currentAnimation() const;

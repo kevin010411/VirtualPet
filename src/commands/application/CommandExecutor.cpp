@@ -253,13 +253,16 @@ bool resolveStatusSource(const char *source,
         value = stats.status;
         maxValue = 5;
     }
-    else if (strcmp(source, "healthy_days") == 0)
-        value = static_cast<int32_t>(stats.healthy_days);
-    else if (strcmp(source, "stage_healthy_days") == 0)
-        value = static_cast<int32_t>(stats.stage_healthy_days);
+    else if (strcmp(source, "stage_days") == 0)
+        value = static_cast<int32_t>(stats.stage_days);
+    else if (strcmp(source, "health") == 0)
+    {
+        value = stats.health;
+        maxValue = 100;
+    }
     else if (strcmp(source, "stage_progress") == 0)
     {
-        value = static_cast<int32_t>(stats.stage_healthy_days);
+        value = static_cast<int32_t>(stats.stage_days);
         maxValue = 10;
     }
     else

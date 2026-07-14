@@ -86,15 +86,19 @@ void Pet::refreshStatus()
         cfg));
 }
 
-bool Pet::dayPassed()
+void Pet::dayPassed()
 {
-    if (getStatus() != HealthStatus::Healthy)
+    const bool healthy = getStatus() == HealthStatus::Healthy;
+    st.stage_days += 1;
+    st.health = clampValue<int32_t>(st.health + (healthy ? 5 : -5), 0, 100);
+
+    if (!healthy)
     {
 #if APP_STATUS_MODE == STATUS_MODE_COMPOSITE
         st.mood = clampValue<int>(st.mood - 2, 0, cfg.max_mood);
         refreshStatus();
 #endif
-        return false;
+        return;
     }
 
     st.hungry_value = clampValue<int>(st.hungry_value + 3, 0, cfg.max_hunger);
@@ -102,10 +106,7 @@ bool Pet::dayPassed()
     st.ageTenths = clampValue<uint32_t>(st.ageTenths + cfg.ageTenthsPerTick, 0, cfg.maxAgeTenths);
     st.clean_value = clampValue<int>(st.clean_value - 3, 0, cfg.max_clean);
     st.env_value = clampValue<int>(st.env_value - 3, 0, cfg.max_env_clean);
-    st.healthy_days += 1;
-    st.stage_healthy_days += 1;
     refreshStatus();
-    return true;
 }
 
 void Pet::feedPet(int add_satiety)
@@ -212,8 +213,8 @@ void Pet::setDefaultState()
     st.env_value = 800;
     strcpy(st.species, "dino");
     strcpy(st.outfit, "base");
-    st.healthy_days = 0;
-    st.stage_healthy_days = 0;
+    st.stage_days = 0;
+    st.health = 0;
     for (size_t i = 0; i < PetStatSnapshot::kCustomStatCount; ++i)
         st.customStats[i] = 0;
     st.flowFlags = 0;
@@ -245,21 +246,21 @@ const char *Pet::outfitCode() const
     return st.outfit[0] == '\0' ? "base" : st.outfit;
 }
 
-uint32_t Pet::healthyDays() const
+uint32_t Pet::stageDays() const
 {
-    return st.healthy_days;
+    return st.stage_days;
 }
 
-uint32_t Pet::stageHealthyDays() const
+int32_t Pet::health() const
 {
-    return st.stage_healthy_days;
+    return st.health;
 }
 
 PetStatSnapshot Pet::statSnapshot() const
 {
     PetStatSnapshot snapshot = {};
-    snapshot.healthy_days = st.healthy_days;
-    snapshot.stage_healthy_days = st.stage_healthy_days;
+    snapshot.stage_days = st.stage_days;
+    snapshot.health = st.health;
     strncpy(snapshot.species, speciesCode(), sizeof(snapshot.species) - 1);
     snapshot.species[sizeof(snapshot.species) - 1] = '\0';
     strncpy(snapshot.outfit, outfitCode(), sizeof(snapshot.outfit) - 1);
@@ -321,7 +322,7 @@ bool Pet::setSpeciesCode(const char *code)
     if (strcmp(st.species, nextSpecies) != 0)
     {
         strcpy(st.species, nextSpecies);
-        st.stage_healthy_days = 0;
+        st.stage_days = 0;
     }
     return true;
 }
@@ -368,6 +369,7 @@ bool Pet::restoreState(const PersistedPetState &state)
     st.mood = clampValue<int32_t>(st.mood, 0, cfg.max_mood);
     st.clean_value = clampValue<int32_t>(st.clean_value, 0, cfg.max_clean);
     st.env_value = clampValue<int32_t>(st.env_value, 0, cfg.max_env_clean);
+    st.health = clampValue<int32_t>(st.health, 0, 100);
 
     char appearanceCode[9] = {};
     if (!copyAppearanceCode(appearanceCode, sizeof(appearanceCode), st.species))

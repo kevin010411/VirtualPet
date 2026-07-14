@@ -19,13 +19,13 @@ Each slot contains one binary `PersistedPetState` record:
 - pet status fields
 - `species`
 - `outfit`
-- `healthy_days`
-- `stage_healthy_days`
+- `stage_days`
+- `health`
 - `customStats[8]`
 - `flowFlags`
 - `crc32`
 
-`version` is currently `8`. Age is stored as an unsigned integer in tenths of a
+`version` is currently `9`. Age is stored as an unsigned integer in tenths of a
 year (`1000` means `100.0` years), so normal firmware operation does not need
 floating-point support.
 
@@ -61,6 +61,7 @@ the previous valid slot should remain available for the next boot.
 ## Compatibility
 
 The legacy single-slot `/state.bin` and `/state.bak` files remain unsupported.
-Version `7` dual-slot records are accepted once: their IEEE-754 age value is
-converted to tenths without using floating-point code, then subsequent normal
-saves update the dual-slot records as version `8`.
+Version `7` and `8` dual-slot records are accepted once. Version `7` age values
+are converted from IEEE-754 to tenths without adding floating-point support.
+The old stage healthy-day count initializes both `stage_days` and `health`, with
+`health` clamped to `0..100`; the next save writes version `9`.

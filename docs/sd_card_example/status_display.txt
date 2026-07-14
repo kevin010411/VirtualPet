@@ -3,7 +3,7 @@
 # direct 與 composite_health 不會在執行時讀取此檔案。
 # 格式：模式|動畫名稱（可用逗號分隔）|數值來源（可用逗號分隔）
 # 模式：direct、composite_health、single_meter、random_meters、triple_meter。
-# 可用來源：age、hunger、satiety、mood、clean、env、sick、status、healthy_days、stage_healthy_days、stage_progress、custom0..custom7。
+# 可用來源：age、hunger、satiety、mood、clean、env、sick、status、stage_days、health、stage_progress、custom0..custom7。
 # 也可使用 state_schema.txt 定義的別名，例如 money、fatigue、alcohol、intimacy。
 
 # DipsyHo 的三格狀態列範例

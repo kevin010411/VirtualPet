@@ -278,10 +278,10 @@ bool statValueByName(const char *name, const PetStatSnapshot &stats, const State
     if (name == nullptr)
         return false;
 
-    if (strcmp(name, "healthy_days") == 0)
-        value = static_cast<int32_t>(stats.healthy_days);
-    else if (strcmp(name, "stage_healthy_days") == 0)
-        value = static_cast<int32_t>(stats.stage_healthy_days);
+    if (strcmp(name, "stage_days") == 0)
+        value = static_cast<int32_t>(stats.stage_days);
+    else if (strcmp(name, "health") == 0)
+        value = stats.health;
     else if (strcmp(name, "age") == 0)
         value = stats.age;
     else if (strcmp(name, "hunger") == 0)

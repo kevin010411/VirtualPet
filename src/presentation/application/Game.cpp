@@ -511,12 +511,10 @@ void Game::maybeTickPet(unsigned long elapsed)
     {
         const int probability = 1;
         const int randValue = random(1001);
-        if (petActions->dayPassed())
-        {
-            handleEvolution();
-            if (pendingEvolution)
-                return;
-        }
+        petActions->dayPassed();
+        handleEvolution();
+        if (pendingEvolution)
+            return;
 
         if (randValue < probability)
             petActions->getSick();

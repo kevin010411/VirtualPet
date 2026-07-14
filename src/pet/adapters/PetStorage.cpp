@@ -7,7 +7,8 @@ namespace
 {
 constexpr const char *kStateSlotAPath = "/state_a.bin";
 constexpr const char *kStateSlotBPath = "/state_b.bin";
-constexpr uint16_t kLegacyPetStateVersion = 7;
+constexpr uint16_t kLegacyFloatAgeVersion = 7;
+constexpr uint16_t kLegacyHealthyDaysVersion = 8;
 
 uint32_t legacyAgeTenthsFromFloatBits(uint32_t bits)
 {
@@ -90,9 +91,19 @@ bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
     if (calculateStateCrc(state) != state.crc32)
         return false;
 
-    if (state.version == kLegacyPetStateVersion)
-    {
+    const uint16_t storedVersion = state.version;
+    if (storedVersion == kLegacyFloatAgeVersion)
         state.ageTenths = legacyAgeTenthsFromFloatBits(state.ageTenths);
+
+    if (storedVersion == kLegacyFloatAgeVersion || storedVersion == kLegacyHealthyDaysVersion)
+    {
+        // Versions 7 and 8 stored healthy_days followed by stage_healthy_days
+        // at the same offsets now occupied by stage_days and health.
+        const uint32_t legacyStageHealthyDays = static_cast<uint32_t>(state.health);
+        state.stage_days = legacyStageHealthyDays;
+        state.health = legacyStageHealthyDays > 100U
+                           ? 100
+                           : static_cast<int32_t>(legacyStageHealthyDays);
         state.version = Pet::kPetStateVersion;
         state.crc32 = 0;
         return true;

@@ -37,8 +37,8 @@ struct PersistedPetState
     int32_t env_value;
     char species[9];
     char outfit[9];
-    uint32_t healthy_days;
-    uint32_t stage_healthy_days;
+    uint32_t stage_days;
+    int32_t health;
     int16_t customStats[8];
     uint32_t flowFlags;
     uint32_t crc32;
@@ -48,8 +48,8 @@ struct PetStatSnapshot
 {
     static constexpr size_t kCustomStatCount = 8;
 
-    uint32_t healthy_days;
-    uint32_t stage_healthy_days;
+    uint32_t stage_days;
+    int32_t health;
     char species[9];
     char outfit[9];
     int32_t age;
@@ -80,11 +80,11 @@ class Pet
 public:
     static constexpr uint32_t kAgeScale = 10;
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 8;
+    static constexpr uint16_t kPetStateVersion = 9;
 
     Pet(uint32_t ageTenths = 0);
 
-    bool dayPassed();
+    void dayPassed();
     void feedPet(int add_satiety);
     void changeMood(int delta);
     void takeShower(int value);
@@ -104,8 +104,8 @@ public:
     uint16_t CurrentHungerFrame(uint16_t maxFrame) const;
     const char *speciesCode() const;
     const char *outfitCode() const;
-    uint32_t healthyDays() const;
-    uint32_t stageHealthyDays() const;
+    uint32_t stageDays() const;
+    int32_t health() const;
     PetStatSnapshot statSnapshot() const;
     int16_t customStat(uint8_t index) const;
     bool setCustomStat(uint8_t index, int16_t value);

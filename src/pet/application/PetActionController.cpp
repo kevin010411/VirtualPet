@@ -54,9 +54,9 @@ void PetActionController::decayEnvironment()
     pet.decayEnvironment(environmentDecayAmount);
 }
 
-bool PetActionController::dayPassed()
+void PetActionController::dayPassed()
 {
-    return pet.dayPassed();
+    pet.dayPassed();
 }
 
 bool PetActionController::findEvolutionTarget(AppearanceSelection &selection) const
@@ -159,11 +159,6 @@ const char *PetActionController::speciesCode() const
 const char *PetActionController::outfitCode() const
 {
     return pet.outfitCode();
-}
-
-uint32_t PetActionController::healthyDays() const
-{
-    return pet.healthyDays();
 }
 
 HealthStatus PetActionController::currentStatus() const
