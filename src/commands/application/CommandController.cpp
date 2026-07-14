@@ -6,7 +6,11 @@ namespace
 {
 #define COMMAND_SLOT(commandId, label, canFn, execFn, clearFirst) \
     { commandId, label, &CommandController::canFn, &CommandController::execFn, true, clearFirst }
+#if ENABLE_CUSTOM_RULES
 #define COMMAND_SLOT_CUSTOM(slot) COMMAND_SLOT(AppCommandId::Custom##slot, "CUSTOM" #slot, canCustom##slot, executeCustom##slot, true)
+#else
+#define COMMAND_SLOT_CUSTOM(slot) CommandController::emptySlot()
+#endif
 
 #if ENABLE_COMMAND_PREDICT
 #define COMMAND_SLOT_PREDICT COMMAND_SLOT(AppCommandId::Predict, "PREDICT", canPredict, executePredict, true)
@@ -44,8 +48,46 @@ constexpr CommandController::CommandSlot CommandController::emptySlot()
     return {AppCommandId::None, "NO_OP", nullptr, nullptr, false, false};
 }
 
+CommandController::CommandSlot CommandController::configuredSlot(uint8_t commandId)
+{
+    switch (commandId)
+    {
+    case APP_COMMAND_FEED_PET:
+        return COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true);
+    case APP_COMMAND_PREDICT:
+        return COMMAND_SLOT_PREDICT;
+    case APP_COMMAND_GIFT:
+        return COMMAND_SLOT_GIFT;
+    case APP_COMMAND_MEDICINE:
+        return COMMAND_SLOT(AppCommandId::Medicine, "MEDICINE", canMedicine, executeMedicine, true);
+    case APP_COMMAND_SHOWER:
+        return COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true);
+    case APP_COMMAND_HAVE_FUN:
+        return COMMAND_SLOT_HAVE_FUN;
+    case APP_COMMAND_CLEAN:
+        return COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true);
+    case APP_COMMAND_CHANGE_OUTFIT:
+        return COMMAND_SLOT_CHANGE_OUTFIT;
+    case APP_COMMAND_STATUS:
+        return COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true);
+    case APP_COMMAND_CHANGE_SPECIES:
+        return COMMAND_SLOT_CHANGE_SPECIES;
+    default:
+        return emptySlot();
+    }
+}
+
 const CommandController::CommandSlot CommandController::slots[] = {
-#if APP_PROFILE == APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY
+#if APP_HAS_COMMAND_SLOT_OVERRIDES
+    configuredSlot(APP_COMMAND_SLOT_1),
+    configuredSlot(APP_COMMAND_SLOT_2),
+    configuredSlot(APP_COMMAND_SLOT_3),
+    configuredSlot(APP_COMMAND_SLOT_4),
+    configuredSlot(APP_COMMAND_SLOT_5),
+    configuredSlot(APP_COMMAND_SLOT_6),
+    configuredSlot(APP_COMMAND_SLOT_7),
+    configuredSlot(APP_COMMAND_SLOT_8),
+#elif APP_PROFILE == APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY
     COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),
     CommandController::emptySlot(),
     CommandController::emptySlot(),
@@ -250,6 +292,7 @@ bool CommandController::canStatus() const
     return host.commandCanStatus();
 }
 
+#if ENABLE_CUSTOM_RULES
 bool CommandController::canCustom0() const { return host.commandCanCustomAction(0); }
 bool CommandController::canCustom1() const { return host.commandCanCustomAction(1); }
 bool CommandController::canCustom2() const { return host.commandCanCustomAction(2); }
@@ -258,6 +301,7 @@ bool CommandController::canCustom4() const { return host.commandCanCustomAction(
 bool CommandController::canCustom5() const { return host.commandCanCustomAction(5); }
 bool CommandController::canCustom6() const { return host.commandCanCustomAction(6); }
 bool CommandController::canCustom7() const { return host.commandCanCustomAction(7); }
+#endif
 
 bool CommandController::hasAnimations(const AnimationId *ids, size_t count) const
 {
@@ -332,6 +376,7 @@ void CommandController::executeStatus()
     host.commandStatus();
 }
 
+#if ENABLE_CUSTOM_RULES
 void CommandController::executeCustom0() { host.commandCustomAction(0); }
 void CommandController::executeCustom1() { host.commandCustomAction(1); }
 void CommandController::executeCustom2() { host.commandCustomAction(2); }
@@ -340,3 +385,4 @@ void CommandController::executeCustom4() { host.commandCustomAction(4); }
 void CommandController::executeCustom5() { host.commandCustomAction(5); }
 void CommandController::executeCustom6() { host.commandCustomAction(6); }
 void CommandController::executeCustom7() { host.commandCustomAction(7); }
+#endif

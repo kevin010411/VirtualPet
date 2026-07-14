@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <SdFat.h>
 #include "animation/domain/Animation.h"
+#include "shared/config/AppProfile.h"
 
 struct AnimationMeta
 {
@@ -21,8 +22,8 @@ struct AnimationMeta
 class AssetManifest
 {
 public:
-    static constexpr uint8_t kMaxNamedAnimations = 4;
-    static constexpr uint8_t kMaxAnimationVariants = 16;
+    static constexpr uint8_t kMaxNamedAnimations = APP_MAX_NAMED_ANIMATIONS;
+    static constexpr uint8_t kMaxAnimationVariants = APP_MAX_ANIMATION_VARIANTS;
     static constexpr uint8_t kMaxAnimationNameLength = 15;
 
     void reset();

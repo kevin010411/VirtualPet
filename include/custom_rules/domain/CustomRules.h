@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <SdFat.h>
 #include "animation/domain/Animation.h"
+#include "shared/config/AppProfile.h"
 
 class AnimationController;
 class DebugDisplay;
@@ -61,6 +62,7 @@ public:
     bool executeAction(const char *key, PetActionController &petActions, AnimationController &animations) const;
 
 private:
+#if ENABLE_CUSTOM_RULES
     StatRule stats[kStatCount] = {};
     DailyRule dailyRules[kMaxDailyRules] = {};
     ActionRule actionRules[kMaxActionRules] = {};
@@ -72,6 +74,7 @@ private:
 
     const ActionRule *findAction(const char *key) const;
     const VariantEffect *findVariantEffect(const char *animationName) const;
+#endif
 };
 
 #endif // CUSTOM_RULES_H

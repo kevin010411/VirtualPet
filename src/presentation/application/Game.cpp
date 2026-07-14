@@ -61,7 +61,9 @@ bool Game::setup_game()
     minigame->reset();
 #endif
 
+#if ENABLE_CUSTOM_RULES
     customRules.load(animations->sdCard(), &renderer.debugDisplay());
+#endif
     if (!loadInitialPetState(true))
         return false;
 

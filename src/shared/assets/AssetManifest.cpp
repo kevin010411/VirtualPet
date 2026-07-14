@@ -10,7 +10,7 @@ constexpr uint16_t kDefaultAnimWidth = 128;
 constexpr uint16_t kDefaultAnimHeight = 96;
 constexpr const char *kMainManifestPath = "/index/main.txt";
 
-constexpr uint8_t kMaxLoadedAnimations = 48;
+constexpr uint8_t kMaxLoadedAnimations = APP_MAX_LOADED_ANIMATIONS;
 
 struct AnimationRegistryEntry
 {

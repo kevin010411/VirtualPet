@@ -1,0 +1,43 @@
+{
+  "metrics": {
+    "flash": "text + data",
+    "ram": "data + bss"
+  },
+  "profiles": {
+    "default": {
+      "bss": 7744,
+      "data": 240,
+      "flash": 52792,
+      "ram": 7984,
+      "text": 52552
+    },
+    "dipsyho": {
+      "bss": 6544,
+      "data": 240,
+      "flash": 52508,
+      "ram": 6784,
+      "text": 52268
+    },
+    "kuromu": {
+      "bss": 8592,
+      "data": 240,
+      "flash": 55180,
+      "ram": 8832,
+      "text": 54940
+    },
+    "new_taipei_childrens_day": {
+      "bss": 6304,
+      "data": 240,
+      "flash": 51276,
+      "ram": 6544,
+      "text": 51036
+    },
+    "small": {
+      "bss": 7504,
+      "data": 240,
+      "flash": 54208,
+      "ram": 7744,
+      "text": 53968
+    }
+  }
+}

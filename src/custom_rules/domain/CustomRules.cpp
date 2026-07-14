@@ -9,6 +9,8 @@
 #include "shared/debug/DebugDisplay.h"
 #include "shared/utils/TextBuffer.h"
 
+#if ENABLE_CUSTOM_RULES
+
 namespace
 {
 constexpr const char *kCustomRulesPath = "/custom_rules.txt";
@@ -592,3 +594,48 @@ const CustomRules::VariantEffect *CustomRules::findVariantEffect(const char *ani
     }
     return nullptr;
 }
+
+#else
+
+void CustomRules::clear()
+{
+}
+
+bool CustomRules::load(SdFat *, DebugDisplay *)
+{
+    return false;
+}
+
+bool CustomRules::isEnabled() const
+{
+    return false;
+}
+
+bool CustomRules::hasAction(const char *) const
+{
+    return false;
+}
+
+void CustomRules::applyInitialValues(Pet &) const
+{
+}
+
+void CustomRules::clampValues(Pet &) const
+{
+}
+
+void CustomRules::applyDaily(PetActionController &) const
+{
+}
+
+bool CustomRules::applyVariantEffect(const char *, PetActionController &) const
+{
+    return false;
+}
+
+bool CustomRules::executeAction(const char *, PetActionController &, AnimationController &) const
+{
+    return false;
+}
+
+#endif

@@ -4,6 +4,8 @@
 
 - [開發與建置指令](codex.md)
 - [應用程式 profile 與功能開關](app_profiles.md)
+- [Profile feature flags 中文查表](profile_feature_flags.md)
+- [Profile size 驗證](profile_size_verification.md)
 - [系統架構](architecture.md)
 
 ## SD 卡設定與資源

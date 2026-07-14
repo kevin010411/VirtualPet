@@ -36,7 +36,9 @@ public:
 
     virtual bool commandHasAnimation(AnimationId id) const = 0;
     virtual bool commandCanStatus() const = 0;
+#if ENABLE_CUSTOM_RULES
     virtual bool commandCanCustomAction(uint8_t slot) const = 0;
+#endif
     virtual AnimationId commandCurrentAgeAnimation() const = 0;
     virtual void commandClearCommandAnimations() = 0;
 
@@ -60,7 +62,9 @@ public:
     virtual void commandChangeSpecies() = 0;
 #endif
     virtual void commandStatus() = 0;
+#if ENABLE_CUSTOM_RULES
     virtual void commandCustomAction(uint8_t slot) = 0;
+#endif
 };
 
 class CommandController
@@ -100,6 +104,7 @@ private:
     int previous = 0;
 
     static constexpr CommandSlot emptySlot();
+    static CommandSlot configuredSlot(uint8_t commandId);
     static const CommandSlot slots[];
     static const CommandSlot &slotAt(int slot);
 
@@ -112,6 +117,7 @@ private:
     bool canShower() const;
     bool canClean() const;
     bool canStatus() const;
+#if ENABLE_CUSTOM_RULES
     bool canCustom0() const;
     bool canCustom1() const;
     bool canCustom2() const;
@@ -120,6 +126,7 @@ private:
     bool canCustom5() const;
     bool canCustom6() const;
     bool canCustom7() const;
+#endif
     bool hasAnimations(const AnimationId *ids, size_t count) const;
 
     void executeFeedPet();
@@ -142,6 +149,7 @@ private:
     void executeChangeSpecies();
 #endif
     void executeStatus();
+#if ENABLE_CUSTOM_RULES
     void executeCustom0();
     void executeCustom1();
     void executeCustom2();
@@ -150,6 +158,7 @@ private:
     void executeCustom5();
     void executeCustom6();
     void executeCustom7();
+#endif
 };
 
 #endif // COMMAND_CONTROLLER_H

@@ -6,7 +6,7 @@
 
 namespace
 {
-#if APP_STATUS_MODE == STATUS_MODE_SINGLE_METER || APP_STATUS_MODE == STATUS_MODE_RANDOM_METERS || APP_STATUS_MODE == STATUS_MODE_TRIPLE_METER
+#if ENABLE_STATUS_SD_CONFIG
 constexpr const char *kStatusDisplayPath = "/status_display.txt";
 constexpr const char *kStateSchemaPath = "/state_schema.txt";
 constexpr size_t kMaxStatusSources = 3;
@@ -489,6 +489,7 @@ bool CommandExecutor::commandCanStatus() const
 #endif
 }
 
+#if ENABLE_CUSTOM_RULES
 bool CommandExecutor::commandCanCustomAction(uint8_t slot) const
 {
     if (slot > 7)
@@ -496,6 +497,7 @@ bool CommandExecutor::commandCanCustomAction(uint8_t slot) const
     const char key[] = {'C', 'U', 'S', 'T', 'O', 'M', static_cast<char>('0' + slot), '\0'};
     return customRules.hasAction(key);
 }
+#endif
 
 AnimationId CommandExecutor::commandCurrentAgeAnimation() const
 {
@@ -592,6 +594,7 @@ void CommandExecutor::commandStatus()
     queueStatusAnimation();
 }
 
+#if ENABLE_CUSTOM_RULES
 void CommandExecutor::commandCustomAction(uint8_t slot)
 {
     if (slot > 7)
@@ -602,6 +605,7 @@ void CommandExecutor::commandCustomAction(uint8_t slot)
     const char key[] = {'C', 'U', 'S', 'T', 'O', 'M', static_cast<char>('0' + slot), '\0'};
     currentResult.executed = executeCustomAction(key);
 }
+#endif
 
 void CommandExecutor::queueStatusAnimation()
 {
@@ -640,6 +644,7 @@ bool CommandExecutor::queueStatusDirectAnimation()
     return true;
 }
 
+#if ENABLE_STATUS_SD_CONFIG
 bool CommandExecutor::queueStatusSingleMeterAnimation()
 {
 #if APP_STATUS_MODE == STATUS_MODE_SINGLE_METER
@@ -742,7 +747,9 @@ bool CommandExecutor::queueStatusTripleMeterAnimation()
     return false;
 #endif
 }
+#endif
 
+#if ENABLE_STATUS_COMPOSITE
 bool CommandExecutor::queueCompositeStatusAnimation()
 {
     const AnimationId statusAnimation = compositeStatusAnimationId();
@@ -782,10 +789,11 @@ AnimationId CommandExecutor::compositeStatusAnimationId() const
 
     return depressed ? AnimationId::StatusDepressedHealthy : AnimationId::StatusGoodHealthy;
 }
+#endif
 
+#if ENABLE_GUESS_ITEM_GAME
 bool CommandExecutor::canPlayGuessItemGame() const
 {
-#if ENABLE_GUESS_ITEM_GAME
     const AnimationId required[] = {
         AnimationId::GuessItem1,
         AnimationId::GuessItem2,
@@ -796,11 +804,12 @@ bool CommandExecutor::canPlayGuessItemGame() const
         AnimationId::GuessRL,
         AnimationId::GuessRR};
     return animations.hasAnimations(required, sizeof(required) / sizeof(required[0]));
-#else
-    return false;
-#endif
 }
+#endif
+
+#if ENABLE_CUSTOM_RULES
 bool CommandExecutor::executeCustomAction(const char *actionKey)
 {
     return customRules.executeAction(actionKey, petActions, animations);
 }
+#endif

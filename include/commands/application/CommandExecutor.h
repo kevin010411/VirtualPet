@@ -35,8 +35,12 @@ private:
     CustomRules &customRules;
     CommandResult currentResult = {};
 
+#if ENABLE_CUSTOM_RULES
     bool executeCustomAction(const char *actionKey);
+#endif
+#if ENABLE_COMMAND_PREDICT
     static AnimationId fortuneToAnimationId(int fortuneIndex);
+#endif
     bool queueCommandAction(AnimationId id,
                             unsigned long durationMs,
                             bool playOnce = false,
@@ -49,16 +53,24 @@ private:
     void queueStatusAnimation();
     void showStatusNotFound();
     bool queueStatusDirectAnimation();
+#if ENABLE_STATUS_SD_CONFIG
     bool queueStatusSingleMeterAnimation();
     bool queueStatusRandomMetersAnimation();
     bool queueStatusTripleMeterAnimation();
+#endif
+#if ENABLE_STATUS_COMPOSITE
     bool queueCompositeStatusAnimation();
     AnimationId compositeStatusAnimationId() const;
+#endif
+#if ENABLE_GUESS_ITEM_GAME
     bool canPlayGuessItemGame() const;
+#endif
 
     bool commandHasAnimation(AnimationId id) const override;
     bool commandCanStatus() const override;
+#if ENABLE_CUSTOM_RULES
     bool commandCanCustomAction(uint8_t slot) const override;
+#endif
     AnimationId commandCurrentAgeAnimation() const override;
     void commandClearCommandAnimations() override;
     void commandFeedPet() override;
@@ -81,7 +93,9 @@ private:
     void commandChangeSpecies() override;
 #endif
     void commandStatus() override;
+#if ENABLE_CUSTOM_RULES
     void commandCustomAction(uint8_t slot) override;
+#endif
 };
 
 #endif // COMMAND_EXECUTOR_H
