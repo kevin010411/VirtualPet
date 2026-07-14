@@ -3,11 +3,9 @@
 
 #include <Arduino.h>
 #include <SdFat.h>
+#include "shared/config/AppProfile.h"
 
-#ifndef ENABLE_RENDER_STATS
-#define ENABLE_RENDER_STATS 0
-#endif
-
+#if ENABLE_DEBUG
 struct RenderStats
 {
     uint32_t totalFrames = 0;
@@ -22,5 +20,6 @@ struct RenderStats
 };
 
 void updateRenderStats(RenderStats &stats, SdFat *sd, uint32_t frameRenderUs);
+#endif
 
 #endif

@@ -19,13 +19,16 @@ struct Renderer::AnimationState
     uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
     AssetManifest manifest;
     const AnimationMeta *namedAnimationMeta = nullptr;
-#if ENABLE_RENDER_STATS
+#if ENABLE_DEBUG
     RenderStats stats;
 #endif
 };
 
 Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
-    : tft(ref_tft), SD(ref_SD), state(new AnimationState()), debug(ref_tft)
+    : tft(ref_tft), SD(ref_SD), state(new AnimationState())
+#if ENABLE_DEBUG
+      , debug(ref_tft)
+#endif
 {
 }
 
@@ -59,7 +62,7 @@ void Renderer::initAnimations()
     state->animationIndex = 0;
     state->maxFrame = 0;
     state->playOnce = false;
-#if ENABLE_RENDER_STATS
+#if ENABLE_DEBUG
     state->stats = RenderStats{};
 #endif
     reloadManifest();
@@ -260,7 +263,7 @@ bool Renderer::advanceAnimationFrame()
             return true;
     }
 
-#if ENABLE_RENDER_STATS
+#if ENABLE_DEBUG
     const unsigned long frameStartUs = micros();
 #endif
     const AnimationMeta *meta = state->namedAnimationMeta != nullptr
@@ -286,7 +289,7 @@ bool Renderer::advanceAnimationFrame()
 
     if (ok)
     {
-#if ENABLE_RENDER_STATS
+#if ENABLE_DEBUG
         updateRenderStats(state->stats, SD, micros() - frameStartUs);
 #endif
     }
@@ -310,6 +313,7 @@ void Renderer::showStatusNotFound()
     FrameDecoder::showStatusNotFound(tft);
 }
 
+#if ENABLE_DEBUG
 DebugDisplay &Renderer::debugDisplay()
 {
     return debug;
@@ -319,6 +323,7 @@ void Renderer::renderDebugOverlay()
 {
     debug.render();
 }
+#endif
 
 uint16_t Renderer::frameCountFor(AnimationId id) const
 {

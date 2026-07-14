@@ -62,7 +62,11 @@ bool Game::setup_game()
 #endif
 
 #if ENABLE_CUSTOM_RULES
+#if ENABLE_DEBUG
     customRules.load(animations->sdCard(), &renderer.debugDisplay());
+#else
+    customRules.load(animations->sdCard());
+#endif
 #endif
     if (!loadInitialPetState(true))
         return false;
@@ -134,7 +138,9 @@ void Game::loop_game()
         layout->drawSelection();
         dirtySelect = false;
     }
+#if ENABLE_DEBUG
     renderer.renderDebugOverlay();
+#endif
 }
 
 void Game::requestFullRedraw()

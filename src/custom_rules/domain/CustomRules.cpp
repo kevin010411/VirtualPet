@@ -6,7 +6,9 @@
 #include "animation/application/AnimationController.h"
 #include "pet/application/PetActionController.h"
 #include "pet/domain/Pet.h"
+#if ENABLE_DEBUG
 #include "shared/debug/DebugDisplay.h"
+#endif
 #include "shared/utils/TextBuffer.h"
 
 #if ENABLE_CUSTOM_RULES
@@ -17,6 +19,7 @@ constexpr const char *kCustomRulesPath = "/custom_rules.txt";
 constexpr size_t kLineSize = 128;
 constexpr unsigned long kActionDurationMs = 2400;
 
+#if ENABLE_DEBUG
 void showLoadError(DebugDisplay *debug, uint16_t lineNumber, const char *reason)
 {
     if (debug == nullptr)
@@ -39,6 +42,9 @@ void showLoadError(DebugDisplay *debug, uint16_t lineNumber, const char *reason)
 
     debug->showMessage("custom_rules", detail);
 }
+#else
+#define showLoadError(debug, lineNumber, reason) ((void)0)
+#endif
 
 bool isSpace(char value)
 {
@@ -201,7 +207,11 @@ void CustomRules::clear()
     enabled = false;
 }
 
+#if ENABLE_DEBUG
 bool CustomRules::load(SdFat *sd, DebugDisplay *debug)
+#else
+bool CustomRules::load(SdFat *sd)
+#endif
 {
     clear();
     if (sd == nullptr)
@@ -601,7 +611,11 @@ void CustomRules::clear()
 {
 }
 
+#if ENABLE_DEBUG
 bool CustomRules::load(SdFat *, DebugDisplay *)
+#else
+bool CustomRules::load(SdFat *)
+#endif
 {
     return false;
 }

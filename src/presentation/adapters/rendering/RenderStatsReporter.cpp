@@ -1,6 +1,6 @@
 #include "presentation/adapters/rendering/RenderStatsReporter.h"
 
-#if ENABLE_RENDER_STATS
+#if ENABLE_DEBUG
 
 #include <stdio.h>
 
@@ -58,12 +58,6 @@ void updateRenderStats(RenderStats &stats, SdFat *sd, uint32_t frameRenderUs)
     stats.lastReportMs = stats.lastFrameMs;
     stats.windowFrames = 0;
     stats.windowRenderTimeUs = 0;
-}
-
-#else
-
-void updateRenderStats(RenderStats &, SdFat *, uint32_t)
-{
 }
 
 #endif

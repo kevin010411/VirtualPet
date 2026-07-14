@@ -7,7 +7,9 @@
 #include "shared/config/AppProfile.h"
 
 class AnimationController;
+#if ENABLE_DEBUG
 class DebugDisplay;
+#endif
 class Pet;
 class PetActionController;
 
@@ -50,7 +52,11 @@ public:
         int16_t moodDelta = 0;
     };
 
+#if ENABLE_DEBUG
     bool load(SdFat *sd, DebugDisplay *debug = nullptr);
+#else
+    bool load(SdFat *sd);
+#endif
     void clear();
     bool isEnabled() const;
     bool hasAction(const char *key) const;

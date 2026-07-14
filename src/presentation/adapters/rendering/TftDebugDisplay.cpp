@@ -1,5 +1,7 @@
 #include "presentation/adapters/rendering/TftDebugDisplay.h"
 
+#if ENABLE_DEBUG
+
 #include <string.h>
 
 namespace
@@ -58,3 +60,5 @@ void TftDebugDisplay::printCentered(const char *text, int16_t y, uint16_t color)
     tft->setCursor(x < 0 ? 0 : x, y);
     tft->print(buffer);
 }
+
+#endif

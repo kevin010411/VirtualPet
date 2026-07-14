@@ -6,7 +6,10 @@
 #include <SdFat.h>
 #include "animation/domain/Animation.h"
 #include "shared/assets/AssetManifest.h"
+#include "shared/config/AppProfile.h"
+#if ENABLE_DEBUG
 #include "presentation/adapters/rendering/TftDebugDisplay.h"
+#endif
 
 class Renderer
 {
@@ -26,8 +29,10 @@ public:
     void showInitPetNotExist();
     void showResourceError();
     void showStatusNotFound();
+#if ENABLE_DEBUG
     DebugDisplay &debugDisplay();
     void renderDebugOverlay();
+#endif
     uint16_t frameCountFor(AnimationId id) const;
     uint16_t frameCountForName(const char *name) const;
     uint8_t variantCountFor(const char *baseName) const;
@@ -54,7 +59,9 @@ private:
     Adafruit_ST7735 *tft;
     SdFat *SD;
     AnimationState *state;
+#if ENABLE_DEBUG
     TftDebugDisplay debug;
+#endif
 };
 
 #endif
