@@ -48,12 +48,17 @@ namespace
 
     AnimationId itemResultAnimation(GuessItemSide itemSide, GuessItemSide playerSide)
     {
+#if ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
+        (void)itemSide;
+        return (playerSide == GuessItemSide::Left) ? AnimationId::GuessLL : AnimationId::GuessRR;
+#else
         constexpr AnimationId kResultByPetAndItem[2][2] = {
             {AnimationId::GuessLL, AnimationId::GuessLR},
             {AnimationId::GuessRL, AnimationId::GuessRR},
         };
 
         return kResultByPetAndItem[static_cast<int>(playerSide)][static_cast<int>(itemSide)];
+#endif
     }
 } // namespace
 
@@ -138,7 +143,7 @@ void GuessItemGame::update()
 
         if (correctCount + wrongCount >= kMaxGuessCount)
         {
-#if ENABLE_GUESS_GAME_SINGLE_ROUND
+#if ENABLE_GUESS_GAME_SINGLE_ROUND && !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
             state = GuessItemState::Inactive;
             lastMoveTime = now;
 #else
@@ -219,15 +224,19 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     {
         host.changePetMood(60);
         correctCount++;
+#if !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
         if (host.hasAnimation(AnimationId::GuessRight))
             host.queueAnimation(Animation(AnimationId::GuessRight, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+#endif
     }
     else
     {
         host.changePetMood(-5);
         wrongCount++;
+#if !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
         if (host.hasAnimation(AnimationId::GuessWrong))
             host.queueAnimation(Animation(AnimationId::GuessWrong, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+#endif
     }
 
     host.markAnimationDirty();

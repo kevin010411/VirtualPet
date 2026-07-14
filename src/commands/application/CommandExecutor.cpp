@@ -799,10 +799,17 @@ bool CommandExecutor::canPlayGuessItemGame() const
         AnimationId::GuessItem2,
         AnimationId::GuessItem3,
         AnimationId::GuessItem4,
+#if ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
+        AnimationId::GuessLL,
+        AnimationId::GuessRR,
+        AnimationId::GuessWin,
+        AnimationId::GuessLoss};
+#else
         AnimationId::GuessLL,
         AnimationId::GuessLR,
         AnimationId::GuessRL,
         AnimationId::GuessRR};
+#endif
     return animations.hasAnimations(required, sizeof(required) / sizeof(required[0]));
 }
 #endif

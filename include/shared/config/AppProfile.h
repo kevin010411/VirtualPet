@@ -50,6 +50,12 @@
 #define ENABLE_GUESS_ITEM_GAME 1
 #endif
 
+// When enabled, GuessLL/GuessRR represent the player's left/right choice.
+// GuessLR/GuessRL are not required, and GuessWin/GuessLoss show the outcome.
+#ifndef ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
+#define ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT 0
+#endif
+
 #ifndef ENABLE_STARTUP_ANIMATION
 #define ENABLE_STARTUP_ANIMATION 0
 #endif
