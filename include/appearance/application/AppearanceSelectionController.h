@@ -20,6 +20,7 @@ public:
     bool onConfirm(char *selectedOutfit, size_t selectedOutfitSize);
     bool onConfirmSpecies(char *selectedSpecies, size_t selectedSpeciesSize, char *selectedOutfit, size_t selectedOutfitSize);
     void exit();
+    void requestFullRedraw();
     void render(unsigned long now);
 
 private:

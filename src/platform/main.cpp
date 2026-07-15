@@ -8,6 +8,7 @@
 #include "pet/adapters/PetStorage.h"
 #include <SdFat.h>
 #include "stm32f1xx.h"
+#include "stm32f1xx_hal.h"
 
 // 建立 TFT 顯示物件
 SPIClass SPI_2(PB15, BoardConfig::TftRstPin, PB13);
@@ -31,42 +32,138 @@ ButtonInput buttons(
 static bool g_sdReady = false;
 static bool g_gameReady = false;
 static bool g_lowBatteryMode = false;
-static unsigned long g_lowBatterySince = 0;
-static unsigned long g_lowBatteryEnteredAt = 0;
-static const unsigned long kLowBatteryConfirmMs = 500; // 防抖動誤判
-static const unsigned long kLowBatteryAnimationMs = 5000;
-static unsigned long g_lowBatteryRecoveredSince = 0;
-static const unsigned long kLowBatteryRecoverConfirmMs = 500;
-static const bool kForceLowBatteryTest = false; // 測試 low battery 時改成 true
+enum class VoltageState : uint8_t
+{
+  Normal = 0,
+  Dimmed = 1,
+  Critical = 2
+};
+
+static VoltageState g_voltageState = VoltageState::Normal;
+static VoltageState g_measuredVoltageState = VoltageState::Normal;
+static unsigned long g_lastVoltageSampleAt = 0;
+static unsigned long g_voltageRecoverySince = 0;
+static unsigned long g_criticalBelowSince = 0;
+static const unsigned long kVoltageSampleIntervalMs = 100;
+static const unsigned long kVoltageRecoveryConfirmMs = 5000;
+static const unsigned long kCriticalStopDelayMs = 5000;
+static const unsigned long kPvdSettleUs = 50;
+static const uint8_t kPvdLevelDimmed = 7;
+static const uint8_t kPvdLevelCritical = 6;
+
+static const uint8_t kBacklightNormal = 255;
+static const uint8_t kBacklightDimmed = 128;
+static const uint8_t kBacklightCritical = 26;
+static const uint8_t kBacklightRampStep = 10;
+static const unsigned long kBacklightRampIntervalMs = 20;
+static uint8_t g_backlightBrightness = 0;
+static uint8_t g_backlightTarget = 0;
+static unsigned long g_lastBacklightRampAt = 0;
+static bool g_restoreBacklightAfterRender = false;
+
 static const unsigned long kStartupPowerSettleMs = 300;
 static const unsigned long kStartupPostSetupMs = 0;
 static const unsigned long kTftPowerSettleMs = 150;
 static const unsigned long kTftStartupResetLowMs = 120;
 static const unsigned long kTftStartupResetHighMs = 120;
 
+static uint8_t brightnessForVoltageState(VoltageState state)
+{
+  switch (state)
+  {
+  case VoltageState::Critical:
+    return kBacklightCritical;
+  case VoltageState::Dimmed:
+    return kBacklightDimmed;
+  case VoltageState::Normal:
+  default:
+    return kBacklightNormal;
+  }
+}
+
+static void writeBacklightPwm(uint8_t brightness)
+{
+  if (brightness == 0)
+  {
+    analogWrite(BoardConfig::TftBacklightPin, 0);
+    pinMode(BoardConfig::TftBacklightPin, OUTPUT);
+    digitalWrite(BoardConfig::TftBacklightPin, LOW);
+    return;
+  }
+
+  analogWrite(BoardConfig::TftBacklightPin, brightness);
+}
+
+static void setBacklightImmediate(uint8_t brightness)
+{
+  g_backlightBrightness = brightness;
+  g_backlightTarget = brightness;
+  writeBacklightPwm(brightness);
+}
+
+static void setBacklightTarget(uint8_t brightness)
+{
+  g_backlightTarget = brightness;
+  if (brightness <= g_backlightBrightness)
+  {
+    g_backlightBrightness = brightness;
+    writeBacklightPwm(brightness);
+  }
+}
+
+static void updateBacklightRamp(unsigned long now)
+{
+  if (g_restoreBacklightAfterRender || g_backlightBrightness >= g_backlightTarget)
+    return;
+
+  if (now - g_lastBacklightRampAt < kBacklightRampIntervalMs)
+    return;
+
+  g_lastBacklightRampAt = now;
+  const uint8_t remaining = g_backlightTarget - g_backlightBrightness;
+  g_backlightBrightness += remaining > kBacklightRampStep ? kBacklightRampStep : remaining;
+  writeBacklightPwm(g_backlightBrightness);
+}
+
+static void setPvdThreshold(uint8_t level)
+{
+  PWR->CR = (PWR->CR & ~(7U << 5)) | ((static_cast<uint32_t>(level) & 7U) << 5);
+}
+
 static void initLowBatteryDetector()
 {
   // 開啟 PWR 模組時鐘
   RCC->APB1ENR |= RCC_APB1ENR_PWREN;
 
-  // 清掉 PLS[7:5]
-  PWR->CR &= ~(7U << 5);
-
-  // STM32F1 PVD PLS[7:5] 只有 3 bits，最高有效門檻是 7U（約 2.9V）。
-  // 若之後覺得太早，可改成 6U 或 5U。
-  PWR->CR |= (7U << 5);
+  // 正常時保持最高 PLS 門檻，量測函式會短暫切到 PLS6。
+  setPvdThreshold(kPvdLevelDimmed);
 
   // 啟用 PVD
   PWR->CR |= PWR_CR_PVDE;
 }
 
-static bool isVddBelowPvdThreshold()
+static bool isVddBelowPvdThreshold(uint8_t level)
 {
-  if (kForceLowBatteryTest)
-    return true;
+  // Restart the comparator so hysteresis from the previous PLS level cannot
+  // leak into this measurement when sampling PLS7 and PLS6 back-to-back.
+  PWR->CR &= ~PWR_CR_PVDE;
+  setPvdThreshold(level);
+  PWR->CR |= PWR_CR_PVDE;
+  delayMicroseconds(kPvdSettleUs);
+  return (PWR->CSR & PWR_CSR_PVDO) != 0; // PVDO = 1 表示 VDD 低於門檻
+}
 
-  // PVDO = 1 表示 VDD 低於設定門檻
-  return (PWR->CSR & PWR_CSR_PVDO) != 0;
+static VoltageState sampleVoltageState()
+{
+  const bool belowDimmed = isVddBelowPvdThreshold(kPvdLevelDimmed);
+  const bool belowCritical = isVddBelowPvdThreshold(kPvdLevelCritical);
+  setPvdThreshold(kPvdLevelDimmed);
+
+  if (belowCritical)
+    return VoltageState::Critical;
+  if (belowDimmed)
+    return VoltageState::Dimmed;
+  return VoltageState::Normal;
 }
 
 static void showSdInitError()
@@ -77,7 +174,7 @@ static void showSdInitError()
   tft.setTextSize(1);
   tft.setCursor(0, 0);
   tft.print("SD init error");
-  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
+  setBacklightImmediate(kBacklightNormal);
 }
 
 const unsigned long kSleepTimeoutMs = 1UL * 60UL * 1000UL; // 1分鐘會自動休眠
@@ -96,24 +193,101 @@ void noteInteraction(unsigned long now = millis())
   g_lastInteractionMs = now;
 }
 
-void enterSleep()
+static bool confirmVoltageRecoveredFromCritical()
 {
-  g_isSleeping = true;
-  digitalWrite(BoardConfig::TftBacklightPin, LOW);
+  const unsigned long recoveredSince = millis();
+  while (millis() - recoveredSince < kVoltageRecoveryConfirmMs)
+  {
+    delay(kVoltageSampleIntervalMs);
+    if (sampleVoltageState() == VoltageState::Critical)
+      return false;
+  }
+
+  return true;
 }
 
-void wakeFromSleep(unsigned long now)
+void enterSleep()
 {
+  if (g_isSleeping)
+    return;
+
+  g_isSleeping = true;
   buttons.clearFlags();
-  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
-  game.requestFullRedraw();
-  noteInteraction(now);
+  setBacklightImmediate(0);
+  digitalWrite(BoardConfig::buzzerPin, LOW);
+
+  tft.enableDisplay(false);
+  tft.enableSleep(true);
+  digitalWrite(BoardConfig::TftCsPin, HIGH);
+  digitalWrite(BoardConfig::SdCsPin, HIGH);
+
+  while (true)
+  {
+    // The display is already dark, so PVD is not needed while all clocks stop.
+    PWR->CR &= ~PWR_CR_PVDE;
+    HAL_SuspendTick();
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    SystemClock_Config();
+    HAL_ResumeTick();
+    PWR->CR |= PWR_CR_PVDE;
+
+    // Consume the button that woke the MCU. It must not execute a game action.
+    buttons.clearFlags();
+
+    const VoltageState measuredState = sampleVoltageState();
+    g_measuredVoltageState = measuredState;
+    if (measuredState == VoltageState::Critical)
+    {
+      g_voltageState = VoltageState::Critical;
+      g_lowBatteryMode = true;
+      g_voltageRecoverySince = 0;
+      continue;
+    }
+
+    if (g_voltageState == VoltageState::Critical || g_lowBatteryMode)
+    {
+      // Keep the screen dark while verifying that PLS6 has recovered.
+      if (!confirmVoltageRecoveredFromCritical())
+      {
+        g_voltageState = VoltageState::Critical;
+        g_lowBatteryMode = true;
+        continue;
+      }
+
+      g_voltageState = VoltageState::Dimmed;
+      g_measuredVoltageState = sampleVoltageState();
+      g_lowBatteryMode = false;
+      g_criticalBelowSince = 0;
+      g_voltageRecoverySince = millis();
+    }
+    else if (static_cast<uint8_t>(measuredState) > static_cast<uint8_t>(g_voltageState))
+    {
+      // Voltage fell while sleeping; lowering brightness never needs debounce.
+      g_voltageState = measuredState;
+    }
+    break;
+  }
+
+  tft.enableSleep(false);
+  delay(120);
+
+  // ST7735 GRAM is not guaranteed to remain intact while sleeping, especially
+  // near the low-voltage threshold. Clear every pixel and synchronously redraw
+  // the current animation/preview plus all layout slots before display-on and
+  // before restoring the backlight.
+  tft.fillScreen(ST77XX_BLACK);
+  game.redrawAllNow();
+  tft.enableDisplay(true);
+
+  noteInteraction(millis());
+  g_restoreBacklightAfterRender = true;
   g_isSleeping = false;
 }
 
 void wakeFromSleepNow()
 {
-  wakeFromSleep(millis());
+  // Stop mode resumes inside enterSleep(); this callback is retained only to
+  // satisfy ButtonInput's normal-mode interface.
 }
 
 void onPreviousButton()
@@ -162,13 +336,13 @@ static void resetAndInitializeTft(unsigned long lowMs, unsigned long highMs)
 
 static void initializeTftDisplay()
 {
-  digitalWrite(BoardConfig::TftBacklightPin, LOW);
+  setBacklightImmediate(0);
   resetAndInitializeTft(200, 200);
 }
 
 static void beginTftStartupReset()
 {
-  digitalWrite(BoardConfig::TftBacklightPin, LOW);
+  setBacklightImmediate(0);
   delay(kTftPowerSettleMs);
   pinMode(BoardConfig::TftRstPin, OUTPUT);
   digitalWrite(BoardConfig::TftRstPin, HIGH);
@@ -193,17 +367,17 @@ void onConfirmLongPress()
 {
   noteInteraction();
   initializeTftDisplay();
-  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   g_gameReady = game.setup_game();
+  setBacklightTarget(brightnessForVoltageState(g_voltageState));
 }
 
 static void onLRComboLongPress()
 {
   noteInteraction();
-  digitalWrite(BoardConfig::TftBacklightPin, LOW);
+  setBacklightImmediate(0);
   g_gameReady = game.resetPet();
   delay(1000);
-  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
+  setBacklightTarget(brightnessForVoltageState(g_voltageState));
 }
 
 static void enterLowBatteryMode(unsigned long now)
@@ -212,10 +386,8 @@ static void enterLowBatteryMode(unsigned long now)
     return;
 
   g_lowBatteryMode = true;
-  g_lowBatteryEnteredAt = now;
   buttons.clearFlags();
-  g_isSleeping = false;
-  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
+  setBacklightTarget(kBacklightCritical);
   game.saveNow();
   game.startBatteryAnimation();
 }
@@ -223,49 +395,87 @@ static void enterLowBatteryMode(unsigned long now)
 static void leaveLowBatteryMode(unsigned long now)
 {
   g_lowBatteryMode = false;
-  g_lowBatteryEnteredAt = 0;
-  g_lowBatteryRecoveredSince = 0;
   buttons.clearFlags();
-  if (g_isSleeping)
-  {
-    wakeFromSleep(now);
-    return;
-  }
-
-  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
   game.requestFullRedraw();
   noteInteraction(now);
+  if (!g_restoreBacklightAfterRender)
+    setBacklightTarget(brightnessForVoltageState(g_voltageState));
 }
 
-static void updateLowBatteryMode(unsigned long now)
+static void applyVoltageState(VoltageState nextState, unsigned long now)
 {
-  if (isVddBelowPvdThreshold())
+  const VoltageState previousState = g_voltageState;
+  if (previousState == nextState)
+    return;
+
+  g_voltageState = nextState;
+  setBacklightTarget(brightnessForVoltageState(nextState));
+
+  if (nextState == VoltageState::Critical)
   {
-    g_lowBatteryRecoveredSince = 0;
-    if (g_lowBatterySince == 0)
-      g_lowBatterySince = now;
-
-    if (!g_lowBatteryMode && now - g_lowBatterySince >= kLowBatteryConfirmMs)
-      enterLowBatteryMode(now);
-
-    if (g_lowBatteryMode && !g_isSleeping)
-    {
-      game.updateBatteryAnimation(now);
-      if (now - g_lowBatteryEnteredAt >= kLowBatteryAnimationMs)
-        enterSleep();
-    }
+    enterLowBatteryMode(now);
     return;
   }
 
-  g_lowBatterySince = 0;
+  if (previousState == VoltageState::Critical)
+    leaveLowBatteryMode(now);
+}
+
+static void updateVoltageState(unsigned long now)
+{
+  if (now - g_lastVoltageSampleAt >= kVoltageSampleIntervalMs)
+  {
+    g_lastVoltageSampleAt = now;
+    g_measuredVoltageState = sampleVoltageState();
+
+    if (g_measuredVoltageState == VoltageState::Critical)
+    {
+      if (g_criticalBelowSince == 0)
+        g_criticalBelowSince = now;
+    }
+    else
+    {
+      g_criticalBelowSince = 0;
+    }
+
+    const uint8_t measuredRank = static_cast<uint8_t>(g_measuredVoltageState);
+    const uint8_t currentRank = static_cast<uint8_t>(g_voltageState);
+    if (measuredRank > currentRank)
+    {
+      // Falling voltage lowers brightness immediately.
+      g_voltageRecoverySince = 0;
+      applyVoltageState(g_measuredVoltageState, now);
+    }
+    else if (measuredRank < currentRank)
+    {
+      if (g_voltageRecoverySince == 0)
+      {
+        g_voltageRecoverySince = now;
+      }
+      else if (now - g_voltageRecoverySince >= kVoltageRecoveryConfirmMs)
+      {
+        // Recover one brightness level at a time so the load rises gradually.
+        const VoltageState nextState = static_cast<VoltageState>(currentRank - 1U);
+        applyVoltageState(nextState, now);
+        g_voltageRecoverySince = now;
+      }
+    }
+    else
+    {
+      g_voltageRecoverySince = 0;
+    }
+  }
+
   if (!g_lowBatteryMode)
     return;
 
-  if (g_lowBatteryRecoveredSince == 0)
-    g_lowBatteryRecoveredSince = now;
-
-  if (now - g_lowBatteryRecoveredSince >= kLowBatteryRecoverConfirmMs)
-    leaveLowBatteryMode(now);
+  game.updateBatteryAnimation(now);
+  if (g_measuredVoltageState == VoltageState::Critical &&
+      g_criticalBelowSince != 0 &&
+      now - g_criticalBelowSince >= kCriticalStopDelayMs)
+  {
+    enterSleep();
+  }
 }
 
 void setup()
@@ -280,8 +490,9 @@ void setup()
   // Keep the first TFT reset-low period useful: SD initialization can safely
   // run while the TFT is held in reset because they use separate chip-selects.
   pinMode(BoardConfig::TftBacklightPin, OUTPUT);
-  digitalWrite(BoardConfig::TftBacklightPin, LOW);
+  setBacklightImmediate(0);
   pinMode(BoardConfig::buzzerPin, OUTPUT);
+  digitalWrite(BoardConfig::buzzerPin, LOW);
   beginTftStartupReset();
   const unsigned long tftResetLowStartedAt = millis();
 
@@ -305,18 +516,24 @@ void setup()
     return;
   if (kStartupPostSetupMs > 0)
     delay(kStartupPostSetupMs);
-  digitalWrite(BoardConfig::TftBacklightPin, HIGH);
-  game.startStartupAnimation();
+
+  const unsigned long now = millis();
+  g_lastVoltageSampleAt = now;
+  g_measuredVoltageState = sampleVoltageState();
+  if (g_measuredVoltageState != VoltageState::Normal)
+    applyVoltageState(g_measuredVoltageState, now);
+  else
+    setBacklightTarget(kBacklightNormal);
+
+  if (!g_lowBatteryMode)
+    game.startStartupAnimation();
   noteInteraction();
 }
 
 void loop()
 {
-  // 每圈都把 TFT_RST(PB14) 維持在推挽輸出 HIGH
-  pinMode(BoardConfig::TftRstPin, OUTPUT);
-  digitalWrite(BoardConfig::TftRstPin, HIGH);
-
   const unsigned long now = millis();
+  updateBacklightRamp(now);
 
   if (!g_sdReady)
     return;
@@ -324,7 +541,7 @@ void loop()
   if (!g_gameReady)
     return;
 
-  updateLowBatteryMode(now);
+  updateVoltageState(now);
   if (g_lowBatteryMode)
     return;
 
@@ -343,4 +560,10 @@ void loop()
   }
 
   game.loop_game();
+
+  if (g_restoreBacklightAfterRender)
+  {
+    g_restoreBacklightAfterRender = false;
+    setBacklightTarget(brightnessForVoltageState(g_voltageState));
+  }
 }

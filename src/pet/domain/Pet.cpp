@@ -65,25 +65,12 @@ Pet::Pet(uint32_t ageTenths)
 {
     setDefaultState();
     st.ageTenths = clampValue<uint32_t>(ageTenths, 0, cfg.maxAgeTenths);
-    refreshStatus();
 }
 
 void Pet::setConfig(const PetConfig &newConfig)
 {
     cfg = newConfig;
     st.ageTenths = clampValue<uint32_t>(st.ageTenths, 0, cfg.maxAgeTenths);
-    refreshStatus();
-}
-
-void Pet::refreshStatus()
-{
-    st.status = static_cast<uint8_t>(decide_state(
-        st.hungry_value,
-        st.mood,
-        st.env_value,
-        st.clean_value,
-        st.hasSick,
-        cfg));
 }
 
 void Pet::dayPassed()
@@ -96,7 +83,6 @@ void Pet::dayPassed()
     {
 #if APP_STATUS_MODE == STATUS_MODE_COMPOSITE
         st.mood = clampValue<int>(st.mood - 2, 0, cfg.max_mood);
-        refreshStatus();
 #endif
         return;
     }
@@ -106,37 +92,31 @@ void Pet::dayPassed()
     st.ageTenths = clampValue<uint32_t>(st.ageTenths + cfg.ageTenthsPerTick, 0, cfg.maxAgeTenths);
     st.clean_value = clampValue<int>(st.clean_value - 3, 0, cfg.max_clean);
     st.env_value = clampValue<int>(st.env_value - 3, 0, cfg.max_env_clean);
-    refreshStatus();
 }
 
 void Pet::feedPet(int add_satiety)
 {
     st.hungry_value = clampValue<int>(st.hungry_value - add_satiety, 0, cfg.max_hunger);
-    refreshStatus();
 }
 
 void Pet::changeMood(int delta)
 {
     st.mood = clampValue<int>(st.mood + delta, 0, cfg.max_mood);
-    refreshStatus();
 }
 
 void Pet::takeShower(int value)
 {
     st.clean_value = clampValue<int>(st.clean_value + value, 0, cfg.max_clean);
-    refreshStatus();
 }
 
 void Pet::cleanEnv(unsigned int clear_value)
 {
     st.env_value = clampValue<int>(st.env_value + clear_value, 0, cfg.max_env_clean);
-    refreshStatus();
 }
 
 void Pet::decayEnvironment(unsigned int decay_value)
 {
     st.env_value = clampValue<int>(st.env_value - static_cast<int>(decay_value), 0, cfg.max_env_clean);
-    refreshStatus();
 }
 
 void Pet::getSick()
@@ -145,7 +125,6 @@ void Pet::getSick()
         return;
 
     st.hasSick = true;
-    refreshStatus();
 }
 
 bool Pet::takeMedicine()
@@ -154,7 +133,6 @@ bool Pet::takeMedicine()
         return false;
 
     st.hasSick = false;
-    refreshStatus();
     return true;
 }
 
@@ -201,11 +179,11 @@ uint16_t Pet::CurrentHungerFrame(uint16_t maxFrame) const
 
 void Pet::setDefaultState()
 {
+    st = {};
     st.magic = kPetStateMagic;
     st.version = kPetStateVersion;
     st.sequence = 0;
     st.hasSick = false;
-    st.status = static_cast<uint8_t>(HealthStatus::Healthy);
     st.ageTenths = 0;
     st.hungry_value = 0;
     st.mood = 70;
@@ -223,7 +201,13 @@ void Pet::setDefaultState()
 
 HealthStatus Pet::getStatus() const
 {
-    return static_cast<HealthStatus>(st.status);
+    return decide_state(
+        static_cast<uint8_t>(st.hungry_value),
+        static_cast<uint8_t>(st.mood),
+        static_cast<unsigned int>(st.env_value),
+        static_cast<unsigned int>(st.clean_value),
+        st.hasSick,
+        cfg);
 }
 
 bool Pet::isMoodDepressed() const
@@ -377,6 +361,5 @@ bool Pet::restoreState(const PersistedPetState &state)
     if (!copyAppearanceCode(appearanceCode, sizeof(appearanceCode), st.outfit))
         strcpy(st.outfit, "base");
 
-    refreshStatus();
     return true;
 }

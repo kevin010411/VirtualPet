@@ -64,6 +64,7 @@ enum class AnimationId : uint8_t
     LayoutSel,
     Start,
     Evolution,
+    StartIntro,
     Count
 };
 

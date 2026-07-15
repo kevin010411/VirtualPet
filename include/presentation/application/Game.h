@@ -32,6 +32,7 @@ public:
     bool setup_game();
     void loop_game();
     void requestFullRedraw();
+    void redrawAllNow();
     void setRendererAssetAppearance(const char *speciesCode, const char *outfitCode);
     bool saveNow();
     bool startStartupAnimation();

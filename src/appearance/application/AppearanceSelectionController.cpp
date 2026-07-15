@@ -143,6 +143,12 @@ void AppearanceSelectionController::exit()
     dirtyOutfitPreview = false;
 }
 
+void AppearanceSelectionController::requestFullRedraw()
+{
+    dirtyOutfitPreview = true;
+    lastOutfitPreviewFrameTime = 0;
+}
+
 void AppearanceSelectionController::render(unsigned long now)
 {
     if (!hasSelectedOutfitPreview)

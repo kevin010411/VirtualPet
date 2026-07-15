@@ -1,6 +1,7 @@
 #include "pet/application/PetActionController.h"
 
 #include <string.h>
+#include <stdio.h>
 #include "pet/domain/Pet.h"
 #include "presentation/adapters/rendering/Renderer.h"
 #include "pet/adapters/PetStorage.h"
@@ -28,6 +29,19 @@ bool PetActionController::loadOrInitial(const AppearanceSelection &initialAppear
 bool PetActionController::saveNow()
 {
     const bool saved = petStorage.save(pet);
+#if ENABLE_DEBUG
+    char title[21] = {};
+    char detail[21] = {};
+    snprintf(
+        title,
+        sizeof(title),
+        "SAVE %s %c %lu",
+        saved ? "OK" : "FAIL",
+        petStorage.lastSaveSlot(),
+        static_cast<unsigned long>(petStorage.lastSaveSequence()));
+    snprintf(detail, sizeof(detail), "%s/%s", pet.speciesCode(), pet.outfitCode());
+    renderer.debugDisplay().showMessage(title, detail);
+#endif
     if (saved)
         saveCounter = 0;
     return saved;

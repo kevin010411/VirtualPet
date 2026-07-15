@@ -21,32 +21,31 @@ struct PetConfig
     unsigned int poop_threshold = 300;
 };
 
+static constexpr size_t kPetCustomStatCount = 8;
+
 struct PersistedPetState
 {
     uint32_t magic;
     uint16_t version;
-    uint32_t sequence;
-
     bool hasSick;
-    uint8_t status;
+    uint32_t sequence;
     uint32_t ageTenths;
-
     int32_t hungry_value;
     int32_t mood;
     int32_t clean_value;
     int32_t env_value;
-    char species[9];
-    char outfit[9];
     uint32_t stage_days;
     int32_t health;
-    int16_t customStats[8];
     uint32_t flowFlags;
+    int16_t customStats[kPetCustomStatCount];
+    char species[9];
+    char outfit[9];
     uint32_t crc32;
 };
 
 struct PetStatSnapshot
 {
-    static constexpr size_t kCustomStatCount = 8;
+    static constexpr size_t kCustomStatCount = kPetCustomStatCount;
 
     uint32_t stage_days;
     int32_t health;
@@ -80,7 +79,7 @@ class Pet
 public:
     static constexpr uint32_t kAgeScale = 10;
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 9;
+    static constexpr uint16_t kPetStateVersion = 10;
 
     Pet(uint32_t ageTenths = 0);
 
@@ -123,8 +122,6 @@ public:
     bool restoreState(const PersistedPetState &state);
 
 private:
-    void refreshStatus();
-
     PetConfig cfg;
     PersistedPetState st = {};
 

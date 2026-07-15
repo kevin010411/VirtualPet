@@ -71,7 +71,10 @@ bool Game::setup_game()
     if (!loadInitialPetState(true))
         return false;
 
-    petActions->applyEvolutionTarget();
+    // A successfully restored appearance is authoritative. Re-evaluating the
+    // evolution table here can immediately replace a saved later-stage species
+    // with an earlier wildcard/fallback match before the startup animation.
+    // Evolution is still evaluated by handleEvolution() during normal ticks.
     renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
     renderer.reloadManifest();
     refreshBaseAnimation();
@@ -124,6 +127,9 @@ void Game::loop_game()
             layout->drawSelection();
             dirtySelect = false;
         }
+#if ENABLE_DEBUG
+        renderer.renderDebugOverlay();
+#endif
         return;
     }
 #endif
@@ -147,6 +153,36 @@ void Game::requestFullRedraw()
 {
     dirtySelect = true;
     animations->requestFullRedraw();
+}
+
+void Game::redrawAllNow()
+{
+    if (!initialized)
+        return;
+
+    const unsigned long now = millis();
+
+    // Repaint the entire center area even when an animation frame was already
+    // considered current before STOP mode.
+    animations->requestFullRedraw();
+    animations->render(now);
+
+#if ENABLE_APPEARANCE_SELECTION
+    if (appearanceSelection->isActive())
+    {
+        appearanceSelection->requestFullRedraw();
+        appearanceSelection->render(now);
+    }
+#endif
+
+    // drawSelection() only updates two slots. After display sleep the complete
+    // top and bottom layout must be restored from the SD card.
+    layout->drawAll();
+    dirtySelect = false;
+
+#if ENABLE_DEBUG
+    renderer.renderDebugOverlay();
+#endif
 }
 
 void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfitCode)
@@ -185,6 +221,9 @@ void Game::startBatteryAnimation()
 void Game::updateBatteryAnimation(unsigned long now)
 {
     animations->updateBatteryAnimation(now);
+#if ENABLE_DEBUG
+    renderer.renderDebugOverlay();
+#endif
 }
 
 void Game::OnLeftKey()
@@ -577,7 +616,9 @@ bool Game::beginEvolutionAnimation(const AppearanceSelection &selection)
 bool Game::beginStartupAnimation()
 {
 #if ENABLE_STARTUP_ANIMATION
-    if (!animations->hasAnimation(AnimationId::Start))
+    const bool hasIntro = animations->hasAnimation(AnimationId::StartIntro);
+    const bool hasSpeciesStart = animations->hasAnimation(AnimationId::Start);
+    if (!hasIntro && !hasSpeciesStart)
     {
         if (isFirstLaunchSelectionPending())
             enterFirstLaunch();
@@ -590,11 +631,25 @@ bool Game::beginStartupAnimation()
     animations->clearByOwner(AnimationOwner::Command);
     animations->clearByOwner(AnimationOwner::Minigame);
     animations->clearByOwner(AnimationOwner::System);
-    const unsigned long startupDuration = max(
-        gameTick,
-        static_cast<unsigned long>(animations->frameCountFor(AnimationId::Start)) *
-            animations->frameIntervalFor(AnimationId::Start));
-    animations->queueAnimation(Animation(AnimationId::Start, startupDuration, true, AnimationOwner::System, AnimationPriority::Critical));
+
+    if (hasIntro)
+    {
+        const unsigned long introDuration = max(
+            gameTick,
+            static_cast<unsigned long>(animations->frameCountFor(AnimationId::StartIntro)) *
+                animations->frameIntervalFor(AnimationId::StartIntro));
+        animations->queueAnimation(Animation(AnimationId::StartIntro, introDuration, true, AnimationOwner::System, AnimationPriority::Critical));
+    }
+
+    if (hasSpeciesStart)
+    {
+        const unsigned long startupDuration = max(
+            gameTick,
+            static_cast<unsigned long>(animations->frameCountFor(AnimationId::Start)) *
+                animations->frameIntervalFor(AnimationId::Start));
+        animations->queueAnimation(Animation(AnimationId::Start, startupDuration, true, AnimationOwner::System, AnimationPriority::Critical));
+    }
+
     animations->markDirty();
     return true;
 #else
