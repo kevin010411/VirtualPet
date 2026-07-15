@@ -111,7 +111,7 @@ const CommandController::CommandSlot CommandController::slots[] = {
     CommandController::emptySlot(),
     CommandController::emptySlot(),
     COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true),
-    COMMAND_SLOT_GIFT,
+    COMMAND_SLOT_HAVE_FUN,
     COMMAND_SLOT(AppCommandId::Shower, "SHOWER", canShower, executeShower, true),
     COMMAND_SLOT(AppCommandId::Clean, "CLEAN", canClean, executeClean, true),
     COMMAND_SLOT(AppCommandId::FeedPet, "FEED_PET", canFeedPet, executeFeedPet, true),

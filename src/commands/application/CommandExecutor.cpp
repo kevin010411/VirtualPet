@@ -797,11 +797,7 @@ AnimationId CommandExecutor::compositeStatusAnimationId() const
 #if ENABLE_GUESS_ITEM_GAME
 bool CommandExecutor::canPlayGuessItemGame() const
 {
-    const AnimationId required[] = {
-        AnimationId::GuessItem1,
-        AnimationId::GuessItem2,
-        AnimationId::GuessItem3,
-        AnimationId::GuessItem4,
+    const AnimationId requiredResults[] = {
 #if ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
         AnimationId::GuessLL,
         AnimationId::GuessRR,
@@ -813,7 +809,16 @@ bool CommandExecutor::canPlayGuessItemGame() const
         AnimationId::GuessRL,
         AnimationId::GuessRR};
 #endif
-    return animations.hasAnimations(required, sizeof(required) / sizeof(required[0]));
+    if (!animations.hasAnimations(requiredResults, sizeof(requiredResults) / sizeof(requiredResults[0])))
+        return false;
+
+    const AnimationId itemPrompts[] = {
+        AnimationId::GuessItem1,
+        AnimationId::GuessItem2,
+        AnimationId::GuessItem3,
+        AnimationId::GuessItem4};
+    return animations.hasAnimation(AnimationId::GuessStart) ||
+           animations.hasAnimations(itemPrompts, sizeof(itemPrompts) / sizeof(itemPrompts[0]));
 }
 #endif
 

@@ -68,6 +68,14 @@ GuessItemGame::GuessItemGame(GuessItemGameHost &hostRef)
     reset();
 }
 
+bool GuessItemGame::hasItemPromptAnimations() const
+{
+    return host.hasAnimation(AnimationId::GuessItem1) &&
+           host.hasAnimation(AnimationId::GuessItem2) &&
+           host.hasAnimation(AnimationId::GuessItem3) &&
+           host.hasAnimation(AnimationId::GuessItem4);
+}
+
 void GuessItemGame::queuePromptAnimation()
 {
     host.clearAnimationsByOwner(AnimationOwner::Minigame);
@@ -80,7 +88,9 @@ void GuessItemGame::start()
     reset();
     host.clearAnimationsByOwner(AnimationOwner::Minigame);
 
-    if (host.hasAnimation(AnimationId::GuessStart))
+    const bool hasItemPrompts = hasItemPromptAnimations();
+
+    if (host.hasAnimation(AnimationId::GuessStart) && hasItemPrompts)
     {
         host.queueAnimation(Animation(AnimationId::GuessStart, kStartAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
         host.markAnimationDirty();
@@ -88,7 +98,7 @@ void GuessItemGame::start()
     }
     else
     {
-        promptAnimationId = randomItemAnimation();
+        promptAnimationId = hasItemPrompts ? randomItemAnimation() : AnimationId::GuessStart;
         queuePromptAnimation();
         state = GuessItemState::WaitingItem;
     }
@@ -129,7 +139,7 @@ void GuessItemGame::update()
         break;
 
     case GuessItemState::WaitingInput:
-        if (now - lastMoveTime > kItemPromptSwitchIntervalMs)
+        if (hasItemPromptAnimations() && now - lastMoveTime > kItemPromptSwitchIntervalMs)
         {
             promptAnimationId = randomItemAnimationExcept(promptAnimationId);
             queuePromptAnimation();

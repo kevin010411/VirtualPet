@@ -52,6 +52,7 @@ public:
     bool isActive() const;
 
 private:
+    bool hasItemPromptAnimations() const;
     void queuePromptAnimation();
     void handleGuess(GuessItemSide player);
 
