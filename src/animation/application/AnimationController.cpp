@@ -379,7 +379,9 @@ void AnimationController::render(unsigned long now)
         }
         dirtyAnimation = false;
     }
-    else if (frameDue && !(hasActiveAnimation && activeAnimation.isFixedFrame()))
+    else if (frameDue &&
+             !(hasActiveAnimation && activeAnimation.isFixedFrame()) &&
+             !(hasActiveAnimation && activeAnimation.playOnce && animateDone))
     {
         animateDone |= renderer.advanceAnimationFrame();
     }
