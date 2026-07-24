@@ -25,7 +25,8 @@ public:
                              unsigned long durationMs,
                              bool playOnce,
                              AnimationOwner owner,
-                             AnimationPriority priority);
+                             AnimationPriority priority,
+                             uint16_t fixedFrameIndex = 0);
     bool queueActionAnimation(AnimationId id,
                               unsigned long durationMs,
                               bool playOnce,
@@ -85,7 +86,7 @@ private:
     unsigned long lastFrameTime = 0;
     AnimationId showAnimationId = AnimationId::None;
     bool showUsesNamedAnimation = false;
-    char showNamedAnimation[16] = {};
+    char showNamedAnimation[32] = {};
 
     void tryStartNextAnimation();
 };

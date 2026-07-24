@@ -121,12 +121,13 @@ void AnimationController::queueNamedAnimation(const char *name,
                                               unsigned long durationMs,
                                               bool playOnce,
                                               AnimationOwner owner,
-                                              AnimationPriority priority)
+                                              AnimationPriority priority,
+                                              uint16_t fixedFrameIndex)
 {
     if (name == nullptr || name[0] == '\0' || !hasNamedAnimation(name))
         return;
 
-    Animation animation(AnimationId::None, durationMs, playOnce, owner, priority);
+    Animation animation(AnimationId::None, durationMs, playOnce, owner, priority, fixedFrameIndex);
     animation.usesNamedAnimation = true;
     strncpy(animation.namedAnimation, name, sizeof(animation.namedAnimation) - 1);
     animation.namedAnimation[sizeof(animation.namedAnimation) - 1] = '\0';

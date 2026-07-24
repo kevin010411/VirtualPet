@@ -8,8 +8,10 @@ namespace
 {
 #if ENABLE_STATUS_SD_CONFIG
 constexpr const char *kStatusDisplayPath = "/status_display.txt";
+constexpr const char *kStatusSetsPath = "/status_sets.txt";
 constexpr const char *kStateSchemaPath = "/state_schema.txt";
 constexpr size_t kMaxStatusSources = 3;
+constexpr size_t kMaxStatusSets = 3;
 constexpr size_t kMaxStateAliases = 8;
 
 struct StateAlias
@@ -24,6 +26,27 @@ struct StatusDisplayConfig
 {
     AnimationId animations[kMaxStatusSources];
     char sources[kMaxStatusSources][16];
+    uint8_t count;
+};
+
+struct StatusSetCondition
+{
+    char source[16];
+    uint8_t levels;
+    int32_t minValue;
+    int32_t maxValue;
+};
+
+struct StatusSetConfig
+{
+    char animation[32];
+    StatusSetCondition conditions[kMaxStatusSources];
+    uint8_t conditionCount;
+};
+
+struct StatusSetsConfig
+{
+    StatusSetConfig sets[kMaxStatusSets];
     uint8_t count;
 };
 
@@ -137,6 +160,96 @@ uint8_t splitCsv(char *text, char values[][16], uint8_t maxValues)
     }
 
     return count;
+}
+
+bool parseStatusSetCondition(char *text, StatusSetCondition &condition)
+{
+    char *source = strtok(text, ",");
+    char *levels = strtok(nullptr, ",");
+    char *minValue = strtok(nullptr, ",");
+    char *maxValue = strtok(nullptr, ",");
+    if (source == nullptr || levels == nullptr || minValue == nullptr || maxValue == nullptr || strtok(nullptr, ",") != nullptr)
+        return false;
+    int32_t parsedLevels = 0;
+    if (!copySmallToken(condition.source, sizeof(condition.source), trimField(source)) ||
+        !parseInt32Field(trimField(levels), parsedLevels) ||
+        !parseInt32Field(trimField(minValue), condition.minValue) ||
+        !parseInt32Field(trimField(maxValue), condition.maxValue) ||
+        parsedLevels < 1 || parsedLevels > 32 || condition.minValue >= condition.maxValue)
+        return false;
+    condition.levels = static_cast<uint8_t>(parsedLevels);
+    return strcmp(condition.source, "sick") != 0 || condition.levels == 2;
+}
+
+bool loadStatusSetsConfig(SdFat *sd, StatusSetsConfig &config)
+{
+    config = {};
+    if (sd == nullptr)
+        return false;
+    File file = sd->open(kStatusSetsPath, FILE_READ);
+    if (!file)
+        return false;
+    char line[192];
+    bool versionSeen = false;
+    while (readConfigLine(file, line, sizeof(line)))
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+        if (!versionSeen)
+        {
+            versionSeen = strcmp(content, "version=1") == 0;
+            if (!versionSeen) { file.close(); return false; }
+            continue;
+        }
+        if (config.count >= kMaxStatusSets)
+        {
+            file.close(); return false;
+        }
+        char *separator = strchr(content, '|');
+        if (separator == nullptr || strchr(separator + 1, '|') != nullptr)
+        {
+            file.close(); return false;
+        }
+        *separator = '\0';
+        StatusSetConfig &set = config.sets[config.count];
+        if (!copySmallToken(set.animation, sizeof(set.animation), trimField(content)))
+        {
+            file.close(); return false;
+        }
+        char *descriptors = trimField(separator + 1);
+        if (strcmp(set.animation, "Status") == 0)
+        {
+            if (descriptors[0] != '\0') { file.close(); return false; }
+            ++config.count;
+            continue;
+        }
+        char *cursor = descriptors;
+        while (cursor != nullptr && set.conditionCount < kMaxStatusSources)
+        {
+            char *next = strchr(cursor, ';');
+            if (next != nullptr) *next = '\0';
+            if (!parseStatusSetCondition(trimField(cursor), set.conditions[set.conditionCount]))
+            {
+                file.close(); return false;
+            }
+            ++set.conditionCount;
+            cursor = next == nullptr ? nullptr : next + 1;
+        }
+        if (set.conditionCount == 0 || cursor != nullptr)
+        {
+            file.close(); return false;
+        }
+        uint16_t product = 1;
+        for (uint8_t i = 0; i < set.conditionCount; ++i)
+        {
+            product = static_cast<uint16_t>(product * set.conditions[i].levels);
+            if (product > 256) { file.close(); return false; }
+        }
+        ++config.count;
+    }
+    file.close();
+    return versionSeen && config.count > 0;
 }
 
 bool splitStatusDisplayRow(char *line, char *&mode, char *&animationsText, char *&sourcesText)
@@ -612,6 +725,10 @@ void CommandExecutor::commandCustomAction(uint8_t slot)
 
 void CommandExecutor::queueStatusAnimation()
 {
+#if ENABLE_STATUS_SD_CONFIG
+    if (queueStatusSetsAnimation())
+        return;
+#endif
 #if APP_STATUS_MODE == STATUS_MODE_DIRECT
     if (!queueStatusDirectAnimation())
         showStatusNotFound();
@@ -648,6 +765,52 @@ bool CommandExecutor::queueStatusDirectAnimation()
 }
 
 #if ENABLE_STATUS_SD_CONFIG
+bool CommandExecutor::queueStatusSetsAnimation()
+{
+    StatusSetsConfig config = {};
+    if (!loadStatusSetsConfig(animations.sdCard(), config))
+        return false;
+
+    const StatusSetConfig &set = config.sets[random(config.count)];
+    if (set.conditionCount == 0)
+    {
+        if (!animations.hasNamedAnimation(set.animation))
+            return false;
+        animations.queueNamedAnimation(set.animation, gameTick * 10, true, AnimationOwner::Command, AnimationPriority::Normal);
+        animations.markDirty();
+        return true;
+    }
+
+    const uint16_t availableFrames = animations.frameCountForName(set.animation);
+    if (availableFrames == 0)
+        return false;
+
+    const PetStatSnapshot stats = petActions.statSnapshot();
+    StateAlias aliases[kMaxStateAliases] = {};
+    const uint8_t aliasCount = loadStateAliases(animations.sdCard(), aliases, kMaxStateAliases);
+    uint16_t frame = 0;
+    uint16_t requiredFrames = 1;
+    for (uint8_t i = 0; i < set.conditionCount; ++i)
+    {
+        const StatusSetCondition &condition = set.conditions[i];
+        int32_t value = 0;
+        int32_t sourceMin = 0;
+        int32_t sourceMax = 0;
+        if (!resolveStatusSource(condition.source, stats, aliases, aliasCount, value, sourceMin, sourceMax))
+            return false;
+        const uint8_t level = levelForValue(value, condition.minValue, condition.maxValue, condition.levels);
+        frame = static_cast<uint16_t>(frame * condition.levels + level);
+        requiredFrames = static_cast<uint16_t>(requiredFrames * condition.levels);
+    }
+    if (availableFrames != requiredFrames)
+        return false;
+
+    animations.queueNamedAnimation(set.animation, gameTick * 4, false, AnimationOwner::Command,
+                                   AnimationPriority::Normal, static_cast<uint16_t>(frame + 1));
+    animations.markDirty();
+    return true;
+}
+
 bool CommandExecutor::queueStatusSingleMeterAnimation()
 {
 #if APP_STATUS_MODE == STATUS_MODE_SINGLE_METER

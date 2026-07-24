@@ -98,7 +98,7 @@ struct Animation
     AnimationPriority priority;
     uint16_t frameIndex;
     bool usesNamedAnimation;
-    char namedAnimation[16];
+    char namedAnimation[32];
 
     Animation(AnimationId animationId = AnimationId::None,
               unsigned long duration = 0,

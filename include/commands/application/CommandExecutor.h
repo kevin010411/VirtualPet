@@ -54,6 +54,7 @@ private:
     void showStatusNotFound();
     bool queueStatusDirectAnimation();
 #if ENABLE_STATUS_SD_CONFIG
+    bool queueStatusSetsAnimation();
     bool queueStatusSingleMeterAnimation();
     bool queueStatusRandomMetersAnimation();
     bool queueStatusTripleMeterAnimation();
