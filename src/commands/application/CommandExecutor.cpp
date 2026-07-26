@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "commands/domain/StatusSetSelection.h"
 #include "custom_rules/domain/CustomRules.h"
 
 namespace
@@ -49,6 +50,11 @@ struct StatusSetsConfig
     StatusSetConfig sets[kMaxStatusSets];
     uint8_t count;
 };
+
+uint8_t arduinoStatusSetIndex(uint8_t setCount)
+{
+    return static_cast<uint8_t>(random(setCount));
+}
 
 bool isSpaceChar(char c)
 {
@@ -771,7 +777,10 @@ bool CommandExecutor::queueStatusSetsAnimation()
     if (!loadStatusSetsConfig(animations.sdCard(), config))
         return false;
 
-    const StatusSetConfig &set = config.sets[random(config.count)];
+    uint8_t selectedSetIndex = 0;
+    if (!selectStatusSetIndex(config.count, arduinoStatusSetIndex, selectedSetIndex))
+        return false;
+    const StatusSetConfig &set = config.sets[selectedSetIndex];
     if (set.conditionCount == 0)
     {
         if (!animations.hasNamedAnimation(set.animation))
