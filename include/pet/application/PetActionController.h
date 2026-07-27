@@ -45,10 +45,6 @@ public:
     HealthStatus currentStatus() const;
     bool isMoodDepressed() const;
     AnimationId currentAnimation() const;
-    AnimationId currentAgeAnimation() const;
-    uint16_t currentAgeFrame(uint16_t maxFrame) const;
-    uint16_t currentMoodFrame(uint16_t maxFrame) const;
-    uint16_t currentHungerFrame(uint16_t maxFrame) const;
     PetStatSnapshot statSnapshot() const;
 
 private:

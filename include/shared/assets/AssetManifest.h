@@ -24,7 +24,7 @@ class AssetManifest
 public:
     static constexpr uint8_t kMaxNamedAnimations = APP_MAX_NAMED_ANIMATIONS;
     static constexpr uint8_t kMaxAnimationVariants = APP_MAX_ANIMATION_VARIANTS;
-    static constexpr uint8_t kMaxAnimationNameLength = 15;
+    static constexpr uint8_t kMaxAnimationNameLength = 31;
 
     void reset();
     bool load(SdFat *sd, const char *speciesCode, const char *outfitCode);

@@ -190,26 +190,6 @@ AnimationId PetActionController::currentAnimation() const
     return pet.CurrentAnimation();
 }
 
-AnimationId PetActionController::currentAgeAnimation() const
-{
-    return pet.CurrentAgeAnimation();
-}
-
-uint16_t PetActionController::currentAgeFrame(uint16_t maxFrame) const
-{
-    return pet.CurrentAgeFrame(maxFrame);
-}
-
-uint16_t PetActionController::currentMoodFrame(uint16_t maxFrame) const
-{
-    return pet.CurrentMoodFrame(maxFrame);
-}
-
-uint16_t PetActionController::currentHungerFrame(uint16_t maxFrame) const
-{
-    return pet.CurrentHungerFrame(maxFrame);
-}
-
 PetStatSnapshot PetActionController::statSnapshot() const
 {
     return pet.statSnapshot();

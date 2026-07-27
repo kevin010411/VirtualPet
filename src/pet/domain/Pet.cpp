@@ -1,24 +1,11 @@
 #include "pet/domain/Pet.h"
 
 #include <string.h>
-#include "shared/config/AppProfile.h"
 
 namespace
 {
 constexpr uint32_t kFirstLaunchCompleteFlag = 0x1UL;
 constexpr uint32_t kCustomRulesInitializedFlag = 0x2UL;
-
-uint16_t frameForRatio(uint32_t value, uint32_t maximum, uint16_t maxFrame)
-{
-    if (maxFrame <= 1)
-        return 1;
-    if (maximum == 0)
-        return maxFrame;
-
-    const uint32_t clampedValue = value > maximum ? maximum : value;
-    const uint16_t frame = static_cast<uint16_t>((clampedValue * maxFrame) / maximum + 1U);
-    return clampValue<uint16_t>(frame, 1, maxFrame);
-}
 
 bool copyAppearanceCode(char *dest, size_t destSize, const char *source)
 {
@@ -80,12 +67,7 @@ void Pet::dayPassed()
     st.health = clampValue<int32_t>(st.health + (healthy ? 5 : -5), 0, 100);
 
     if (!healthy)
-    {
-#if APP_STATUS_MODE == STATUS_MODE_COMPOSITE
-        st.mood = clampValue<int>(st.mood - 2, 0, cfg.max_mood);
-#endif
         return;
-    }
 
     st.hungry_value = clampValue<int>(st.hungry_value + 3, 0, cfg.max_hunger);
     st.mood = clampValue<int>(st.mood - 2, 0, cfg.max_mood);
@@ -155,26 +137,6 @@ AnimationId Pet::CurrentAnimation() const
     }
 
     return AnimationId::Idle;
-}
-
-AnimationId Pet::CurrentAgeAnimation() const
-{
-    return AnimationId::StatusAge;
-}
-
-uint16_t Pet::CurrentAgeFrame(uint16_t maxFrame) const
-{
-    return frameForRatio(st.ageTenths, cfg.maxAgeTenths, maxFrame);
-}
-
-uint16_t Pet::CurrentMoodFrame(uint16_t maxFrame) const
-{
-    return frameForRatio(static_cast<uint32_t>(st.mood), cfg.max_mood, maxFrame);
-}
-
-uint16_t Pet::CurrentHungerFrame(uint16_t maxFrame) const
-{
-    return frameForRatio(static_cast<uint32_t>(st.hungry_value), cfg.max_hunger, maxFrame);
 }
 
 void Pet::setDefaultState()

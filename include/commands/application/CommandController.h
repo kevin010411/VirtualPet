@@ -39,7 +39,6 @@ public:
 #if ENABLE_CUSTOM_RULES
     virtual bool commandCanCustomAction(uint8_t slot) const = 0;
 #endif
-    virtual AnimationId commandCurrentAgeAnimation() const = 0;
     virtual void commandClearCommandAnimations() = 0;
 
     virtual void commandFeedPet() = 0;
