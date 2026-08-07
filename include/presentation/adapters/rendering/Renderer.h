@@ -27,6 +27,7 @@ public:
     bool setNamedAnimation(const char *name, bool playOnce);
     bool advanceAnimationFrame();
     void showInitPetNotExist();
+    void showPetBehaviorLoadingError();
     void showResourceError();
     void showStatusNotFound();
 #if ENABLE_DEBUG

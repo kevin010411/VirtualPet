@@ -60,6 +60,17 @@ void showInitPetNotExist(Adafruit_ST7735 *tft)
     tft->print("init pet not exist");
 }
 
+void showPetBehaviorLoadingError(Adafruit_ST7735 *tft)
+{
+    if (tft == nullptr)
+        return;
+
+    tft->fillScreen(ST77XX_BLACK);
+    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
+    tft->setCursor(0, 32);
+    tft->print("sd card config loading error");
+}
+
 bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, const char *ext)
 {
     if (dest == nullptr || destSize == 0 || path == nullptr || ext == nullptr)

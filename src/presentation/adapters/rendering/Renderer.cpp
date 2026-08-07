@@ -308,6 +308,11 @@ void Renderer::showInitPetNotExist()
     FrameDecoder::showInitPetNotExist(tft);
 }
 
+void Renderer::showPetBehaviorLoadingError()
+{
+    FrameDecoder::showPetBehaviorLoadingError(tft);
+}
+
 void Renderer::showStatusNotFound()
 {
     FrameDecoder::showStatusNotFound(tft);

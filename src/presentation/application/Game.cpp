@@ -43,6 +43,14 @@ Game::~Game()
 bool Game::setup_game()
 {
     initialized = false;
+    if (petBehaviorLoadingFailed || !loadPetBehaviorContract(animations->sdCard(), petBehaviorConfig))
+    {
+        petBehaviorLoadingFailed = true;
+        petBehaviorLoaded = false;
+        renderer.showPetBehaviorLoadingError();
+        return false;
+    }
+    petBehaviorLoaded = true;
     commands->resetSelection();
     animations->setup(currentBaseAnimation());
     layout->begin();
@@ -187,6 +195,11 @@ void Game::redrawAllNow()
 
 void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfitCode)
 {
+    if (petBehaviorLoadingFailed)
+    {
+        renderer.showPetBehaviorLoadingError();
+        return;
+    }
     if (!pet.setSpeciesCode(speciesCode) || !pet.setOutfitCode(outfitCode))
     {
         initialized = false;
@@ -202,11 +215,13 @@ void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfi
 
 bool Game::saveNow()
 {
-    return petActions->saveNow();
+    return initialized && petActions->saveNow();
 }
 
 bool Game::startStartupAnimation()
 {
+    if (!initialized)
+        return false;
     if (!flow.requestStartup())
         return false;
 
@@ -215,11 +230,15 @@ bool Game::startStartupAnimation()
 
 void Game::startBatteryAnimation()
 {
+    if (!initialized)
+        return;
     animations->startBatteryAnimation();
 }
 
 void Game::updateBatteryAnimation(unsigned long now)
 {
+    if (!initialized)
+        return;
     animations->updateBatteryAnimation(now);
 #if ENABLE_DEBUG
     renderer.renderDebugOverlay();
@@ -228,6 +247,8 @@ void Game::updateBatteryAnimation(unsigned long now)
 
 void Game::OnLeftKey()
 {
+    if (!initialized)
+        return;
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
@@ -258,6 +279,8 @@ void Game::OnLeftKey()
 
 void Game::OnRightKey()
 {
+    if (!initialized)
+        return;
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
@@ -288,6 +311,8 @@ void Game::OnRightKey()
 
 void Game::OnConfirmKey()
 {
+    if (!initialized)
+        return;
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
@@ -349,6 +374,8 @@ void Game::OnConfirmKey()
 
 bool Game::resetPet()
 {
+    if (!petBehaviorLoaded)
+        return false;
     initialized = false;
     if (!loadInitialPetState(false))
         return false;

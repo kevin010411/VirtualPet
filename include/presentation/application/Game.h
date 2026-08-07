@@ -7,6 +7,7 @@
 #include "animation/domain/Animation.h"
 #include "appearance/ports/AppearanceLoader.h"
 #include "custom_rules/domain/CustomRules.h"
+#include "pet_behavior/domain/PetBehaviorContract.h"
 
 class AnimationController;
 class CommandController;
@@ -70,6 +71,9 @@ private:
     bool dirtySelect = true;
     bool pendingEvolution = false;
     bool initialized = false;
+    bool petBehaviorLoadingFailed = false;
+    bool petBehaviorLoaded = false;
+    PetBehaviorConfig petBehaviorConfig = {};
     char pendingEvolutionSpeciesCode[9] = {};
     char pendingEvolutionOutfitCode[9] = {};
 
