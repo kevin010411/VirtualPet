@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <SdFat.h>
+#include "animation/application/BaseAnimationRotation.h"
 #include "animation/domain/Animation.h"
 
 class Renderer;
@@ -89,7 +90,7 @@ private:
     uint8_t activeRepeatsRemaining = 0;
     AnimationId baseAnimationId = AnimationId::Idle;
     bool baseUsesNamedAnimation = false;
-    char baseNamedAnimation[32] = {};
+    BaseAnimationRotation baseRotation;
     long displayDuration = 0;
     bool dirtyAnimation = true;
     bool animateDone = true;

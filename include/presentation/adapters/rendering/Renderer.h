@@ -25,6 +25,7 @@ public:
     bool ShowNamedAnimationFrame(const char *name, uint16_t frame_index, int xmin = 0, int ymin = 32, int batch_lines = 12);
     bool setAnimation(AnimationId id, bool playOnce);
     bool setNamedAnimation(const char *name, bool playOnce);
+    bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
     void showInitPetNotExist();
     void showPetBehaviorLoadingError();

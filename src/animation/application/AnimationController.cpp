@@ -26,7 +26,7 @@ void AnimationController::setup(const char *baseAnimation)
 {
     resetPlaybackState();
     setBaseAnimation(baseAnimation);
-    renderer.setNamedAnimation(baseNamedAnimation, false);
+    renderer.setNamedAnimation(baseRotation.selectedAnimation(), false);
 }
 
 void AnimationController::resetPlaybackState()
@@ -38,7 +38,7 @@ void AnimationController::resetPlaybackState()
     activeRepeatsRemaining = 0;
     baseAnimationId = AnimationId::None;
     baseUsesNamedAnimation = false;
-    baseNamedAnimation[0] = '\0';
+    baseRotation.reset();
     displayDuration = 0;
     dirtyAnimation = true;
     animateDone = true;
@@ -56,26 +56,17 @@ void AnimationController::setBaseAnimation(AnimationId baseAnimation)
 
     baseAnimationId = baseAnimation;
     baseUsesNamedAnimation = false;
-    baseNamedAnimation[0] = '\0';
+    baseRotation.reset();
     dirtyAnimation = true;
 }
 
 void AnimationController::setBaseAnimation(const char *baseAnimation)
 {
-    if (baseAnimation == nullptr || baseAnimation[0] == '\0')
-        return;
-    const uint8_t variantCount = renderer.variantCountFor(baseAnimation);
-    const char *selectedAnimation = variantCount > 0 ? renderer.variantNameFor(baseAnimation, 0) : baseAnimation;
-    if (selectedAnimation == nullptr || selectedAnimation[0] == '\0' ||
-        strlen(selectedAnimation) >= sizeof(baseNamedAnimation))
-        return;
-    if (baseUsesNamedAnimation && strcmp(baseNamedAnimation, selectedAnimation) == 0)
+    if (!baseRotation.setBaseAnimation(baseAnimation, renderer))
         return;
 
     baseAnimationId = AnimationId::None;
     baseUsesNamedAnimation = true;
-    strncpy(baseNamedAnimation, selectedAnimation, sizeof(baseNamedAnimation) - 1);
-    baseNamedAnimation[sizeof(baseNamedAnimation) - 1] = '\0';
     dirtyAnimation = true;
 }
 
@@ -524,7 +515,7 @@ void AnimationController::render(unsigned long now)
             showUsesNamedAnimation = baseUsesNamedAnimation;
             if (showUsesNamedAnimation)
             {
-                strncpy(showNamedAnimation, baseNamedAnimation, sizeof(showNamedAnimation) - 1);
+                strncpy(showNamedAnimation, baseRotation.selectedAnimation(), sizeof(showNamedAnimation) - 1);
                 showNamedAnimation[sizeof(showNamedAnimation) - 1] = '\0';
                 showAnimationId = AnimationId::None;
             }
@@ -558,6 +549,13 @@ void AnimationController::render(unsigned long now)
              !(hasActiveAnimation && activeAnimation.isFixedFrame()) &&
              !(hasActiveAnimation && activeAnimation.playOnce && animateDone))
     {
+        if (!hasActiveAnimation && showUsesNamedAnimation &&
+            renderer.willRestartAnimationLoop() && baseRotation.onLoopCompletedAndRotateIfDue(renderer))
+        {
+            strncpy(showNamedAnimation, baseRotation.selectedAnimation(), sizeof(showNamedAnimation) - 1);
+            showNamedAnimation[sizeof(showNamedAnimation) - 1] = '\0';
+            animateDone = !renderer.setNamedAnimation(showNamedAnimation, false);
+        }
         animateDone |= renderer.advanceAnimationFrame();
     }
 }

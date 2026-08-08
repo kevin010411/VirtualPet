@@ -251,6 +251,11 @@ bool Renderer::setNamedAnimation(const char *name, bool playOnce)
     return true;
 }
 
+bool Renderer::willRestartAnimationLoop() const
+{
+    return state->animationIndex > state->maxFrame;
+}
+
 bool Renderer::advanceAnimationFrame()
 {
     if ((state->nowAnimId == AnimationId::None && state->namedAnimationMeta == nullptr) || state->maxFrame == 0)

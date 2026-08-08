@@ -144,10 +144,13 @@ void Game::loop_game()
     }
 #endif
 
+    if (layout->isActionActive() && !animations->hasAnimationForOwner(AnimationOwner::Command))
+    {
+        refreshBaseAnimation();
+        layout->endAction();
+    }
     animations->render(now);
     syncActionLayoutWithAnimationQueue();
-    if (layout->isActionActive() && !animations->hasAnimationForOwner(AnimationOwner::Command))
-        layout->endAction();
 
     if (dirtySelect)
     {
