@@ -60,22 +60,22 @@ private:
     bool commandHasAnimation(AnimationId id) const override;
     bool commandCanStatus() const override;
 #if ENABLE_CUSTOM_RULES
-    bool commandCanCustomAction(uint8_t slot) const override;
+    bool commandCanCustomAction(uint8_t slot) const;
 #endif
     void commandClearCommandAnimations() override;
-    void commandFeedPet() override;
+    void commandFeedPet();
 #if ENABLE_COMMAND_PREDICT
     void commandPredict() override;
 #endif
 #if ENABLE_COMMAND_GIFT
-    void commandGift() override;
+    void commandGift();
 #endif
-    void commandMedicine() override;
-    void commandShower() override;
+    void commandMedicine();
+    void commandShower();
 #if ENABLE_GUESS_ITEM_GAME
     void commandHaveFun() override;
 #endif
-    void commandClean() override;
+    void commandClean();
 #if ENABLE_COMMAND_OUTFIT
     void commandChangeOutfit() override;
 #endif
@@ -84,7 +84,7 @@ private:
 #endif
     void commandStatus() override;
 #if ENABLE_CUSTOM_RULES
-    void commandCustomAction(uint8_t slot) override;
+    void commandCustomAction(uint8_t slot);
 #endif
 };
 

@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include "shared/config/AppProfile.h"
 #include "animation/domain/Animation.h"
+#include "pet_behavior/domain/PetBehaviorTypes.h"
 
 enum class AppCommandId : uint8_t
 {
@@ -37,24 +38,14 @@ public:
 
     virtual bool commandHasAnimation(AnimationId id) const = 0;
     virtual bool commandCanStatus() const = 0;
-#if ENABLE_CUSTOM_RULES
-    virtual bool commandCanCustomAction(uint8_t slot) const = 0;
-#endif
     virtual void commandClearCommandAnimations() = 0;
 
-    virtual void commandFeedPet() = 0;
 #if ENABLE_COMMAND_PREDICT
     virtual void commandPredict() = 0;
 #endif
-#if ENABLE_COMMAND_GIFT
-    virtual void commandGift() = 0;
-#endif
-    virtual void commandMedicine() = 0;
-    virtual void commandShower() = 0;
 #if ENABLE_GUESS_ITEM_GAME
     virtual void commandHaveFun() = 0;
 #endif
-    virtual void commandClean() = 0;
 #if ENABLE_COMMAND_OUTFIT
     virtual void commandChangeOutfit() = 0;
 #endif
@@ -62,9 +53,6 @@ public:
     virtual void commandChangeSpecies() = 0;
 #endif
     virtual void commandStatus() = 0;
-#if ENABLE_CUSTOM_RULES
-    virtual void commandCustomAction(uint8_t slot) = 0;
-#endif
 };
 
 class CommandController
@@ -72,6 +60,7 @@ class CommandController
 public:
     explicit CommandController(CommandHost &hostRef);
 
+    void configure(const PetBehaviorConfig &config);
     void resetSelection();
     void next();
     void prev();
@@ -102,46 +91,26 @@ private:
     CommandHost &host;
     int selected = 0;
     int previous = 0;
+    CommandSlot slots[kPetBehaviorButtonCount] = {};
 
     static constexpr CommandSlot emptySlot();
-    static CommandSlot configuredSlot(uint8_t commandId);
-    static const CommandSlot slots[];
-    static const CommandSlot &slotAt(int slot);
+    static CommandSlot systemCommandSlot(const char *token);
+    static CommandSlot buttonSlot(const PetBehaviorButtonConfig &button);
+    const CommandSlot &slotAt(int slot) const;
 
     bool canAlwaysExecute() const;
-    bool canFeedPet() const;
 #if ENABLE_COMMAND_PREDICT
     bool canPredict() const;
 #endif
-    bool canMedicine() const;
-    bool canShower() const;
-    bool canClean() const;
     bool canStatus() const;
-#if ENABLE_CUSTOM_RULES
-    bool canCustom0() const;
-    bool canCustom1() const;
-    bool canCustom2() const;
-    bool canCustom3() const;
-    bool canCustom4() const;
-    bool canCustom5() const;
-    bool canCustom6() const;
-    bool canCustom7() const;
-#endif
     bool hasAnimations(const AnimationId *ids, size_t count) const;
 
-    void executeFeedPet();
 #if ENABLE_COMMAND_PREDICT
     void executePredict();
 #endif
-#if ENABLE_COMMAND_GIFT
-    void executeGift();
-#endif
-    void executeMedicine();
-    void executeShower();
 #if ENABLE_GUESS_ITEM_GAME
-    void executeHaveFun();
+    void executeGuessGame();
 #endif
-    void executeClean();
     void executeUserAction();
 #if ENABLE_COMMAND_OUTFIT
     void executeChangeOutfit();
@@ -150,16 +119,6 @@ private:
     void executeChangeSpecies();
 #endif
     void executeStatus();
-#if ENABLE_CUSTOM_RULES
-    void executeCustom0();
-    void executeCustom1();
-    void executeCustom2();
-    void executeCustom3();
-    void executeCustom4();
-    void executeCustom5();
-    void executeCustom6();
-    void executeCustom7();
-#endif
 };
 
 #endif // COMMAND_CONTROLLER_H

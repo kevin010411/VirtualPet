@@ -53,6 +53,7 @@ bool Game::setup_game()
         return false;
     }
     petBehaviorLoaded = true;
+    commands->configure(petBehaviorConfig);
     commands->resetSelection();
     animations->setup(petBehaviorConfig.idleAnimation);
     layout->begin();

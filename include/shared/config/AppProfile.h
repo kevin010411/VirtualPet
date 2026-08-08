@@ -20,18 +20,6 @@
 #define APP_COMMAND_CHANGE_SPECIES 10
 #define APP_COMMAND_USER_ACTION 11
 
-// A generated web profile may override all eight physical menu slots.  Define
-// either every APP_COMMAND_SLOT_n macro or none of them so legacy profiles keep
-// their existing compile-time layout.
-#if defined(APP_COMMAND_SLOT_1) || defined(APP_COMMAND_SLOT_2) || defined(APP_COMMAND_SLOT_3) || defined(APP_COMMAND_SLOT_4) || defined(APP_COMMAND_SLOT_5) || defined(APP_COMMAND_SLOT_6) || defined(APP_COMMAND_SLOT_7) || defined(APP_COMMAND_SLOT_8)
-#if !defined(APP_COMMAND_SLOT_1) || !defined(APP_COMMAND_SLOT_2) || !defined(APP_COMMAND_SLOT_3) || !defined(APP_COMMAND_SLOT_4) || !defined(APP_COMMAND_SLOT_5) || !defined(APP_COMMAND_SLOT_6) || !defined(APP_COMMAND_SLOT_7) || !defined(APP_COMMAND_SLOT_8)
-#error "Define all APP_COMMAND_SLOT_1..8 values when overriding command slots."
-#endif
-#define APP_HAS_COMMAND_SLOT_OVERRIDES 1
-#else
-#define APP_HAS_COMMAND_SLOT_OVERRIDES 0
-#endif
-
 #ifndef APP_PROFILE
 #define APP_PROFILE APP_PROFILE_DEFAULT
 #endif
