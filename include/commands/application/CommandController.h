@@ -19,6 +19,7 @@ enum class AppCommandId : uint8_t
     ChangeOutfit = APP_COMMAND_CHANGE_OUTFIT,
     Status = APP_COMMAND_STATUS,
     ChangeSpecies = APP_COMMAND_CHANGE_SPECIES,
+    UserAction = APP_COMMAND_USER_ACTION,
     Custom0,
     Custom1,
     Custom2,
@@ -141,6 +142,7 @@ private:
     void executeHaveFun();
 #endif
     void executeClean();
+    void executeUserAction();
 #if ENABLE_COMMAND_OUTFIT
     void executeChangeOutfit();
 #endif

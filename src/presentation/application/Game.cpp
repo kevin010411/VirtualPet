@@ -11,6 +11,7 @@
 #include "appearance/application/AppearanceSelectionController.h"
 #endif
 #include "pet/application/PetActionController.h"
+#include "pet_behavior/application/PetBehaviorRuntime.h"
 #include "pet/domain/Pet.h"
 #include "presentation/adapters/rendering/Renderer.h"
 #include "pet/adapters/PetStorage.h"
@@ -21,8 +22,9 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       petStorage(petStorageRef),
       renderer(rendererRef),
       appearanceLoader(appearanceLoaderRef),
-       petActions(std::make_unique<PetActionController>(pet, petStorage, renderer, appearanceLoader)),
-       animations(std::make_unique<AnimationController>(renderer)),
+      petActions(std::make_unique<PetActionController>(pet, petStorage, renderer, appearanceLoader)),
+      animations(std::make_unique<AnimationController>(renderer)),
+      petBehaviorRuntime(std::make_unique<PetBehaviorRuntime>(petBehaviorConfig, *petActions, *animations)),
       commandExecutor(std::make_unique<CommandExecutor>(*petActions, *animations, customRules)),
       commands(std::make_unique<CommandController>(*commandExecutor)),
       layout(std::make_unique<LayoutRenderer>(renderer, *commands))
@@ -52,7 +54,7 @@ bool Game::setup_game()
     }
     petBehaviorLoaded = true;
     commands->resetSelection();
-    animations->setup(currentBaseAnimation());
+    animations->setup(petBehaviorConfig.idleAnimation);
     layout->begin();
     layout->drawAll();
 
@@ -367,6 +369,17 @@ void Game::OnConfirmKey()
 
     const AppCommandId commandId = commands->currentCommandId();
     const int selectedSlot = commands->selectedSlot();
+    const PetBehaviorButtonConfig &behaviorButton = petBehaviorConfig.buttons[selectedSlot];
+    if (behaviorButton.active && behaviorButton.kind == PetBehaviorButtonKind::UserAction)
+    {
+        animations->clearByOwner(AnimationOwner::Command);
+        if (petBehaviorRuntime->executeAction(behaviorButton.actionSlot))
+        {
+            refreshBaseAnimation();
+            layout->enterAction(AnimationId::None, selectedSlot);
+        }
+        return;
+    }
     commandExecutor->begin(commandId);
     const bool executed = commands->executeCurrent();
     handleCommandResult(commandExecutor->complete(executed), selectedSlot);
@@ -407,19 +420,7 @@ bool Game::resetPet()
 
 void Game::refreshBaseAnimation()
 {
-    animations->setBaseAnimation(currentBaseAnimation());
-}
-
-AnimationId Game::currentBaseAnimation() const
-{
-    const AnimationId candidateAnimation = petActions->currentAnimation();
-    if (animations->hasAnimation(candidateAnimation))
-        return candidateAnimation;
-
-    if (candidateAnimation != AnimationId::Idle && animations->hasAnimation(AnimationId::Idle))
-        return AnimationId::Idle;
-
-    return candidateAnimation;
+    animations->setBaseAnimation(petBehaviorRuntime->baseAnimation());
 }
 
 void Game::syncActionLayoutWithAnimationQueue()
@@ -510,6 +511,7 @@ bool Game::loadInitialPetState(bool allowSavedState)
     }
 
     pet.setDefaultState();
+    petBehaviorRuntime->initializeStats();
     const bool applied = pet.setSpeciesCode(initialAppearance.speciesCode) &&
                          pet.setOutfitCode(initialAppearance.outfitCode);
     if (!applied)
@@ -578,6 +580,7 @@ void Game::maybeTickPet(unsigned long elapsed)
         const int probability = 1;
         const int randValue = random(1001);
         petActions->dayPassed();
+        petBehaviorRuntime->applyDailyChanges();
         handleEvolution();
         if (pendingEvolution)
             return;

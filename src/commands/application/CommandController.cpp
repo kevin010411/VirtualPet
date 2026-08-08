@@ -72,6 +72,8 @@ CommandController::CommandSlot CommandController::configuredSlot(uint8_t command
         return COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true);
     case APP_COMMAND_CHANGE_SPECIES:
         return COMMAND_SLOT_CHANGE_SPECIES;
+    case APP_COMMAND_USER_ACTION:
+        return COMMAND_SLOT(AppCommandId::UserAction, "USER_ACTION", canAlwaysExecute, executeUserAction, false);
     default:
         return emptySlot();
     }
@@ -355,6 +357,11 @@ void CommandController::executeHaveFun()
 void CommandController::executeClean()
 {
     host.commandClean();
+}
+
+void CommandController::executeUserAction()
+{
+    // Game intercepts configured user-action slots before legacy execution.
 }
 
 #if ENABLE_COMMAND_OUTFIT

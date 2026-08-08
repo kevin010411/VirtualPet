@@ -13,7 +13,9 @@ public:
     explicit AnimationController(Renderer &renderer);
 
     void setup(AnimationId baseAnimation);
+    void setup(const char *baseAnimation);
     void setBaseAnimation(AnimationId baseAnimation);
+    void setBaseAnimation(const char *baseAnimation);
     AnimationId baseAnimation() const;
     bool hasAnimation(AnimationId id) const;
     bool hasNamedAnimation(const char *name) const;
@@ -51,6 +53,12 @@ public:
                               AnimationPriority priority,
                               char *selectedName,
                               size_t selectedNameSize);
+    bool queueRepeatedActionAnimation(const char *baseName,
+                                      uint8_t playbackCount,
+                                      AnimationOwner owner,
+                                      AnimationPriority priority,
+                                      char *selectedName = nullptr,
+                                      size_t selectedNameSize = 0);
     void clearByOwner(AnimationOwner owner);
     bool hasAnimationForOwner(AnimationOwner owner) const;
     AnimationId currentCommandAnimationId() const;
@@ -78,7 +86,10 @@ private:
     uint8_t animationQueueCount = 0;
     Animation activeAnimation = {};
     bool hasActiveAnimation = false;
+    uint8_t activeRepeatsRemaining = 0;
     AnimationId baseAnimationId = AnimationId::Idle;
+    bool baseUsesNamedAnimation = false;
+    char baseNamedAnimation[32] = {};
     long displayDuration = 0;
     bool dirtyAnimation = true;
     bool animateDone = true;
@@ -88,6 +99,8 @@ private:
     bool showUsesNamedAnimation = false;
     char showNamedAnimation[32] = {};
 
+    void resetPlaybackState();
+    unsigned long completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const;
     void tryStartNextAnimation();
 };
 

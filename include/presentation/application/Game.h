@@ -18,6 +18,7 @@ class MinigameController;
 class AppearanceSelectionController;
 class Pet;
 class PetActionController;
+class PetBehaviorRuntime;
 class PetStorage;
 class Renderer;
 
@@ -53,8 +54,10 @@ private:
     Renderer &renderer;
     AppearanceLoader &appearanceLoader;
     AppFlowController flow;
+    PetBehaviorConfig petBehaviorConfig = {};
     std::unique_ptr<PetActionController> petActions;
     std::unique_ptr<AnimationController> animations;
+    std::unique_ptr<PetBehaviorRuntime> petBehaviorRuntime;
     CustomRules customRules;
     std::unique_ptr<CommandExecutor> commandExecutor;
     std::unique_ptr<CommandController> commands;
@@ -73,12 +76,10 @@ private:
     bool initialized = false;
     bool petBehaviorLoadingFailed = false;
     bool petBehaviorLoaded = false;
-    PetBehaviorConfig petBehaviorConfig = {};
     char pendingEvolutionSpeciesCode[9] = {};
     char pendingEvolutionOutfitCode[9] = {};
 
     void refreshBaseAnimation();
-    AnimationId currentBaseAnimation() const;
     void syncActionLayoutWithAnimationQueue();
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);

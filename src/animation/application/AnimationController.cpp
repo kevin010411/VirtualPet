@@ -1,7 +1,14 @@
 #include "animation/application/AnimationController.h"
 
+#include <limits.h>
 #include <string.h>
 #include "presentation/adapters/rendering/Renderer.h"
+
+namespace
+{
+constexpr uint8_t kMaxRepeatedActionPlaybackCount = 10;
+constexpr unsigned long kCompletePlaybackSafetyMs = 3000;
+} // namespace
 
 AnimationController::AnimationController(Renderer &rendererRef)
     : renderer(rendererRef)
@@ -10,11 +17,28 @@ AnimationController::AnimationController(Renderer &rendererRef)
 
 void AnimationController::setup(AnimationId baseAnimation)
 {
+    resetPlaybackState();
+    setBaseAnimation(baseAnimation);
+    renderer.setAnimation(baseAnimationId, false);
+}
+
+void AnimationController::setup(const char *baseAnimation)
+{
+    resetPlaybackState();
+    setBaseAnimation(baseAnimation);
+    renderer.setNamedAnimation(baseNamedAnimation, false);
+}
+
+void AnimationController::resetPlaybackState()
+{
     renderer.initAnimations();
     animationQueueCount = 0;
     activeAnimation = Animation();
     hasActiveAnimation = false;
-    baseAnimationId = baseAnimation;
+    activeRepeatsRemaining = 0;
+    baseAnimationId = AnimationId::None;
+    baseUsesNamedAnimation = false;
+    baseNamedAnimation[0] = '\0';
     displayDuration = 0;
     dirtyAnimation = true;
     animateDone = true;
@@ -23,15 +47,35 @@ void AnimationController::setup(AnimationId baseAnimation)
     showAnimationId = AnimationId::None;
     showUsesNamedAnimation = false;
     showNamedAnimation[0] = '\0';
-    renderer.setAnimation(baseAnimationId, false);
 }
 
 void AnimationController::setBaseAnimation(AnimationId baseAnimation)
 {
-    if (baseAnimationId == baseAnimation)
+    if (!baseUsesNamedAnimation && baseAnimationId == baseAnimation)
         return;
 
     baseAnimationId = baseAnimation;
+    baseUsesNamedAnimation = false;
+    baseNamedAnimation[0] = '\0';
+    dirtyAnimation = true;
+}
+
+void AnimationController::setBaseAnimation(const char *baseAnimation)
+{
+    if (baseAnimation == nullptr || baseAnimation[0] == '\0')
+        return;
+    const uint8_t variantCount = renderer.variantCountFor(baseAnimation);
+    const char *selectedAnimation = variantCount > 0 ? renderer.variantNameFor(baseAnimation, 0) : baseAnimation;
+    if (selectedAnimation == nullptr || selectedAnimation[0] == '\0' ||
+        strlen(selectedAnimation) >= sizeof(baseNamedAnimation))
+        return;
+    if (baseUsesNamedAnimation && strcmp(baseNamedAnimation, selectedAnimation) == 0)
+        return;
+
+    baseAnimationId = AnimationId::None;
+    baseUsesNamedAnimation = true;
+    strncpy(baseNamedAnimation, selectedAnimation, sizeof(baseNamedAnimation) - 1);
+    baseNamedAnimation[sizeof(baseNamedAnimation) - 1] = '\0';
     dirtyAnimation = true;
 }
 
@@ -218,6 +262,99 @@ bool AnimationController::queueActionAnimation(const char *baseName,
     return true;
 }
 
+bool AnimationController::queueRepeatedActionAnimation(const char *baseName,
+                                                        uint8_t playbackCount,
+                                                        AnimationOwner owner,
+                                                        AnimationPriority priority,
+                                                        char *selectedName,
+                                                        size_t selectedNameSize)
+{
+    if (baseName == nullptr || baseName[0] == '\0' || playbackCount == 0 ||
+        playbackCount > kMaxRepeatedActionPlaybackCount)
+        return false;
+
+    const char *selectedAnimation = baseName;
+    AnimationId selectedId = AnimationId::None;
+    bool usesNamedAnimation = false;
+    uint16_t frameCount = 0;
+    unsigned long frameIntervalMs = frameIntervalSlow;
+
+    const uint8_t variantCount = renderer.variantCountFor(baseName);
+    if (variantCount > 0)
+    {
+        selectedAnimation = renderer.variantNameFor(baseName, static_cast<uint8_t>(random(variantCount)));
+        if (selectedAnimation == nullptr || !hasNamedAnimation(selectedAnimation))
+            return false;
+
+        usesNamedAnimation = true;
+        frameCount = renderer.frameCountForName(selectedAnimation);
+        frameIntervalMs = renderer.frameIntervalForName(selectedAnimation, frameIntervalSlow);
+    }
+    else
+    {
+        selectedId = animationIdFromName(baseName);
+        if (selectedId != AnimationId::None)
+        {
+            if (!hasAnimation(selectedId))
+                return false;
+
+            frameCount = renderer.frameCountFor(selectedId);
+            frameIntervalMs = renderer.frameIntervalFor(selectedId, frameIntervalSlow);
+        }
+        else
+        {
+            if (!hasNamedAnimation(baseName))
+                return false;
+
+            usesNamedAnimation = true;
+            frameCount = renderer.frameCountForName(baseName);
+            frameIntervalMs = renderer.frameIntervalForName(baseName, frameIntervalSlow);
+        }
+    }
+
+    if (frameCount == 0 || frameIntervalMs == 0)
+        return false;
+
+    bool canQueue = animationQueueCount < kMaxQueuedAnimations;
+    if (!canQueue)
+    {
+        for (uint8_t index = 0; index < animationQueueCount; ++index)
+        {
+            if (static_cast<uint8_t>(priority) > static_cast<uint8_t>(animationQueue[index].priority))
+            {
+                canQueue = true;
+                break;
+            }
+        }
+    }
+    if (!canQueue)
+        return false;
+
+    Animation animation(selectedId,
+                        completePlaybackDuration(frameCount, frameIntervalMs),
+                        true,
+                        owner,
+                        priority);
+    if (usesNamedAnimation && strlen(selectedAnimation) >= sizeof(animation.namedAnimation))
+        return false;
+
+    animation.repeatCount = playbackCount;
+    animation.usesNamedAnimation = usesNamedAnimation;
+    if (usesNamedAnimation)
+    {
+        strncpy(animation.namedAnimation, selectedAnimation, sizeof(animation.namedAnimation) - 1);
+        animation.namedAnimation[sizeof(animation.namedAnimation) - 1] = '\0';
+    }
+    queueAnimation(animation);
+
+    if (selectedName != nullptr && selectedNameSize > 0)
+    {
+        strncpy(selectedName, selectedAnimation, selectedNameSize - 1);
+        selectedName[selectedNameSize - 1] = '\0';
+    }
+    return true;
+}
+
 void AnimationController::clearByOwner(AnimationOwner owner)
 {
     for (uint8_t index = 0; index < animationQueueCount;)
@@ -238,6 +375,7 @@ void AnimationController::clearByOwner(AnimationOwner owner)
     {
         hasActiveAnimation = false;
         activeAnimation = Animation();
+        activeRepeatsRemaining = 0;
         displayDuration = 0;
         animateDone = true;
         showAnimationId = AnimationId::None;
@@ -307,10 +445,26 @@ void AnimationController::updateElapsed(unsigned long elapsed)
     if (displayDuration > 0 && activeAnimation.isFixedFrame())
         return;
 
+    if (activeAnimation.repeatCount > 1 && activeAnimation.playOnce)
+    {
+        if (!animateDone)
+            return;
+
+        if (activeRepeatsRemaining > 1)
+        {
+            --activeRepeatsRemaining;
+            displayDuration = static_cast<long>(activeAnimation.durationMs);
+            dirtyAnimation = true;
+            animateDone = false;
+            return;
+        }
+    }
+
     if (displayDuration > 0 && !animateDone)
         return;
 
     hasActiveAnimation = false;
+    activeRepeatsRemaining = 0;
     dirtyAnimation = true;
     animateDone = false;
 }
@@ -325,7 +479,18 @@ void AnimationController::tryStartNextAnimation()
         animationQueue[index - 1] = animationQueue[index];
     --animationQueueCount;
     hasActiveAnimation = true;
+    activeRepeatsRemaining = activeAnimation.repeatCount == 0 ? 1 : activeAnimation.repeatCount;
     displayDuration = static_cast<long>(activeAnimation.durationMs);
+}
+
+unsigned long AnimationController::completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const
+{
+    const unsigned long frameTransitions = static_cast<unsigned long>(frameCount) + 1;
+    const unsigned long maxDisplayDuration = static_cast<unsigned long>(LONG_MAX);
+    if (frameIntervalMs > (maxDisplayDuration - kCompletePlaybackSafetyMs) / frameTransitions)
+        return maxDisplayDuration;
+
+    return frameIntervalMs * frameTransitions + kCompletePlaybackSafetyMs;
 }
 
 void AnimationController::render(unsigned long now)
@@ -356,9 +521,18 @@ void AnimationController::render(unsigned long now)
         }
         else
         {
-            showUsesNamedAnimation = false;
-            showNamedAnimation[0] = '\0';
-            showAnimationId = baseAnimationId;
+            showUsesNamedAnimation = baseUsesNamedAnimation;
+            if (showUsesNamedAnimation)
+            {
+                strncpy(showNamedAnimation, baseNamedAnimation, sizeof(showNamedAnimation) - 1);
+                showNamedAnimation[sizeof(showNamedAnimation) - 1] = '\0';
+                showAnimationId = AnimationId::None;
+            }
+            else
+            {
+                showNamedAnimation[0] = '\0';
+                showAnimationId = baseAnimationId;
+            }
         }
 
         frameInterval = showUsesNamedAnimation

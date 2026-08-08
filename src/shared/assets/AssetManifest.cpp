@@ -158,6 +158,28 @@ bool splitVariantAnimationName(const char *name, char *baseName, size_t baseName
     if (length < 2)
         return false;
 
+    // Schema-v8 export tokens end in a digit (for example anim0), so use an
+    // explicit separator before the positive version number. This keeps the
+    // existing trailing-number convention available for legacy resources.
+    const char *versionMarker = strstr(name, "_v");
+    if (versionMarker != nullptr && versionMarker != name)
+    {
+        const char *digits = versionMarker + 2;
+        if (*digits == '\0' || *digits == '0')
+            return false;
+        for (const char *cursor = digits; *cursor != '\0'; ++cursor)
+        {
+            if (*cursor < '0' || *cursor > '9')
+                return false;
+        }
+        const size_t baseLength = static_cast<size_t>(versionMarker - name);
+        if (baseLength >= baseNameSize)
+            return false;
+        memcpy(baseName, name, baseLength);
+        baseName[baseLength] = '\0';
+        return true;
+    }
+
     size_t suffixStart = length;
     while (suffixStart > 0 && name[suffixStart - 1] >= '0' && name[suffixStart - 1] <= '9')
         --suffixStart;

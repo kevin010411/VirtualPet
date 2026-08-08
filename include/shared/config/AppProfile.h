@@ -18,6 +18,7 @@
 #define APP_COMMAND_CHANGE_OUTFIT 8
 #define APP_COMMAND_STATUS 9
 #define APP_COMMAND_CHANGE_SPECIES 10
+#define APP_COMMAND_USER_ACTION 11
 
 // A generated web profile may override all eight physical menu slots.  Define
 // either every APP_COMMAND_SLOT_n macro or none of them so legacy profiles keep

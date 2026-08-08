@@ -69,7 +69,7 @@ void Pet::dayPassed()
     if (!healthy)
         return;
 
-    st.hungry_value = clampValue<int>(st.hungry_value + 3, 0, cfg.max_hunger);
+    st.hungry_value = clampValue<int>(st.hungry_value + 2, 0, cfg.max_hunger);
     st.mood = clampValue<int>(st.mood - 2, 0, cfg.max_mood);
     st.ageTenths = clampValue<uint32_t>(st.ageTenths + cfg.ageTenthsPerTick, 0, cfg.maxAgeTenths);
     st.clean_value = clampValue<int>(st.clean_value - 3, 0, cfg.max_clean);

@@ -84,6 +84,7 @@ struct Animation
     AnimationOwner owner;
     AnimationPriority priority;
     uint16_t frameIndex;
+    uint8_t repeatCount;
     bool usesNamedAnimation;
     char namedAnimation[32];
 
@@ -99,6 +100,7 @@ struct Animation
           owner(animationOwner),
           priority(animationPriority),
           frameIndex(fixedFrameIndex),
+          repeatCount(1),
           usesNamedAnimation(false),
           namedAnimation{} {}
 
