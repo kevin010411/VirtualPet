@@ -46,7 +46,6 @@ private:
                             bool playOnce = false,
                             char *selectedName = nullptr,
                             size_t selectedNameSize = 0);
-    void queuePostCommandHappyAnimation();
 #if ENABLE_COMMAND_GIFT || ENABLE_GUESS_ITEM_GAME
     void queueGiftAnimation();
 #endif

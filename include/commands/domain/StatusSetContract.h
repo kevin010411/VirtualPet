@@ -7,7 +7,7 @@
 constexpr size_t kStatusAnimationNameSize = 32;
 constexpr size_t kStatusSourceNameSize = 16;
 constexpr size_t kMaxStatusContractBytes = 640;
-constexpr uint8_t kMaxStatusSets = 3;
+constexpr uint8_t kMaxStatusSets = 5;
 constexpr uint8_t kMaxStatusConditions = 3;
 
 struct StatusSetCondition

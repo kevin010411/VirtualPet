@@ -145,14 +145,6 @@ bool CommandExecutor::queueCommandAction(AnimationId id,
     return queued;
 }
 
-void CommandExecutor::queuePostCommandHappyAnimation()
-{
-    if (!animations.hasActionAnimation(AnimationId::Happy))
-        return;
-
-    animations.queueActionAnimation(AnimationId::Happy, gameTick * 1.2, false, AnimationOwner::Command, AnimationPriority::High);
-}
-
 #if ENABLE_COMMAND_GIFT || ENABLE_GUESS_ITEM_GAME
 void CommandExecutor::queueGiftAnimation()
 {
@@ -164,7 +156,6 @@ void CommandExecutor::queueGiftAnimation()
     if (animations.hasActionAnimation(AnimationId::GiftHappy))
         animations.queueActionAnimation(AnimationId::GiftHappy, gameTick * 1.5, false, AnimationOwner::Command, AnimationPriority::High);
 
-    queuePostCommandHappyAnimation();
     animations.markDirty();
 }
 #endif
@@ -199,7 +190,6 @@ void CommandExecutor::commandFeedPet()
     currentResult.layoutId = AnimationId::Feed;
     petActions.feedPet(40);
     queueCommandAction(AnimationId::Feed, gameTick * 1.2);
-    queuePostCommandHappyAnimation();
     animations.markDirty();
 }
 
@@ -226,7 +216,6 @@ void CommandExecutor::commandMedicine()
     currentResult.layoutId = AnimationId::Heal;
     petActions.takeMedicine();
     queueCommandAction(AnimationId::Heal, gameTick * 1.2);
-    queuePostCommandHappyAnimation();
     animations.markDirty();
 }
 
@@ -235,7 +224,6 @@ void CommandExecutor::commandShower()
     currentResult.layoutId = AnimationId::Shower;
     petActions.takeShower(250);
     queueCommandAction(AnimationId::Shower, gameTick * 1.2);
-    queuePostCommandHappyAnimation();
     animations.markDirty();
 }
 
@@ -255,7 +243,6 @@ void CommandExecutor::commandClean()
     currentResult.layoutId = AnimationId::Clean;
     petActions.cleanEnvironment(500);
     queueCommandAction(AnimationId::Clean, gameTick * 1.2);
-    queuePostCommandHappyAnimation();
     animations.markDirty();
 }
 

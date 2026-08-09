@@ -278,7 +278,7 @@ void Game::OnLeftKey()
 
     if (flow.isCommand() || flow.isStartup())
     {
-        commands->next();
+        commands->prev();
         dirtySelect = true;
     }
 }
@@ -310,7 +310,7 @@ void Game::OnRightKey()
 
     if (flow.isCommand() || flow.isStartup())
     {
-        commands->prev();
+        commands->next();
         dirtySelect = true;
     }
 }
