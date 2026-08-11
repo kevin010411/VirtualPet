@@ -4,7 +4,7 @@
 #include <SdFat.h>
 #include "pet_behavior/domain/PetBehaviorTypes.h"
 
-// The parser validates the complete v1 contract before assigning config.
+// The parser validates the complete v2 contract before assigning config.
 bool parsePetBehaviorContract(const char *contractText, PetBehaviorConfig &config);
 
 // The SD loader streams the contract through the same parser and retains no source text.

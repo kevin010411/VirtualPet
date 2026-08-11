@@ -116,8 +116,9 @@ bool parseAnimationToken(const char *token, char *destination, size_t destinatio
     if (length != 5 && length != 6)
         return false;
     uint32_t animation = 0;
-    if (!parseUnsigned(token + 4, 15, animation) ||
-        (length == 6 && (token[4] != '1' || token[5] < '0' || token[5] > '5')) ||
+    if (!parseUnsigned(token + 4, 31, animation) ||
+        (length == 5 && animation > 9) ||
+        (length == 6 && animation < 10) ||
         length >= destinationSize)
         return false;
     strcpy(destination, token);
@@ -199,8 +200,8 @@ public:
             return parseStat(fields, fieldCount);
         case Phase::Idle:
             return parseIdle(fields, fieldCount);
-        case Phase::HealthStatuses:
-            return parseHealthStatus(fields, fieldCount);
+        case Phase::IdleTriggers:
+            return parseIdleTrigger(fields, fieldCount);
         case Phase::Actions:
             return parseAction(fields, fieldCount);
         case Phase::ActionEffects:
@@ -215,7 +216,7 @@ public:
     bool complete(PetBehaviorConfig &destination) const
     {
         if (!finished || !seenFooter || phase != Phase::Buttons ||
-            statsSeen != candidate.statCount || healthStatusesSeen != candidate.healthStatusCount ||
+            statsSeen != candidate.statCount || idleTriggersSeen != candidate.idleTriggerCount ||
             actionsSeen != candidate.actionCount || actionEffectsSeen != candidate.actionEffectCount ||
             buttonsSeen != kPetBehaviorButtonCount)
             return false;
@@ -229,7 +230,7 @@ private:
         Header,
         Stats,
         Idle,
-        HealthStatuses,
+        IdleTriggers,
         Actions,
         ActionEffects,
         Buttons,
@@ -239,7 +240,7 @@ private:
     Phase phase = Phase::Header;
     uint32_t crc = 0xFFFFFFFFUL;
     uint8_t statsSeen = 0;
-    uint8_t healthStatusesSeen = 0;
+    uint8_t idleTriggersSeen = 0;
     uint8_t actionsSeen = 0;
     uint8_t actionEffectsSeen = 0;
     uint8_t buttonsSeen = 0;
@@ -261,14 +262,14 @@ private:
     {
         uint32_t schemaRevision = 0;
         uint32_t statCount = 0;
-        uint32_t healthStatusCount = 0;
+        uint32_t idleTriggerCount = 0;
         uint32_t actionCount = 0;
         uint32_t actionEffectCount = 0;
         uint32_t buttonCount = 0;
-        if (count != 8 || strcmp(fields[0], "pet_behavior") != 0 || strcmp(fields[1], "1") != 0 ||
+        if (count != 8 || strcmp(fields[0], "pet_behavior") != 0 || strcmp(fields[1], "2") != 0 ||
             !parseCrc32(fields[2], schemaRevision) ||
             !parseUnsigned(fields[3], kMaxPetBehaviorStats, statCount) ||
-            !parseUnsigned(fields[4], kMaxPetBehaviorHealthStatuses, healthStatusCount) ||
+            !parseUnsigned(fields[4], kMaxPetBehaviorIdleTriggers, idleTriggerCount) ||
             !parseUnsigned(fields[5], kMaxPetBehaviorActions, actionCount) ||
             !parseUnsigned(fields[6], kMaxPetBehaviorActionEffects, actionEffectCount) ||
             !parseUnsigned(fields[7], kPetBehaviorButtonCount, buttonCount) ||
@@ -277,7 +278,7 @@ private:
 
         candidate.schemaRevision = schemaRevision;
         candidate.statCount = static_cast<uint8_t>(statCount);
-        candidate.healthStatusCount = static_cast<uint8_t>(healthStatusCount);
+        candidate.idleTriggerCount = static_cast<uint8_t>(idleTriggerCount);
         candidate.actionCount = static_cast<uint8_t>(actionCount);
         candidate.actionEffectCount = static_cast<uint8_t>(actionEffectCount);
         candidate.buttonCount = static_cast<uint8_t>(buttonCount);
@@ -317,38 +318,46 @@ private:
             !parseAnimationToken(fields[1], candidate.idleAnimation, sizeof(candidate.idleAnimation)))
             return false;
         idleSeen = true;
-        phase = candidate.healthStatusCount == 0 ?
+        phase = candidate.idleTriggerCount == 0 ?
                     (candidate.actionCount == 0 ?
                          (candidate.actionEffectCount == 0 ? Phase::Buttons : Phase::ActionEffects) :
                          Phase::Actions) :
-                    Phase::HealthStatuses;
+                    Phase::IdleTriggers;
         return true;
     }
 
-    bool parseHealthStatus(char **fields, uint8_t count)
+    bool parseIdleTrigger(char **fields, uint8_t count)
     {
         uint8_t statSlot = 0;
         int16_t threshold = 0;
-        if (count != 4 || strcmp(fields[0], "health_status") != 0 || !parseSlot(fields[1], "custom", statSlot) ||
-            !candidate.stats[statSlot].active || !parseSigned16(fields[2], threshold) ||
-            threshold <= candidate.stats[statSlot].minValue || threshold > candidate.stats[statSlot].maxValue ||
-            healthStatusesSeen >= candidate.healthStatusCount)
+        PetBehaviorIdleTriggerOperator comparison;
+        if (count != 5 || strcmp(fields[0], "idle_trigger") != 0 ||
+            !parseSlot(fields[1], "custom", statSlot) || !candidate.stats[statSlot].active)
+            return false;
+        if (strcmp(fields[2], "<") == 0)
+            comparison = PetBehaviorIdleTriggerOperator::LessThan;
+        else if (strcmp(fields[2], ">") == 0)
+            comparison = PetBehaviorIdleTriggerOperator::GreaterThan;
+        else
+            return false;
+        const PetBehaviorStatConfig &stat = candidate.stats[statSlot];
+        if (!parseSigned16(fields[3], threshold) ||
+            (comparison == PetBehaviorIdleTriggerOperator::LessThan &&
+             (threshold <= stat.minValue || threshold > stat.maxValue)) ||
+            (comparison == PetBehaviorIdleTriggerOperator::GreaterThan &&
+             (threshold < stat.minValue || threshold >= stat.maxValue)) ||
+            idleTriggersSeen >= candidate.idleTriggerCount)
             return false;
 
-        for (uint8_t index = 0; index < healthStatusesSeen; ++index)
-        {
-            if (candidate.healthStatuses[index].statSlot == statSlot)
-                return false;
-        }
-
-        PetBehaviorHealthStatusConfig &status = candidate.healthStatuses[healthStatusesSeen];
-        if (!parseAnimationToken(fields[3], status.animation, sizeof(status.animation)))
+        PetBehaviorIdleTriggerConfig &trigger = candidate.idleTriggers[idleTriggersSeen];
+        if (!parseAnimationToken(fields[4], trigger.animation, sizeof(trigger.animation)))
             return false;
-        status.active = true;
-        status.statSlot = statSlot;
-        status.threshold = threshold;
-        ++healthStatusesSeen;
-        if (healthStatusesSeen == candidate.healthStatusCount)
+        trigger.active = true;
+        trigger.statSlot = statSlot;
+        trigger.comparison = comparison;
+        trigger.threshold = threshold;
+        ++idleTriggersSeen;
+        if (idleTriggersSeen == candidate.idleTriggerCount)
             phase = candidate.actionCount == 0 ?
                         (candidate.actionEffectCount == 0 ? Phase::Buttons : Phase::ActionEffects) :
                         Phase::Actions;
@@ -456,7 +465,7 @@ private:
         uint32_t expected = 0;
         if (count != 2 || strcmp(fields[0], "crc32") != 0 || !parseCrc32(fields[1], expected) ||
             phase != Phase::Buttons || !idleSeen || statsSeen != candidate.statCount ||
-            healthStatusesSeen != candidate.healthStatusCount || actionsSeen != candidate.actionCount ||
+            idleTriggersSeen != candidate.idleTriggerCount || actionsSeen != candidate.actionCount ||
             actionEffectsSeen != candidate.actionEffectCount || buttonsSeen != kPetBehaviorButtonCount ||
             (crc ^ 0xFFFFFFFFUL) != expected)
             return false;
@@ -480,7 +489,6 @@ bool processTextLine(PetBehaviorParser &parser, char *line, size_t length)
 
 bool parsePetBehaviorContract(const char *contractText, PetBehaviorConfig &config)
 {
-    config = {};
     if (contractText == nullptr)
         return false;
 
@@ -510,7 +518,6 @@ bool parsePetBehaviorContract(const char *contractText, PetBehaviorConfig &confi
 
 bool loadPetBehaviorContract(SdFat *sd, PetBehaviorConfig &config)
 {
-    config = {};
     if (sd == nullptr)
         return false;
     File file = sd->open(kPetBehaviorPath, FILE_READ);

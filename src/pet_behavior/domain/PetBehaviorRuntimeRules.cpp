@@ -69,13 +69,18 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
 const char *resolvePetBehaviorBaseAnimation(const PetBehaviorConfig &config,
                                             const PetBehaviorStatValues &state)
 {
-    for (uint8_t index = 0; index < config.healthStatusCount; ++index)
+    for (uint8_t index = 0; index < config.idleTriggerCount; ++index)
     {
-        const PetBehaviorHealthStatusConfig &status = config.healthStatuses[index];
-        if (status.active && status.statSlot < kPetBehaviorSlotCount &&
-            state.values[status.statSlot] < status.threshold)
+        const PetBehaviorIdleTriggerConfig &trigger = config.idleTriggers[index];
+        if (!trigger.active || trigger.statSlot >= kPetBehaviorSlotCount)
+            continue;
+        const int16_t value = state.values[trigger.statSlot];
+        const bool active = trigger.comparison == PetBehaviorIdleTriggerOperator::LessThan ?
+                                value < trigger.threshold :
+                                value > trigger.threshold;
+        if (active)
         {
-            return status.animation;
+            return trigger.animation;
         }
     }
     return config.idleAnimation;
