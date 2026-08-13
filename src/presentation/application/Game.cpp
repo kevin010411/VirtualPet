@@ -638,11 +638,14 @@ bool Game::beginEvolutionAnimation(const AppearanceSelection &selection)
     pendingEvolutionOutfitCode[sizeof(pendingEvolutionOutfitCode) - 1] = '\0';
     pendingEvolution = true;
 
-    const unsigned long evolutionDuration = max(
-        gameTick,
-        static_cast<unsigned long>(animations->frameCountFor(AnimationId::Evolution)) *
-            animations->frameIntervalFor(AnimationId::Evolution));
-    animations->queueAnimation(Animation(AnimationId::Evolution, evolutionDuration, true, AnimationOwner::System, AnimationPriority::Critical));
+    if (!animations->queueRepeatedActionAnimation(
+            "Evolution", 2, AnimationOwner::System, AnimationPriority::Critical))
+    {
+        pendingEvolution = false;
+        pendingEvolutionSpeciesCode[0] = '\0';
+        pendingEvolutionOutfitCode[0] = '\0';
+        return false;
+    }
     animations->markDirty();
     return true;
 }
