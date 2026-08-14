@@ -21,6 +21,7 @@ struct Renderer::AnimationState
     const AnimationMeta *namedAnimationMeta = nullptr;
 #if ENABLE_DEBUG
     RenderStats stats;
+    bool hasRenderedFrame = false;
 #endif
 };
 
@@ -296,6 +297,7 @@ bool Renderer::advanceAnimationFrame()
     {
 #if ENABLE_DEBUG
         updateRenderStats(state->stats, SD, micros() - frameStartUs);
+        state->hasRenderedFrame = true;
 #endif
     }
 
@@ -332,6 +334,11 @@ DebugDisplay &Renderer::debugDisplay()
 void Renderer::renderDebugOverlay()
 {
     debug.render();
+}
+
+bool Renderer::hasRenderedFrame() const
+{
+    return state->hasRenderedFrame;
 }
 #endif
 

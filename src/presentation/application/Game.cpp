@@ -44,12 +44,19 @@ Game::~Game()
 
 bool Game::setup_game()
 {
+    prepare_game();
+    return finish_setup_game();
+}
+
+bool Game::prepare_game()
+{
     initialized = false;
+    setupPrepared = false;
+    initialStateLoadingFailed = false;
     if (petBehaviorLoadingFailed || !loadPetBehaviorContract(animations->sdCard(), petBehaviorConfig))
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
-        renderer.showPetBehaviorLoadingError();
         return false;
     }
     petBehaviorLoaded = true;
@@ -57,7 +64,6 @@ bool Game::setup_game()
     commands->resetSelection();
     animations->setup(petBehaviorConfig.idleAnimation);
     layout->begin();
-    layout->drawAll();
 
     dirtySelect = true;
     environmentCooldown = 0;
@@ -79,8 +85,11 @@ bool Game::setup_game()
     customRules.load(animations->sdCard());
 #endif
 #endif
-    if (!loadInitialPetState(true))
+    if (!loadInitialPetState(true, false))
+    {
+        initialStateLoadingFailed = true;
         return false;
+    }
 
     // A successfully restored appearance is authoritative. Re-evaluating the
     // evolution table here can immediately replace a saved later-stage species
@@ -89,6 +98,23 @@ bool Game::setup_game()
     renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
     renderer.reloadManifest();
     refreshBaseAnimation();
+
+    setupPrepared = true;
+    return true;
+}
+
+bool Game::finish_setup_game()
+{
+    if (!setupPrepared)
+    {
+        if (petBehaviorLoadingFailed)
+            renderer.showPetBehaviorLoadingError();
+        else if (initialStateLoadingFailed)
+            renderer.showInitPetNotExist();
+        return false;
+    }
+
+    layout->drawAll();
 
     initialized = true;
     enterCommand();
@@ -498,7 +524,7 @@ bool Game::isFirstLaunchSelectionPending() const
     return ENABLE_APPEARANCE_SELECTION && ENABLE_FIRST_LAUNCH_SELECTION && !petActions->isFirstLaunchComplete();
 }
 
-bool Game::loadInitialPetState(bool allowSavedState)
+bool Game::loadInitialPetState(bool allowSavedState, bool showError)
 {
     if (allowSavedState && petStorage.load(pet))
     {
@@ -518,7 +544,7 @@ bool Game::loadInitialPetState(bool allowSavedState)
     petBehaviorRuntime->initializeStats();
     const bool applied = pet.setSpeciesCode(initialAppearance.speciesCode) &&
                          pet.setOutfitCode(initialAppearance.outfitCode);
-    if (!applied)
+    if (!applied && showError)
         renderer.showInitPetNotExist();
     return applied;
 }

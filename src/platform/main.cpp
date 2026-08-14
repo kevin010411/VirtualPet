@@ -12,7 +12,9 @@
 
 // 建立 TFT 顯示物件
 SPIClass SPI_2(PB15, BoardConfig::TftRstPin, PB13);
-CalibratedST7735 tft(&SPI_2, BoardConfig::TftCsPin, BoardConfig::TftDcPin, BoardConfig::TftRstPin);
+// TFT reset is sequenced explicitly during startup and recovery. Passing -1
+// prevents Adafruit_SPITFT::initSPI() from repeating another 400 ms reset.
+CalibratedST7735 tft(&SPI_2, BoardConfig::TftCsPin, BoardConfig::TftDcPin, -1);
 
 SdFat SD;
 Pet pet;
@@ -61,11 +63,63 @@ static uint8_t g_backlightTarget = 0;
 static unsigned long g_lastBacklightRampAt = 0;
 static bool g_restoreBacklightAfterRender = false;
 
-static const unsigned long kStartupPowerSettleMs = 300;
+static const unsigned long kStartupPowerSettleMs = 200;
 static const unsigned long kStartupPostSetupMs = 0;
-static const unsigned long kTftPowerSettleMs = 150;
 static const unsigned long kTftStartupResetLowMs = 120;
 static const unsigned long kTftStartupResetHighMs = 120;
+
+#if ENABLE_DEBUG
+struct StartupTiming
+{
+  unsigned long startedAt = 0;
+  unsigned long powerSettleMs = 0;
+  unsigned long sdInitMs = 0;
+  unsigned long tftInitMs = 0;
+  unsigned long gamePrepareMs = 0;
+  unsigned long gameRenderMs = 0;
+  unsigned long gameSetupMs = 0;
+  unsigned long startupReadyMs = 0;
+  bool written = false;
+};
+
+static StartupTiming g_startupTiming;
+
+static void writeStartupTiming(unsigned long firstFrameMs)
+{
+  if (g_startupTiming.written)
+    return;
+
+  g_startupTiming.written = true;
+  File file = SD.open("/boot_timing.txt", O_WRONLY | O_CREAT | O_TRUNC);
+  if (!file)
+    return;
+
+  char content[192] = {};
+  const int length = snprintf(
+      content,
+      sizeof(content),
+      "power_settle_ms=%lu\n"
+      "sd_init_ms=%lu\n"
+      "tft_init_ms=%lu\n"
+      "game_prepare_ms=%lu\n"
+      "game_render_ms=%lu\n"
+      "game_setup_ms=%lu\n"
+      "startup_ready_ms=%lu\n"
+      "first_frame_ms=%lu\n",
+      g_startupTiming.powerSettleMs,
+      g_startupTiming.sdInitMs,
+      g_startupTiming.tftInitMs,
+      g_startupTiming.gamePrepareMs,
+      g_startupTiming.gameRenderMs,
+      g_startupTiming.gameSetupMs,
+      g_startupTiming.startupReadyMs,
+      firstFrameMs);
+  if (length > 0 && static_cast<size_t>(length) < sizeof(content))
+    file.write(reinterpret_cast<const uint8_t *>(content), static_cast<size_t>(length));
+  file.flush();
+  file.close();
+}
+#endif
 
 static uint8_t brightnessForVoltageState(VoltageState state)
 {
@@ -328,6 +382,13 @@ static void configureTft()
   tft.setTextColor(ST77XX_RED);
 }
 
+static void finishPhasedTftStartup()
+{
+  tft.setDisplayOffset(BoardConfig::TftColOffset, BoardConfig::TftRowOffset);
+  tft.fillScreen(ST77XX_BLACK);
+  tft.setTextColor(ST77XX_RED);
+}
+
 static void resetAndInitializeTft(unsigned long lowMs, unsigned long highMs)
 {
   TFT_Reset(lowMs, highMs);
@@ -343,14 +404,13 @@ static void initializeTftDisplay()
 static void beginTftStartupReset()
 {
   setBacklightImmediate(0);
-  delay(kTftPowerSettleMs);
   pinMode(BoardConfig::TftRstPin, OUTPUT);
   digitalWrite(BoardConfig::TftRstPin, HIGH);
   delay(10);
   digitalWrite(BoardConfig::TftRstPin, LOW);
 }
 
-static void finishTftStartupResetAndInitialize(unsigned long resetLowStartedAt)
+static void finishTftStartupReset(unsigned long resetLowStartedAt)
 {
   const unsigned long elapsedLow = millis() - resetLowStartedAt;
   if (elapsedLow < kTftStartupResetLowMs)
@@ -358,9 +418,6 @@ static void finishTftStartupResetAndInitialize(unsigned long resetLowStartedAt)
 
   digitalWrite(BoardConfig::TftRstPin, HIGH);
   delay(kTftStartupResetHighMs);
-  configureTft();
-
-  resetAndInitializeTft(kTftStartupResetLowMs, kTftStartupResetHighMs);
 }
 
 void onConfirmLongPress()
@@ -480,15 +537,26 @@ static void updateVoltageState(unsigned long now)
 
 void setup()
 {
+#if ENABLE_DEBUG
+  g_startupTiming = StartupTiming{};
+  g_startupTiming.startedAt = millis();
+#endif
+
+#if ENABLE_DEBUG
+  const unsigned long powerSettleStartedAt = millis();
+#endif
   delay(kStartupPowerSettleMs);
+#if ENABLE_DEBUG
+  g_startupTiming.powerSettleMs = millis() - powerSettleStartedAt;
+#endif
 
   randomSeed(analogRead(0));
 
   SPI.begin();   // SPI1
   SPI_2.begin(); // SPI2
 
-  // Keep the first TFT reset-low period useful: SD initialization can safely
-  // run while the TFT is held in reset because they use separate chip-selects.
+  // Keep MCU initialization inside the first TFT reset-low period so the
+  // hardware reset remains stable without adding it again to the critical path.
   pinMode(BoardConfig::TftBacklightPin, OUTPUT);
   setBacklightImmediate(0);
   pinMode(BoardConfig::buzzerPin, OUTPUT);
@@ -501,19 +569,66 @@ void setup()
 
   buttons.begin();
 
+#if ENABLE_DEBUG
+  const unsigned long tftInitStartedAt = millis();
+#endif
+  finishTftStartupReset(tftResetLowStartedAt);
+  tft.beginStartup(millis());
+
+  // The controller must finish software reset before Sleep Out. Start the
+  // 500 ms Sleep Out window first, then fill it with SD and game preparation.
+  while (!tft.startupWorkWindowOpen())
+  {
+    tft.advanceStartup(millis());
+    delay(1);
+  }
+
+#if ENABLE_DEBUG
+  const unsigned long sdInitStartedAt = millis();
+#endif
   if (!SD.begin(BoardConfig::SdCsPin, SD_SCK_MHZ(BoardConfig::SdSpiMhz)))
   {
-    finishTftStartupResetAndInitialize(tftResetLowStartedAt);
+#if ENABLE_DEBUG
+    g_startupTiming.sdInitMs = millis() - sdInitStartedAt;
+#endif
+    while (!tft.advanceStartup(millis()))
+      delay(1);
+    finishPhasedTftStartup();
     showSdInitError();
     return;
   }
-
-  finishTftStartupResetAndInitialize(tftResetLowStartedAt);
+#if ENABLE_DEBUG
+  g_startupTiming.sdInitMs = millis() - sdInitStartedAt;
+#endif
 
   g_sdReady = true;
-  g_gameReady = game.setup_game();
+#if ENABLE_DEBUG
+  const unsigned long gamePrepareStartedAt = millis();
+#endif
+  const bool gamePrepared = game.prepare_game();
+#if ENABLE_DEBUG
+  g_startupTiming.gamePrepareMs = millis() - gamePrepareStartedAt;
+  g_startupTiming.gameSetupMs = g_startupTiming.gamePrepareMs;
+#endif
+
+  while (!tft.advanceStartup(millis()))
+    delay(1);
+  finishPhasedTftStartup();
+#if ENABLE_DEBUG
+  g_startupTiming.tftInitMs = millis() - tftInitStartedAt;
+  const unsigned long gameFinishStartedAt = millis();
+#endif
+  g_gameReady = gamePrepared && game.finish_setup_game();
+#if ENABLE_DEBUG
+  g_startupTiming.gameRenderMs = millis() - gameFinishStartedAt;
+  g_startupTiming.gameSetupMs += g_startupTiming.gameRenderMs;
+#endif
   if (!g_gameReady)
+  {
+    if (!gamePrepared)
+      game.finish_setup_game();
     return;
+  }
   if (kStartupPostSetupMs > 0)
     delay(kStartupPostSetupMs);
 
@@ -528,6 +643,9 @@ void setup()
   if (!g_lowBatteryMode)
     game.startStartupAnimation();
   noteInteraction();
+#if ENABLE_DEBUG
+  g_startupTiming.startupReadyMs = millis() - g_startupTiming.startedAt;
+#endif
 }
 
 void loop()
@@ -560,6 +678,11 @@ void loop()
   }
 
   game.loop_game();
+
+#if ENABLE_DEBUG
+  if (renderer.hasRenderedFrame() && !g_startupTiming.written)
+    writeStartupTiming(millis() - g_startupTiming.startedAt);
+#endif
 
   if (g_restoreBacklightAfterRender)
   {

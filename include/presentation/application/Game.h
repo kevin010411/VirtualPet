@@ -32,6 +32,8 @@ public:
     Game &operator=(const Game &) = delete;
 
     bool setup_game();
+    bool prepare_game();
+    bool finish_setup_game();
     void loop_game();
     void requestFullRedraw();
     void redrawAllNow();
@@ -76,6 +78,8 @@ private:
     bool initialized = false;
     bool petBehaviorLoadingFailed = false;
     bool petBehaviorLoaded = false;
+    bool setupPrepared = false;
+    bool initialStateLoadingFailed = false;
     char pendingEvolutionSpeciesCode[9] = {};
     char pendingEvolutionOutfitCode[9] = {};
 
@@ -83,7 +87,7 @@ private:
     void syncActionLayoutWithAnimationQueue();
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
-    bool loadInitialPetState(bool allowSavedState);
+    bool loadInitialPetState(bool allowSavedState, bool showError = true);
     void maybeTickPet(unsigned long elapsed);
     bool completePendingEvolutionIfReady();
     void handleEvolution();

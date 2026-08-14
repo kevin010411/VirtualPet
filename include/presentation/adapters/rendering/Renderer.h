@@ -34,6 +34,7 @@ public:
 #if ENABLE_DEBUG
     DebugDisplay &debugDisplay();
     void renderDebugOverlay();
+    bool hasRenderedFrame() const;
 #endif
     uint16_t frameCountFor(AnimationId id) const;
     uint16_t frameCountForName(const char *name) const;
