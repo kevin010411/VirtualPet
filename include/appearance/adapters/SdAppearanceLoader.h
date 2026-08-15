@@ -3,6 +3,7 @@
 
 #include <SdFat.h>
 #include "appearance/ports/AppearanceLoader.h"
+#include "pet_behavior/domain/PetBehaviorTypes.h"
 
 class SdAppearanceLoader : public AppearanceLoader
 {
@@ -14,8 +15,17 @@ public:
     bool loadSpecies(char species[][9], size_t maxSpecies, size_t &speciesCount) override;
     bool loadOutfits(const char *speciesCode, char outfits[][9], size_t maxOutfits, size_t &outfitCount) override;
     bool findOutfitPreview(const char *speciesCode, const char *outfitCode, OutfitPreview &preview) override;
+    bool validateEvolutionContract(const PetBehaviorConfig &config) override;
 
 private:
+    struct EvolutionStatBinding
+    {
+        char name[kPetBehaviorStatNameSize];
+        uint8_t slot;
+    };
+    EvolutionStatBinding evolutionStats[kPetBehaviorSlotCount] = {};
+    uint8_t evolutionStatCount = 0;
+    bool evolutionContractValidated = false;
     SdFat *sd;
 };
 

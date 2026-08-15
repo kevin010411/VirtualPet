@@ -63,6 +63,11 @@ bool Game::prepare_game()
         return false;
     }
     petBehaviorLoaded = true;
+    if (!appearanceLoader.validateEvolutionContract(petBehaviorConfig))
+    {
+        startupConfigError = "evolution_rules.txt";
+        return false;
+    }
     if (!commandExecutor->validateRequiredContracts(petBehaviorConfig))
     {
         startupConfigError = "status_sets.txt";

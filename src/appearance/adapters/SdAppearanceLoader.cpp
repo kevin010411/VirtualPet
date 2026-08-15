@@ -8,7 +8,6 @@
 namespace
 {
 constexpr const char *kEvolutionRulesPath = "/evolution_rules.txt";
-constexpr const char *kStateSchemaPath = "/state_schema.txt";
 constexpr int32_t kMinConditionValue = -2147483647L - 1L;
 constexpr int32_t kMaxConditionValue = 2147483647L;
 constexpr size_t kMaxStateAliases = 8;
@@ -190,87 +189,23 @@ bool splitFields(char *line, char *fields[], size_t fieldCount)
     return true;
 }
 
-bool parseCustomSlot(const char *text, uint8_t &index)
-{
-    if (text == nullptr || strncmp(text, "custom", 6) != 0 || text[6] == '\0' || text[7] != '\0')
-        return false;
-
-    const char digit = text[6];
-    if (digit < '0' || digit > '7')
-        return false;
-
-    index = static_cast<uint8_t>(digit - '0');
-    return true;
-}
-
-bool parseStateSchemaRow(char *line, StateAlias &alias)
-{
-    char *fields[5] = {};
-    if (!splitFields(line, fields, 5))
-        return false;
-
-    uint8_t customIndex = 0;
-    int32_t minValue = 0;
-    int32_t maxValue = 0;
-    int32_t defaultValue = 0;
-    if (!isValidStatName(fields[0]) ||
-        !parseCustomSlot(fields[1], customIndex) ||
-        !parseSignedField(fields[2], minValue) ||
-        !parseSignedField(fields[3], maxValue) ||
-        !parseSignedField(fields[4], defaultValue) ||
-        minValue > maxValue ||
-        defaultValue < minValue ||
-        defaultValue > maxValue)
-    {
-        return false;
-    }
-
-    strncpy(alias.name, fields[0], sizeof(alias.name) - 1);
-    alias.name[sizeof(alias.name) - 1] = '\0';
-    alias.customIndex = customIndex;
-    alias.minValue = minValue;
-    alias.maxValue = maxValue;
-    alias.defaultValue = defaultValue;
-    return true;
-}
-
-void loadStateAliases(SdFat *sd, StateAlias aliases[], size_t maxAliases, size_t &aliasCount)
+void loadStateAliases(const PetBehaviorConfig &config, StateAlias aliases[], size_t maxAliases, size_t &aliasCount)
 {
     aliasCount = 0;
-    if (sd == nullptr || aliases == nullptr || maxAliases == 0 || !sd->exists(kStateSchemaPath))
+    if (aliases == nullptr || maxAliases == 0)
         return;
-
-    File file = sd->open(kStateSchemaPath, FILE_READ);
-    if (!file)
-        return;
-
-    char line[96] = {};
-    while (readConfigLine(file, line, sizeof(line)) && aliasCount < maxAliases)
+    for (uint8_t slot = 0; slot < kPetBehaviorSlotCount && aliasCount < maxAliases; ++slot)
     {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+        const PetBehaviorStatConfig &stat = config.stats[slot];
+        if (!stat.active)
             continue;
-
-        StateAlias alias = {};
-        if (!parseStateSchemaRow(content, alias))
-            continue;
-
-        bool duplicate = false;
-        for (size_t i = 0; i < aliasCount; ++i)
-        {
-            if (strcmp(aliases[i].name, alias.name) == 0)
-            {
-                duplicate = true;
-                break;
-            }
-        }
-        if (duplicate)
-            continue;
-
-        aliases[aliasCount++] = alias;
+        StateAlias &alias = aliases[aliasCount++];
+        strncpy(alias.name, stat.name, sizeof(alias.name) - 1);
+        alias.customIndex = slot;
+        alias.minValue = stat.minValue;
+        alias.maxValue = stat.maxValue;
+        alias.defaultValue = stat.initialValue;
     }
-
-    file.close();
 }
 
 bool statValueByName(const char *name, const PetStatSnapshot &stats, const StateAlias aliases[], size_t aliasCount, int32_t &value)
@@ -280,39 +215,17 @@ bool statValueByName(const char *name, const PetStatSnapshot &stats, const State
 
     if (strcmp(name, "stage_days") == 0)
         value = static_cast<int32_t>(stats.stage_days);
-    else if (strcmp(name, "health") == 0)
-        value = stats.health;
-    else if (strcmp(name, "age") == 0)
-        value = stats.age;
-    else if (strcmp(name, "hunger") == 0)
-        value = stats.hunger;
-    else if (strcmp(name, "mood") == 0)
-        value = stats.mood;
-    else if (strcmp(name, "clean") == 0)
-        value = stats.clean;
-    else if (strcmp(name, "env") == 0)
-        value = stats.env;
-    else if (strcmp(name, "sick") == 0)
-        value = stats.sick;
-    else if (strcmp(name, "status") == 0)
-        value = stats.status;
     else
     {
-        uint8_t customIndex = 0;
-        if (parseCustomSlot(name, customIndex))
-            value = stats.customStats[customIndex];
-        else
+        for (size_t i = 0; i < aliasCount; ++i)
         {
-            for (size_t i = 0; i < aliasCount; ++i)
-            {
-                if (strcmp(name, aliases[i].name) != 0)
-                    continue;
+            if (strcmp(name, aliases[i].name) != 0)
+                continue;
 
-                value = stats.customStats[aliases[i].customIndex];
-                return true;
-            }
-            return false;
+            value = stats.customStats[aliases[i].customIndex];
+            return true;
         }
+        return false;
     }
 
     return true;
@@ -382,6 +295,12 @@ bool conditionMatches(char *condition,
     if (!isValidStatName(name))
         return false;
 
+    if (strcmp(name, "species") == 0 || strcmp(name, "outfit") == 0)
+    {
+        const char *actual = strcmp(name, "species") == 0 ? stats.species : stats.outfit;
+        return isValidAppearanceCode(rangeText) && strcmp(actual, rangeText) == 0;
+    }
+
     int32_t statValue = 0;
     int32_t minValue = 0;
     int32_t maxValue = 0;
@@ -425,6 +344,53 @@ bool conditionsMatch(char *conditions,
     return true;
 }
 
+bool conditionIsValid(char *condition, const StateAlias aliases[], size_t aliasCount)
+{
+    char *equals = strchr(condition, '=');
+    if (equals == nullptr)
+        return false;
+    *equals = '\0';
+    char *name = trimField(condition);
+    char *value = trimField(equals + 1);
+    if (!isValidStatName(name))
+        return false;
+    if (strcmp(name, "species") == 0 || strcmp(name, "outfit") == 0)
+        return isValidAppearanceCode(value);
+    if (strcmp(name, "stage_days") != 0)
+    {
+        bool found = false;
+        for (size_t index = 0; index < aliasCount; ++index)
+            found = found || strcmp(name, aliases[index].name) == 0;
+        if (!found)
+            return false;
+    }
+    int32_t minimum = 0;
+    int32_t maximum = 0;
+    return parseConditionRange(value, minimum, maximum);
+}
+
+bool conditionsAreValid(char *conditions, const StateAlias aliases[], size_t aliasCount)
+{
+    conditions = trimField(conditions);
+    if (conditions == nullptr)
+        return false;
+    if (conditions[0] == '\0')
+        return true;
+    char *cursor = conditions;
+    while (cursor != nullptr && *cursor != '\0')
+    {
+        char *separator = strchr(cursor, ',');
+        if (separator != nullptr)
+            *separator = '\0';
+        char *condition = trimField(cursor);
+        if (condition == nullptr || condition[0] == '\0' ||
+            !conditionIsValid(condition, aliases, aliasCount))
+            return false;
+        cursor = separator == nullptr ? nullptr : separator + 1;
+    }
+    return true;
+}
+
 bool splitEvolutionRule(char *line, char *&sourceSpecies, char *&speciesCode, char *&outfitCode, char *&conditions)
 {
     char *fields[4] = {};
@@ -447,6 +413,83 @@ bool buildSpeciesOutfitListPath(char *dest, size_t destSize, const char *species
 
     TextBuffer path(dest, destSize);
     return path.append("/index/") && path.append(speciesCode) && path.append(".txt") && path.ok();
+}
+
+bool evolutionSpeciesExists(SdFat *sd, const char *expectedCode)
+{
+    if (sd == nullptr || !isValidAppearanceCode(expectedCode))
+        return false;
+    File file = sd->open(kEvolutionRulesPath, FILE_READ);
+    if (!file)
+        return false;
+    bool found = false;
+    char line[192] = {};
+    while (!found && readConfigLine(file, line, sizeof(line)))
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+        char *sourceSpecies = nullptr;
+        char *speciesCode = nullptr;
+        char *outfitCode = nullptr;
+        char *conditions = nullptr;
+        found = splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions) &&
+                strcmp(speciesCode, expectedCode) == 0;
+    }
+    file.close();
+    return found;
+}
+
+bool outfitExists(SdFat *sd, const char *speciesCode, const char *expectedCode)
+{
+    char path[32] = {};
+    if (sd == nullptr || !isValidAppearanceCode(expectedCode) ||
+        !buildSpeciesOutfitListPath(path, sizeof(path), speciesCode))
+        return false;
+    File file = sd->open(path, FILE_READ);
+    if (!file)
+        return false;
+    bool found = false;
+    char line[128] = {};
+    while (!found && readConfigLine(file, line, sizeof(line)))
+    {
+        char *cursor = trimField(line);
+        while (cursor != nullptr && cursor[0] != '\0')
+        {
+            char *separator = strchr(cursor, '|');
+            if (separator != nullptr)
+                *separator = '\0';
+            found = strcmp(trimField(cursor), expectedCode) == 0;
+            if (found)
+                break;
+            cursor = separator == nullptr ? nullptr : separator + 1;
+        }
+    }
+    file.close();
+    return found;
+}
+
+bool conditionReferencesExist(char *conditions, SdFat *sd, const char *sourceSpecies)
+{
+    char *cursor = trimField(conditions);
+    while (cursor != nullptr && cursor[0] != '\0')
+    {
+        char *separator = strchr(cursor, ',');
+        if (separator != nullptr)
+            *separator = '\0';
+        char *equals = strchr(cursor, '=');
+        if (equals == nullptr)
+            return false;
+        *equals = '\0';
+        const char *name = trimField(cursor);
+        const char *value = trimField(equals + 1);
+        if (strcmp(name, "species") == 0 && !evolutionSpeciesExists(sd, value))
+            return false;
+        if (strcmp(name, "outfit") == 0 && !outfitExists(sd, sourceSpecies, value))
+            return false;
+        cursor = separator == nullptr ? nullptr : separator + 1;
+    }
+    return true;
 }
 
 bool buildOutfitPreviewPath(char *dest, size_t destSize, const char *speciesCode)
@@ -509,6 +552,78 @@ SdAppearanceLoader::SdAppearanceLoader(SdFat *refSd) : sd(refSd)
 {
 }
 
+bool SdAppearanceLoader::validateEvolutionContract(const PetBehaviorConfig &config)
+{
+    evolutionContractValidated = false;
+    evolutionStatCount = 0;
+    if (sd == nullptr || !sd->exists(kEvolutionRulesPath))
+        return false;
+
+    StateAlias aliases[kMaxStateAliases] = {};
+    size_t aliasCount = 0;
+    loadStateAliases(config, aliases, kMaxStateAliases, aliasCount);
+    for (size_t index = 0; index < aliasCount; ++index)
+    {
+        strncpy(evolutionStats[index].name, aliases[index].name, kPetBehaviorStatNameSize - 1);
+        evolutionStats[index].slot = aliases[index].customIndex;
+    }
+    evolutionStatCount = static_cast<uint8_t>(aliasCount);
+    File file = sd->open(kEvolutionRulesPath, FILE_READ);
+    if (!file)
+        return false;
+
+    bool foundInitial = false;
+    bool valid = true;
+    char line[192] = {};
+    while (valid && readConfigLine(file, line, sizeof(line)))
+    {
+        char *content = trimField(line);
+        if (content == nullptr || content[0] == '\0' || content[0] == '#')
+            continue;
+        char *sourceSpecies = nullptr;
+        char *speciesCode = nullptr;
+        char *outfitCode = nullptr;
+        char *conditions = nullptr;
+        if (!splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions))
+        {
+            valid = false;
+            break;
+        }
+        if (strcmp(sourceSpecies, "init") == 0)
+        {
+            valid = !foundInitial && conditions[0] == '\0';
+            foundInitial = true;
+            continue;
+        }
+        valid = conditionsAreValid(conditions, aliases, aliasCount);
+    }
+    file.close();
+    valid = valid && foundInitial;
+    if (valid)
+    {
+        file = sd->open(kEvolutionRulesPath, FILE_READ);
+        valid = static_cast<bool>(file);
+        while (valid && readConfigLine(file, line, sizeof(line)))
+        {
+            char *content = trimField(line);
+            if (content == nullptr || content[0] == '\0' || content[0] == '#')
+                continue;
+            char *sourceSpecies = nullptr;
+            char *speciesCode = nullptr;
+            char *outfitCode = nullptr;
+            char *conditions = nullptr;
+            valid = splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions) &&
+                    outfitExists(sd, speciesCode, outfitCode) &&
+                    (strcmp(sourceSpecies, "init") == 0 ||
+                     (evolutionSpeciesExists(sd, sourceSpecies) &&
+                      conditionReferencesExist(conditions, sd, sourceSpecies)));
+        }
+        file.close();
+    }
+    evolutionContractValidated = valid;
+    return evolutionContractValidated;
+}
+
 bool SdAppearanceLoader::findInitialAppearance(AppearanceSelection &selection)
 {
     selection = {};
@@ -555,8 +670,14 @@ bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats, Appea
         return false;
 
     StateAlias aliases[kMaxStateAliases] = {};
-    size_t aliasCount = 0;
-    loadStateAliases(sd, aliases, kMaxStateAliases, aliasCount);
+    const size_t aliasCount = evolutionStatCount;
+    if (!evolutionContractValidated)
+        return false;
+    for (size_t index = 0; index < aliasCount; ++index)
+    {
+        strncpy(aliases[index].name, evolutionStats[index].name, sizeof(aliases[index].name) - 1);
+        aliases[index].customIndex = evolutionStats[index].slot;
+    }
 
     File file = sd->open(kEvolutionRulesPath, FILE_READ);
     if (!file)
