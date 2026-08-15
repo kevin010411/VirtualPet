@@ -2,9 +2,8 @@
 
 #if ENABLE_GUESS_ITEM_GAME
 
-MinigameController::MinigameController(PetActionController &petActionsRef, AnimationController &animationsRef)
-    : petActions(petActionsRef),
-      animations(animationsRef),
+MinigameController::MinigameController(AnimationController &animationsRef)
+    : animations(animationsRef),
       guessItem(*this)
 {
 }
@@ -57,11 +56,6 @@ void MinigameController::clearAnimationsByOwner(AnimationOwner owner)
 void MinigameController::markAnimationDirty()
 {
     animations.markDirty();
-}
-
-void MinigameController::changePetMood(int delta)
-{
-    petActions.changeMood(delta);
 }
 
 bool MinigameController::hasAnimation(AnimationId id) const

@@ -1,22 +1,10 @@
 # dino/base 外觀動畫 manifest；放在 SD 卡：/index/dino_base.txt
 # 格式：動畫名稱|格式(bmp/rle)|影格數|寬|高|影格間隔毫秒|SD 資源路徑
 
-# 基本狀態動畫
+# Pet Behavior 基礎與 named animations
 Idle|bmp|3|128|96|6|/dino/base/idle
-Happy|bmp|2|128|96|6|/dino/base/happy
-Hungry|bmp|2|128|96|6|/dino/base/hungry
-Depress|bmp|2|128|96|6|/dino/base/depress
-Dirty|bmp|2|128|96|6|/dino/base/dirty
-Clean|bmp|2|128|96|6|/dino/base/clean
-Sick|bmp|2|128|96|6|/dino/base/sick
-Poop|bmp|2|128|96|6|/dino/base/poop
-
-# 指令動畫
-Feed|bmp|2|128|96|8|/dino/base/feed
-Heal|bmp|2|128|96|8|/dino/base/heal
-Shower|bmp|2|128|96|8|/dino/base/shower
-Gift|bmp|3|128|96|8|/dino/base/gift
-GiftHappy|bmp|2|128|96|8|/dino/base/gift_happy
+Wave|bmp|2|128|96|6|/dino/base/wave
+Dance|bmp|2|128|96|8|/dino/base/dance
 
 # 猜物小遊戲動畫
 GuessStart|bmp|2|128|96|8|/dino/guess_game/guess_start

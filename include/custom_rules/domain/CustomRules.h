@@ -19,7 +19,6 @@ public:
     static constexpr uint8_t kStatCount = 8;
     static constexpr uint8_t kMaxDailyRules = 8;
     static constexpr uint8_t kMaxActionRules = 16;
-    static constexpr uint8_t kMaxVariantEffects = 16;
 
     struct StatRule
     {
@@ -46,12 +45,6 @@ public:
         char animation[16] = {};
     };
 
-    struct VariantEffect
-    {
-        char animation[16] = {};
-        int16_t moodDelta = 0;
-    };
-
 #if ENABLE_DEBUG
     bool load(SdFat *sd, DebugDisplay *debug = nullptr);
 #else
@@ -64,7 +57,6 @@ public:
     void applyInitialValues(Pet &pet) const;
     void clampValues(Pet &pet) const;
     void applyDaily(PetActionController &petActions) const;
-    bool applyVariantEffect(const char *animationName, PetActionController &petActions) const;
     bool executeAction(const char *key, PetActionController &petActions, AnimationController &animations) const;
 
 private:
@@ -72,14 +64,11 @@ private:
     StatRule stats[kStatCount] = {};
     DailyRule dailyRules[kMaxDailyRules] = {};
     ActionRule actionRules[kMaxActionRules] = {};
-    VariantEffect variantEffects[kMaxVariantEffects] = {};
     uint8_t dailyRuleCount = 0;
     uint8_t actionRuleCount = 0;
-    uint8_t variantEffectCount = 0;
     bool enabled = false;
 
     const ActionRule *findAction(const char *key) const;
-    const VariantEffect *findVariantEffect(const char *animationName) const;
 #endif
 };
 

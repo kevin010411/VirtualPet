@@ -5,10 +5,10 @@
 ## 擁有者
 
 - `BaseState`
-  - 寵物待機或狀態動畫，例如 `Idle`、`Hungry`、`Sick`
+  - Pet Behavior contract 解析出的基礎動畫，例如 `Idle`
   - 這些動畫應視為備用畫面
 - `Command`
-  - 由按鈕觸發的動作，例如 `Feed`、`Clean`、`Gift`、`Predict`
+  - 由按鈕觸發的 User Action named animation 或 `Predict`
   - 這些動畫代表使用者意圖，應覆蓋基礎狀態播放
 - `Minigame`
   - 互動遊戲流程，例如道具提示、勝負畫面、結果回饋
@@ -40,7 +40,7 @@
 - `BaseState` + `Base`
   - 寵物狀態動畫
 - `Command` + `High`
-  - 餵食、清潔、吃藥、洗澡、送禮、占卜流程
+  - 一般 User Action 與占卜流程
 - `Command` + `Normal`
   - 狀態卡片或資訊類動畫
 - `Minigame` + `Critical`

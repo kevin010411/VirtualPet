@@ -232,7 +232,6 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     host.queueAnimation(Animation(itemResultAnimation(itemSide, player), kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
     if (correct)
     {
-        host.changePetMood(60);
         correctCount++;
 #if !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
         if (host.hasAnimation(AnimationId::GuessRight))
@@ -241,7 +240,6 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     }
     else
     {
-        host.changePetMood(-5);
         wrongCount++;
 #if !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
         if (host.hasAnimation(AnimationId::GuessWrong))

@@ -34,7 +34,7 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
 #endif
 #if ENABLE_GUESS_ITEM_GAME
       ,
-      minigame(std::make_unique<MinigameController>(*petActions, *animations))
+      minigame(std::make_unique<MinigameController>(*animations))
 #endif
 {
 }
@@ -79,7 +79,6 @@ bool Game::prepare_game()
     layout->begin();
 
     dirtySelect = true;
-    environmentCooldown = 0;
     pendingEvolution = false;
     pendingEvolutionSpeciesCode[0] = '\0';
     pendingEvolutionOutfitCode[0] = '\0';
@@ -148,7 +147,7 @@ void Game::loop_game()
         animations->updateElapsed(elapsed);
 
         if (flow.isCommand() || flow.isMinigame())
-            maybeTickPet(elapsed);
+            maybeTickPet();
 
         if (flow.isStartup() && !animations->hasAnimationForOwner(AnimationOwner::System))
         {
@@ -593,7 +592,7 @@ bool Game::startFirstLaunchRequiredCommand()
     return false;
 }
 
-void Game::maybeTickPet(unsigned long elapsed)
+void Game::maybeTickPet()
 {
     if (completePendingEvolutionIfReady())
         return;
@@ -610,28 +609,16 @@ void Game::maybeTickPet(unsigned long elapsed)
             return;
     }
 
-    environmentCooldown -= static_cast<long>(elapsed);
-    if (environmentCooldown <= 0)
-    {
-        petActions->decayEnvironment();
-        environmentCooldown = random(3 * gameTick, 6 * gameTick);
-    }
-
     if (!animations->hasAnimationForOwner(AnimationOwner::Command) &&
         !animations->hasAnimationForOwner(AnimationOwner::Minigame) &&
         !animations->hasAnimationForOwner(AnimationOwner::System))
     {
-        const int probability = 1;
-        const int randValue = random(1001);
         if (!petBehaviorRuntime->advancePetDay())
             return;
-        petActions->dayPassed();
         handleEvolution();
         if (pendingEvolution)
             return;
 
-        if (randValue < probability)
-            petActions->getSick();
     }
 
     refreshBaseAnimation();

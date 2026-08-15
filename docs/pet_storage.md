@@ -16,32 +16,20 @@ Each slot contains one binary `PersistedPetState` record:
 - `magic`
 - `version`
 - `sequence`
-- `hasSick`
-- `ageTenths`
-- `hungry_value`
-- `mood`
-- `clean_value`
-- `env_value`
+- `schemaFingerprint`
 - `species`
 - `outfit`
 - `stage_days`
-- `health`
 - `customStats[8]` (`custom0` through `custom7`)
 - `flowFlags`
 - `crc32`
 
-`version` is currently `10`. Age is stored as an unsigned integer in tenths of a
-year (`1000` means `100.0` years), so normal firmware operation does not need
-floating-point support.
+`version` is currently `12`. Fixed care values, age-tenths, sickness, health,
+and derived health state are not part of runtime or persistent pet state.
+Project-defined Pet Stats are stored in the fixed `customStats` slots.
 
-`status` is not persisted. It is derived whenever needed from hunger, mood,
-environment cleanliness, pet cleanliness, sickness, and the active `PetConfig`.
-Enum values such as `Healthy`, `Hungry`, and `Sick` therefore never become stale
-when thresholds change between firmware builds.
-
-`health` remains persisted because it is a cumulative stage score updated over
-time; it cannot be reconstructed from the current status fields. The same is
-true for `stage_days` and `custom0` through `custom7`.
+`schemaFingerprint` identifies the Project and ordered Pet Stat schema. A
+mismatch discards both save slots instead of migrating values into a new schema.
 
 `flowFlags` stores app-flow state. Bit `0` marks the first-launch flow as
 complete.
@@ -74,9 +62,6 @@ the previous valid slot should remain available for the next boot.
 
 ## Compatibility
 
-The legacy single-slot `/state.bin` and `/state.bak` files remain unsupported.
-Version `7`, `8`, and `9` dual-slot records are accepted once. Version `7` age values
-are converted from IEEE-754 to tenths without adding floating-point support.
-The old stage healthy-day count initializes both `stage_days` and `health`, with
-`health` clamped to `0..100`. Version `9`'s stored `status` is discarded. The
-next save writes the compact version `10` record.
+The legacy single-slot `/state.bin` and `/state.bak` files and earlier dual-slot
+record versions remain unsupported. A version or schema mismatch starts a new
+pet through the normal First Launch flow.

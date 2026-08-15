@@ -19,20 +19,12 @@ public:
     bool saveNow();
     void reset();
     void maybeSave();
-    void decayEnvironment();
-    void dayPassed();
     bool commitPetStats(const int16_t *customStats, size_t customStatCount);
     bool commitPetDay(const int16_t *customStats, size_t customStatCount);
     bool findEvolutionTarget(AppearanceSelection &selection) const;
     bool applyEvolutionTarget();
     bool applyAppearance(const char *speciesCode, const char *outfitCode);
 
-    void feedPet(int addSatiety);
-    void changeMood(int delta);
-    bool takeMedicine();
-    void takeShower(int value);
-    void cleanEnvironment(unsigned int clearValue);
-    void getSick();
     int16_t customStat(uint8_t index) const;
     bool setCustomStat(uint8_t index, int16_t value);
     bool changeCustomStat(uint8_t index, int16_t delta);
@@ -44,15 +36,10 @@ public:
 
     const char *speciesCode() const;
     const char *outfitCode() const;
-    HealthStatus currentStatus() const;
-    bool isMoodDepressed() const;
-    AnimationId currentAnimation() const;
     PetStatSnapshot statSnapshot() const;
 
 private:
     static constexpr uint8_t savePeriodTicks = 2;
-    static constexpr unsigned int environmentDecayAmount = 5;
-
     Pet &pet;
     PetStorage &petStorage;
     Renderer &renderer;

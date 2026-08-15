@@ -72,7 +72,6 @@ private:
 #endif
 
     unsigned long last_tick_time = 0;
-    long environmentCooldown = 0;
     bool dirtySelect = true;
     bool pendingEvolution = false;
     bool initialized = false;
@@ -89,7 +88,7 @@ private:
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
     bool loadInitialPetState(bool allowSavedState, bool showError = true);
-    void maybeTickPet(unsigned long elapsed);
+    void maybeTickPet();
     bool completePendingEvolutionIfReady();
     void handleEvolution();
     bool beginEvolutionAnimation(const AppearanceSelection &selection);

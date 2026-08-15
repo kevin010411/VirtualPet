@@ -41,63 +41,10 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_start
 
 ## Command Registry 與 Menu Profile
 
-Command 被拆成兩個概念：
-
-1. Command Registry
-
-   Registry 定義這份韌體「知道怎麼執行」的所有 command。
-   位置在 `src/app/Game.cpp` 的 `Game::commandRegistry`。
-
-   例子：
-
-   - `NoOp`
-   - `FeedPet`
-   - `Predict`
-   - `Gift`
-   - `Medicine`
-   - `Shower`
-   - `HaveFun`
-   - `Clean`
-   - `ChangeOutfit`
-   - `Status`
-
-2. Menu Profile
-
-   Profile 決定目前韌體版本的 8 個選單 slot 要放哪些 command。
-   位置在 `src/app/Game.cpp` 的 `Game::profileCommands`。
-
-   Slot 順序就是陣列順序：
-
-   ```cpp
-   const Game::Command Game::profileCommands[] = {
-       Command::FeedPet,   // slot 1
-       Command::Predict,   // slot 2
-       Command::Gift,      // slot 3
-       Command::Medicine,  // slot 4
-       Command::Shower,    // slot 5
-       Command::HaveFun,   // slot 6
-       Command::Clean,     // slot 7
-       Command::Status,    // slot 8
-   };
-   ```
-
-如果要改某個 profile 的 slot 6 或 slot 7，就修改 `profileCommands` 裡對應的 `#if APP_PROFILE == ...` 區塊。
-
-例子：
-
-```cpp
-#elif APP_PROFILE == APP_PROFILE_DEFAULT_SMALL
-    Command::FeedPet,
-    Command::NoOp,
-    Command::NoOp,
-    Command::Medicine,
-    Command::Shower,
-    Command::HaveFun,
-    Command::Clean,
-    Command::Status,
-```
-
-`Command::NoOp` 表示這個 slot 沒有 command。左右切換選單時會跳過 NoOp slot，但仍會畫出該 slot 的一般 layout frame。
+韌體透過 `SystemCommandCatalog.def` 編譯固定的 System Commands：`predict`、
+`guess_game`、`status`、`change_outfit` 與 `change_species`。實際八個按鍵 slot
+由 `/pet_behavior.txt` 的 Command Layout 配置為空白、User Action 或可用的
+System Command；Feed、Medicine、Shower、Clean 與 Gift 不再是固定 command。
 
 ## STATUS 模式
 
@@ -110,7 +57,6 @@ Command 被拆成兩個概念：
 | `STATUS_MODE_AGE` | 目前原本行為，使用 `Pet::CurrentAgeAnimation()` 與 `Pet::CurrentAgeFrame()` |
 | `STATUS_MODE_STATUS` | 播放目前外觀 manifest 中的 `Status` 動畫 |
 | `STATUS_MODE_RANDOM3` | 從目前外觀 manifest 中存在的 `StatusAge`、`StatusHappy`、`StatusHungry` 隨機選，再依對應數值顯示固定 frame |
-| `STATUS_MODE_COMPOSITE` | 依 `Pet::isMoodDepressed()` 與目前主要狀態選擇 10 種 `StatusGood*` / `StatusDepressed*` 動畫之一 |
 
 `Status` animation 只由 `STATUS_MODE_STATUS` 使用；其他 STATUS mode 不會先檢查或優先播放 `Status`。`STATUS_MODE_RANDOM3` 由 `Status*` 素材列控制顯示候選，沒有列在 index 或沒有 frame 的項目不會被選到。`StatusAge` 依 age 選 frame，`StatusHappy` 依 mood 選 frame，`StatusHungry` 依 hungry value 選 frame。
 
@@ -128,31 +74,6 @@ build_flags =
 
 如果 `STATUS_MODE_RANDOM3` 沒有可用候選動畫，程式會 fallback 回年齡狀態。
 
-`STATUS_MODE_COMPOSITE` 不做 fallback。執行 `STATUS` 時會先讀取目前 mood：
-
-- `mood <= depressed_threshold` 時使用 `StatusDepressed*`
-- 其他情況使用 `StatusGood*`
-
-主要狀態仍然只會選一個：`Healthy`、`Sick`、`Hungry`、`Poop`、`Dirty`。舊有 `HealthStatus::Depressed` 在 composite 顯示中視為 `Depressed + Healthy`，因為 mood 已經由 `isMoodDepressed()` 獨立判斷。
-
-Composite mode 需要在目前外觀 manifest 中提供下列動畫 id：
-
-```txt
-StatusGoodHealthy
-StatusGoodSick
-StatusGoodHungry
-StatusGoodPoop
-StatusGoodDirty
-StatusDepressedHealthy
-StatusDepressedSick
-StatusDepressedHungry
-StatusDepressedPoop
-StatusDepressedDirty
-```
-
-若選出的 composite animation 沒有列在 index、frame count 為 `0`，或資源讀取失敗，韌體會直接在 TFT 顯示 `resource error`，不會退回 `StatusAge`、`Status`、`Idle` 或其他動畫。
-
-Composite mode 也會改變 `dayPassed()` 在非健康狀態下的行為：只有 `APP_STATUS_MODE=STATUS_MODE_COMPOSITE` 時，非 `Healthy` 仍會讓 mood 自然下降；其他 STATUS mode 維持原本「非 Healthy 時不更新 hunger、age 與 clean」的行為。所有模式都會讓 `stage_days` 增加；健康時 `health +1`，非健康時 `health -1`，範圍限制為 `0..100`。環境值仍由獨立的環境衰退計時器更新。
 
 ## Feature Gate 與 Flash 控制
 
@@ -211,21 +132,7 @@ build_flags =
    lib_deps = ${common.lib_deps}
    ```
 
-3. 在 `Game::profileCommands` 加入該 profile 的 slot map。
-
-   ```cpp
-#elif APP_PROFILE == APP_PROFILE_VENDOR_C
-       Command::FeedPet,
-       Command::Predict,
-       Command::Gift,
-       Command::Medicine,
-       Command::Shower,
-       Command::Gift,
-       Command::NoOp,
-       Command::Status,
-   ```
-
-4. 建置新 env。
+3. 建置新 env。
 
    ```powershell
    C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e vendor_c

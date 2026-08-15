@@ -15,7 +15,7 @@
 ```
 
 `main.txt` 放共用或系統資源，例如 `Battery`、`Layout`、`LayoutSel`。  
-`{species}_{outfit}.txt` 放該外觀的寵物動作與互動動畫，例如 `Idle`、`Feed`、`GuessWin`，以及行為的多版本動畫。
+`{species}_{outfit}.txt` 放該外觀的寵物動作與互動動畫，例如 `Idle`、`Dance`、`GuessWin`，以及行為的多版本動畫。
 
 換裝 command 另外會讀取：
 
@@ -61,7 +61,7 @@ Idle|rle|167|3|128|96|/dino/base/idle
 
 - `id`
   - 必須與韌體中的 animation id 名稱完全相同
-  - 範例：`Idle`、`Hungry`、`Feed`、`Status`、`StatusGoodHealthy`、`GuessWin`、`Battery`
+  - 範例：`Idle`、`Status`、`GuessWin`、`Battery`，或 Pet Behavior contract 使用的 named animation
 - `format`
   - 目前韌體只支援 `rle`
 - `frame_ms`
@@ -105,8 +105,8 @@ LayoutSel|bmp|8|32|32|0|/layout_sel
 
 ```txt
 Idle|rle|167|3|128|96|/dino/base/idle
-Happy|rle|167|2|128|96|/dino/base/happy
-Feed|rle|125|2|128|96|/dino/base/feed
+Wave|rle|167|2|128|96|/dino/base/wave
+Dance|rle|125|2|128|96|/dino/base/dance
 GuessWin|rle|100|5|128|96|/dino/guess_game/win
 ```
 
@@ -114,7 +114,7 @@ GuessWin|rle|100|5|128|96|/dino/guess_game/win
 
 ```txt
 Idle|rle|125|7|128|96|/dino/hat/idle
-Happy|rle|167|2|128|96|/dino/base/happy
+Wave|rle|167|2|128|96|/dino/base/wave
 ```
 
 ## 行為多版本動畫
@@ -122,19 +122,15 @@ Happy|rle|167|2|128|96|/dino/base/happy
 多版本只由外觀 manifest（`/index/{species}_{outfit}.txt`）載入。以行為的既有名稱加上正整數後綴宣告版本：
 
 ```txt
-Gift1|rle|167|3|128|96|/dino/base/gift_1
-Gift2|rle|167|3|128|96|/dino/base/gift_2
-Shower1|rle|125|2|128|96|/dino/base/shower_1
 Dance1|rle|167|4|128|96|/dino/base/dance_1
 Dance2|rle|167|4|128|96|/dino/base/dance_2
 ```
 
 - 同一行為有一個或多個版本時，韌體優先使用版本；多個版本以等機率隨機挑選，單一版本固定播放。
-- 沒有版本時，韌體會播放同名的固定動畫，例如 `Gift`。
-- 內建行為與 `custom_rules.txt` 的自訂 action 都適用；例如自訂 rule 設定動畫為 `Dance` 時，會選擇 `Dance1` 或 `Dance2`。
+- 沒有版本時，韌體會播放同名的 named animation，例如 `Dance`。
+- Pet Behavior User Action 與 `custom_rules.txt` 的自訂 action 都可使用 named animation；例如設定動畫為 `Dance` 時，會選擇 `Dance1` 或 `Dance2`。
 - 固定動畫與版本動畫都缺少時，行為數值仍會更新，TFT 會顯示 `resource error`。
 - 每個已載入外觀最多 16 個版本動畫；第 17 筆會觸發資源容量錯誤。切換外觀時會清空並重新使用這個固定容量，不會配置 heap。
-- 若 `/custom_rules.txt` 定義 `variant_effect|Gift1|mood|10`，Gift command 隨機選到 `Gift1` 時會套用 `mood +10`；有定義版本效果時，它會取代 Gift 內建的 `mood +50`。
 
 `/index/pet.txt`：
 
@@ -164,6 +160,3 @@ STATUS command 的素材需求由 `APP_STATUS_MODE` 決定：
 - `STATUS_MODE_STATUS` 使用 `Status`。
 - `STATUS_MODE_AGE` 使用 `StatusAge`。
 - `STATUS_MODE_RANDOM3` 從 `StatusAge`、`StatusHappy`、`StatusHungry` 中選擇可用項目。
-- `STATUS_MODE_COMPOSITE` 使用 `StatusGoodHealthy`、`StatusGoodSick`、`StatusGoodHungry`、`StatusGoodPoop`、`StatusGoodDirty`、`StatusDepressedHealthy`、`StatusDepressedSick`、`StatusDepressedHungry`、`StatusDepressedPoop`、`StatusDepressedDirty`。
-
-`STATUS_MODE_COMPOSITE` 不會 fallback；選出的 composite animation 缺少 index row 或 frame 時，TFT 會顯示 `resource error`。

@@ -64,16 +64,6 @@ void PetActionController::maybeSave()
     saveNow();
 }
 
-void PetActionController::decayEnvironment()
-{
-    pet.decayEnvironment(environmentDecayAmount);
-}
-
-void PetActionController::dayPassed()
-{
-    pet.dayPassed();
-}
-
 bool PetActionController::commitPetDay(const int16_t *customStats, size_t customStatCount)
 {
     return pet.commitPetDay(customStats, customStatCount);
@@ -109,36 +99,6 @@ bool PetActionController::applyAppearance(const char *speciesCode, const char *o
     renderer.setAssetAppearance(pet.speciesCode(), pet.outfitCode());
     renderer.reloadManifest();
     return saveNow();
-}
-
-void PetActionController::feedPet(int addSatiety)
-{
-    pet.feedPet(addSatiety);
-}
-
-void PetActionController::changeMood(int delta)
-{
-    pet.changeMood(delta);
-}
-
-bool PetActionController::takeMedicine()
-{
-    return pet.takeMedicine();
-}
-
-void PetActionController::takeShower(int value)
-{
-    pet.takeShower(value);
-}
-
-void PetActionController::cleanEnvironment(unsigned int clearValue)
-{
-    pet.cleanEnv(clearValue);
-}
-
-void PetActionController::getSick()
-{
-    pet.getSick();
 }
 
 int16_t PetActionController::customStat(uint8_t index) const
@@ -184,21 +144,6 @@ const char *PetActionController::speciesCode() const
 const char *PetActionController::outfitCode() const
 {
     return pet.outfitCode();
-}
-
-HealthStatus PetActionController::currentStatus() const
-{
-    return pet.getStatus();
-}
-
-bool PetActionController::isMoodDepressed() const
-{
-    return pet.isMoodDepressed();
-}
-
-AnimationId PetActionController::currentAnimation() const
-{
-    return pet.CurrentAnimation();
 }
 
 PetStatSnapshot PetActionController::statSnapshot() const

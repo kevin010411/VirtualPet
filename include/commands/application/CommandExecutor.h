@@ -44,14 +44,6 @@ private:
 #if ENABLE_COMMAND_PREDICT
     static AnimationId fortuneToAnimationId(int fortuneIndex);
 #endif
-    bool queueCommandAction(AnimationId id,
-                            unsigned long durationMs,
-                            bool playOnce = false,
-                            char *selectedName = nullptr,
-                            size_t selectedNameSize = 0);
-#if ENABLE_COMMAND_GIFT || ENABLE_GUESS_ITEM_GAME
-    void queueGiftAnimation();
-#endif
     void queueStatusAnimation();
     void showStatusNotFound();
     bool queueStatusSetsAnimation();
@@ -65,19 +57,12 @@ private:
     bool commandCanCustomAction(uint8_t slot) const;
 #endif
     void commandClearCommandAnimations() override;
-    void commandFeedPet();
 #if ENABLE_COMMAND_PREDICT
     void commandPredict() override;
 #endif
-#if ENABLE_COMMAND_GIFT
-    void commandGift();
-#endif
-    void commandMedicine();
-    void commandShower();
 #if ENABLE_GUESS_ITEM_GAME
     void commandHaveFun() override;
 #endif
-    void commandClean();
 #if ENABLE_COMMAND_OUTFIT
     void commandChangeOutfit() override;
 #endif

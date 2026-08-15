@@ -10,13 +10,8 @@
 enum class AppCommandId : uint8_t
 {
     None = APP_COMMAND_NONE,
-    FeedPet = APP_COMMAND_FEED_PET,
     Predict = APP_COMMAND_PREDICT,
-    Gift = APP_COMMAND_GIFT,
-    Medicine = APP_COMMAND_MEDICINE,
-    Shower = APP_COMMAND_SHOWER,
     HaveFun = APP_COMMAND_HAVE_FUN,
-    Clean = APP_COMMAND_CLEAN,
     ChangeOutfit = APP_COMMAND_CHANGE_OUTFIT,
     Status = APP_COMMAND_STATUS,
     ChangeSpecies = APP_COMMAND_CHANGE_SPECIES,

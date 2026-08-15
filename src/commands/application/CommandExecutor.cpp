@@ -208,34 +208,6 @@ AnimationId CommandExecutor::fortuneToAnimationId(int fortuneIndex)
 }
 #endif
 
-bool CommandExecutor::queueCommandAction(AnimationId id,
-                                         unsigned long durationMs,
-                                         bool playOnce,
-                                         char *selectedName,
-                                         size_t selectedNameSize)
-{
-    const bool queued = animations.queueActionAnimation(
-        id, durationMs, playOnce, AnimationOwner::Command, AnimationPriority::High, selectedName, selectedNameSize);
-    if (!queued)
-        animations.showResourceError();
-    return queued;
-}
-
-#if ENABLE_COMMAND_GIFT || ENABLE_GUESS_ITEM_GAME
-void CommandExecutor::queueGiftAnimation()
-{
-    char selectedAnimation[16] = {};
-    const bool queued = queueCommandAction(AnimationId::Gift, gameTick * 2.5, false, selectedAnimation, sizeof(selectedAnimation));
-    if (!queued || !customRules.applyVariantEffect(selectedAnimation, petActions))
-        petActions.changeMood(50);
-
-    if (animations.hasActionAnimation(AnimationId::GiftHappy))
-        animations.queueActionAnimation(AnimationId::GiftHappy, gameTick * 1.5, false, AnimationOwner::Command, AnimationPriority::High);
-
-    animations.markDirty();
-}
-#endif
-
 bool CommandExecutor::commandHasAnimation(AnimationId id) const
 {
     return animations.hasActionAnimation(id);
@@ -261,14 +233,6 @@ void CommandExecutor::commandClearCommandAnimations()
     animations.clearByOwner(AnimationOwner::Command);
 }
 
-void CommandExecutor::commandFeedPet()
-{
-    currentResult.layoutId = AnimationId::Feed;
-    petActions.feedPet(40);
-    queueCommandAction(AnimationId::Feed, gameTick * 1.2);
-    animations.markDirty();
-}
-
 #if ENABLE_COMMAND_PREDICT
 void CommandExecutor::commandPredict()
 {
@@ -279,48 +243,14 @@ void CommandExecutor::commandPredict()
 }
 #endif
 
-#if ENABLE_COMMAND_GIFT
-void CommandExecutor::commandGift()
-{
-    currentResult.layoutId = AnimationId::Gift;
-    queueGiftAnimation();
-}
-#endif
-
-void CommandExecutor::commandMedicine()
-{
-    currentResult.layoutId = AnimationId::Heal;
-    petActions.takeMedicine();
-    queueCommandAction(AnimationId::Heal, gameTick * 1.2);
-    animations.markDirty();
-}
-
-void CommandExecutor::commandShower()
-{
-    currentResult.layoutId = AnimationId::Shower;
-    petActions.takeShower(250);
-    queueCommandAction(AnimationId::Shower, gameTick * 1.2);
-    animations.markDirty();
-}
-
 #if ENABLE_GUESS_ITEM_GAME
 void CommandExecutor::commandHaveFun()
 {
     animations.clearByOwner(AnimationOwner::Command);
-    if (canPlayGuessItemGame())
-        currentResult.requestedMinigame = true;
-    else
-        queueGiftAnimation();
+    currentResult.requestedMinigame = canPlayGuessItemGame();
+    currentResult.executed = currentResult.requestedMinigame;
 }
 #endif
-
-void CommandExecutor::commandClean()
-{
-    currentResult.layoutId = AnimationId::Clean;
-    petActions.cleanEnvironment(500);
-    queueCommandAction(AnimationId::Clean, gameTick * 1.2);
-    animations.markDirty();
-}
 
 #if ENABLE_COMMAND_OUTFIT
 void CommandExecutor::commandChangeOutfit()
