@@ -9,12 +9,22 @@ namespace
 PetBehaviorConfig behaviorConfig()
 {
     PetBehaviorConfig config = {};
-    config.stats[0] = {true, 10, -20, 20, -7};
-    config.stats[3] = {true, 100, 0, 100, 50};
+    config.stats[0].active = true;
+    strcpy(config.stats[0].name, "energy");
+    config.stats[0].initialValue = 10;
+    config.stats[0].minValue = -20;
+    config.stats[0].maxValue = 20;
+    config.stats[0].dailyChange = -7;
+    config.stats[3].active = true;
+    strcpy(config.stats[3].name, "health");
+    config.stats[3].initialValue = 100;
+    config.stats[3].minValue = 0;
+    config.stats[3].maxValue = 100;
+    config.stats[3].dailyChange = 50;
     config.statCount = 2;
     config.actions[2].active = true;
     strcpy(config.actions[2].animation, "anim4");
-    config.actions[2].playbackCount = 10;
+    config.actions[2].playbackCount = 5;
     config.actionCount = 1;
     return config;
 }
@@ -45,10 +55,10 @@ void testZeroAndCompoundEffectsExecuteWithoutRequirements()
     assert(applyPetBehaviorAction(config, 2, state, playback));
     assert(state.values[0] == 10);
     assert(strcmp(playback.animation, "anim4") == 0);
-    assert(playback.playbackCount == 10);
+    assert(playback.playbackCount == 5);
 
-    config.actionEffects[0] = {true, 2, 0, INT16_MAX};
-    config.actionEffects[1] = {true, 2, 3, INT16_MIN};
+    config.actionEffects[0] = {true, 2, 0, PetBehaviorActionEffectConfig::Operation::Change, INT16_MAX};
+    config.actionEffects[1] = {true, 2, 3, PetBehaviorActionEffectConfig::Operation::Set, INT16_MIN};
     config.actionEffectCount = 2;
     assert(applyPetBehaviorAction(config, 2, state, playback));
     assert(state.values[0] == 20);
@@ -66,7 +76,7 @@ void testInactiveOrInvalidActionsDoNotMutateState()
     assert(!applyPetBehaviorAction(config, 7, state, playback));
     assert(memcmp(&state, &before, sizeof(state)) == 0);
 
-    config.actionEffects[0] = {true, 2, 7, 5};
+    config.actionEffects[0] = {true, 2, 7, PetBehaviorActionEffectConfig::Operation::Change, 5};
     config.actionEffectCount = 1;
     assert(!applyPetBehaviorAction(config, 2, state, playback));
     assert(memcmp(&state, &before, sizeof(state)) == 0);

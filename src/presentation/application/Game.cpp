@@ -53,13 +53,21 @@ bool Game::prepare_game()
     initialized = false;
     setupPrepared = false;
     initialStateLoadingFailed = false;
+    if (startupConfigError != nullptr)
+        return false;
     if (petBehaviorLoadingFailed || !loadPetBehaviorContract(animations->sdCard(), petBehaviorConfig))
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
+        startupConfigError = "pet_behavior.txt";
         return false;
     }
     petBehaviorLoaded = true;
+    if (!commandExecutor->validateRequiredContracts(petBehaviorConfig))
+    {
+        startupConfigError = "status_sets.txt";
+        return false;
+    }
     commands->configure(petBehaviorConfig);
     commands->resetSelection();
     animations->setup(petBehaviorConfig.idleAnimation);
@@ -107,8 +115,8 @@ bool Game::finish_setup_game()
 {
     if (!setupPrepared)
     {
-        if (petBehaviorLoadingFailed)
-            renderer.showPetBehaviorLoadingError();
+        if (startupConfigError != nullptr)
+            renderer.showConfigLoadingError(startupConfigError);
         else if (initialStateLoadingFailed)
             renderer.showInitPetNotExist();
         return false;
@@ -229,7 +237,7 @@ void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfi
 {
     if (petBehaviorLoadingFailed)
     {
-        renderer.showPetBehaviorLoadingError();
+        renderer.showConfigLoadingError("pet_behavior.txt");
         return;
     }
     if (!pet.setSpeciesCode(speciesCode) || !pet.setOutfitCode(outfitCode))

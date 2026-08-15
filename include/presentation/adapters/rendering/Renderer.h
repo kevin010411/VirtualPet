@@ -28,7 +28,7 @@ public:
     bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
     void showInitPetNotExist();
-    void showPetBehaviorLoadingError();
+    void showConfigLoadingError(const char *resource);
     void showResourceError();
     void showStatusNotFound();
 #if ENABLE_DEBUG

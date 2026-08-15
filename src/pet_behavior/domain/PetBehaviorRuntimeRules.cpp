@@ -54,8 +54,9 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
             return false;
 
         const PetBehaviorStatConfig &stat = config.stats[effect.statSlot];
-        next.values[effect.statSlot] = clampedChange(
-            next.values[effect.statSlot], effect.delta, stat.minValue, stat.maxValue);
+        next.values[effect.statSlot] = effect.operation == PetBehaviorActionEffectConfig::Operation::Set
+                                          ? clampedChange(0, effect.value, stat.minValue, stat.maxValue)
+                                          : clampedChange(next.values[effect.statSlot], effect.value, stat.minValue, stat.maxValue);
     }
 
     state = next;

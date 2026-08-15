@@ -80,6 +80,7 @@ private:
     bool petBehaviorLoaded = false;
     bool setupPrepared = false;
     bool initialStateLoadingFailed = false;
+    const char *startupConfigError = nullptr;
     char pendingEvolutionSpeciesCode[9] = {};
     char pendingEvolutionOutfitCode[9] = {};
 

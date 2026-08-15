@@ -7,6 +7,7 @@
 #include "pet/application/PetActionController.h"
 
 class CustomRules;
+struct PetBehaviorConfig;
 
 struct CommandResult
 {
@@ -25,6 +26,7 @@ public:
 
     void begin(AppCommandId commandId);
     CommandResult complete(bool executed);
+    bool validateRequiredContracts(const PetBehaviorConfig &config) const;
 
 private:
     static constexpr unsigned long gameTick = 2000;

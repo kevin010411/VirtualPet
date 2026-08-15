@@ -315,9 +315,9 @@ void Renderer::showInitPetNotExist()
     FrameDecoder::showInitPetNotExist(tft);
 }
 
-void Renderer::showPetBehaviorLoadingError()
+void Renderer::showConfigLoadingError(const char *resource)
 {
-    FrameDecoder::showPetBehaviorLoadingError(tft);
+    FrameDecoder::showConfigLoadingError(tft, resource);
 }
 
 void Renderer::showStatusNotFound()

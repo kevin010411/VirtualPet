@@ -12,11 +12,13 @@ constexpr uint8_t kMaxPetBehaviorActionEffects = kMaxPetBehaviorActions * kMaxPe
 constexpr uint8_t kPetBehaviorButtonCount = 8;
 constexpr size_t kPetBehaviorAnimationTokenSize = 8;
 constexpr size_t kPetBehaviorSystemCommandTokenSize = 16;
+constexpr size_t kPetBehaviorStatNameSize = 17;
 constexpr size_t kMaxPetBehaviorContractBytes = 4096;
 
 struct PetBehaviorStatConfig
 {
     bool active;
+    char name[kPetBehaviorStatNameSize];
     int16_t initialValue;
     int16_t minValue;
     int16_t maxValue;
@@ -50,7 +52,12 @@ struct PetBehaviorActionEffectConfig
     bool active;
     uint8_t actionSlot;
     uint8_t statSlot;
-    int16_t delta;
+    enum class Operation : uint8_t
+    {
+        Change,
+        Set,
+    } operation;
+    int16_t value;
 };
 
 enum class PetBehaviorButtonKind : uint8_t

@@ -4,6 +4,7 @@
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/StatusSetSelection.h"
 #include "custom_rules/domain/CustomRules.h"
+#include "pet_behavior/domain/PetBehaviorTypes.h"
 #include "shared/assets/AssetManifest.h"
 
 namespace
@@ -99,6 +100,41 @@ CommandResult CommandExecutor::complete(bool executed)
 {
     currentResult.executed = executed && currentResult.executed;
     return currentResult;
+}
+
+bool CommandExecutor::validateRequiredContracts(const PetBehaviorConfig &config) const
+{
+    bool statusRequired = false;
+    for (uint8_t index = 0; index < config.buttonCount; ++index)
+    {
+        const PetBehaviorButtonConfig &button = config.buttons[index];
+        if (button.active && button.kind == PetBehaviorButtonKind::SystemCommand &&
+            strcmp(button.systemCommand, "status") == 0)
+        {
+            statusRequired = true;
+            break;
+        }
+    }
+    if (!statusRequired)
+        return true;
+
+    StatusSetsConfig statusConfig = {};
+    if (!loadStatusSetsConfig(animations.sdCard(), statusConfig))
+        return false;
+    for (uint8_t setIndex = 0; setIndex < statusConfig.count; ++setIndex)
+    {
+        const StatusSetConfig &set = statusConfig.sets[setIndex];
+        for (uint8_t conditionIndex = 0; conditionIndex < set.conditionCount; ++conditionIndex)
+        {
+            const char *source = set.conditions[conditionIndex].source;
+            if (strncmp(source, "custom", 6) != 0)
+                continue;
+            const uint8_t statSlot = static_cast<uint8_t>(source[6] - '0');
+            if (statSlot >= kPetBehaviorSlotCount || !config.stats[statSlot].active)
+                return false;
+        }
+    }
+    return true;
 }
 
 #if ENABLE_COMMAND_PREDICT

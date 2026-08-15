@@ -6,7 +6,7 @@
 namespace
 {
 constexpr const char *kMinimalContract =
-    "pet_behavior|1|00000000|0|0|0|0|8\n"
+    "pet_behavior|3|00000000|0|0|0|0|8\n"
     "idle|anim0\n"
     "button|1|empty|\n"
     "button|2|empty|\n"
@@ -16,7 +16,7 @@ constexpr const char *kMinimalContract =
     "button|6|empty|\n"
     "button|7|empty|\n"
     "button|8|empty|\n"
-    "crc32|7B21D0E5\n";
+    "crc32|66F8A164\n";
 
 void assertRejectedAndCleared(const char *contract)
 {
@@ -33,7 +33,7 @@ void testMinimalContractParsesCountsAndButtons()
     PetBehaviorConfig config = {};
     assert(parsePetBehaviorContract(kMinimalContract, config));
     assert(config.statCount == 0);
-    assert(config.healthStatusCount == 0);
+    assert(config.idleTriggerCount == 0);
     assert(config.actionCount == 0);
     assert(config.actionEffectCount == 0);
     assert(config.buttonCount == 8);
@@ -46,11 +46,11 @@ void testMalformedContractsFailClosed()
 {
     assertRejectedAndCleared("");
     assertRejectedAndCleared(
-        "pet_behavior|1|00000000|0|0|0|0|8\n"
+        "pet_behavior|3|00000000|0|0|0|0|8\n"
         "idle|anim0\n"
         "crc32|00000000\n");
     assertRejectedAndCleared(
-        "pet_behavior|1|00000000|0|0|0|0|8\n"
+        "pet_behavior|3|00000000|0|0|0|0|8\n"
         "idle|anim0\n"
         "button|1|empty|\n"
         "button|2|empty|\n"

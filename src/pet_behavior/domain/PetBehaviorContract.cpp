@@ -125,6 +125,33 @@ bool parseAnimationToken(const char *token, char *destination, size_t destinatio
     return true;
 }
 
+bool parseStatName(const char *value, char *destination, size_t destinationSize)
+{
+    if (value == nullptr || destination == nullptr || destinationSize == 0)
+        return false;
+    const size_t length = strlen(value);
+    if (length == 0 || length >= destinationSize || value[0] < 'a' || value[0] > 'z')
+        return false;
+    for (size_t index = 1; index < length; ++index)
+    {
+        const char character = value[index];
+        if (!((character >= 'a' && character <= 'z') ||
+              (character >= '0' && character <= '9') || character == '_'))
+            return false;
+    }
+    constexpr const char *reserved[] = {
+        "predict", "guess_game", "status", "change_outfit", "change_species",
+        "stage_days", "species", "outfit",
+    };
+    for (const char *name : reserved)
+    {
+        if (strcmp(value, name) == 0)
+            return false;
+    }
+    strcpy(destination, value);
+    return true;
+}
+
 bool isAvailableSystemCommand(const char *token)
 {
     if (token == nullptr)
@@ -258,6 +285,19 @@ private:
         return false;
     }
 
+    bool findStatSlot(const char *name, uint8_t &slot) const
+    {
+        for (uint8_t index = 0; index < candidate.statCount; ++index)
+        {
+            if (candidate.stats[index].active && strcmp(candidate.stats[index].name, name) == 0)
+            {
+                slot = index;
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool parseHeader(char **fields, uint8_t count)
     {
         uint32_t schemaRevision = 0;
@@ -266,7 +306,7 @@ private:
         uint32_t actionCount = 0;
         uint32_t actionEffectCount = 0;
         uint32_t buttonCount = 0;
-        if (count != 8 || strcmp(fields[0], "pet_behavior") != 0 || strcmp(fields[1], "2") != 0 ||
+        if (count != 8 || strcmp(fields[0], "pet_behavior") != 0 || strcmp(fields[1], "3") != 0 ||
             !parseCrc32(fields[2], schemaRevision) ||
             !parseUnsigned(fields[3], kMaxPetBehaviorStats, statCount) ||
             !parseUnsigned(fields[4], kMaxPetBehaviorIdleTriggers, idleTriggerCount) ||
@@ -288,19 +328,24 @@ private:
 
     bool parseStat(char **fields, uint8_t count)
     {
-        uint8_t slot = 0;
         int16_t initialValue = 0;
         int16_t minValue = 0;
         int16_t maxValue = 0;
         int16_t dailyChange = 0;
-        if (count != 6 || strcmp(fields[0], "stat") != 0 || !parseSlot(fields[1], "custom", slot) ||
-            candidate.stats[slot].active || !parseSigned16(fields[2], initialValue) ||
+        if (count != 6 || strcmp(fields[0], "stat") != 0 || !parseSigned16(fields[2], initialValue) ||
             !parseSigned16(fields[3], minValue) || !parseSigned16(fields[4], maxValue) ||
             !parseSigned16(fields[5], dailyChange) || minValue >= maxValue ||
             initialValue < minValue || initialValue > maxValue)
             return false;
 
-        PetBehaviorStatConfig &stat = candidate.stats[slot];
+        for (uint8_t index = 0; index < statsSeen; ++index)
+        {
+            if (strcmp(candidate.stats[index].name, fields[1]) == 0)
+                return false;
+        }
+        PetBehaviorStatConfig &stat = candidate.stats[statsSeen];
+        if (!parseStatName(fields[1], stat.name, sizeof(stat.name)))
+            return false;
         stat.active = true;
         stat.initialValue = initialValue;
         stat.minValue = minValue;
@@ -331,8 +376,9 @@ private:
         uint8_t statSlot = 0;
         int16_t threshold = 0;
         PetBehaviorIdleTriggerOperator comparison;
-        if (count != 5 || strcmp(fields[0], "idle_trigger") != 0 ||
-            !parseSlot(fields[1], "custom", statSlot) || !candidate.stats[statSlot].active)
+        if (count != 5 || strcmp(fields[0], "idle_trigger") != 0)
+            return false;
+        if (!findStatSlot(fields[1], statSlot))
             return false;
         if (strcmp(fields[2], "<") == 0)
             comparison = PetBehaviorIdleTriggerOperator::LessThan;
@@ -369,7 +415,7 @@ private:
         uint8_t actionSlot = 0;
         uint32_t playbackCount = 0;
         if (count != 4 || strcmp(fields[0], "action") != 0 || !parseSlot(fields[1], "action", actionSlot) ||
-            candidate.actions[actionSlot].active || !parseUnsigned(fields[3], 10, playbackCount) ||
+            candidate.actions[actionSlot].active || !parseUnsigned(fields[3], 5, playbackCount) ||
             playbackCount < 1 || actionsSeen >= candidate.actionCount)
             return false;
 
@@ -388,11 +434,19 @@ private:
     {
         uint8_t actionSlot = 0;
         uint8_t statSlot = 0;
-        int16_t delta = 0;
-        if (count != 4 || strcmp(fields[0], "action_effect") != 0 ||
-            !parseSlot(fields[1], "action", actionSlot) || !parseSlot(fields[2], "custom", statSlot) ||
-            !candidate.actions[actionSlot].active || !candidate.stats[statSlot].active ||
-            !parseSigned16(fields[3], delta) || actionEffectsSeen >= candidate.actionEffectCount)
+        int16_t value = 0;
+        PetBehaviorActionEffectConfig::Operation operation;
+        if (count != 5 || strcmp(fields[0], "action_effect") != 0 ||
+            !parseSlot(fields[1], "action", actionSlot) || !candidate.actions[actionSlot].active ||
+            !parseSigned16(fields[4], value) || actionEffectsSeen >= candidate.actionEffectCount)
+            return false;
+        if (strcmp(fields[2], "change") == 0)
+            operation = PetBehaviorActionEffectConfig::Operation::Change;
+        else if (strcmp(fields[2], "set") == 0)
+            operation = PetBehaviorActionEffectConfig::Operation::Set;
+        else
+            return false;
+        if (!findStatSlot(fields[3], statSlot))
             return false;
 
         uint8_t actionEffectCount = 0;
@@ -411,7 +465,8 @@ private:
         effect.active = true;
         effect.actionSlot = actionSlot;
         effect.statSlot = statSlot;
-        effect.delta = delta;
+        effect.operation = operation;
+        effect.value = value;
         ++actionEffectsSeen;
         if (actionEffectsSeen == candidate.actionEffectCount)
             phase = Phase::Buttons;
