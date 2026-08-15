@@ -63,7 +63,6 @@ void Pet::setConfig(const PetConfig &newConfig)
 void Pet::dayPassed()
 {
     const bool healthy = getStatus() == HealthStatus::Healthy;
-    st.stage_days += 1;
     st.health = clampValue<int32_t>(st.health + (healthy ? 5 : -5), 0, 100);
 
     if (!healthy)
@@ -74,6 +73,26 @@ void Pet::dayPassed()
     st.ageTenths = clampValue<uint32_t>(st.ageTenths + cfg.ageTenthsPerTick, 0, cfg.maxAgeTenths);
     st.clean_value = clampValue<int>(st.clean_value - 3, 0, cfg.max_clean);
     st.env_value = clampValue<int>(st.env_value - 3, 0, cfg.max_env_clean);
+}
+
+bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount)
+{
+    if (customStats == nullptr || customStatCount != kPetCustomStatCount)
+        return false;
+
+    const uint32_t nextStageDays = st.stage_days == UINT32_MAX ? UINT32_MAX : st.stage_days + 1;
+    st.stage_days = nextStageDays;
+    return commitPetStats(customStats, customStatCount);
+}
+
+bool Pet::commitPetStats(const int16_t *customStats, size_t customStatCount)
+{
+    if (customStats == nullptr || customStatCount != kPetCustomStatCount)
+        return false;
+
+    for (size_t index = 0; index < kPetCustomStatCount; ++index)
+        st.customStats[index] = customStats[index];
+    return true;
 }
 
 void Pet::feedPet(int add_satiety)

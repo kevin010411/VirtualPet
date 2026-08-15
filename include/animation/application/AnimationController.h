@@ -66,6 +66,7 @@ public:
     void markDirty();
     void requestFullRedraw();
     void showResourceError();
+    void showActionAnimationError();
     void showStatusNotFound();
     void updateElapsed(unsigned long elapsed);
     void render(unsigned long now);

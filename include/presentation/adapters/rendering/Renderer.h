@@ -30,6 +30,7 @@ public:
     void showInitPetNotExist();
     void showConfigLoadingError(const char *resource);
     void showResourceError();
+    void showActionAnimationError();
     void showStatusNotFound();
 #if ENABLE_DEBUG
     DebugDisplay &debugDisplay();

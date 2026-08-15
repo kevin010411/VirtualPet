@@ -15,6 +15,7 @@ constexpr size_t kRleReadBufferBytes = 1024;
 constexpr size_t kLineBufferPixels = static_cast<size_t>(kDefaultAnimWidth) * kWorkingBatchLines;
 
 void showResourceError(Adafruit_ST7735 *tft);
+void showActionAnimationError(Adafruit_ST7735 *tft);
 void showPathError(Adafruit_ST7735 *tft);
 void showRegistryFullError(Adafruit_ST7735 *tft);
 void showStatusNotFound(Adafruit_ST7735 *tft);

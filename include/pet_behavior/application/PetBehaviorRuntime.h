@@ -17,7 +17,7 @@ public:
 
     bool hasAction(uint8_t actionSlot) const;
     void initializeStats();
-    void applyDailyChanges();
+    bool advancePetDay();
     bool executeAction(uint8_t actionSlot);
     const char *baseAnimation() const;
 

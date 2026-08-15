@@ -15,15 +15,10 @@ PetBehaviorStatValues readStats(const PetActionController &petActions)
     return state;
 }
 
-void writeStats(const PetBehaviorConfig &config,
-                const PetBehaviorStatValues &state,
+bool writeStats(const PetBehaviorStatValues &state,
                 PetActionController &petActions)
 {
-    for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
-    {
-        if (config.stats[slot].active)
-            petActions.setCustomStat(slot, state.values[slot]);
-    }
+    return petActions.commitPetStats(state.values, kPetBehaviorSlotCount);
 }
 } // namespace
 
@@ -43,14 +38,14 @@ void PetBehaviorRuntime::initializeStats()
 {
     PetBehaviorStatValues state = readStats(petActions);
     initializePetBehaviorStats(config, state);
-    writeStats(config, state, petActions);
+    writeStats(state, petActions);
 }
 
-void PetBehaviorRuntime::applyDailyChanges()
+bool PetBehaviorRuntime::advancePetDay()
 {
     PetBehaviorStatValues state = readStats(petActions);
     applyPetBehaviorDailyChanges(config, state);
-    writeStats(config, state, petActions);
+    return petActions.commitPetDay(state.values, kPetBehaviorSlotCount);
 }
 
 bool PetBehaviorRuntime::executeAction(uint8_t actionSlot)
@@ -62,17 +57,25 @@ bool PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     PetBehaviorActionPlayback playback = {};
     if (!applyPetBehaviorAction(config, actionSlot, state, playback))
         return false;
-    writeStats(config, state, petActions);
+    if (!writeStats(state, petActions))
+        return false;
 
-    if (!animations.queueRepeatedActionAnimation(
+    if (!animations.hasActionAnimation(playback.animation))
+    {
+        animations.showActionAnimationError();
+    }
+    else if (!animations.queueRepeatedActionAnimation(
             playback.animation,
             playback.playbackCount,
             AnimationOwner::Command,
             AnimationPriority::High))
     {
-        animations.showResourceError();
+        return true;
     }
-    animations.markDirty();
+    else
+    {
+        animations.markDirty();
+    }
     return true;
 }
 

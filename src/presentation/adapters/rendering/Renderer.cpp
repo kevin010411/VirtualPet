@@ -310,6 +310,11 @@ void Renderer::showResourceError()
     FrameDecoder::showResourceError(tft);
 }
 
+void Renderer::showActionAnimationError()
+{
+    FrameDecoder::showActionAnimationError(tft);
+}
+
 void Renderer::showInitPetNotExist()
 {
     FrameDecoder::showInitPetNotExist(tft);

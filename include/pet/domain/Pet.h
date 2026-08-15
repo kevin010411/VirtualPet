@@ -100,6 +100,8 @@ public:
     const char *speciesCode() const;
     const char *outfitCode() const;
     uint32_t stageDays() const;
+    bool commitPetStats(const int16_t *customStats, size_t customStatCount);
+    bool commitPetDay(const int16_t *customStats, size_t customStatCount);
     int32_t health() const;
     PetStatSnapshot statSnapshot() const;
     int16_t customStat(uint8_t index) const;

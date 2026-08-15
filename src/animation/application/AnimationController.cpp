@@ -6,7 +6,7 @@
 
 namespace
 {
-constexpr uint8_t kMaxRepeatedActionPlaybackCount = 10;
+constexpr uint8_t kMaxRepeatedActionPlaybackCount = 5;
 constexpr unsigned long kCompletePlaybackSafetyMs = 3000;
 } // namespace
 
@@ -96,8 +96,17 @@ bool AnimationController::hasActionAnimation(const char *baseName) const
 {
     if (baseName == nullptr || baseName[0] == '\0')
         return false;
-    if (renderer.variantCountFor(baseName) > 0)
+    const uint8_t variantCount = renderer.variantCountFor(baseName);
+    if (variantCount > 0)
+    {
+        for (uint8_t index = 0; index < variantCount; ++index)
+        {
+            const char *variantName = renderer.variantNameFor(baseName, index);
+            if (variantName == nullptr || !hasNamedAnimation(variantName))
+                return false;
+        }
         return true;
+    }
 
     const AnimationId id = animationIdFromName(baseName);
     return id != AnimationId::None ? hasAnimation(id) : hasNamedAnimation(baseName);
@@ -420,6 +429,11 @@ void AnimationController::requestFullRedraw()
 void AnimationController::showResourceError()
 {
     renderer.showResourceError();
+}
+
+void AnimationController::showActionAnimationError()
+{
+    renderer.showActionAnimationError();
 }
 
 void AnimationController::showStatusNotFound()

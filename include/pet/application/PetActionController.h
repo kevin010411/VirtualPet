@@ -21,6 +21,8 @@ public:
     void maybeSave();
     void decayEnvironment();
     void dayPassed();
+    bool commitPetStats(const int16_t *customStats, size_t customStatCount);
+    bool commitPetDay(const int16_t *customStats, size_t customStatCount);
     bool findEvolutionTarget(AppearanceSelection &selection) const;
     bool applyEvolutionTarget();
     bool applyAppearance(const char *speciesCode, const char *outfitCode);

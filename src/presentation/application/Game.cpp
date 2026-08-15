@@ -617,8 +617,9 @@ void Game::maybeTickPet(unsigned long elapsed)
     {
         const int probability = 1;
         const int randValue = random(1001);
+        if (!petBehaviorRuntime->advancePetDay())
+            return;
         petActions->dayPassed();
-        petBehaviorRuntime->applyDailyChanges();
         handleEvolution();
         if (pendingEvolution)
             return;

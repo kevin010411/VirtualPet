@@ -45,6 +45,7 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
         return false;
 
     PetBehaviorStatValues next = state;
+    bool affectedSlots[kPetBehaviorSlotCount] = {};
     for (uint8_t index = 0; index < config.actionEffectCount; ++index)
     {
         const PetBehaviorActionEffectConfig &effect = config.actionEffects[index];
@@ -52,6 +53,9 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
             continue;
         if (effect.statSlot >= kPetBehaviorSlotCount || !config.stats[effect.statSlot].active)
             return false;
+        if (affectedSlots[effect.statSlot])
+            return false;
+        affectedSlots[effect.statSlot] = true;
 
         const PetBehaviorStatConfig &stat = config.stats[effect.statSlot];
         next.values[effect.statSlot] = effect.operation == PetBehaviorActionEffectConfig::Operation::Set

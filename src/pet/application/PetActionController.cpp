@@ -73,6 +73,16 @@ void PetActionController::dayPassed()
     pet.dayPassed();
 }
 
+bool PetActionController::commitPetDay(const int16_t *customStats, size_t customStatCount)
+{
+    return pet.commitPetDay(customStats, customStatCount);
+}
+
+bool PetActionController::commitPetStats(const int16_t *customStats, size_t customStatCount)
+{
+    return pet.commitPetStats(customStats, customStatCount);
+}
+
 bool PetActionController::findEvolutionTarget(AppearanceSelection &selection) const
 {
     if (!appearanceLoader.findEvolutionTarget(pet.statSnapshot(), selection))
