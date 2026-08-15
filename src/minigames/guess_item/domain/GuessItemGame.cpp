@@ -1,6 +1,6 @@
 #include "shared/config/AppProfile.h"
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
 
 #include "minigames/guess_item/domain/GuessItemGame.h"
 
@@ -252,4 +252,4 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     lastMoveTime = millis();
 }
 
-#endif // ENABLE_GUESS_ITEM_GAME
+#endif // ENABLE_GUESS_GAME

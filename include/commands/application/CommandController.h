@@ -38,7 +38,7 @@ public:
 #if ENABLE_COMMAND_PREDICT
     virtual void commandPredict() = 0;
 #endif
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     virtual void commandHaveFun() = 0;
 #endif
 #if ENABLE_COMMAND_OUTFIT
@@ -103,7 +103,7 @@ private:
 #if ENABLE_COMMAND_PREDICT
     void executePredict();
 #endif
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     void executeGuessGame();
 #endif
     void executeUserAction();

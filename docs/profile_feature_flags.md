@@ -24,7 +24,7 @@
 | `ENABLE_COMMAND_PREDICT` | `1` | 是否啟用占卜指令。 | Predict slot、`canPredict()`、`commandPredict()`、fortune helper、Predict animation 檢查。 | 主要省 Flash。 | `default=1`，其他驗收 profile 多為 `0`。 | 若關閉後 Flash 沒降，用 symbol 檢查 `commandPredict` / `fortuneToAnimationId`。 |
 | `ENABLE_COMMAND_OUTFIT` | `1` | 是否啟用換 outfit 指令。 | ChangeOutfit slot、result handler、appearance selection 入口。 | 主要省 Flash。 | `kuromu=1`。 | 開啟時必須啟用 `ENABLE_APPEARANCE_SELECTION`。 |
 | `ENABLE_COMMAND_SPECIES` | `1` | 是否啟用換 species 指令。 | ChangeSpecies slot、result handler、species selection 入口。 | 主要省 Flash。 | `small=1`、`small_multi_status=1`、`small_status_anime=1`。 | 開啟時必須啟用 `ENABLE_APPEARANCE_SELECTION`。 |
-| `ENABLE_GUESS_ITEM_GAME` | `1` | 是否啟用猜物品小遊戲。 | `GuessItemGame`、`MinigameController`、minigame input/update flow、HaveFun slot。 | 主要省 Flash；也會讓 `Game` 少一個 minigame member。 | `default`、`small`、`dipsyho`。 | `new_taipei_childrens_day` 與 `kuromu` 目前關閉。 |
+| `ENABLE_GUESS_GAME` | `1` | 是否啟用猜物品小遊戲。 | `GuessItemGame`、`MinigameController`、minigame input/update flow、HaveFun slot。 | 主要省 Flash；也會讓 `Game` 少一個 minigame member。 | `default`、`small`、`dipsyho`。 | `new_taipei_childrens_day` 與 `kuromu` 目前關閉。 |
 | `ENABLE_CUSTOM_RULES` | `1` | 是否啟用 `/custom_rules.txt` 的自訂規則。 | `CustomRules::load` parser、daily/action rule buffer、custom command slot support。 | 省 Flash，也能省 RAM，因為 rules buffer 會變成無狀態 stub。 | 目前只有 `kuromu=1`，因為 resource 內只有庫洛姆有 `custom_rules.txt`。 | 新版 Pet Behavior contract 已接管正常 User Action 路徑。 |
 
 ## Appearance、啟動與 layout

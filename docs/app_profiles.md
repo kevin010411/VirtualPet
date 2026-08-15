@@ -5,7 +5,7 @@
 核心概念：
 
 - `main` 保留所有共用程式碼、bug fix、command 實作。
-- `platformio.ini` 選擇要建置哪個環境。
+- `platformio.ini` 選擇要建置哪個環境，並透過 `extra_configs` 載入 firmware-owned `platformio.base.ini`；Web 產生的 project profile 只替換選擇器與新增 project environment。
 - `include/app/AppProfile.h` 定義 profile 與 feature flag。
 - `src/app/Game.cpp` 依照 profile 決定 8 個 command slot。
 - 大型可選功能用 `ENABLE_*` 控制，讓未使用的程式碼可以被 compiler/linker 移除。
@@ -69,7 +69,7 @@ build_flags =
 	${common.build_flags}
 	-DAPP_PROFILE=APP_PROFILE_NEW_TAIPEI_CHILDRENS_DAY
 	-DAPP_STATUS_MODE=STATUS_MODE_STATUS
-	-DENABLE_GUESS_ITEM_GAME=0
+	-DENABLE_GUESS_GAME=0
 ```
 
 如果 `STATUS_MODE_RANDOM3` 沒有可用候選動畫，程式會 fallback 回年齡狀態。
@@ -83,7 +83,7 @@ build_flags =
 
 | Flag | 用途 |
 | --- | --- |
-| `ENABLE_GUESS_ITEM_GAME` | 編入或排除猜物小遊戲邏輯 |
+| `ENABLE_GUESS_GAME` | 編入或排除猜物小遊戲邏輯 |
 | `ENABLE_GUESS_GAME_SINGLE_ROUND` | 控制猜物小遊戲回合數 |
 | `ENABLE_RENDER_STATS` | 編入或排除 renderer 統計報表 |
 | `ENABLE_SD_RLE_ASSETS` | 必須為 `1`，韌體 runtime 固定使用 RLE renderer |
@@ -96,10 +96,10 @@ build_flags =
 	${common.build_flags}
 	-DAPP_PROFILE=APP_PROFILE_VENDOR_C
 	-DAPP_STATUS_MODE=STATUS_MODE_RANDOM3
-	-DENABLE_GUESS_ITEM_GAME=0
+	-DENABLE_GUESS_GAME=0
 ```
 
-當 `ENABLE_GUESS_ITEM_GAME=0` 時：
+當 `ENABLE_GUESS_GAME=0` 時：
 
 - `Game` 不會繼承 `GuessItemGameHost`。
 - `Game` 不會配置 `GuessItemGame`。
@@ -127,7 +127,7 @@ build_flags =
    	${common.build_flags}
    	-DAPP_PROFILE=APP_PROFILE_VENDOR_C
    	-DAPP_STATUS_MODE=STATUS_MODE_AGE
-   	-DENABLE_GUESS_ITEM_GAME=1
+        -DENABLE_GUESS_GAME=1
    build_unflags = ${common.build_unflags}
    lib_deps = ${common.lib_deps}
    ```

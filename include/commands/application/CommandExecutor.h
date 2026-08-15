@@ -47,7 +47,7 @@ private:
     void queueStatusAnimation();
     void showStatusNotFound();
     bool queueStatusSetsAnimation();
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     bool canPlayGuessItemGame() const;
 #endif
 
@@ -60,7 +60,7 @@ private:
 #if ENABLE_COMMAND_PREDICT
     void commandPredict() override;
 #endif
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     void commandHaveFun() override;
 #endif
 #if ENABLE_COMMAND_OUTFIT

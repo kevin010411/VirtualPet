@@ -3,7 +3,7 @@
 
 #include "shared/config/AppProfile.h"
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
 
 #include "animation/application/AnimationController.h"
 #include "minigames/guess_item/domain/GuessItemGame.h"
@@ -32,6 +32,6 @@ private:
     bool hasAnimationForOwner(AnimationOwner owner) const override;
 };
 
-#endif // ENABLE_GUESS_ITEM_GAME
+#endif // ENABLE_GUESS_GAME
 
 #endif // MINIGAME_CONTROLLER_H

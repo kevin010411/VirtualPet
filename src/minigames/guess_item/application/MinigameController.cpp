@@ -1,6 +1,6 @@
 #include "minigames/guess_item/application/MinigameController.h"
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
 
 MinigameController::MinigameController(AnimationController &animationsRef)
     : animations(animationsRef),
@@ -68,4 +68,4 @@ bool MinigameController::hasAnimationForOwner(AnimationOwner owner) const
     return animations.hasAnimationForOwner(owner);
 }
 
-#endif // ENABLE_GUESS_ITEM_GAME
+#endif // ENABLE_GUESS_GAME

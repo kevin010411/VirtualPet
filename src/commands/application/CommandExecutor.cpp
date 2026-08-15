@@ -243,7 +243,7 @@ void CommandExecutor::commandPredict()
 }
 #endif
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
 void CommandExecutor::commandHaveFun()
 {
     animations.clearByOwner(AnimationOwner::Command);
@@ -342,7 +342,7 @@ bool CommandExecutor::queueStatusSetsAnimation()
     return true;
 }
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
 bool CommandExecutor::canPlayGuessItemGame() const
 {
     const AnimationId requiredResults[] = {

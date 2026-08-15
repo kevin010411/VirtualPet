@@ -32,7 +32,7 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       ,
       appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader))
 #endif
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
       ,
       minigame(std::make_unique<MinigameController>(*animations))
 #endif
@@ -86,7 +86,7 @@ bool Game::prepare_game()
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
 #endif
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     minigame->reset();
 #endif
 
@@ -158,7 +158,7 @@ void Game::loop_game()
         }
     }
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     if (flow.isMinigame())
     {
         minigame->update();
@@ -306,7 +306,7 @@ void Game::OnLeftKey()
         return;
     }
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     if (flow.isMinigame())
     {
         minigame->onLeft();
@@ -338,7 +338,7 @@ void Game::OnRightKey()
         return;
     }
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     if (flow.isMinigame())
     {
         minigame->onRight();
@@ -392,7 +392,7 @@ void Game::OnConfirmKey()
     }
 #endif
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     if (flow.isMinigame())
     {
         minigame->onConfirm();
@@ -444,7 +444,7 @@ bool Game::resetPet()
     animations->clearByOwner(AnimationOwner::Command);
     animations->clearByOwner(AnimationOwner::Minigame);
     animations->clearByOwner(AnimationOwner::System);
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     minigame->reset();
 #endif
     refreshBaseAnimation();
@@ -501,7 +501,7 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
     }
 #endif
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     if (result.requestedMinigame && !flow.isFirstLaunch())
     {
         minigame->startGuessItem();
@@ -729,7 +729,7 @@ bool Game::beginStartupAnimation()
 void Game::enterFirstLaunch()
 {
     flow.beginFirstLaunch();
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     minigame->reset();
 #endif
     animations->clearByOwner(AnimationOwner::Command);

@@ -25,7 +25,7 @@ namespace
 #define COMMAND_SLOT_CHANGE_SPECIES CommandController::emptySlot()
 #endif
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
 #define COMMAND_SLOT_GUESS_GAME COMMAND_SLOT(AppCommandId::HaveFun, "GUESS_GAME", canAlwaysExecute, executeGuessGame, false)
 #else
 #define COMMAND_SLOT_GUESS_GAME CommandController::emptySlot()
@@ -229,7 +229,7 @@ void CommandController::executePredict()
 }
 #endif
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
 void CommandController::executeGuessGame()
 {
     host.commandHaveFun();

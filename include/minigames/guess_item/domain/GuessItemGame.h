@@ -3,7 +3,7 @@
 
 #include "shared/config/AppProfile.h"
 
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
 
 #include <Arduino.h>
 #include "animation/domain/Animation.h"
@@ -64,6 +64,6 @@ private:
     unsigned long lastMoveTime = 0;
 };
 
-#endif // ENABLE_GUESS_ITEM_GAME
+#endif // ENABLE_GUESS_GAME
 
 #endif

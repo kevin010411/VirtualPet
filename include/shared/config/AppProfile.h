@@ -19,8 +19,8 @@
 #define APP_PROFILE APP_PROFILE_DEFAULT
 #endif
 
-#ifndef ENABLE_GUESS_ITEM_GAME
-#define ENABLE_GUESS_ITEM_GAME 1
+#ifndef ENABLE_GUESS_GAME
+#define ENABLE_GUESS_GAME 1
 #endif
 
 // When enabled, GuessLL/GuessRR represent the player's left/right choice.

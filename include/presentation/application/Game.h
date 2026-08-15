@@ -67,7 +67,7 @@ private:
 #if ENABLE_APPEARANCE_SELECTION
     std::unique_ptr<AppearanceSelectionController> appearanceSelection;
 #endif
-#if ENABLE_GUESS_ITEM_GAME
+#if ENABLE_GUESS_GAME
     std::unique_ptr<MinigameController> minigame;
 #endif
 
