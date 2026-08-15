@@ -50,34 +50,52 @@ bool loadStatusSetsConfig(SdFat *sd, StatusSetsConfig &config)
     return parseStatusSetsContract(contract, config);
 }
 
+struct StatusValueContext
+{
+    const PetStatSnapshot &stats;
+    const PetBehaviorConfig &config;
+};
+
+bool petStatSlotForSource(
+    const PetBehaviorConfig &config,
+    const char *source,
+    uint8_t &slot)
+{
+    for (uint8_t candidate = 0; candidate < kPetBehaviorSlotCount; ++candidate)
+    {
+        if (!config.stats[candidate].active ||
+            strcmp(source, config.stats[candidate].name) != 0)
+            continue;
+        slot = candidate;
+        return true;
+    }
+    return false;
+}
+
+bool appendStatusAnimationToken(char *animation, size_t capacity, const char *token)
+{
+    const size_t length = strlen(animation);
+    const size_t tokenLength = strlen(token);
+    if (length + tokenLength >= capacity)
+        return false;
+    memcpy(animation + length, token, tokenLength + 1);
+    return true;
+}
+
 bool statusValueFromSnapshot(const char *source, const void *context, int32_t &value)
 {
     if (source == nullptr || context == nullptr)
         return false;
-    const PetStatSnapshot &stats = *static_cast<const PetStatSnapshot *>(context);
-    if (strcmp(source, "age") == 0)
-        value = stats.age;
-    else if (strcmp(source, "hunger") == 0)
-        value = stats.hunger;
-    else if (strcmp(source, "mood") == 0)
-        value = stats.mood;
-    else if (strcmp(source, "clean") == 0)
-        value = stats.clean;
-    else if (strcmp(source, "env") == 0)
-        value = stats.env;
-    else if (strcmp(source, "sick") == 0)
-        value = stats.sick;
-    else if (strcmp(source, "stage_days") == 0)
-        value = static_cast<int32_t>(stats.stage_days);
-    else if (strcmp(source, "health") == 0)
-        value = stats.health;
-    else
+    const StatusValueContext &status = *static_cast<const StatusValueContext *>(context);
+    if (strcmp(source, "stage_days") == 0)
     {
-        if (strncmp(source, "custom", 6) != 0 ||
-            source[6] < '0' || source[6] > '7' || source[7] != '\0')
-            return false;
-        value = stats.customStats[source[6] - '0'];
+        value = static_cast<int32_t>(status.stats.stage_days);
+        return true;
     }
+    uint8_t slot = 0;
+    if (!petStatSlotForSource(status.config, source, slot))
+        return false;
+    value = status.stats.customStats[slot];
     return true;
 }
 } // namespace
@@ -102,8 +120,9 @@ CommandResult CommandExecutor::complete(bool executed)
     return currentResult;
 }
 
-bool CommandExecutor::validateRequiredContracts(const PetBehaviorConfig &config) const
+bool CommandExecutor::validateRequiredContracts(const PetBehaviorConfig &config)
 {
+    petBehaviorConfig = &config;
     bool statusRequired = false;
     for (uint8_t index = 0; index < config.buttonCount; ++index)
     {
@@ -124,15 +143,36 @@ bool CommandExecutor::validateRequiredContracts(const PetBehaviorConfig &config)
     for (uint8_t setIndex = 0; setIndex < statusConfig.count; ++setIndex)
     {
         const StatusSetConfig &set = statusConfig.sets[setIndex];
+        char expectedAnimation[kStatusAnimationNameSize] = "Status";
+        int8_t previousRank = -1;
         for (uint8_t conditionIndex = 0; conditionIndex < set.conditionCount; ++conditionIndex)
         {
             const char *source = set.conditions[conditionIndex].source;
-            if (strncmp(source, "custom", 6) != 0)
+            if (strcmp(source, "stage_days") == 0)
+            {
+                if (previousRank >= 0)
+                    return false;
+                previousRank = 0;
+                if (!appendStatusAnimationToken(
+                        expectedAnimation, sizeof(expectedAnimation), "StageDays"))
+                    return false;
                 continue;
-            const uint8_t statSlot = static_cast<uint8_t>(source[6] - '0');
-            if (statSlot >= kPetBehaviorSlotCount || !config.stats[statSlot].active)
+            }
+            uint8_t statSlot = 0;
+            if (!petStatSlotForSource(config, source, statSlot))
+                return false;
+            const int8_t rank = static_cast<int8_t>(statSlot + 1);
+            if (rank <= previousRank)
+                return false;
+            previousRank = rank;
+            char token[] = "Custom0";
+            token[6] = static_cast<char>('0' + statSlot);
+            if (!appendStatusAnimationToken(
+                    expectedAnimation, sizeof(expectedAnimation), token))
                 return false;
         }
+        if (strcmp(set.animation, expectedAnimation) != 0)
+            return false;
     }
     return true;
 }
@@ -328,6 +368,8 @@ void CommandExecutor::showStatusNotFound()
 
 bool CommandExecutor::queueStatusSetsAnimation()
 {
+    if (petBehaviorConfig == nullptr)
+        return false;
     StatusSetsConfig config = {};
     if (!loadStatusSetsConfig(animations.sdCard(), config))
         return false;
@@ -337,8 +379,9 @@ bool CommandExecutor::queueStatusSetsAnimation()
         return false;
     const StatusSetConfig &set = config.sets[selectedSetIndex];
     const PetStatSnapshot stats = petActions.statSnapshot();
+    const StatusValueContext valueContext = {stats, *petBehaviorConfig};
     StatusSetResolution resolution = {};
-    if (!resolveStatusSet(set, statusValueFromSnapshot, &stats, resolution))
+    if (!resolveStatusSet(set, statusValueFromSnapshot, &valueContext, resolution))
         return false;
 
     if (resolution.playOnce)

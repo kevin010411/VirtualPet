@@ -7,23 +7,6 @@
 
 namespace
 {
-struct SourceDefinition
-{
-    const char *source;
-    const char *token;
-};
-
-constexpr SourceDefinition kBuiltInSources[] = {
-    {"age", "Age"},
-    {"clean", "Clean"},
-    {"env", "Env"},
-    {"health", "Health"},
-    {"hunger", "Hungry"},
-    {"mood", "Mood"},
-    {"sick", "Sick"},
-    {"stage_days", "StageDays"},
-};
-
 bool isSpace(char value)
 {
     return value == ' ' || value == '\t';
@@ -53,16 +36,6 @@ bool copyText(char *destination, size_t destinationSize, const char *source)
     return true;
 }
 
-bool appendText(char *destination, size_t destinationSize, const char *suffix)
-{
-    const size_t currentLength = strlen(destination);
-    const size_t suffixLength = strlen(suffix);
-    if (currentLength + suffixLength >= destinationSize)
-        return false;
-    memcpy(destination + currentLength, suffix, suffixLength + 1);
-    return true;
-}
-
 bool parseInt32(const char *text, int32_t &value)
 {
     if (text == nullptr || text[0] == '\0')
@@ -77,38 +50,24 @@ bool parseInt32(const char *text, int32_t &value)
     return true;
 }
 
-bool customSourceIndex(const char *source, uint8_t &index)
+bool validSourceName(const char *source)
 {
-    constexpr const char *prefix = "custom";
-    if (source == nullptr || strncmp(source, prefix, strlen(prefix)) != 0)
+    if (source == nullptr || source[0] == '\0')
         return false;
-    const char *digit = source + strlen(prefix);
-    if (digit[0] < '0' || digit[0] > '7' || digit[1] != '\0')
+    if (strcmp(source, "stage_days") == 0)
+        return true;
+    if (source[0] < 'a' || source[0] > 'z')
         return false;
-    index = static_cast<uint8_t>(digit[0] - '0');
+    for (const char *cursor = source + 1; *cursor != '\0'; ++cursor)
+    {
+        if ((*cursor < 'a' || *cursor > 'z') &&
+            (*cursor < '0' || *cursor > '9') && *cursor != '_')
+            return false;
+    }
     return true;
 }
 
-bool sourceDefinition(const char *source, uint8_t &rank, char *token, size_t tokenSize)
-{
-    for (uint8_t index = 0; index < sizeof(kBuiltInSources) / sizeof(kBuiltInSources[0]); ++index)
-    {
-        if (strcmp(source, kBuiltInSources[index].source) != 0)
-            continue;
-        rank = index;
-        return copyText(token, tokenSize, kBuiltInSources[index].token);
-    }
-
-    uint8_t customIndex = 0;
-    if (!customSourceIndex(source, customIndex))
-        return false;
-    rank = static_cast<uint8_t>(sizeof(kBuiltInSources) / sizeof(kBuiltInSources[0]) + customIndex);
-    char customToken[] = "Custom0";
-    customToken[6] = static_cast<char>('0' + customIndex);
-    return copyText(token, tokenSize, customToken);
-}
-
-bool parseCondition(char *descriptor, StatusSetCondition &condition, uint8_t &rank, char *token, size_t tokenSize)
+bool parseCondition(char *descriptor, StatusSetCondition &condition)
 {
     char *fields[4] = {};
     char *cursor = descriptor;
@@ -133,7 +92,7 @@ bool parseCondition(char *descriptor, StatusSetCondition &condition, uint8_t &ra
     }
 
     int32_t levels = 0;
-    if (!sourceDefinition(fields[0], rank, token, tokenSize) ||
+    if (!validSourceName(fields[0]) ||
         !copyText(condition.source, sizeof(condition.source), fields[0]) ||
         !parseInt32(fields[1], levels) ||
         !parseInt32(fields[2], condition.minValue) ||
@@ -143,7 +102,7 @@ bool parseCondition(char *descriptor, StatusSetCondition &condition, uint8_t &ra
         return false;
 
     condition.levels = static_cast<uint8_t>(levels);
-    return strcmp(condition.source, "sick") != 0 || condition.levels == 2;
+    return true;
 }
 
 bool sameConditionSet(const StatusSetConfig &left, const StatusSetConfig &right)
@@ -175,9 +134,6 @@ bool parseSetRow(char *row, StatusSetConfig &set)
     if (descriptors[0] == '\0')
         return false;
 
-    char expectedAnimation[kStatusAnimationNameSize] = "Status";
-    uint8_t previousRank = 0;
-    bool hasPreviousRank = false;
     uint16_t frameProduct = 1;
     char *cursor = descriptors;
     while (cursor != nullptr)
@@ -188,26 +144,25 @@ bool parseSetRow(char *row, StatusSetConfig &set)
         if (next != nullptr)
             *next = '\0';
 
-        uint8_t rank = 0;
-        char token[12] = {};
         StatusSetCondition &condition = set.conditions[set.conditionCount];
-        if (!parseCondition(trim(cursor), condition, rank, token, sizeof(token)) ||
-            (hasPreviousRank && rank <= previousRank) ||
-            !appendText(expectedAnimation, sizeof(expectedAnimation), token))
+        if (!parseCondition(trim(cursor), condition))
             return false;
+        for (uint8_t index = 0; index < set.conditionCount; ++index)
+        {
+            if (strcmp(set.conditions[index].source, condition.source) == 0)
+                return false;
+        }
 
         frameProduct = static_cast<uint16_t>(frameProduct * condition.levels);
         if (frameProduct > 256)
             return false;
-        previousRank = rank;
-        hasPreviousRank = true;
         ++set.conditionCount;
         cursor = next == nullptr ? nullptr : next + 1;
         if (cursor != nullptr && trim(cursor)[0] == '\0')
             return false;
     }
 
-    return set.conditionCount > 0 && strcmp(set.animation, expectedAnimation) == 0;
+    return set.conditionCount > 0 && strncmp(set.animation, "Status", 6) == 0;
 }
 
 uint8_t levelForValue(int32_t value, int32_t minValue, int32_t maxValue, uint8_t levels)

@@ -26,7 +26,7 @@ public:
 
     void begin(AppCommandId commandId);
     CommandResult complete(bool executed);
-    bool validateRequiredContracts(const PetBehaviorConfig &config) const;
+    bool validateRequiredContracts(const PetBehaviorConfig &config);
 
 private:
     static constexpr unsigned long gameTick = 2000;
@@ -35,6 +35,7 @@ private:
     PetActionController &petActions;
     AnimationController &animations;
     CustomRules &customRules;
+    const PetBehaviorConfig *petBehaviorConfig = nullptr;
     CommandResult currentResult = {};
 
 #if ENABLE_CUSTOM_RULES
