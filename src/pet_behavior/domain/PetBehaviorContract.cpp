@@ -300,14 +300,14 @@ private:
 
     bool parseHeader(char **fields, uint8_t count)
     {
-        uint32_t schemaRevision = 0;
+        uint32_t schemaFingerprint = 0;
         uint32_t statCount = 0;
         uint32_t idleTriggerCount = 0;
         uint32_t actionCount = 0;
         uint32_t actionEffectCount = 0;
         uint32_t buttonCount = 0;
         if (count != 8 || strcmp(fields[0], "pet_behavior") != 0 || strcmp(fields[1], "3") != 0 ||
-            !parseCrc32(fields[2], schemaRevision) ||
+            !parseCrc32(fields[2], schemaFingerprint) ||
             !parseUnsigned(fields[3], kMaxPetBehaviorStats, statCount) ||
             !parseUnsigned(fields[4], kMaxPetBehaviorIdleTriggers, idleTriggerCount) ||
             !parseUnsigned(fields[5], kMaxPetBehaviorActions, actionCount) ||
@@ -316,7 +316,7 @@ private:
             buttonCount != kPetBehaviorButtonCount)
             return false;
 
-        candidate.schemaRevision = schemaRevision;
+        candidate.schemaFingerprint = schemaFingerprint;
         candidate.statCount = static_cast<uint8_t>(statCount);
         candidate.idleTriggerCount = static_cast<uint8_t>(idleTriggerCount);
         candidate.actionCount = static_cast<uint8_t>(actionCount);

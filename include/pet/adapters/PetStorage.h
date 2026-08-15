@@ -10,7 +10,7 @@ public:
     explicit PetStorage(SdFat *ref_sd);
 
     bool save(const Pet &pet);
-    bool load(Pet &pet);
+    bool load(Pet &pet, uint32_t schemaFingerprint);
     char lastSaveSlot() const;
     uint32_t lastSaveSequence() const;
 

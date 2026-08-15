@@ -534,7 +534,7 @@ bool Game::isFirstLaunchSelectionPending() const
 
 bool Game::loadInitialPetState(bool allowSavedState, bool showError)
 {
-    if (allowSavedState && petStorage.load(pet))
+    if (allowSavedState && petStorage.load(pet, petBehaviorConfig.schemaFingerprint))
     {
         return true;
     }
@@ -549,6 +549,7 @@ bool Game::loadInitialPetState(bool allowSavedState, bool showError)
     }
 
     pet.setDefaultState();
+    pet.setSchemaFingerprint(petBehaviorConfig.schemaFingerprint);
     petBehaviorRuntime->initializeStats();
     const bool applied = pet.setSpeciesCode(initialAppearance.speciesCode) &&
                          pet.setOutfitCode(initialAppearance.outfitCode);

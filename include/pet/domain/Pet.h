@@ -29,6 +29,7 @@ struct PersistedPetState
     uint16_t version;
     bool hasSick;
     uint32_t sequence;
+    uint32_t schemaFingerprint;
     uint32_t ageTenths;
     int32_t hungry_value;
     int32_t mood;
@@ -79,7 +80,7 @@ class Pet
 public:
     static constexpr uint32_t kAgeScale = 10;
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 10;
+    static constexpr uint16_t kPetStateVersion = 11;
 
     Pet(uint32_t ageTenths = 0);
 
@@ -92,6 +93,7 @@ public:
     void getSick();
     bool takeMedicine();
     void setDefaultState();
+    void setSchemaFingerprint(uint32_t fingerprint);
     void setConfig(const PetConfig &newConfig);
 
     HealthStatus getStatus() const;

@@ -14,12 +14,13 @@ PetActionController::PetActionController(Pet &petRef, PetStorage &petStorageRef,
 {
 }
 
-bool PetActionController::loadOrInitial(const AppearanceSelection &initialAppearance)
+bool PetActionController::loadOrInitial(const AppearanceSelection &initialAppearance, uint32_t schemaFingerprint)
 {
-    const bool loaded = petStorage.load(pet);
+    const bool loaded = petStorage.load(pet, schemaFingerprint);
     if (!loaded)
     {
         pet.setDefaultState();
+        pet.setSchemaFingerprint(schemaFingerprint);
         pet.setSpeciesCode(initialAppearance.speciesCode);
         pet.setOutfitCode(initialAppearance.outfitCode);
     }

@@ -77,7 +77,7 @@ struct PetBehaviorButtonConfig
 
 struct PetBehaviorConfig
 {
-    uint32_t schemaRevision;
+    uint32_t schemaFingerprint;
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     PetBehaviorIdleTriggerConfig idleTriggers[kMaxPetBehaviorIdleTriggers];
     PetBehaviorActionConfig actions[kPetBehaviorSlotCount];

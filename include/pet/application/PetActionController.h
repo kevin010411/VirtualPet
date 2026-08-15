@@ -15,7 +15,7 @@ class PetActionController
 public:
     PetActionController(Pet &pet, PetStorage &petStorage, Renderer &renderer, AppearanceLoader &appearanceLoader);
 
-    bool loadOrInitial(const AppearanceSelection &initialAppearance);
+    bool loadOrInitial(const AppearanceSelection &initialAppearance, uint32_t schemaFingerprint);
     bool saveNow();
     void reset();
     void maybeSave();

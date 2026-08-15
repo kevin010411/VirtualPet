@@ -164,6 +164,7 @@ void Pet::setDefaultState()
     st.magic = kPetStateMagic;
     st.version = kPetStateVersion;
     st.sequence = 0;
+    st.schemaFingerprint = 0;
     st.hasSick = false;
     st.ageTenths = 0;
     st.hungry_value = 0;
@@ -178,6 +179,11 @@ void Pet::setDefaultState()
         st.customStats[i] = 0;
     st.flowFlags = 0;
     st.crc32 = 0;
+}
+
+void Pet::setSchemaFingerprint(uint32_t fingerprint)
+{
+    st.schemaFingerprint = fingerprint;
 }
 
 HealthStatus Pet::getStatus() const
