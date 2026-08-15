@@ -1,7 +1,7 @@
 #include "commands/application/CommandController.h"
 
 #include <stddef.h>
-#include <string.h>
+#include "commands/domain/SystemCommandCatalog.h"
 
 namespace
 {
@@ -30,6 +30,7 @@ namespace
 #else
 #define COMMAND_SLOT_GUESS_GAME CommandController::emptySlot()
 #endif
+#define COMMAND_SLOT_STATUS COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true)
 } // namespace
 
 constexpr CommandController::CommandSlot CommandController::emptySlot()
@@ -39,16 +40,18 @@ constexpr CommandController::CommandSlot CommandController::emptySlot()
 
 CommandController::CommandSlot CommandController::systemCommandSlot(const char *token)
 {
-    if (strcmp(token, "predict") == 0)
-        return COMMAND_SLOT_PREDICT;
-    if (strcmp(token, "guess_game") == 0)
-        return COMMAND_SLOT_GUESS_GAME;
-    if (strcmp(token, "status") == 0)
-        return COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true);
-    if (strcmp(token, "change_outfit") == 0)
-        return COMMAND_SLOT_CHANGE_OUTFIT;
-    if (strcmp(token, "change_species") == 0)
-        return COMMAND_SLOT_CHANGE_SPECIES;
+    const CompiledSystemCommand *command = findCompiledSystemCommand(token);
+    if (command == nullptr)
+        return emptySlot();
+
+    switch (command->handler)
+    {
+#define SYSTEM_COMMAND(handler, token, slot) \
+    case SystemCommandHandler::handler:      \
+        return slot;
+#include "commands/domain/SystemCommandCatalog.def"
+#undef SYSTEM_COMMAND
+    }
     return emptySlot();
 }
 

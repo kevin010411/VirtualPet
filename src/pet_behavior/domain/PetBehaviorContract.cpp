@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <SdFat.h>
+#include "commands/domain/SystemCommandCatalog.h"
 #include "shared/config/AppProfile.h"
 
 namespace
@@ -150,31 +151,6 @@ bool parseStatName(const char *value, char *destination, size_t destinationSize)
     }
     strcpy(destination, value);
     return true;
-}
-
-bool isAvailableSystemCommand(const char *token)
-{
-    if (token == nullptr)
-        return false;
-    if (strcmp(token, "status") == 0)
-        return true;
-#if ENABLE_COMMAND_PREDICT
-    if (strcmp(token, "predict") == 0)
-        return true;
-#endif
-#if ENABLE_GUESS_ITEM_GAME
-    if (strcmp(token, "guess_game") == 0)
-        return true;
-#endif
-#if ENABLE_COMMAND_OUTFIT
-    if (strcmp(token, "change_outfit") == 0)
-        return true;
-#endif
-#if ENABLE_COMMAND_SPECIES
-    if (strcmp(token, "change_species") == 0)
-        return true;
-#endif
-    return false;
 }
 
 uint8_t splitFields(char *line, char **fields, uint8_t capacity)
@@ -498,7 +474,8 @@ private:
         }
         else if (strcmp(fields[2], "system_command") == 0)
         {
-            if (!isAvailableSystemCommand(fields[3]) || strlen(fields[3]) >= sizeof(button.systemCommand))
+            if (findCompiledSystemCommand(fields[3]) == nullptr ||
+                strlen(fields[3]) >= sizeof(button.systemCommand))
                 return false;
             button.kind = PetBehaviorButtonKind::SystemCommand;
             strcpy(button.systemCommand, fields[3]);
