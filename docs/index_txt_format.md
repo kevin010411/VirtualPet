@@ -84,7 +84,7 @@ Idle|rle|167|3|128|96|/dino/base/idle
 ## Validation
 
 - 每一行必須剛好包含 7 個欄位
-- 未知且不以數字結尾的 `id` 會成為 named animation，供 `custom_rules.txt` 的自訂 action 使用
+- 未知且不以數字結尾的 `id` 會成為 named animation，供 Pet Behavior User Action 使用
 - `{行為名稱}{正整數}` 的未知 `id`（例如 `Gift1`、`Dance2`）會成為該行為的版本動畫；已定義的 enum 名稱如 `Predict1`、`GuessItem1` 不適用此規則
 - 未知 `format` 會被忽略
 - `frames`、`width` 或 `height` 等於 `0` 時會被忽略
@@ -128,7 +128,7 @@ Dance2|rle|167|4|128|96|/dino/base/dance_2
 
 - 同一行為有一個或多個版本時，韌體優先使用版本；多個版本以等機率隨機挑選，單一版本固定播放。
 - 沒有版本時，韌體會播放同名的 named animation，例如 `Dance`。
-- Pet Behavior User Action 與 `custom_rules.txt` 的自訂 action 都可使用 named animation；例如設定動畫為 `Dance` 時，會選擇 `Dance1` 或 `Dance2`。
+- Pet Behavior User Action 可使用 named animation；例如設定動畫為 `Dance` 時，會選擇 `Dance1` 或 `Dance2`。
 - 固定動畫與版本動畫都缺少時，行為數值仍會更新，TFT 會顯示 `resource error`。
 - 每個已載入外觀最多 16 個版本動畫；第 17 筆會觸發資源容量錯誤。切換外觀時會清空並重新使用這個固定容量，不會配置 heap。
 

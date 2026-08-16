@@ -6,7 +6,6 @@
 #include "presentation/application/AppFlowController.h"
 #include "animation/domain/Animation.h"
 #include "appearance/ports/AppearanceLoader.h"
-#include "custom_rules/domain/CustomRules.h"
 #include "pet_behavior/domain/PetBehaviorContract.h"
 
 class AnimationController;
@@ -60,7 +59,6 @@ private:
     std::unique_ptr<PetActionController> petActions;
     std::unique_ptr<AnimationController> animations;
     std::unique_ptr<PetBehaviorRuntime> petBehaviorRuntime;
-    CustomRules customRules;
     std::unique_ptr<CommandExecutor> commandExecutor;
     std::unique_ptr<CommandController> commands;
     std::unique_ptr<LayoutRenderer> layout;

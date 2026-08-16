@@ -4,7 +4,6 @@
 #include "animation/application/AnimationController.h"
 #include "commands/application/CommandController.h"
 #include "commands/application/CommandExecutor.h"
-#include "custom_rules/domain/CustomRules.h"
 #include "presentation/application/LayoutRenderer.h"
 #include "minigames/guess_item/application/MinigameController.h"
 #if ENABLE_APPEARANCE_SELECTION
@@ -25,7 +24,7 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       petActions(std::make_unique<PetActionController>(pet, petStorage, renderer, appearanceLoader)),
       animations(std::make_unique<AnimationController>(renderer)),
       petBehaviorRuntime(std::make_unique<PetBehaviorRuntime>(petBehaviorConfig, *petActions, *animations)),
-      commandExecutor(std::make_unique<CommandExecutor>(*petActions, *animations, customRules)),
+      commandExecutor(std::make_unique<CommandExecutor>(*petActions, *animations)),
       commands(std::make_unique<CommandController>(*commandExecutor)),
       layout(std::make_unique<LayoutRenderer>(renderer, *commands))
 #if ENABLE_APPEARANCE_SELECTION
@@ -85,13 +84,6 @@ bool Game::prepare_game()
     minigame->reset();
 #endif
 
-#if ENABLE_CUSTOM_RULES
-#if ENABLE_DEBUG
-    customRules.load(animations->sdCard(), &renderer.debugDisplay());
-#else
-    customRules.load(animations->sdCard());
-#endif
-#endif
     if (!loadInitialPetState(true, false))
     {
         initialStateLoadingFailed = true;

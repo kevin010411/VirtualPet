@@ -2,7 +2,6 @@
 
 將本資料夾內容與 `index/` 資料夾複製到 SD 卡根目錄。
 
-- `custom_rules.txt`：全域自訂數值、每日變化與指令額外效果。
 - `evolution_rules.txt`：物種／服裝演化規則。
 - `state_schema.txt`：`custom0`～`custom7` 的別名與範圍。
 - `status_display.txt`：狀態畫面設定。

@@ -12,7 +12,6 @@
 
 請使用 [sd_card_example](sd_card_example/README.md) 作為**唯一建議複製來源**。該資料夾的註解均為中文，且檔案結構對應 SD 卡根目錄。
 
-- `custom_rules.txt`：全域 custom stat、每日變化與指令額外效果。
 - `evolution_rules.txt`：演化規則。
 - `state_schema.txt`：custom stat 別名與範圍。
 - `status_display.txt`：狀態畫面設定。

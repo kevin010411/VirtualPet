@@ -16,14 +16,6 @@ enum class AppCommandId : uint8_t
     Status = APP_COMMAND_STATUS,
     ChangeSpecies = APP_COMMAND_CHANGE_SPECIES,
     UserAction = APP_COMMAND_USER_ACTION,
-    Custom0,
-    Custom1,
-    Custom2,
-    Custom3,
-    Custom4,
-    Custom5,
-    Custom6,
-    Custom7,
 };
 
 class CommandHost

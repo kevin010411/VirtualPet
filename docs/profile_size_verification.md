@@ -45,7 +45,6 @@ C:\Users\kevin\.platformio\packages\toolchain-gccarmnoneeabi\bin\arm-none-eabi-n
 - `fortuneToAnimationId`
 - `GuessItemGame`
 - `MinigameController`
-- `CustomRules::load`
 - `commandChangeOutfit`
 - `commandChangeSpecies`
 

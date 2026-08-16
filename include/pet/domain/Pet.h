@@ -58,9 +58,6 @@ public:
     bool isFirstLaunchComplete() const;
     void markFirstLaunchComplete();
     void resetFirstLaunch();
-    bool isCustomRulesInitialized() const;
-    void markCustomRulesInitialized();
-
     const PersistedPetState &persistentState() const;
     bool restoreState(const PersistedPetState &state);
 

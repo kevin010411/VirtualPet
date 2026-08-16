@@ -5,7 +5,6 @@
 namespace
 {
 constexpr uint32_t kFirstLaunchCompleteFlag = 0x1UL;
-constexpr uint32_t kCustomRulesInitializedFlag = 0x2UL;
 
 bool copyAppearanceCode(char *dest, size_t destSize, const char *source)
 {
@@ -179,16 +178,6 @@ void Pet::markFirstLaunchComplete()
 void Pet::resetFirstLaunch()
 {
     st.flowFlags &= ~kFirstLaunchCompleteFlag;
-}
-
-bool Pet::isCustomRulesInitialized() const
-{
-    return (st.flowFlags & kCustomRulesInitializedFlag) != 0;
-}
-
-void Pet::markCustomRulesInitialized()
-{
-    st.flowFlags |= kCustomRulesInitializedFlag;
 }
 
 bool Pet::restoreState(const PersistedPetState &state)

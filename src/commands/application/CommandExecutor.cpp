@@ -3,7 +3,6 @@
 #include <string.h>
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/StatusSetSelection.h"
-#include "custom_rules/domain/CustomRules.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
 #include "shared/assets/AssetManifest.h"
 
@@ -60,10 +59,9 @@ bool statusValueFromSnapshot(const char *source, const void *context, int32_t &v
 }
 } // namespace
 
-CommandExecutor::CommandExecutor(PetActionController &petActionsRef, AnimationController &animationsRef, CustomRules &customRulesRef)
+CommandExecutor::CommandExecutor(PetActionController &petActionsRef, AnimationController &animationsRef)
     : petActions(petActionsRef),
-      animations(animationsRef),
-      customRules(customRulesRef)
+      animations(animationsRef)
 {
 }
 
@@ -115,7 +113,6 @@ AnimationId CommandExecutor::fortuneToAnimationId(int fortuneIndex)
     }
 }
 #endif
-
 bool CommandExecutor::commandHasAnimation(AnimationId id) const
 {
     return animations.hasActionAnimation(id);
@@ -125,16 +122,6 @@ bool CommandExecutor::commandCanStatus() const
 {
     return true;
 }
-
-#if ENABLE_CUSTOM_RULES
-bool CommandExecutor::commandCanCustomAction(uint8_t slot) const
-{
-    if (slot > 7)
-        return false;
-    const char key[] = {'C', 'U', 'S', 'T', 'O', 'M', static_cast<char>('0' + slot), '\0'};
-    return customRules.hasAction(key);
-}
-#endif
 
 void CommandExecutor::commandClearCommandAnimations()
 {
@@ -179,19 +166,6 @@ void CommandExecutor::commandStatus()
     currentResult.layoutId = AnimationId::Status;
     queueStatusAnimation();
 }
-
-#if ENABLE_CUSTOM_RULES
-void CommandExecutor::commandCustomAction(uint8_t slot)
-{
-    if (slot > 7)
-    {
-        currentResult.executed = false;
-        return;
-    }
-    const char key[] = {'C', 'U', 'S', 'T', 'O', 'M', static_cast<char>('0' + slot), '\0'};
-    currentResult.executed = executeCustomAction(key);
-}
-#endif
 
 void CommandExecutor::queueStatusAnimation()
 {
@@ -271,12 +245,5 @@ bool CommandExecutor::canPlayGuessItemGame() const
         AnimationId::GuessItem4};
     return animations.hasAnimation(AnimationId::GuessStart) ||
            animations.hasAnimations(itemPrompts, sizeof(itemPrompts) / sizeof(itemPrompts[0]));
-}
-#endif
-
-#if ENABLE_CUSTOM_RULES
-bool CommandExecutor::executeCustomAction(const char *actionKey)
-{
-    return customRules.executeAction(actionKey, petActions, animations);
 }
 #endif

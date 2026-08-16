@@ -61,10 +61,6 @@
 #define ENABLE_COMMAND_SPECIES 1
 #endif
 
-#ifndef ENABLE_CUSTOM_RULES
-#define ENABLE_CUSTOM_RULES 1
-#endif
-
 #ifndef ENABLE_DEBUG
 #define ENABLE_DEBUG 0
 #endif
