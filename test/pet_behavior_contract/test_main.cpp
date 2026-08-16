@@ -9,6 +9,8 @@ namespace
 constexpr const char *kMinimalContract =
     "runtime_contract|1\n"
     "pet_behavior|3|00000000\n"
+    "status|1\n"
+    "status_set|set0|Status\n"
     "idle|anim0\n"
     "button|1|empty|\n"
     "button|2|empty|\n"
@@ -18,7 +20,7 @@ constexpr const char *kMinimalContract =
     "button|6|empty|\n"
     "button|7|empty|\n"
     "button|8|empty|\n"
-    "crc32|AF5C7E68\n";
+    "crc32|47D27BCA\n";
 
 void assertRejectedAndCleared(const char *contract)
 {
@@ -57,11 +59,14 @@ void testRecordsDecodeBySlotWithoutOrderingDependencies()
         "button|6|empty|\n"
         "button|7|empty|\n"
         "button|8|empty|\n"
+        "status_condition|set0|condition0|custom7|2|0|10\n"
         "stat|custom7|5|0|10|-1\n"
+        "status_set|set0|StatusCustom7\n"
         "action|action7|anim31|2\n"
         "idle|anim0\n"
+        "status|1\n"
         "pet_behavior|3|12345678\n"
-        "crc32|7C3B0036\n";
+        "crc32|A167BD76\n";
     PetBehaviorConfig config = {};
     assert(parsePetBehaviorContract(contract, config));
     assert(config.schemaFingerprint == 0x12345678UL);
@@ -69,6 +74,9 @@ void testRecordsDecodeBySlotWithoutOrderingDependencies()
     assert(config.actions[7].active);
     assert(config.actionEffects[0].statSlot == 7);
     assert(config.buttons[0].actionSlot == 7);
+    assert(config.statusSets.count == 1);
+    assert(strcmp(config.statusSets.sets[0].animation, "StatusCustom7") == 0);
+    assert(strcmp(config.statusSets.sets[0].conditions[0].source, "custom7") == 0);
 }
 
 bool acceptRecord(void *, const SdTextRecord &)

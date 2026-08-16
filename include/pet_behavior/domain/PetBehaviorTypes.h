@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "commands/domain/StatusSetContract.h"
 
 constexpr uint8_t kPetBehaviorSlotCount = 8;
 constexpr uint8_t kMaxPetBehaviorStats = 6;
@@ -83,6 +84,7 @@ struct PetBehaviorConfig
     PetBehaviorActionConfig actions[kPetBehaviorSlotCount];
     PetBehaviorActionEffectConfig actionEffects[kMaxPetBehaviorActionEffects];
     PetBehaviorButtonConfig buttons[kPetBehaviorButtonCount];
+    StatusSetsConfig statusSets;
     char idleAnimation[kPetBehaviorAnimationTokenSize];
     uint8_t statCount;
     uint8_t idleTriggerCount;

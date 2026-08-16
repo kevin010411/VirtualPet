@@ -26,7 +26,7 @@ public:
 
     void begin(AppCommandId commandId);
     CommandResult complete(bool executed);
-    bool validateRequiredContracts(const PetBehaviorConfig &config);
+    void configureRuntimeContract(const PetBehaviorConfig &config);
 
 private:
     static constexpr unsigned long gameTick = 2000;

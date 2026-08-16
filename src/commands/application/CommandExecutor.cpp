@@ -15,35 +15,9 @@ static_assert(
 static_assert(
     sizeof(((Animation *)nullptr)->namedAnimation) >= kStatusAnimationNameSize,
     "Queued animation names must hold every Status Animation ID.");
-constexpr const char *kStatusSetsPath = "/status_sets.txt";
-
 uint8_t arduinoStatusSetIndex(uint8_t setCount)
 {
     return static_cast<uint8_t>(random(setCount));
-}
-
-bool loadStatusSetsConfig(SdFat *sd, StatusSetsConfig &config)
-{
-    config = {};
-    if (sd == nullptr)
-        return false;
-    File file = sd->open(kStatusSetsPath, FILE_READ);
-    if (!file)
-        return false;
-    char contract[kMaxStatusContractBytes] = {};
-    size_t index = 0;
-    while (file.available())
-    {
-        if (index + 1 >= sizeof(contract))
-        {
-            file.close();
-            return false;
-        }
-        contract[index++] = static_cast<char>(file.read());
-    }
-    file.close();
-    contract[index] = '\0';
-    return parseStatusSetsContract(contract, config);
 }
 
 struct StatusValueContext
@@ -66,16 +40,6 @@ bool petStatSlotForSource(
         return true;
     }
     return false;
-}
-
-bool appendStatusAnimationToken(char *animation, size_t capacity, const char *token)
-{
-    const size_t length = strlen(animation);
-    const size_t tokenLength = strlen(token);
-    if (length + tokenLength >= capacity)
-        return false;
-    memcpy(animation + length, token, tokenLength + 1);
-    return true;
 }
 
 bool statusValueFromSnapshot(const char *source, const void *context, int32_t &value)
@@ -116,61 +80,9 @@ CommandResult CommandExecutor::complete(bool executed)
     return currentResult;
 }
 
-bool CommandExecutor::validateRequiredContracts(const PetBehaviorConfig &config)
+void CommandExecutor::configureRuntimeContract(const PetBehaviorConfig &config)
 {
     petBehaviorConfig = &config;
-    bool statusRequired = false;
-    for (uint8_t index = 0; index < config.buttonCount; ++index)
-    {
-        const PetBehaviorButtonConfig &button = config.buttons[index];
-        if (button.active && button.kind == PetBehaviorButtonKind::SystemCommand &&
-            strcmp(button.systemCommand, "status") == 0)
-        {
-            statusRequired = true;
-            break;
-        }
-    }
-    if (!statusRequired)
-        return true;
-
-    StatusSetsConfig statusConfig = {};
-    if (!loadStatusSetsConfig(animations.sdCard(), statusConfig))
-        return false;
-    for (uint8_t setIndex = 0; setIndex < statusConfig.count; ++setIndex)
-    {
-        const StatusSetConfig &set = statusConfig.sets[setIndex];
-        char expectedAnimation[kStatusAnimationNameSize] = "Status";
-        int8_t previousRank = -1;
-        for (uint8_t conditionIndex = 0; conditionIndex < set.conditionCount; ++conditionIndex)
-        {
-            const char *source = set.conditions[conditionIndex].source;
-            if (strcmp(source, "stage_days") == 0)
-            {
-                if (previousRank >= 0)
-                    return false;
-                previousRank = 0;
-                if (!appendStatusAnimationToken(
-                        expectedAnimation, sizeof(expectedAnimation), "StageDays"))
-                    return false;
-                continue;
-            }
-            uint8_t statSlot = 0;
-            if (!petStatSlotForSource(config, source, statSlot))
-                return false;
-            const int8_t rank = static_cast<int8_t>(statSlot + 1);
-            if (rank <= previousRank)
-                return false;
-            previousRank = rank;
-            char token[] = "Custom0";
-            token[6] = static_cast<char>('0' + statSlot);
-            if (!appendStatusAnimationToken(
-                    expectedAnimation, sizeof(expectedAnimation), token))
-                return false;
-        }
-        if (strcmp(set.animation, expectedAnimation) != 0)
-            return false;
-    }
-    return true;
 }
 
 #if ENABLE_COMMAND_PREDICT
@@ -296,14 +208,10 @@ bool CommandExecutor::queueStatusSetsAnimation()
 {
     if (petBehaviorConfig == nullptr)
         return false;
-    StatusSetsConfig config = {};
-    if (!loadStatusSetsConfig(animations.sdCard(), config))
-        return false;
-
     uint8_t selectedSetIndex = 0;
-    if (!selectStatusSetIndex(config.count, arduinoStatusSetIndex, selectedSetIndex))
+    if (!selectStatusSetIndex(petBehaviorConfig->statusSets.count, arduinoStatusSetIndex, selectedSetIndex))
         return false;
-    const StatusSetConfig &set = config.sets[selectedSetIndex];
+    const StatusSetConfig &set = petBehaviorConfig->statusSets.sets[selectedSetIndex];
     const PetStatSnapshot stats = petActions.statSnapshot();
     const StatusValueContext valueContext = {stats, *petBehaviorConfig};
     StatusSetResolution resolution = {};

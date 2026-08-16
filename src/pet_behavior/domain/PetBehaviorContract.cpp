@@ -28,7 +28,7 @@ bool parseUnsigned(const char *text, uint32_t maximum, uint32_t &value)
     return true;
 }
 
-bool parseSigned16(const char *text, int16_t &value)
+bool parseSigned(const char *text, uint32_t positiveMaximum, uint32_t negativeMaximum, int32_t &value)
 {
     if (text == nullptr || text[0] == '\0')
         return false;
@@ -42,7 +42,7 @@ bool parseSigned16(const char *text, int16_t &value)
     if (*cursor == '\0')
         return false;
     uint32_t magnitude = 0;
-    const uint32_t maximum = negative ? 32768U : 32767U;
+    const uint32_t maximum = negative ? negativeMaximum : positiveMaximum;
     for (; *cursor != '\0'; ++cursor)
     {
         if (*cursor < '0' || *cursor > '9')
@@ -52,9 +52,23 @@ bool parseSigned16(const char *text, int16_t &value)
             return false;
         magnitude = magnitude * 10U + digit;
     }
-    value = negative ? static_cast<int16_t>(-static_cast<int32_t>(magnitude))
-                     : static_cast<int16_t>(magnitude);
+    value = negative ? static_cast<int32_t>(-static_cast<int64_t>(magnitude))
+                     : static_cast<int32_t>(magnitude);
     return true;
+}
+
+bool parseSigned16(const char *text, int16_t &value)
+{
+    int32_t parsed = 0;
+    if (!parseSigned(text, 32767U, 32768U, parsed))
+        return false;
+    value = static_cast<int16_t>(parsed);
+    return true;
+}
+
+bool parseSigned32(const char *text, int32_t &value)
+{
+    return parseSigned(text, 2147483647UL, 2147483648UL, value);
 }
 
 bool parseHex32(const char *text, uint32_t &value)
@@ -119,12 +133,18 @@ public:
             return decodeActionEffect(record);
         if (strcmp(record.fields[0], "button") == 0)
             return decodeButton(record);
+        if (strcmp(record.fields[0], "status") == 0)
+            return decodeStatusHeader(record);
+        if (strcmp(record.fields[0], "status_set") == 0)
+            return decodeStatusSet(record);
+        if (strcmp(record.fields[0], "status_condition") == 0)
+            return decodeStatusCondition(record);
         return false;
     }
 
     bool complete(PetBehaviorConfig &destination) const
     {
-        if (!identitySeen || !idleSeen || candidate.buttonCount != kPetBehaviorButtonCount ||
+        if (!identitySeen || !statusSeen || !idleSeen || candidate.buttonCount != kPetBehaviorButtonCount ||
             candidate.statCount > kMaxPetBehaviorStats)
             return false;
         destination = candidate;
@@ -134,7 +154,56 @@ public:
 private:
     PetBehaviorConfig candidate = {};
     bool identitySeen = false;
+    bool statusSeen = false;
     bool idleSeen = false;
+
+    bool decodeStatusHeader(const SdTextRecord &record)
+    {
+        if (record.fieldCount != 2 || strcmp(record.fields[1], "1") != 0 || statusSeen)
+            return false;
+        statusSeen = true;
+        return true;
+    }
+
+    bool decodeStatusSet(const SdTextRecord &record)
+    {
+        uint8_t slot = 0;
+        if (record.fieldCount != 3 ||
+            !parseSlot(record.fields[1], "set", kMaxStatusSets, slot))
+            return false;
+        StatusSetConfig &set = candidate.statusSets.sets[slot];
+        if (!copyBounded(record.fields[2], set.animation, sizeof(set.animation)))
+            return false;
+        if (candidate.statusSets.count <= slot)
+            candidate.statusSets.count = static_cast<uint8_t>(slot + 1);
+        return true;
+    }
+
+    bool decodeStatusCondition(const SdTextRecord &record)
+    {
+        uint8_t setSlot = 0;
+        uint8_t conditionSlot = 0;
+        uint32_t levels = 0;
+        int32_t minValue = 0;
+        int32_t maxValue = 0;
+        if (record.fieldCount != 7 ||
+            !parseSlot(record.fields[1], "set", kMaxStatusSets, setSlot) ||
+            !parseSlot(record.fields[2], "condition", kMaxStatusConditions, conditionSlot) ||
+            !parseUnsigned(record.fields[4], UINT8_MAX, levels) ||
+            !parseSigned32(record.fields[5], minValue) ||
+            !parseSigned32(record.fields[6], maxValue))
+            return false;
+        StatusSetConfig &set = candidate.statusSets.sets[setSlot];
+        StatusSetCondition &condition = set.conditions[conditionSlot];
+        if (!copyBounded(record.fields[3], condition.source, sizeof(condition.source)))
+            return false;
+        condition.levels = static_cast<uint8_t>(levels);
+        condition.minValue = minValue;
+        condition.maxValue = maxValue;
+        if (set.conditionCount <= conditionSlot)
+            set.conditionCount = static_cast<uint8_t>(conditionSlot + 1);
+        return true;
+    }
 
     bool decodePetBehaviorHeader(const SdTextRecord &record)
     {

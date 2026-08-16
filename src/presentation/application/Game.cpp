@@ -68,11 +68,7 @@ bool Game::prepare_game()
         startupConfigError = "evolution_rules.txt";
         return false;
     }
-    if (!commandExecutor->validateRequiredContracts(petBehaviorConfig))
-    {
-        startupConfigError = "status_sets.txt";
-        return false;
-    }
+    commandExecutor->configureRuntimeContract(petBehaviorConfig);
     commands->configure(petBehaviorConfig);
     commands->resetSelection();
     layout->begin();
