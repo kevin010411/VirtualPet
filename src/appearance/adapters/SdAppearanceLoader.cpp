@@ -3,11 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "shared/sd/SdTextRecordReader.h"
 #include "shared/utils/TextBuffer.h"
 
 namespace
 {
 constexpr const char *kEvolutionRulesPath = "/evolution_rules.txt";
+constexpr size_t kMaxEvolutionRulesFileBytes = 8192;
 constexpr int32_t kMinConditionValue = -2147483647L - 1L;
 constexpr int32_t kMaxConditionValue = 2147483647L;
 constexpr size_t kMaxStateAliases = 8;
@@ -151,38 +153,6 @@ bool isValidStatName(const char *name)
                            (c >= '0' && c <= '9') ||
                            c == '_' || c == '-';
         if (!valid)
-            return false;
-    }
-
-    return true;
-}
-
-bool splitFields(char *line, char *fields[], size_t fieldCount)
-{
-    size_t count = 0;
-    char *cursor = line;
-
-    while (count < fieldCount)
-    {
-        fields[count++] = cursor;
-        char *sep = strchr(cursor, '|');
-        if (sep == nullptr)
-            break;
-
-        *sep = '\0';
-        cursor = sep + 1;
-    }
-
-    if (count != fieldCount)
-        return false;
-
-    if (strchr(fields[fieldCount - 1], '|') != nullptr)
-        return false;
-
-    for (size_t i = 0; i < fieldCount; ++i)
-    {
-        fields[i] = trimField(fields[i]);
-        if (fields[i] == nullptr)
             return false;
     }
 
@@ -391,19 +361,41 @@ bool conditionsAreValid(char *conditions, const StateAlias aliases[], size_t ali
     return true;
 }
 
-bool splitEvolutionRule(char *line, char *&sourceSpecies, char *&speciesCode, char *&outfitCode, char *&conditions)
+struct EvolutionRule
 {
-    char *fields[4] = {};
-    if (!splitFields(line, fields, 4))
+    char *sourceSpecies;
+    char *speciesCode;
+    char *outfitCode;
+    char *conditions;
+};
+
+bool parseEvolutionRule(const SdTextRecord &record, EvolutionRule &rule)
+{
+    rule = {};
+    if (record.fieldOverflow || record.fieldCount != 4)
         return false;
 
-    sourceSpecies = fields[0];
-    speciesCode = fields[1];
-    outfitCode = fields[2];
-    conditions = fields[3];
-    return (strcmp(sourceSpecies, "*") == 0 || isValidAppearanceCode(sourceSpecies)) &&
-           isValidAppearanceCode(speciesCode) &&
-           isValidAppearanceCode(outfitCode);
+    rule.sourceSpecies = trimField(record.fields[0]);
+    rule.speciesCode = trimField(record.fields[1]);
+    rule.outfitCode = trimField(record.fields[2]);
+    rule.conditions = trimField(record.fields[3]);
+    return (strcmp(rule.sourceSpecies, "*") == 0 || isValidAppearanceCode(rule.sourceSpecies)) &&
+           isValidAppearanceCode(rule.speciesCode) &&
+           isValidAppearanceCode(rule.outfitCode);
+}
+
+bool isIgnoredEvolutionRecord(const SdTextRecord &record)
+{
+    if (record.fieldCount == 0)
+        return true;
+    char *content = trimField(record.fields[0]);
+    return content == nullptr || content[0] == '\0' || content[0] == '#';
+}
+
+bool loadEvolutionRecords(SdFat *sd, SdDelimitedTextRecordHandler handler, void *context)
+{
+    return loadSdDelimitedTextRecords(sd, kEvolutionRulesPath, kMaxEvolutionRulesFileBytes,
+                                      kSdDelimitedTextMaxLineBytes, handler, context);
 }
 
 bool buildSpeciesOutfitListPath(char *dest, size_t destSize, const char *speciesCode)
@@ -419,25 +411,20 @@ bool evolutionSpeciesExists(SdFat *sd, const char *expectedCode)
 {
     if (sd == nullptr || !isValidAppearanceCode(expectedCode))
         return false;
-    File file = sd->open(kEvolutionRulesPath, FILE_READ);
-    if (!file)
-        return false;
-    bool found = false;
-    char line[192] = {};
-    while (!found && readConfigLine(file, line, sizeof(line)))
+    struct Context
     {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
-            continue;
-        char *sourceSpecies = nullptr;
-        char *speciesCode = nullptr;
-        char *outfitCode = nullptr;
-        char *conditions = nullptr;
-        found = splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions) &&
-                strcmp(speciesCode, expectedCode) == 0;
-    }
-    file.close();
-    return found;
+        const char *expectedCode;
+        bool found;
+    } context = {expectedCode, false};
+    const bool loaded = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
+        Context &context = *static_cast<Context *>(rawContext);
+        if (isIgnoredEvolutionRecord(record))
+            return SdTextRecordAction::Continue;
+        EvolutionRule rule = {};
+        context.found = parseEvolutionRule(record, rule) && strcmp(rule.speciesCode, context.expectedCode) == 0;
+        return context.found ? SdTextRecordAction::Stop : SdTextRecordAction::Continue;
+    }, &context);
+    return loaded && context.found;
 }
 
 bool outfitExists(SdFat *sd, const char *speciesCode, const char *expectedCode)
@@ -568,57 +555,48 @@ bool SdAppearanceLoader::validateEvolutionContract(const PetBehaviorConfig &conf
         evolutionStats[index].slot = aliases[index].customIndex;
     }
     evolutionStatCount = static_cast<uint8_t>(aliasCount);
-    File file = sd->open(kEvolutionRulesPath, FILE_READ);
-    if (!file)
-        return false;
-
-    bool foundInitial = false;
-    bool valid = true;
-    char line[192] = {};
-    while (valid && readConfigLine(file, line, sizeof(line)))
+    struct ValidationContext
     {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
-            continue;
-        char *sourceSpecies = nullptr;
-        char *speciesCode = nullptr;
-        char *outfitCode = nullptr;
-        char *conditions = nullptr;
-        if (!splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions))
+        StateAlias *aliases;
+        size_t aliasCount;
+        bool foundInitial;
+    } validation = {aliases, aliasCount, false};
+    bool valid = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
+        ValidationContext &context = *static_cast<ValidationContext *>(rawContext);
+        if (isIgnoredEvolutionRecord(record))
+            return SdTextRecordAction::Continue;
+        EvolutionRule rule = {};
+        if (!parseEvolutionRule(record, rule))
+            return SdTextRecordAction::Error;
+        if (strcmp(rule.sourceSpecies, "init") == 0)
         {
-            valid = false;
-            break;
+            const bool validInitial = !context.foundInitial && rule.conditions[0] == '\0';
+            context.foundInitial = true;
+            return validInitial ? SdTextRecordAction::Continue : SdTextRecordAction::Error;
         }
-        if (strcmp(sourceSpecies, "init") == 0)
-        {
-            valid = !foundInitial && conditions[0] == '\0';
-            foundInitial = true;
-            continue;
-        }
-        valid = conditionsAreValid(conditions, aliases, aliasCount);
-    }
-    file.close();
-    valid = valid && foundInitial;
+        return conditionsAreValid(rule.conditions, context.aliases, context.aliasCount)
+                   ? SdTextRecordAction::Continue
+                   : SdTextRecordAction::Error;
+    }, &validation);
+    valid = valid && validation.foundInitial;
     if (valid)
     {
-        file = sd->open(kEvolutionRulesPath, FILE_READ);
-        valid = static_cast<bool>(file);
-        while (valid && readConfigLine(file, line, sizeof(line)))
+        struct ReferenceContext
         {
-            char *content = trimField(line);
-            if (content == nullptr || content[0] == '\0' || content[0] == '#')
-                continue;
-            char *sourceSpecies = nullptr;
-            char *speciesCode = nullptr;
-            char *outfitCode = nullptr;
-            char *conditions = nullptr;
-            valid = splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions) &&
-                    outfitExists(sd, speciesCode, outfitCode) &&
-                    (strcmp(sourceSpecies, "init") == 0 ||
-                     (evolutionSpeciesExists(sd, sourceSpecies) &&
-                      conditionReferencesExist(conditions, sd, sourceSpecies)));
-        }
-        file.close();
+            SdFat *sd;
+        } references = {sd};
+        valid = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
+            ReferenceContext &context = *static_cast<ReferenceContext *>(rawContext);
+            if (isIgnoredEvolutionRecord(record))
+                return SdTextRecordAction::Continue;
+            EvolutionRule rule = {};
+            const bool recordValid = parseEvolutionRule(record, rule) &&
+                                     outfitExists(context.sd, rule.speciesCode, rule.outfitCode) &&
+                                     (strcmp(rule.sourceSpecies, "init") == 0 ||
+                                      (evolutionSpeciesExists(context.sd, rule.sourceSpecies) &&
+                                       conditionReferencesExist(rule.conditions, context.sd, rule.sourceSpecies)));
+            return recordValid ? SdTextRecordAction::Continue : SdTextRecordAction::Error;
+        }, &references);
     }
     evolutionContractValidated = valid;
     return evolutionContractValidated;
@@ -630,37 +608,28 @@ bool SdAppearanceLoader::findInitialAppearance(AppearanceSelection &selection)
     if (sd == nullptr || !sd->exists(kEvolutionRulesPath))
         return false;
 
-    File file = sd->open(kEvolutionRulesPath, FILE_READ);
-    if (!file)
-        return false;
-
-    char line[192] = {};
-    while (readConfigLine(file, line, sizeof(line)))
+    struct Context
     {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
-            continue;
-
-        char *speciesCode = nullptr;
-        char *outfitCode = nullptr;
-        char *sourceSpecies = nullptr;
-        char *conditions = nullptr;
-        if (!splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions))
-            continue;
-
-        if (strcmp(sourceSpecies, "init") != 0)
-            continue;
-
-        strncpy(selection.speciesCode, speciesCode, sizeof(selection.speciesCode) - 1);
-        selection.speciesCode[sizeof(selection.speciesCode) - 1] = '\0';
-        strncpy(selection.outfitCode, outfitCode, sizeof(selection.outfitCode) - 1);
-        selection.outfitCode[sizeof(selection.outfitCode) - 1] = '\0';
-        file.close();
-        return true;
-    }
-
-    file.close();
-    return false;
+        AppearanceSelection *selection;
+        bool found;
+    } context = {&selection, false};
+    const bool loaded = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
+        Context &context = *static_cast<Context *>(rawContext);
+        if (isIgnoredEvolutionRecord(record))
+            return SdTextRecordAction::Continue;
+        EvolutionRule rule = {};
+        if (!parseEvolutionRule(record, rule))
+            return SdTextRecordAction::Continue;
+        if (strcmp(rule.sourceSpecies, "init") != 0)
+            return SdTextRecordAction::Continue;
+        strncpy(context.selection->speciesCode, rule.speciesCode, sizeof(context.selection->speciesCode) - 1);
+        context.selection->speciesCode[sizeof(context.selection->speciesCode) - 1] = '\0';
+        strncpy(context.selection->outfitCode, rule.outfitCode, sizeof(context.selection->outfitCode) - 1);
+        context.selection->outfitCode[sizeof(context.selection->outfitCode) - 1] = '\0';
+        context.found = true;
+        return SdTextRecordAction::Stop;
+    }, &context);
+    return loaded && context.found;
 }
 
 bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection)
@@ -679,40 +648,31 @@ bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats, Appea
         aliases[index].customIndex = evolutionStats[index].slot;
     }
 
-    File file = sd->open(kEvolutionRulesPath, FILE_READ);
-    if (!file)
-        return false;
-
-    char line[192] = {};
-    while (readConfigLine(file, line, sizeof(line)))
+    struct Context
     {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
-            continue;
-
-        char *speciesCode = nullptr;
-        char *outfitCode = nullptr;
-        char *sourceSpecies = nullptr;
-        char *conditions = nullptr;
-        if (!splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions))
-            continue;
-
-        if (!sourceMatches(sourceSpecies, stats))
-            continue;
-
-        if (!conditionsMatch(conditions, stats, aliases, aliasCount))
-            continue;
-
-        strncpy(selection.speciesCode, speciesCode, sizeof(selection.speciesCode) - 1);
-        selection.speciesCode[sizeof(selection.speciesCode) - 1] = '\0';
-        strncpy(selection.outfitCode, outfitCode, sizeof(selection.outfitCode) - 1);
-        selection.outfitCode[sizeof(selection.outfitCode) - 1] = '\0';
-        file.close();
-        return true;
-    }
-
-    file.close();
-    return false;
+        const PetStatSnapshot *stats;
+        const StateAlias *aliases;
+        size_t aliasCount;
+        AppearanceSelection *selection;
+        bool found;
+    } context = {&stats, aliases, aliasCount, &selection, false};
+    const bool loaded = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
+        Context &context = *static_cast<Context *>(rawContext);
+        if (isIgnoredEvolutionRecord(record))
+            return SdTextRecordAction::Continue;
+        EvolutionRule rule = {};
+        if (!parseEvolutionRule(record, rule) ||
+            !sourceMatches(rule.sourceSpecies, *context.stats) ||
+            !conditionsMatch(rule.conditions, *context.stats, context.aliases, context.aliasCount))
+            return SdTextRecordAction::Continue;
+        strncpy(context.selection->speciesCode, rule.speciesCode, sizeof(context.selection->speciesCode) - 1);
+        context.selection->speciesCode[sizeof(context.selection->speciesCode) - 1] = '\0';
+        strncpy(context.selection->outfitCode, rule.outfitCode, sizeof(context.selection->outfitCode) - 1);
+        context.selection->outfitCode[sizeof(context.selection->outfitCode) - 1] = '\0';
+        context.found = true;
+        return SdTextRecordAction::Stop;
+    }, &context);
+    return loaded && context.found;
 }
 
 bool SdAppearanceLoader::loadSpecies(char species[][9], size_t maxSpecies, size_t &speciesCount)
@@ -721,28 +681,24 @@ bool SdAppearanceLoader::loadSpecies(char species[][9], size_t maxSpecies, size_
     if (sd == nullptr || species == nullptr || maxSpecies == 0 || !sd->exists(kEvolutionRulesPath))
         return false;
 
-    File file = sd->open(kEvolutionRulesPath, FILE_READ);
-    if (!file)
-        return false;
-
-    char line[192] = {};
-    while (readConfigLine(file, line, sizeof(line)) && speciesCount < maxSpecies)
+    struct Context
     {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
-            continue;
-
-        char *speciesCode = nullptr;
-        char *outfitCode = nullptr;
-        char *sourceSpecies = nullptr;
-        char *conditions = nullptr;
-        if (!splitEvolutionRule(content, sourceSpecies, speciesCode, outfitCode, conditions))
-            continue;
+        char (*species)[9];
+        size_t maxSpecies;
+        size_t *speciesCount;
+    } context = {species, maxSpecies, &speciesCount};
+    const bool loaded = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
+        Context &context = *static_cast<Context *>(rawContext);
+        if (isIgnoredEvolutionRecord(record))
+            return SdTextRecordAction::Continue;
+        EvolutionRule rule = {};
+        if (!parseEvolutionRule(record, rule))
+            return SdTextRecordAction::Continue;
 
         bool duplicate = false;
-        for (size_t i = 0; i < speciesCount; ++i)
+        for (size_t i = 0; i < *context.speciesCount; ++i)
         {
-            if (strcmp(species[i], speciesCode) == 0)
+            if (strcmp(context.species[i], rule.speciesCode) == 0)
             {
                 duplicate = true;
                 break;
@@ -750,15 +706,14 @@ bool SdAppearanceLoader::loadSpecies(char species[][9], size_t maxSpecies, size_
         }
 
         if (duplicate)
-            continue;
-
-        strncpy(species[speciesCount], speciesCode, 8);
-        species[speciesCount][8] = '\0';
-        ++speciesCount;
-    }
-
-    file.close();
-    return speciesCount > 0;
+            return SdTextRecordAction::Continue;
+        strncpy(context.species[*context.speciesCount], rule.speciesCode, 8);
+        context.species[*context.speciesCount][8] = '\0';
+        ++*context.speciesCount;
+        return *context.speciesCount >= context.maxSpecies ? SdTextRecordAction::Stop
+                                                           : SdTextRecordAction::Continue;
+    }, &context);
+    return loaded && speciesCount > 0;
 }
 
 bool SdAppearanceLoader::loadOutfits(const char *speciesCode, char outfits[][9], size_t maxOutfits, size_t &outfitCount)

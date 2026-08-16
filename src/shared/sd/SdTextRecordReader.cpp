@@ -46,7 +46,10 @@ bool splitFields(char *line, SdTextRecord &record)
     while (true)
     {
         if (record.fieldCount >= kSdTextRecordMaxFields)
-            return false;
+        {
+            record.fieldOverflow = true;
+            return true;
+        }
         record.fields[record.fieldCount++] = cursor;
         char *separator = strchr(cursor, '|');
         if (separator == nullptr)
@@ -76,7 +79,7 @@ public:
         char crcLine[kSdTextRecordMaxLineBytes] = {};
         strcpy(crcLine, line);
         SdTextRecord record = {};
-        if (!splitFields(line, record))
+        if (!splitFields(line, record) || record.fieldOverflow)
             return false;
         if (!headerSeen)
         {
@@ -145,6 +148,59 @@ bool readRecords(NextByte nextByte, size_t maxFileBytes, const char *fileIdentit
         return false;
     return reader.complete();
 }
+
+template <typename NextByte>
+bool readDelimitedRecords(NextByte nextByte, size_t maxFileBytes, size_t maxLineBytes,
+                          SdDelimitedTextRecordHandler handler, void *context)
+{
+    if (maxFileBytes == 0 || maxLineBytes < 2 || maxLineBytes > kSdDelimitedTextMaxLineBytes || handler == nullptr)
+        return false;
+
+    char line[kSdDelimitedTextMaxLineBytes] = {};
+    size_t lineLength = 0;
+    size_t totalLength = 0;
+    while (true)
+    {
+        const int next = nextByte();
+        if (next < 0)
+            break;
+        if (++totalLength > maxFileBytes)
+            return false;
+
+        const char character = static_cast<char>(next);
+        if (character == '\n')
+        {
+            if (lineLength > 0 && line[lineLength - 1] == '\r')
+                --lineLength;
+            line[lineLength] = '\0';
+            SdTextRecord record = {};
+            if (!splitFields(line, record))
+                return false;
+            const SdTextRecordAction action = handler(context, record);
+            if (action == SdTextRecordAction::Stop)
+                return true;
+            if (action == SdTextRecordAction::Error)
+                return false;
+            lineLength = 0;
+        }
+        else if (lineLength + 1 >= maxLineBytes)
+            return false;
+        else
+            line[lineLength++] = character;
+    }
+
+    if (lineLength > 0)
+    {
+        if (line[lineLength - 1] == '\r')
+            --lineLength;
+        line[lineLength] = '\0';
+        SdTextRecord record = {};
+        if (!splitFields(line, record))
+            return false;
+        return handler(context, record) != SdTextRecordAction::Error;
+    }
+    return true;
+}
 } // namespace
 
 bool parseSdTextRecords(const char *text, size_t maxFileBytes, const char *fileIdentity,
@@ -170,6 +226,20 @@ bool loadSdTextRecords(SdFat *sd, const char *path, size_t maxFileBytes, const c
         return false;
     const bool valid = readRecords([&file]() -> int { return file.available() ? file.read() : -1; },
                                    maxFileBytes, fileIdentity, supportedVersion, handler, context);
+    file.close();
+    return valid;
+}
+
+bool loadSdDelimitedTextRecords(SdFat *sd, const char *path, size_t maxFileBytes, size_t maxLineBytes,
+                                SdDelimitedTextRecordHandler handler, void *context)
+{
+    if (sd == nullptr || path == nullptr)
+        return false;
+    File file = sd->open(path, FILE_READ);
+    if (!file)
+        return false;
+    const bool valid = readDelimitedRecords([&file]() -> int { return file.available() ? file.read() : -1; },
+                                            maxFileBytes, maxLineBytes, handler, context);
     file.close();
     return valid;
 }
