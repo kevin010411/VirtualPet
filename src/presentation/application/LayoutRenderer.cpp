@@ -3,6 +3,7 @@
 #include <SdFat.h>
 #include <string.h>
 #include "shared/config/AppProfile.h"
+#include "shared/sd/SdTextRecordReader.h"
 #include "shared/utils/TextBuffer.h"
 #include "commands/application/CommandController.h"
 #include "presentation/adapters/rendering/Renderer.h"
@@ -14,6 +15,8 @@ constexpr const char *kLegacyLayoutPath = "/layout";
 constexpr const char *kLegacySelectedLayoutPath = "/layout_sel";
 constexpr const char *kBaseSelectedLayoutPath = "/layout/base_on";
 constexpr const char *kBaseLayoutPath = "/layout/base_off";
+constexpr size_t kMaxLayoutIndexFileBytes = kAnimationIdCount * 32U;
+constexpr size_t kMaxLayoutIndexLineBytes = 32;
 
 void trimLine(char *line)
 {
@@ -41,6 +44,24 @@ void trimLine(char *line)
         line[length - 1] = '\0';
         --length;
     }
+}
+
+struct ActionLayoutLoadContext
+{
+    bool layouts[kAnimationIdCount] = {};
+};
+
+SdTextRecordAction collectActionLayout(void *rawContext, const SdTextRecord &record)
+{
+    if (rawContext == nullptr || record.fieldOverflow || record.fieldCount != 1)
+        return SdTextRecordAction::Continue;
+
+    char *line = record.fields[0];
+    trimLine(line);
+    const AnimationId id = animationIdFromName(line);
+    if (id != AnimationId::None)
+        static_cast<ActionLayoutLoadContext *>(rawContext)->layouts[static_cast<size_t>(id)] = true;
+    return SdTextRecordAction::Continue;
 }
 } // namespace
 
@@ -147,40 +168,12 @@ void LayoutRenderer::loadActionLayouts()
     if (sd == nullptr)
         return;
 
-    File index = sd->open(kLayoutIndexPath, FILE_READ);
-    if (!index)
+    ActionLayoutLoadContext context;
+    if (!loadSdDelimitedTextRecords(sd, kLayoutIndexPath, kMaxLayoutIndexFileBytes,
+                                    kMaxLayoutIndexLineBytes, collectActionLayout, &context))
         return;
 
-    char line[32] = {};
-    size_t length = 0;
-    while (index.available())
-    {
-        const char c = static_cast<char>(index.read());
-        if (c == '\n' || length >= sizeof(line) - 1)
-        {
-            line[length] = '\0';
-            trimLine(line);
-            const AnimationId id = animationIdFromName(line);
-            if (id != AnimationId::None)
-                actionLayouts[static_cast<size_t>(id)] = true;
-            length = 0;
-            line[0] = '\0';
-            continue;
-        }
-
-        line[length++] = c;
-    }
-
-    if (length > 0)
-    {
-        line[length] = '\0';
-        trimLine(line);
-        const AnimationId id = animationIdFromName(line);
-        if (id != AnimationId::None)
-            actionLayouts[static_cast<size_t>(id)] = true;
-    }
-
-    index.close();
+    memcpy(actionLayouts, context.layouts, sizeof(actionLayouts));
 }
 
 void LayoutRenderer::drawSlot(int slot, bool selected)
