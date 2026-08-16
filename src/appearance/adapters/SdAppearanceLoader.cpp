@@ -10,6 +10,8 @@ namespace
 {
 constexpr const char *kEvolutionRulesPath = "/evolution_rules.txt";
 constexpr size_t kMaxEvolutionRulesFileBytes = 8192;
+constexpr size_t kMaxAppearanceIndexFileBytes = 8192;
+constexpr size_t kMaxAppearanceLineBytes = 192;
 constexpr int32_t kMinConditionValue = -2147483647L - 1L;
 constexpr int32_t kMaxConditionValue = 2147483647L;
 constexpr size_t kMaxStateAliases = 8;
@@ -44,29 +46,6 @@ char *trimField(char *text)
         --end;
     }
     return text;
-}
-
-bool readConfigLine(File &file, char *line, size_t lineSize)
-{
-    if (line == nullptr || lineSize == 0)
-        return false;
-
-    size_t index = 0;
-    bool sawAny = false;
-    while (file.available())
-    {
-        const char c = static_cast<char>(file.read());
-        sawAny = true;
-        if (c == '\r')
-            continue;
-        if (c == '\n')
-            break;
-        if (index + 1 < lineSize)
-            line[index++] = c;
-    }
-
-    line[index] = '\0';
-    return sawAny || index > 0;
 }
 
 bool parseUnsignedField(const char *text, uint32_t &value)
@@ -395,7 +374,7 @@ bool isIgnoredEvolutionRecord(const SdTextRecord &record)
 bool loadEvolutionRecords(SdFat *sd, SdDelimitedTextRecordHandler handler, void *context)
 {
     return loadSdDelimitedTextRecords(sd, kEvolutionRulesPath, kMaxEvolutionRulesFileBytes,
-                                      kSdDelimitedTextMaxLineBytes, handler, context);
+                                      kMaxAppearanceLineBytes, handler, context);
 }
 
 bool buildSpeciesOutfitListPath(char *dest, size_t destSize, const char *speciesCode)
@@ -433,27 +412,23 @@ bool outfitExists(SdFat *sd, const char *speciesCode, const char *expectedCode)
     if (sd == nullptr || !isValidAppearanceCode(expectedCode) ||
         !buildSpeciesOutfitListPath(path, sizeof(path), speciesCode))
         return false;
-    File file = sd->open(path, FILE_READ);
-    if (!file)
-        return false;
-    bool found = false;
-    char line[128] = {};
-    while (!found && readConfigLine(file, line, sizeof(line)))
+    struct Context
     {
-        char *cursor = trimField(line);
-        while (cursor != nullptr && cursor[0] != '\0')
-        {
-            char *separator = strchr(cursor, '|');
-            if (separator != nullptr)
-                *separator = '\0';
-            found = strcmp(trimField(cursor), expectedCode) == 0;
-            if (found)
-                break;
-            cursor = separator == nullptr ? nullptr : separator + 1;
-        }
-    }
-    file.close();
-    return found;
+        const char *expectedCode;
+        bool found;
+    } context = {expectedCode, false};
+    const bool loaded = loadSdDelimitedTextRecords(sd, path, kMaxAppearanceIndexFileBytes, 128,
+        [](void *rawContext, const SdTextRecord &record) {
+            Context &context = *static_cast<Context *>(rawContext);
+            for (uint8_t index = 0; index < record.fieldCount; ++index)
+            {
+                context.found = strcmp(trimField(record.fields[index]), context.expectedCode) == 0;
+                if (context.found)
+                    return SdTextRecordAction::Stop;
+            }
+            return SdTextRecordAction::Continue;
+        }, &context);
+    return loaded && context.found;
 }
 
 bool conditionReferencesExist(char *conditions, SdFat *sd, const char *sourceSpecies)
@@ -498,38 +473,6 @@ bool copyText(char *dest, size_t destSize, const char *source)
         return false;
 
     memcpy(dest, source, len + 1);
-    return true;
-}
-
-bool splitOutfitPreviewRow(char *line, char *fields[], size_t fieldCount)
-{
-    size_t count = 0;
-    char *cursor = line;
-
-    while (count < fieldCount)
-    {
-        fields[count++] = cursor;
-        char *sep = strchr(cursor, '|');
-        if (sep == nullptr)
-            break;
-
-        *sep = '\0';
-        cursor = sep + 1;
-    }
-
-    if (count != fieldCount)
-        return false;
-
-    if (strchr(fields[fieldCount - 1], '|') != nullptr)
-        return false;
-
-    for (size_t i = 0; i < fieldCount; ++i)
-    {
-        fields[i] = trimField(fields[i]);
-        if (fields[i] == nullptr || fields[i][0] == '\0')
-            return false;
-    }
-
     return true;
 }
 
@@ -726,41 +669,32 @@ bool SdAppearanceLoader::loadOutfits(const char *speciesCode, char outfits[][9],
     if (!buildSpeciesOutfitListPath(path, sizeof(path), speciesCode))
         return false;
 
-    File file = sd->open(path, FILE_READ);
-    if (!file)
-        return false;
-
-    char line[128] = {};
-    while (readConfigLine(file, line, sizeof(line)))
+    struct Context
     {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
-            continue;
-
-        char *cursor = content;
-        while (cursor != nullptr && *cursor != '\0' && outfitCount < maxOutfits)
-        {
-            char *sep = strchr(cursor, '|');
-            if (sep != nullptr)
-                *sep = '\0';
-
-            char *outfitCode = trimField(cursor);
-            if (isValidAppearanceCode(outfitCode))
+        char (*outfits)[9];
+        size_t maxOutfits;
+        size_t *outfitCount;
+    } context = {outfits, maxOutfits, &outfitCount};
+    const bool loaded = loadSdDelimitedTextRecords(sd, path, kMaxAppearanceIndexFileBytes, 128,
+        [](void *rawContext, const SdTextRecord &record) {
+            Context &context = *static_cast<Context *>(rawContext);
+            if (record.fieldCount == 0)
+                return SdTextRecordAction::Continue;
+            char *first = trimField(record.fields[0]);
+            if (first == nullptr || first[0] == '\0' || first[0] == '#')
+                return SdTextRecordAction::Continue;
+            for (uint8_t index = 0; index < record.fieldCount && *context.outfitCount < context.maxOutfits; ++index)
             {
-                strncpy(outfits[outfitCount], outfitCode, 8);
-                outfits[outfitCount][8] = '\0';
-                ++outfitCount;
+                char *outfitCode = trimField(record.fields[index]);
+                if (!isValidAppearanceCode(outfitCode))
+                    continue;
+                strncpy(context.outfits[*context.outfitCount], outfitCode, 8);
+                context.outfits[*context.outfitCount][8] = '\0';
+                ++*context.outfitCount;
             }
-
-            cursor = (sep == nullptr) ? nullptr : sep + 1;
-        }
-
-        if (outfitCount > 0 || outfitCount >= maxOutfits)
-            break;
-    }
-
-    file.close();
-    return outfitCount > 0;
+            return *context.outfitCount > 0 ? SdTextRecordAction::Stop : SdTextRecordAction::Continue;
+        }, &context);
+    return loaded && outfitCount > 0;
 }
 
 bool SdAppearanceLoader::findOutfitPreview(const char *speciesCode, const char *outfitCode, OutfitPreview &preview)
@@ -773,43 +707,40 @@ bool SdAppearanceLoader::findOutfitPreview(const char *speciesCode, const char *
     if (!buildOutfitPreviewPath(path, sizeof(path), speciesCode))
         return false;
 
-    File file = sd->open(path, FILE_READ);
-    if (!file)
-        return false;
-
-    char line[192] = {};
-    while (readConfigLine(file, line, sizeof(line)))
+    struct Context
     {
-        char *content = trimField(line);
-        if (content == nullptr || content[0] == '\0' || content[0] == '#')
-            continue;
-
-        char *fields[6] = {};
-        if (!splitOutfitPreviewRow(content, fields, 6))
-            continue;
-
-        if (strcmp(fields[0], outfitCode) != 0)
-            continue;
-
-        const uint16_t frameCount = static_cast<uint16_t>(strtoul(fields[1], nullptr, 10));
-        const uint16_t frameIntervalMs = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
-        const uint16_t width = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
-        const uint16_t height = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
-        if (frameCount == 0 || width == 0 || height == 0)
-            continue;
-
-        if (!copyText(preview.outfitCode, sizeof(preview.outfitCode), fields[0]) ||
-            !copyText(preview.path, sizeof(preview.path), fields[5]))
-            continue;
-
-        preview.frameCount = frameCount;
-        preview.width = width;
-        preview.height = height;
-        preview.frameIntervalMs = frameIntervalMs;
-        file.close();
-        return true;
-    }
-
-    file.close();
-    return false;
+        const char *outfitCode;
+        OutfitPreview *preview;
+        bool found;
+    } context = {outfitCode, &preview, false};
+    const bool loaded = loadSdDelimitedTextRecords(sd, path, kMaxAppearanceIndexFileBytes,
+        kMaxAppearanceLineBytes, [](void *rawContext, const SdTextRecord &record) {
+            Context &context = *static_cast<Context *>(rawContext);
+            if (record.fieldOverflow || record.fieldCount != 6)
+                return SdTextRecordAction::Continue;
+            char *fields[6] = {};
+            for (uint8_t index = 0; index < record.fieldCount; ++index)
+            {
+                fields[index] = trimField(record.fields[index]);
+                if (fields[index] == nullptr || fields[index][0] == '\0')
+                    return SdTextRecordAction::Continue;
+            }
+            if (fields[0][0] == '#' || strcmp(fields[0], context.outfitCode) != 0)
+                return SdTextRecordAction::Continue;
+            const uint16_t frameCount = static_cast<uint16_t>(strtoul(fields[1], nullptr, 10));
+            const uint16_t frameIntervalMs = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
+            const uint16_t width = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
+            const uint16_t height = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
+            if (frameCount == 0 || width == 0 || height == 0 ||
+                !copyText(context.preview->outfitCode, sizeof(context.preview->outfitCode), fields[0]) ||
+                !copyText(context.preview->path, sizeof(context.preview->path), fields[5]))
+                return SdTextRecordAction::Continue;
+            context.preview->frameCount = frameCount;
+            context.preview->width = width;
+            context.preview->height = height;
+            context.preview->frameIntervalMs = frameIntervalMs;
+            context.found = true;
+            return SdTextRecordAction::Stop;
+        }, &context);
+    return loaded && context.found;
 }

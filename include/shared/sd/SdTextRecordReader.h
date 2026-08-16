@@ -6,7 +6,7 @@
 #include <SdFat.h>
 
 constexpr size_t kSdTextRecordMaxLineBytes = 128;
-constexpr size_t kSdDelimitedTextMaxLineBytes = 192;
+constexpr size_t kSdDelimitedTextMaxLineBytes = 256;
 constexpr uint8_t kSdTextRecordMaxFields = 8;
 
 struct SdTextRecord

@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "shared/sd/SdTextRecordReader.h"
 #include "shared/utils/TextBuffer.h"
 
 namespace
@@ -9,6 +10,7 @@ namespace
 constexpr uint16_t kDefaultAnimWidth = 128;
 constexpr uint16_t kDefaultAnimHeight = 96;
 constexpr const char *kMainManifestPath = "/index/main.txt";
+constexpr size_t kMaxManifestFileBytes = 32768;
 
 constexpr uint8_t kMaxLoadedAnimations = APP_MAX_LOADED_ANIMATIONS;
 
@@ -76,37 +78,6 @@ bool endsWithIgnoreCase(const char *text, const char *suffix)
         if (b >= 'A' && b <= 'Z')
             b = static_cast<char>(b - 'A' + 'a');
         if (a != b)
-            return false;
-    }
-    return true;
-}
-
-bool splitManifestFields(char *line, char **fields, size_t fieldCount)
-{
-    size_t count = 0;
-    char *cursor = line;
-
-    while (count < fieldCount)
-    {
-        fields[count++] = cursor;
-        char *sep = strchr(cursor, '|');
-        if (sep == nullptr)
-            break;
-
-        *sep = '\0';
-        cursor = sep + 1;
-    }
-
-    if (count != fieldCount)
-        return false;
-
-    if (strchr(fields[fieldCount - 1], '|') != nullptr)
-        return false;
-
-    for (size_t i = 0; i < fieldCount; ++i)
-    {
-        trimWhitespace(fields[i]);
-        if (fields[i][0] == '\0')
             return false;
     }
     return true;
@@ -268,71 +239,77 @@ bool upsertMeta(AnimationId id, const AnimationMeta &meta)
     return true;
 }
 
+struct ManifestLoadContext
+{
+    AssetManifest *registry;
+    bool allowVariants;
+};
+
+SdTextRecordAction loadManifestRecord(void *rawContext, const SdTextRecord &record)
+{
+    if (rawContext == nullptr || record.fieldCount == 0)
+        return SdTextRecordAction::Continue;
+    ManifestLoadContext &context = *static_cast<ManifestLoadContext *>(rawContext);
+    char *fields[7] = {};
+    for (uint8_t index = 0; index < record.fieldCount && index < 7; ++index)
+        fields[index] = record.fields[index];
+    trimWhitespace(fields[0]);
+    if (fields[0][0] == '\0' || fields[0][0] == '#')
+        return SdTextRecordAction::Continue;
+    if (record.fieldOverflow || record.fieldCount != 7)
+        return SdTextRecordAction::Continue;
+    for (size_t index = 0; index < 7; ++index)
+    {
+        trimWhitespace(fields[index]);
+        if (fields[index][0] == '\0')
+            return SdTextRecordAction::Continue;
+    }
+
+    if (strcmp(fields[1], "rle") != 0)
+        return SdTextRecordAction::Continue;
+
+    AnimationMeta parsed = {};
+    parsed.frameIntervalMs = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
+    parsed.frameCount = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
+    parsed.width = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
+    parsed.height = static_cast<uint16_t>(strtoul(fields[5], nullptr, 10));
+    if (!copyManifestPath(parsed.path, sizeof(parsed.path), fields[6]))
+    {
+        gPathError = true;
+        return SdTextRecordAction::Continue;
+    }
+
+    if (parsed.frameCount == 0 || parsed.width == 0 || parsed.height == 0 || parsed.path[0] == '\0')
+        return SdTextRecordAction::Continue;
+
+    parsed.singleFile = endsWithIgnoreCase(parsed.path, ".rle");
+    if (parsed.singleFile)
+        parsed.frameCount = 1;
+
+    parsed.configured = true;
+
+    const AnimationId targetId = animationIdFromName(fields[0]);
+    if (targetId != AnimationId::None)
+        upsertMeta(targetId, parsed);
+    else
+    {
+        char baseName[AssetManifest::kMaxAnimationNameLength + 1] = {};
+        if (context.allowVariants && !isStatusSetAnimationName(fields[0]) &&
+            splitVariantAnimationName(fields[0], baseName, sizeof(baseName)))
+            context.registry->registerVariantAnimation(baseName, fields[0], parsed);
+        else
+            context.registry->registerNamedAnimation(fields[0], parsed);
+    }
+    return SdTextRecordAction::Continue;
+}
+
 bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPath, bool allowVariants)
 {
     if (sd == nullptr || manifestPath == nullptr || manifestPath[0] == '\0')
         return false;
-
-    File manifest = sd->open(manifestPath, FILE_READ);
-    if (!manifest)
-        return false;
-
-    char line[256];
-    while (manifest.available())
-    {
-        const int len = manifest.readBytesUntil('\n', line, sizeof(line) - 1);
-        line[len] = '\0';
-        trimWhitespace(line);
-
-        if (line[0] == '\0' || line[0] == '#')
-            continue;
-
-        char *fields[7] = {};
-        if (!splitManifestFields(line, fields, 7))
-            continue;
-
-        if (strcmp(fields[1], "rle") != 0)
-            continue;
-
-        AnimationMeta parsed = {};
-        parsed.frameIntervalMs = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
-        parsed.frameCount = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
-        parsed.width = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
-        parsed.height = static_cast<uint16_t>(strtoul(fields[5], nullptr, 10));
-        if (!copyManifestPath(parsed.path, sizeof(parsed.path), fields[6]))
-        {
-            gPathError = true;
-            continue;
-        }
-
-        if (parsed.frameCount == 0 || parsed.width == 0 || parsed.height == 0 || parsed.path[0] == '\0')
-            continue;
-
-        parsed.singleFile = endsWithIgnoreCase(parsed.path, ".rle");
-        if (parsed.singleFile)
-            parsed.frameCount = 1;
-
-        parsed.configured = true;
-
-        const AnimationId targetId = animationIdFromName(fields[0]);
-        if (targetId != AnimationId::None)
-        {
-            upsertMeta(targetId, parsed);
-        }
-        else
-        {
-            char baseName[AssetManifest::kMaxAnimationNameLength + 1] = {};
-            if (allowVariants &&
-                !isStatusSetAnimationName(fields[0]) &&
-                splitVariantAnimationName(fields[0], baseName, sizeof(baseName)))
-                registry.registerVariantAnimation(baseName, fields[0], parsed);
-            else
-                registry.registerNamedAnimation(fields[0], parsed);
-        }
-    }
-
-    manifest.close();
-    return true;
+    ManifestLoadContext context = {&registry, allowVariants};
+    return loadSdDelimitedTextRecords(sd, manifestPath, kMaxManifestFileBytes,
+                                      kSdDelimitedTextMaxLineBytes, loadManifestRecord, &context);
 }
 } // namespace
 
