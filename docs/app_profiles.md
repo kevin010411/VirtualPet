@@ -43,7 +43,7 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_start
 
 韌體透過 `SystemCommandCatalog.def` 編譯固定的 System Commands：`predict`、
 `guess_game`、`status`、`change_outfit` 與 `change_species`。實際八個按鍵 slot
-由 `/pet_behavior.txt` 的 Command Layout 配置為空白、User Action 或可用的
+由 `/runtime_contract.txt` 的 Command Layout 配置為空白、User Action 或可用的
 System Command；Feed、Medicine、Shower、Clean 與 Gift 不再是固定 command。
 
 ## STATUS 模式

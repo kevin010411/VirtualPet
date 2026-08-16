@@ -59,7 +59,7 @@ bool Game::prepare_game()
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
-        startupConfigError = "pet_behavior.txt";
+        startupConfigError = "runtime_contract.txt";
         return false;
     }
     petBehaviorLoaded = true;
@@ -241,7 +241,7 @@ void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfi
 {
     if (petBehaviorLoadingFailed)
     {
-        renderer.showConfigLoadingError("pet_behavior.txt");
+        renderer.showConfigLoadingError("runtime_contract.txt");
         return;
     }
     if (!pet.setSpeciesCode(speciesCode) || !pet.setOutfitCode(outfitCode))
