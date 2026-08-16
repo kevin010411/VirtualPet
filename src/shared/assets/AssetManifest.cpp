@@ -193,6 +193,14 @@ bool splitVariantAnimationName(const char *name, char *baseName, size_t baseName
     return true;
 }
 
+bool isStatusSetAnimationName(const char *name)
+{
+    // Status Set animation IDs (for example StatusCustom1) are named
+    // animations. Their numeric suffix is a Stat slot, not a legacy variant
+    // version, so they must bypass splitVariantAnimationName().
+    return name != nullptr && strncmp(name, "Status", 6) == 0;
+}
+
 bool buildAppearanceManifestPath(char *dest, size_t destSize, const char *speciesCode, const char *outfitCode)
 {
     if (dest == nullptr || destSize == 0)
@@ -314,7 +322,9 @@ bool loadManifestFile(SdFat *sd, AssetManifest &registry, const char *manifestPa
         else
         {
             char baseName[AssetManifest::kMaxAnimationNameLength + 1] = {};
-            if (allowVariants && splitVariantAnimationName(fields[0], baseName, sizeof(baseName)))
+            if (allowVariants &&
+                !isStatusSetAnimationName(fields[0]) &&
+                splitVariantAnimationName(fields[0], baseName, sizeof(baseName)))
                 registry.registerVariantAnimation(baseName, fields[0], parsed);
             else
                 registry.registerNamedAnimation(fields[0], parsed);

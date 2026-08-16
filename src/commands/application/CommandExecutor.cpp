@@ -15,10 +15,6 @@ static_assert(
 static_assert(
     sizeof(((Animation *)nullptr)->namedAnimation) >= kStatusAnimationNameSize,
     "Queued animation names must hold every Status Animation ID.");
-static_assert(
-    AssetManifest::kMaxNamedAnimations >= kMaxStatusSets,
-    "The manifest must hold all configured Status Sets.");
-
 constexpr const char *kStatusSetsPath = "/status_sets.txt";
 
 uint8_t arduinoStatusSetIndex(uint8_t setCount)

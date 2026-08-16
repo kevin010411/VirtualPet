@@ -75,7 +75,6 @@ bool Game::prepare_game()
     }
     commands->configure(petBehaviorConfig);
     commands->resetSelection();
-    animations->setup(petBehaviorConfig.idleAnimation);
     layout->begin();
 
     dirtySelect = true;
@@ -108,8 +107,9 @@ bool Game::prepare_game()
     // with an earlier wildcard/fallback match before the startup animation.
     // Evolution is still evaluated by handleEvolution() during normal ticks.
     renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
-    renderer.reloadManifest();
-    refreshBaseAnimation();
+    // Animation setup reloads the manifest and selects the initial Idle
+    // variant, so it must run after the active appearance is known.
+    animations->setup(petBehaviorConfig.idleAnimation);
 
     setupPrepared = true;
     return true;
