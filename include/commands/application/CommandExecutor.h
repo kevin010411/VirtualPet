@@ -35,6 +35,9 @@ private:
     AnimationController &animations;
     const PetBehaviorConfig *petBehaviorConfig = nullptr;
     CommandResult currentResult = {};
+#if ENABLE_SEQUENTIAL_STATUS_SET_SELECTION
+    uint8_t nextStatusSetIndex = 0;
+#endif
 
 #if ENABLE_COMMAND_PREDICT
     static AnimationId fortuneToAnimationId(int fortuneIndex);

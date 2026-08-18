@@ -14,10 +14,12 @@ static_assert(
 static_assert(
     sizeof(((Animation *)nullptr)->namedAnimation) >= kStatusAnimationNameSize,
     "Queued animation names must hold every Status Animation ID.");
+#if !ENABLE_SEQUENTIAL_STATUS_SET_SELECTION
 uint8_t arduinoStatusSetIndex(uint8_t setCount)
 {
     return static_cast<uint8_t>(random(setCount));
 }
+#endif
 
 struct StatusValueContext
 {
@@ -183,8 +185,16 @@ bool CommandExecutor::queueStatusSetsAnimation()
     if (petBehaviorConfig == nullptr)
         return false;
     uint8_t selectedSetIndex = 0;
+#if ENABLE_SEQUENTIAL_STATUS_SET_SELECTION
+    const uint8_t setCount = petBehaviorConfig->statusSets.count;
+    if (setCount == 0)
+        return false;
+    selectedSetIndex = static_cast<uint8_t>(nextStatusSetIndex % setCount);
+    nextStatusSetIndex = static_cast<uint8_t>((selectedSetIndex + 1) % setCount);
+#else
     if (!selectStatusSetIndex(petBehaviorConfig->statusSets.count, arduinoStatusSetIndex, selectedSetIndex))
         return false;
+#endif
     const StatusSetConfig &set = petBehaviorConfig->statusSets.sets[selectedSetIndex];
     const PetStatSnapshot stats = petActions.statSnapshot();
     const StatusValueContext valueContext = {stats, *petBehaviorConfig};

@@ -65,6 +65,16 @@
 #define ENABLE_DEBUG 0
 #endif
 
+// When enabled, Status Sets are selected in exported order and wrap back to
+// the first Set. The default preserves equal-probability random selection.
+#ifndef ENABLE_SEQUENTIAL_STATUS_SET_SELECTION
+#define ENABLE_SEQUENTIAL_STATUS_SET_SELECTION 0
+#endif
+
+#if ENABLE_SEQUENTIAL_STATUS_SET_SELECTION != 0 && ENABLE_SEQUENTIAL_STATUS_SET_SELECTION != 1
+#error "ENABLE_SEQUENTIAL_STATUS_SET_SELECTION must be 0 or 1."
+#endif
+
 #ifndef APP_MAX_LOADED_ANIMATIONS
 #define APP_MAX_LOADED_ANIMATIONS 48
 #endif
