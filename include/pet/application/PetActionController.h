@@ -33,6 +33,9 @@ public:
     bool isFirstLaunchComplete() const;
     void markFirstLaunchComplete();
     void resetFirstLaunch();
+    bool isFirstStartCompleted() const;
+    void markFirstStartCompleted();
+    void resetFirstStartCompleted();
 
     const char *speciesCode() const;
     const char *outfitCode() const;

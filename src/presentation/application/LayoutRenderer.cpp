@@ -89,7 +89,10 @@ void LayoutRenderer::drawAll()
     const int selectedSlot = commands.selectedSlot();
 
     for (int slot = 0; slot < commands.commandCount(); ++slot)
-        drawSlot(slot, slot == selectedSlot);
+    {
+        if (!drawSlot(slot, slot == selectedSlot))
+            return;
+    }
 }
 
 void LayoutRenderer::drawSelection()
@@ -176,7 +179,7 @@ void LayoutRenderer::loadActionLayouts()
     memcpy(actionLayouts, context.layouts, sizeof(actionLayouts));
 }
 
-void LayoutRenderer::drawSlot(int slot, bool selected)
+bool LayoutRenderer::drawSlot(int slot, bool selected)
 {
 #if ENABLE_DYNAMIC_ACTION_LAYOUT
     if (activeAction != AnimationId::None)
@@ -186,20 +189,19 @@ void LayoutRenderer::drawSlot(int slot, bool selected)
         if (layoutPath.append("/layout/") && layoutPath.append(animationNameFromId(activeAction)) &&
             layoutPath.append("_") && layoutPath.append(selected ? "on" : "off") && layoutPath.ok())
         {
-            drawSlotFromPath(slot, path);
-            return;
+            return drawSlotFromPath(slot, path);
         }
     }
 
-    drawSlotFromPath(slot, selected ? kBaseSelectedLayoutPath : kBaseLayoutPath);
+    return drawSlotFromPath(slot, selected ? kBaseSelectedLayoutPath : kBaseLayoutPath);
 #else
-    drawSlotFromPath(slot, selected ? kLegacySelectedLayoutPath : kLegacyLayoutPath);
+    return drawSlotFromPath(slot, selected ? kLegacySelectedLayoutPath : kLegacyLayoutPath);
 #endif
 }
 
-void LayoutRenderer::drawSlotFromPath(int slot, const char *path)
+bool LayoutRenderer::drawSlotFromPath(int slot, const char *path)
 {
-    renderer.ShowSDCardFrame(path, static_cast<uint16_t>(slot + 1), slotX(slot), slotY(slot));
+    return renderer.ShowSDCardFrame(path, static_cast<uint16_t>(slot + 1), slotX(slot), slotY(slot));
 }
 
 bool LayoutRenderer::hasActionLayout(AnimationId id) const

@@ -44,9 +44,11 @@ void AnimationController::resetPlaybackState()
     animateDone = true;
     frameInterval = frameIntervalSlow;
     lastFrameTime = 0;
+    lastPlaybackUpdateTime = 0;
     showAnimationId = AnimationId::None;
     showUsesNamedAnimation = false;
     showNamedAnimation[0] = '\0';
+    failedAnimationId = AnimationId::None;
 }
 
 void AnimationController::setBaseAnimation(AnimationId baseAnimation)
@@ -262,6 +264,26 @@ bool AnimationController::queueActionAnimation(const char *baseName,
     return true;
 }
 
+bool AnimationController::queueCompleteAnimation(AnimationId id,
+                                                 AnimationOwner owner,
+                                                 AnimationPriority priority)
+{
+    if (!hasAnimation(id))
+        return false;
+
+    const uint16_t frameCount = renderer.frameCountFor(id);
+    const unsigned long frameIntervalMs = renderer.frameIntervalFor(id, frameIntervalSlow);
+    if (frameCount == 0 || frameIntervalMs == 0)
+        return false;
+
+    queueAnimation(Animation(id,
+                             completePlaybackDuration(frameCount, frameIntervalMs),
+                             true,
+                             owner,
+                             priority));
+    return true;
+}
+
 bool AnimationController::queueRepeatedActionAnimation(const char *baseName,
                                                         uint8_t playbackCount,
                                                         AnimationOwner owner,
@@ -431,6 +453,29 @@ void AnimationController::showResourceError()
     renderer.showResourceError();
 }
 
+bool AnimationController::hasAnimationPending(AnimationId id) const
+{
+    if (hasActiveAnimation && activeAnimation.id == id)
+        return true;
+    for (uint8_t index = 0; index < animationQueueCount; ++index)
+    {
+        if (animationQueue[index].id == id)
+            return true;
+    }
+    return false;
+}
+
+bool AnimationController::hasPlaybackFailure(AnimationId id) const
+{
+    return failedAnimationId == id;
+}
+
+void AnimationController::clearPlaybackFailure(AnimationId id)
+{
+    if (failedAnimationId == id)
+        failedAnimationId = AnimationId::None;
+}
+
 void AnimationController::showActionAnimationError()
 {
     renderer.showActionAnimationError();
@@ -450,23 +495,25 @@ void AnimationController::updateElapsed(unsigned long elapsed)
     if (displayDuration > 0 && activeAnimation.isFixedFrame())
         return;
 
-    if (activeAnimation.repeatCount > 1 && activeAnimation.playOnce)
-    {
-        if (!animateDone)
-            return;
-
-        if (activeRepeatsRemaining > 1)
-        {
-            --activeRepeatsRemaining;
-            displayDuration = static_cast<long>(activeAnimation.durationMs);
-            dirtyAnimation = true;
-            animateDone = false;
-            return;
-        }
-    }
-
     if (displayDuration > 0 && !animateDone)
         return;
+
+    completeActiveAnimation();
+}
+
+void AnimationController::completeActiveAnimation()
+{
+    if (!hasActiveAnimation)
+        return;
+
+    if (activeAnimation.repeatCount > 1 && activeAnimation.playOnce && activeRepeatsRemaining > 1)
+    {
+        --activeRepeatsRemaining;
+        displayDuration = static_cast<long>(activeAnimation.durationMs);
+        dirtyAnimation = true;
+        animateDone = false;
+        return;
+    }
 
     hasActiveAnimation = false;
     activeRepeatsRemaining = 0;
@@ -496,6 +543,26 @@ unsigned long AnimationController::completePlaybackDuration(uint16_t frameCount,
         return maxDisplayDuration;
 
     return frameIntervalMs * frameTransitions + kCompletePlaybackSafetyMs;
+}
+
+void AnimationController::tick(unsigned long now)
+{
+    if (lastPlaybackUpdateTime == 0)
+        lastPlaybackUpdateTime = now;
+
+    const unsigned long elapsed = now - lastPlaybackUpdateTime;
+    lastPlaybackUpdateTime = now;
+    updateElapsed(elapsed);
+    render(now);
+
+    // A one-shot must hand its display ownership back immediately after its
+    // final frame. Game's low-frequency Pet State tick must not delay idle.
+    if (hasActiveAnimation && activeAnimation.playOnce &&
+        !activeAnimation.isFixedFrame() && animateDone)
+    {
+        completeActiveAnimation();
+        render(now);
+    }
 }
 
 void AnimationController::render(unsigned long now)
@@ -555,7 +622,11 @@ void AnimationController::render(unsigned long now)
                               ? !renderer.setNamedAnimation(showNamedAnimation, playOnce)
                               : !renderer.setAnimation(showAnimationId, playOnce);
             if (!animateDone)
+            {
                 animateDone = renderer.advanceAnimationFrame();
+                if (renderer.animationFrameFailed() && hasActiveAnimation)
+                    failedAnimationId = activeAnimation.id;
+            }
         }
         dirtyAnimation = false;
     }
@@ -571,6 +642,8 @@ void AnimationController::render(unsigned long now)
             animateDone = !renderer.setNamedAnimation(showNamedAnimation, false);
         }
         animateDone |= renderer.advanceAnimationFrame();
+        if (renderer.animationFrameFailed() && hasActiveAnimation)
+            failedAnimationId = activeAnimation.id;
     }
 }
 

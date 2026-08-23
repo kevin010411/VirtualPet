@@ -11,10 +11,8 @@ namespace
 #endif
 
     constexpr unsigned long kItemRevealDelayMs = 50;
-    constexpr unsigned long kStartAnimationDurationMs = 1200;
     constexpr unsigned long kItemPromptLoopDurationMs = 24UL * 60UL * 60UL * 1000UL;
     constexpr unsigned long kItemPromptSwitchIntervalMs = 800;
-    constexpr unsigned long kResultAnimationDurationMs = 2000;
     constexpr unsigned long kCancelExitDelayMs = 250;
 #if ENABLE_GUESS_GAME_SINGLE_ROUND
     constexpr int kMaxGuessCount = 1;
@@ -76,9 +74,10 @@ bool GuessItemGame::hasItemPromptAnimations() const
            host.hasAnimation(AnimationId::GuessItem4);
 }
 
-void GuessItemGame::queuePromptAnimation()
+void GuessItemGame::queuePromptAnimation(bool replaceExisting)
 {
-    host.clearAnimationsByOwner(AnimationOwner::Minigame);
+    if (replaceExisting)
+        host.clearAnimationsByOwner(AnimationOwner::Minigame);
     host.queueAnimation(Animation(promptAnimationId, kItemPromptLoopDurationMs, false, AnimationOwner::Minigame, AnimationPriority::Critical));
     host.markAnimationDirty();
 }
@@ -92,9 +91,13 @@ void GuessItemGame::start()
 
     if (host.hasAnimation(AnimationId::GuessStart) && hasItemPrompts)
     {
-        host.queueAnimation(Animation(AnimationId::GuessStart, kStartAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
-        host.markAnimationDirty();
-        state = GuessItemState::Starting;
+        promptAnimationId = randomItemAnimation();
+        const bool queuedStart = host.queueCompleteAnimation(
+            AnimationId::GuessStart, AnimationOwner::Minigame, AnimationPriority::Critical);
+        // Queue the first prompt behind GuessStart so playback never falls back
+        // to idle between the introductory animation and the user's turn.
+        queuePromptAnimation(false);
+        state = queuedStart ? GuessItemState::Starting : GuessItemState::WaitingItem;
     }
     else
     {
@@ -120,10 +123,8 @@ void GuessItemGame::update()
     switch (state)
     {
     case GuessItemState::Starting:
-        if (!host.hasAnimationForOwner(AnimationOwner::Minigame))
+        if (!host.hasAnimationPending(AnimationId::GuessStart))
         {
-            promptAnimationId = randomItemAnimation();
-            queuePromptAnimation();
             state = GuessItemState::WaitingItem;
             lastMoveTime = now;
         }
@@ -161,7 +162,7 @@ void GuessItemGame::update()
             const AnimationId finalAnimation = (state == GuessItemState::Win) ? AnimationId::GuessWin : AnimationId::GuessLoss;
             host.clearAnimationsByOwner(AnimationOwner::Minigame);
             if (host.hasAnimation(finalAnimation))
-                host.queueAnimation(Animation(finalAnimation, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+                host.queueCompleteAnimation(finalAnimation, AnimationOwner::Minigame, AnimationPriority::Critical);
             host.markAnimationDirty();
             lastMoveTime = now;
 #endif
@@ -229,13 +230,13 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     const bool correct = (player == itemSide);
 
     host.clearAnimationsByOwner(AnimationOwner::Minigame);
-    host.queueAnimation(Animation(itemResultAnimation(itemSide, player), kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+    host.queueCompleteAnimation(itemResultAnimation(itemSide, player), AnimationOwner::Minigame, AnimationPriority::Critical);
     if (correct)
     {
         correctCount++;
 #if !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
         if (host.hasAnimation(AnimationId::GuessRight))
-            host.queueAnimation(Animation(AnimationId::GuessRight, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+            host.queueCompleteAnimation(AnimationId::GuessRight, AnimationOwner::Minigame, AnimationPriority::Critical);
 #endif
     }
     else
@@ -243,7 +244,7 @@ void GuessItemGame::handleGuess(GuessItemSide player)
         wrongCount++;
 #if !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
         if (host.hasAnimation(AnimationId::GuessWrong))
-            host.queueAnimation(Animation(AnimationId::GuessWrong, kResultAnimationDurationMs, true, AnimationOwner::Minigame, AnimationPriority::Critical));
+            host.queueCompleteAnimation(AnimationId::GuessWrong, AnimationOwner::Minigame, AnimationPriority::Critical);
 #endif
     }
 

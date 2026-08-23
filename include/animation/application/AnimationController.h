@@ -54,6 +54,9 @@ public:
                               AnimationPriority priority,
                               char *selectedName,
                               size_t selectedNameSize);
+    bool queueCompleteAnimation(AnimationId id,
+                                AnimationOwner owner,
+                                AnimationPriority priority);
     bool queueRepeatedActionAnimation(const char *baseName,
                                       uint8_t playbackCount,
                                       AnimationOwner owner,
@@ -62,14 +65,16 @@ public:
                                       size_t selectedNameSize = 0);
     void clearByOwner(AnimationOwner owner);
     bool hasAnimationForOwner(AnimationOwner owner) const;
+    bool hasAnimationPending(AnimationId id) const;
+    bool hasPlaybackFailure(AnimationId id) const;
+    void clearPlaybackFailure(AnimationId id);
     AnimationId currentCommandAnimationId() const;
     void markDirty();
     void requestFullRedraw();
     void showResourceError();
     void showActionAnimationError();
     void showStatusNotFound();
-    void updateElapsed(unsigned long elapsed);
-    void render(unsigned long now);
+    void tick(unsigned long now);
     void startBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
     unsigned long defaultFrameInterval() const;
@@ -97,12 +102,17 @@ private:
     bool animateDone = true;
     unsigned long frameInterval = frameIntervalSlow;
     unsigned long lastFrameTime = 0;
+    unsigned long lastPlaybackUpdateTime = 0;
     AnimationId showAnimationId = AnimationId::None;
     bool showUsesNamedAnimation = false;
     char showNamedAnimation[32] = {};
+    AnimationId failedAnimationId = AnimationId::None;
 
     void resetPlaybackState();
     unsigned long completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const;
+    void updateElapsed(unsigned long elapsed);
+    void completeActiveAnimation();
+    void render(unsigned long now);
     void tryStartNextAnimation();
 };
 

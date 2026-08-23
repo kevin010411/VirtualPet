@@ -13,6 +13,7 @@ struct Renderer::AnimationState
     uint16_t animationIndex = 0;
     uint16_t maxFrame = 0;
     bool playOnce = false;
+    bool animationFrameFailed = false;
     char speciesCode[9] = "dino";
     char outfitCode[9] = "base";
     uint8_t readBuffer[FrameDecoder::kRleReadBufferBytes] = {};
@@ -63,6 +64,7 @@ void Renderer::initAnimations()
     state->animationIndex = 0;
     state->maxFrame = 0;
     state->playOnce = false;
+    state->animationFrameFailed = false;
 #if ENABLE_DEBUG
     state->stats = RenderStats{};
 #endif
@@ -213,6 +215,7 @@ bool Renderer::ShowNamedAnimationFrame(const char *name, uint16_t frame_index, i
 
 bool Renderer::setAnimation(AnimationId id, bool playOnce)
 {
+    state->animationFrameFailed = false;
     state->namedAnimationMeta = nullptr;
     const AnimationMeta *meta = state->manifest.metaFor(id);
     if (id == AnimationId::None || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
@@ -233,6 +236,7 @@ bool Renderer::setAnimation(AnimationId id, bool playOnce)
 
 bool Renderer::setNamedAnimation(const char *name, bool playOnce)
 {
+    state->animationFrameFailed = false;
     const AnimationMeta *meta = state->manifest.metaForName(name);
     if (name == nullptr || name[0] == '\0' || meta == nullptr || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
     {
@@ -260,13 +264,19 @@ bool Renderer::willRestartAnimationLoop() const
 bool Renderer::advanceAnimationFrame()
 {
     if ((state->nowAnimId == AnimationId::None && state->namedAnimationMeta == nullptr) || state->maxFrame == 0)
+    {
+        state->animationFrameFailed = true;
         return true;
+    }
 
     if (state->animationIndex > state->maxFrame)
     {
         state->animationIndex = 1;
         if (state->playOnce)
+        {
+            state->animationFrameFailed = false;
             return true;
+        }
     }
 
 #if ENABLE_DEBUG
@@ -302,7 +312,13 @@ bool Renderer::advanceAnimationFrame()
     }
 
     state->animationIndex++;
+    state->animationFrameFailed = !ok;
     return !ok;
+}
+
+bool Renderer::animationFrameFailed() const
+{
+    return state->animationFrameFailed;
 }
 
 void Renderer::showResourceError()

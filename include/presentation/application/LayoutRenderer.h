@@ -33,8 +33,8 @@ private:
     int activeActionSlot = -1;
 
     void loadActionLayouts();
-    void drawSlot(int slot, bool selected);
-    void drawSlotFromPath(int slot, const char *path);
+    bool drawSlot(int slot, bool selected);
+    bool drawSlotFromPath(int slot, const char *path);
     bool hasActionLayout(AnimationId id) const;
     static int slotX(int slot);
     static int slotY(int slot);

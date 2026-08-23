@@ -5,6 +5,7 @@
 namespace
 {
 constexpr uint32_t kFirstLaunchCompleteFlag = 0x1UL;
+constexpr uint32_t kFirstStartCompletedFlag = 0x2UL;
 
 bool copyAppearanceCode(char *dest, size_t destSize, const char *source)
 {
@@ -178,6 +179,21 @@ void Pet::markFirstLaunchComplete()
 void Pet::resetFirstLaunch()
 {
     st.flowFlags &= ~kFirstLaunchCompleteFlag;
+}
+
+bool Pet::isFirstStartCompleted() const
+{
+    return (st.flowFlags & kFirstStartCompletedFlag) != 0;
+}
+
+void Pet::markFirstStartCompleted()
+{
+    st.flowFlags |= kFirstStartCompletedFlag;
+}
+
+void Pet::resetFirstStartCompleted()
+{
+    st.flowFlags &= ~kFirstStartCompletedFlag;
 }
 
 bool Pet::restoreState(const PersistedPetState &state)

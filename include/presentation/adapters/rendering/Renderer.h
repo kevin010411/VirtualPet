@@ -27,6 +27,7 @@ public:
     bool setNamedAnimation(const char *name, bool playOnce);
     bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
+    bool animationFrameFailed() const;
     void showInitPetNotExist();
     void showConfigLoadingError(const char *resource);
     void showResourceError();

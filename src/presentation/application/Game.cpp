@@ -74,6 +74,8 @@ bool Game::prepare_game()
 
     dirtySelect = true;
     pendingEvolution = false;
+    pendingFirstStartCompletion = false;
+    firstStartResourceError = false;
     pendingEvolutionSpeciesCode[0] = '\0';
     pendingEvolutionOutfitCode[0] = '\0';
     last_tick_time = millis();
@@ -126,13 +128,18 @@ void Game::loop_game()
     if (!initialized)
         return;
 
+    if (firstStartResourceError)
+    {
+        renderer.showConfigLoadingError("first start resource");
+        return;
+    }
+
     const unsigned long now = millis();
     const unsigned long elapsed = now - last_tick_time;
 
     if (elapsed >= gameTick)
     {
         last_tick_time = now;
-        animations->updateElapsed(elapsed);
 
         if (flow.isCommand() || flow.isMinigame())
             maybeTickPet();
@@ -171,12 +178,20 @@ void Game::loop_game()
     }
 #endif
 
+    animations->tick(now);
+    completeFirstStartIfReady();
+
+    if (firstStartResourceError)
+    {
+        renderer.showConfigLoadingError("first start resource");
+        return;
+    }
+
     if (layout->isActionActive() && !animations->hasAnimationForOwner(AnimationOwner::Command))
     {
         refreshBaseAnimation();
         layout->endAction();
     }
-    animations->render(now);
     syncActionLayoutWithAnimationQueue();
 
     if (dirtySelect)
@@ -205,7 +220,7 @@ void Game::redrawAllNow()
     // Repaint the entire center area even when an animation frame was already
     // considered current before STOP mode.
     animations->requestFullRedraw();
-    animations->render(now);
+    animations->tick(now);
 
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
@@ -302,7 +317,7 @@ void Game::OnLeftKey()
     }
 #endif
 
-    if (flow.isCommand() || flow.isStartup())
+    if (flow.isCommand())
     {
         commands->prev();
         dirtySelect = true;
@@ -334,7 +349,7 @@ void Game::OnRightKey()
     }
 #endif
 
-    if (flow.isCommand() || flow.isStartup())
+    if (flow.isCommand())
     {
         commands->next();
         dirtySelect = true;
@@ -424,6 +439,8 @@ bool Game::resetPet()
         return false;
 
     pendingEvolution = false;
+    pendingFirstStartCompletion = false;
+    firstStartResourceError = false;
     pendingEvolutionSpeciesCode[0] = '\0';
     pendingEvolutionOutfitCode[0] = '\0';
     petActions->applyEvolutionTarget();
@@ -671,7 +688,20 @@ bool Game::beginStartupAnimation()
 #if ENABLE_STARTUP_ANIMATION
     const bool hasIntro = animations->hasAnimation(AnimationId::StartIntro);
     const bool hasSpeciesStart = animations->hasAnimation(AnimationId::Start);
-    if (!hasIntro && !hasSpeciesStart)
+    const bool needsFirstStart = ENABLE_FIRST_START_ANIMATION && !petActions->isFirstStartCompleted();
+    const bool hasFirstStart = animations->hasAnimation(AnimationId::FirstStart);
+    if (needsFirstStart && !hasFirstStart)
+    {
+        flow.requestStartup();
+        animations->clearByOwner(AnimationOwner::Command);
+        animations->clearByOwner(AnimationOwner::Minigame);
+        animations->clearByOwner(AnimationOwner::System);
+        pendingFirstStartCompletion = false;
+        firstStartResourceError = true;
+        renderer.showConfigLoadingError("first start resource");
+        return false;
+    }
+    if (!hasIntro && !hasSpeciesStart && !needsFirstStart)
     {
         if (isFirstLaunchSelectionPending())
             enterFirstLaunch();
@@ -684,6 +714,9 @@ bool Game::beginStartupAnimation()
     animations->clearByOwner(AnimationOwner::Command);
     animations->clearByOwner(AnimationOwner::Minigame);
     animations->clearByOwner(AnimationOwner::System);
+    pendingFirstStartCompletion = needsFirstStart;
+    firstStartResourceError = false;
+    animations->clearPlaybackFailure(AnimationId::FirstStart);
 
     if (hasIntro)
     {
@@ -692,6 +725,15 @@ bool Game::beginStartupAnimation()
             static_cast<unsigned long>(animations->frameCountFor(AnimationId::StartIntro)) *
                 animations->frameIntervalFor(AnimationId::StartIntro));
         animations->queueAnimation(Animation(AnimationId::StartIntro, introDuration, true, AnimationOwner::System, AnimationPriority::Critical));
+    }
+
+    if (needsFirstStart)
+    {
+        const unsigned long firstStartDuration = max(
+            gameTick,
+            static_cast<unsigned long>(animations->frameCountFor(AnimationId::FirstStart)) *
+                animations->frameIntervalFor(AnimationId::FirstStart));
+        animations->queueAnimation(Animation(AnimationId::FirstStart, firstStartDuration, true, AnimationOwner::System, AnimationPriority::Critical));
     }
 
     if (hasSpeciesStart)
@@ -711,6 +753,26 @@ bool Game::beginStartupAnimation()
     else
         enterCommand();
     return false;
+#endif
+}
+
+void Game::completeFirstStartIfReady()
+{
+#if ENABLE_FIRST_START_ANIMATION
+    if (!pendingFirstStartCompletion || animations->hasAnimationPending(AnimationId::FirstStart))
+        return;
+
+    pendingFirstStartCompletion = false;
+    if (animations->hasPlaybackFailure(AnimationId::FirstStart))
+    {
+        animations->clearByOwner(AnimationOwner::System);
+        firstStartResourceError = true;
+        return;
+    }
+
+    petActions->markFirstStartCompleted();
+    if (!petActions->saveNow())
+        petActions->resetFirstStartCompleted();
 #endif
 }
 

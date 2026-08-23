@@ -26,9 +26,13 @@ private:
     GuessItemGame guessItem;
 
     void queueAnimation(const Animation &animation) override;
+    bool queueCompleteAnimation(AnimationId id,
+                                AnimationOwner owner,
+                                AnimationPriority priority) override;
     void clearAnimationsByOwner(AnimationOwner owner) override;
     void markAnimationDirty() override;
     bool hasAnimation(AnimationId id) const override;
+    bool hasAnimationPending(AnimationId id) const override;
     bool hasAnimationForOwner(AnimationOwner owner) const override;
 };
 

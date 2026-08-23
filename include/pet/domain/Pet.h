@@ -58,6 +58,9 @@ public:
     bool isFirstLaunchComplete() const;
     void markFirstLaunchComplete();
     void resetFirstLaunch();
+    bool isFirstStartCompleted() const;
+    void markFirstStartCompleted();
+    void resetFirstStartCompleted();
     const PersistedPetState &persistentState() const;
     bool restoreState(const PersistedPetState &state);
 

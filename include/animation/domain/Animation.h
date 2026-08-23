@@ -40,6 +40,7 @@ enum class AnimationId : uint8_t
     Start,
     Evolution,
     StartIntro,
+    FirstStart,
     Count
 };
 

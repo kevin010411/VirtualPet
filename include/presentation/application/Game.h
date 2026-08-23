@@ -72,6 +72,8 @@ private:
     unsigned long last_tick_time = 0;
     bool dirtySelect = true;
     bool pendingEvolution = false;
+    bool pendingFirstStartCompletion = false;
+    bool firstStartResourceError = false;
     bool initialized = false;
     bool petBehaviorLoadingFailed = false;
     bool petBehaviorLoaded = false;
@@ -93,6 +95,7 @@ private:
     bool isFirstLaunchSelectionPending() const;
     bool startFirstLaunchRequiredCommand();
     bool beginStartupAnimation();
+    void completeFirstStartIfReady();
     void enterFirstLaunch();
     void enterCommand();
 };

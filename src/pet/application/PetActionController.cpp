@@ -136,6 +136,21 @@ void PetActionController::resetFirstLaunch()
     pet.resetFirstLaunch();
 }
 
+bool PetActionController::isFirstStartCompleted() const
+{
+    return pet.isFirstStartCompleted();
+}
+
+void PetActionController::markFirstStartCompleted()
+{
+    pet.markFirstStartCompleted();
+}
+
+void PetActionController::resetFirstStartCompleted()
+{
+    pet.resetFirstStartCompleted();
+}
+
 const char *PetActionController::speciesCode() const
 {
     return pet.speciesCode();

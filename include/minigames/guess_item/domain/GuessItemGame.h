@@ -31,9 +31,13 @@ class GuessItemGameHost
 public:
     virtual ~GuessItemGameHost() = default;
     virtual void queueAnimation(const Animation &animation) = 0;
+    virtual bool queueCompleteAnimation(AnimationId id,
+                                        AnimationOwner owner,
+                                        AnimationPriority priority) = 0;
     virtual void clearAnimationsByOwner(AnimationOwner owner) = 0;
     virtual void markAnimationDirty() = 0;
     virtual bool hasAnimation(AnimationId id) const = 0;
+    virtual bool hasAnimationPending(AnimationId id) const = 0;
     virtual bool hasAnimationForOwner(AnimationOwner owner) const = 0;
 };
 
@@ -52,7 +56,7 @@ public:
 
 private:
     bool hasItemPromptAnimations() const;
-    void queuePromptAnimation();
+    void queuePromptAnimation(bool replaceExisting = true);
     void handleGuess(GuessItemSide player);
 
     GuessItemGameHost &host;

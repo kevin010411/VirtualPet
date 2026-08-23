@@ -48,6 +48,13 @@ void MinigameController::queueAnimation(const Animation &animation)
     animations.queueAnimation(animation);
 }
 
+bool MinigameController::queueCompleteAnimation(AnimationId id,
+                                                 AnimationOwner owner,
+                                                 AnimationPriority priority)
+{
+    return animations.queueCompleteAnimation(id, owner, priority);
+}
+
 void MinigameController::clearAnimationsByOwner(AnimationOwner owner)
 {
     animations.clearByOwner(owner);
@@ -61,6 +68,11 @@ void MinigameController::markAnimationDirty()
 bool MinigameController::hasAnimation(AnimationId id) const
 {
     return animations.hasAnimation(id);
+}
+
+bool MinigameController::hasAnimationPending(AnimationId id) const
+{
+    return animations.hasAnimationPending(id);
 }
 
 bool MinigameController::hasAnimationForOwner(AnimationOwner owner) const
