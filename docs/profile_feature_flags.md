@@ -35,13 +35,6 @@
 | `ENABLE_OUTFIT_CHOOSE_ANIMATION` | `0` | 是否讓 outfit 選擇流程使用 choose animation。 | 外觀選擇中的 outfit preview/choose 行為。 | 主要省 Flash。 | `new_taipei_childrens_day`、`kuromu`。 | 需搭配外觀資源。 |
 | `ENABLE_DYNAMIC_ACTION_LAYOUT` | `0` | 是否啟用動態 action layout。 | 動態 layout path/slot 邏輯。 | 主要省 Flash。 | `kuromu`。 | 沒有動態 layout 資源的 profile 不要開。 |
 
-## Status 與 SD 設定 parser
-
-| Flag | 預設值 | 中文說明 | 開啟時會編譯 | 關閉時預期可省 Flash/RAM | 目前使用 profile | 注意事項 |
-| --- | --- | --- | --- | --- | --- | --- |
-| `ENABLE_STATUS_SD_CONFIG` | 依 `APP_STATUS_MODE` 自動決定 | 是否編譯 `status_display.txt` / `state_schema.txt` parser。 | meter 類 status parser、alias parser、frame/level 計算。 | 主要省 Flash。 | `default`、`small`、`dipsyho` 會自動為 `1`。 | `STATUS_MODE_DIRECT` 與 `STATUS_MODE_COMPOSITE_HEALTH` 會自動為 `0`。 |
-| `ENABLE_STATUS_COMPOSITE` | 依 `APP_STATUS_MODE` 自動決定 | 是否編譯 composite health status。 | `queueCompositeStatusAnimation()` 與 `compositeStatusAnimationId()`。 | 主要省 Flash。 | `kuromu` 會自動為 `1`。 | 只適用 `STATUS_MODE_COMPOSITE_HEALTH`。 |
-
 ## Manifest RAM 容量
 
 | Flag | 預設值 | 中文說明 | 設定後會配置 | 改小可省什麼 | 目前使用 profile | 注意事項 |

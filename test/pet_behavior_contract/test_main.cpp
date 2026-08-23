@@ -1,12 +1,32 @@
 #include <assert.h>
 #include <string.h>
 
+#include "appearance/adapters/EvolutionConditionContract.h"
+#include "commands/domain/StatusSetContract.h"
+#include "pet/adapters/PetStateSchemaDecision.h"
 #include "pet_behavior/domain/PetBehaviorContract.h"
+#include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "shared/sd/SdTextRecordReader.h"
 #include "slot_projection_fixture.h"
 
 namespace
 {
+struct FixtureStatContext
+{
+    const ActivePetBehaviorStatSlots *activeSlots;
+    const PetStatSnapshot *stats;
+};
+
+bool fixtureStatusValue(const char *source, const void *rawContext, int32_t &value)
+{
+    const FixtureStatContext &context = *static_cast<const FixtureStatContext *>(rawContext);
+    uint8_t slot = 0;
+    if (!context.activeSlots->resolve(source, slot))
+        return false;
+    value = context.stats->customStats[slot];
+    return true;
+}
+
 constexpr const char *kMinimalContract =
     "runtime_contract|1\n"
     "pet_behavior|3|00000000\n"
@@ -85,7 +105,7 @@ void testWebExportedSlotProjectionTargetsOneRuntimeSlot()
 {
     PetBehaviorConfig config = {};
     assert(parsePetBehaviorContract(kSlotProjectionFixture, config));
-    assert(config.schemaFingerprint == 0x1B1C30C7UL);
+    assert(config.schemaFingerprint == kSlotProjectionSchemaFingerprint);
     assert(config.statCount == 1);
     assert(config.stats[0].active);
     assert(strcmp(config.stats[0].name, "custom0") == 0);
@@ -95,6 +115,51 @@ void testWebExportedSlotProjectionTargetsOneRuntimeSlot()
     assert(config.actionEffects[0].statSlot == 0);
     assert(config.guessEffectCount == 1);
     assert(config.guessEffects[0].statSlot == 0);
+    assert(config.statusSets.count == 1);
+    assert(config.statusSets.sets[0].conditionCount == 1);
+    assert(strcmp(config.statusSets.sets[0].conditions[0].source, "custom0") == 0);
+
+    ActivePetBehaviorStatSlots activeSlots(config);
+    uint8_t statusSlot = 0;
+    uint8_t evolutionSlot = 0;
+    assert(activeSlots.resolve(config.statusSets.sets[0].conditions[0].source, statusSlot));
+    assert(activeSlots.resolve(kSlotProjectionEvolutionPetStatSource, evolutionSlot));
+    assert(statusSlot == 0);
+    assert(evolutionSlot == 0);
+    assert(strstr(kSlotProjectionEvolutionFixture, "custom0=50..*") != nullptr);
+    assert(strstr(kSlotProjectionEvolutionFixture, "custom4") == nullptr);
+
+    PetStatSnapshot stats = {};
+    stats.customStats[0] = 50;
+    FixtureStatContext statContext = {&activeSlots, &stats};
+    StatusSetResolution statusResolution = {};
+    assert(resolveStatusSet(
+        config.statusSets.sets[0],
+        fixtureStatusValue,
+        &statContext,
+        statusResolution));
+    assert(statusResolution.requiredFrames == 2);
+
+    char matchingEvolutionConditions[32] = {};
+    strcpy(matchingEvolutionConditions, kSlotProjectionEvolutionConditions);
+    assert(evaluateEvolutionConditions(
+        matchingEvolutionConditions,
+        stats,
+        activeSlots));
+    stats.customStats[0] = 49;
+    char rejectedEvolutionConditions[32] = {};
+    strcpy(rejectedEvolutionConditions, kSlotProjectionEvolutionConditions);
+    assert(!evaluateEvolutionConditions(
+        rejectedEvolutionConditions,
+        stats,
+        activeSlots));
+
+    assert(decidePetStateSchema(
+               kSlotProjectionSchemaFingerprint,
+               config.schemaFingerprint) == PetStateSchemaDecision::Restore);
+    assert(decidePetStateSchema(
+               kSlotProjectionSchemaFingerprint + 1,
+               config.schemaFingerprint) == PetStateSchemaDecision::Reset);
 }
 #endif
 

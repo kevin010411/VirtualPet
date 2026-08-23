@@ -28,8 +28,10 @@ Each slot contains one binary `PersistedPetState` record:
 and derived health state are not part of runtime or persistent pet state.
 Project-defined Pet Stats are stored in the fixed `customStats` slots.
 
-`schemaFingerprint` identifies the Project and ordered Pet Stat schema. A
-mismatch discards both save slots instead of migrating values into a new schema.
+`schemaFingerprint` is emitted by the authoritative Web Pet Stat Slot contract
+at `E:\C++\virtualPet\web\.scratch\sd-driven-pet-stats\spec.md`. Firmware does
+not reconstruct it. A mismatch discards both save slots instead of migrating
+values into a new schema; a match retains the saved Pet State.
 
 `flowFlags` stores app-flow state. Bit `0` marks the first-launch flow as
 complete.

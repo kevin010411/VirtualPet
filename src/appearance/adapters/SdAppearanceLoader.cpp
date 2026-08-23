@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "appearance/adapters/EvolutionConditionContract.h"
 #include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "shared/sd/SdTextRecordReader.h"
 #include "shared/utils/TextBuffer.h"
@@ -205,9 +206,12 @@ bool conditionMatches(char *condition,
     return statValue >= minValue && statValue <= maxValue;
 }
 
-bool conditionsMatch(char *conditions,
-                     const PetStatSnapshot &stats,
-                     const ActivePetBehaviorStatSlots &activeSlots)
+} // namespace
+
+bool evaluateEvolutionConditions(
+    char *conditions,
+    const PetStatSnapshot &stats,
+    const ActivePetBehaviorStatSlots &activeSlots)
 {
     conditions = trimField(conditions);
     if (conditions == nullptr)
@@ -235,6 +239,9 @@ bool conditionsMatch(char *conditions,
     return true;
 }
 
+namespace
+{
+
 bool conditionIsValid(
     char *condition,
     const ActivePetBehaviorStatSlots &activeSlots)
@@ -256,7 +263,9 @@ bool conditionIsValid(
     return parseConditionRange(value, minimum, maximum);
 }
 
-bool conditionsAreValid(
+} // namespace
+
+bool validateEvolutionConditions(
     char *conditions,
     const ActivePetBehaviorStatSlots &activeSlots)
 {
@@ -279,6 +288,9 @@ bool conditionsAreValid(
     }
     return true;
 }
+
+namespace
+{
 
 struct EvolutionRule
 {
@@ -447,7 +459,7 @@ bool SdAppearanceLoader::validateEvolutionContract(const PetBehaviorConfig &conf
             context.foundInitial = true;
             return validInitial ? SdTextRecordAction::Continue : SdTextRecordAction::Error;
         }
-        return conditionsAreValid(rule.conditions, *context.activeSlots)
+        return validateEvolutionConditions(rule.conditions, *context.activeSlots)
                    ? SdTextRecordAction::Continue
                    : SdTextRecordAction::Error;
     }, &validation);
@@ -528,7 +540,7 @@ bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats, Appea
         EvolutionRule rule = {};
         if (!parseEvolutionRule(record, rule) ||
             !sourceMatches(rule.sourceSpecies, *context.stats) ||
-            !conditionsMatch(rule.conditions, *context.stats, *context.activeSlots))
+            !evaluateEvolutionConditions(rule.conditions, *context.stats, *context.activeSlots))
             return SdTextRecordAction::Continue;
         strncpy(context.selection->speciesCode, rule.speciesCode, sizeof(context.selection->speciesCode) - 1);
         context.selection->speciesCode[sizeof(context.selection->speciesCode) - 1] = '\0';

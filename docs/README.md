@@ -10,11 +10,13 @@
 
 ## SD 卡設定與資源
 
-請使用 [sd_card_example](sd_card_example/README.md) 作為**唯一建議複製來源**。該資料夾的註解均為中文，且檔案結構對應 SD 卡根目錄。
+Pet Stat、Status 與 Evolution runtime contract 請由 Web exporter 產生；權威規格位於
+`E:\C++\virtualPet\web\.scratch\sd-driven-pet-stats\spec.md`。本 repository 不再
+提供 `state_schema.txt`、Pet Stat alias 或手寫 Status contract 範例。
+
+[sd_card_example](sd_card_example/README.md) 只保留韌體資源布局提示。
 
 - `evolution_rules.txt`：演化規則。
-- `state_schema.txt`：custom stat 別名與範圍。
-- `status_display.txt`：狀態畫面設定。
 - `index/`：動畫 manifest 範例。
 
 相關格式說明：

@@ -1,4 +1,5 @@
 #include "pet/adapters/PetStorage.h"
+#include "pet/adapters/PetStateSchemaDecision.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -137,7 +138,8 @@ bool PetStorage::load(Pet &pet, uint32_t schemaFingerprint)
     const PersistedPetState &selected = (!hasB || (hasA && isSequenceNewer(stateA.sequence, stateB.sequence)))
                                            ? stateA
                                            : stateB;
-    if (selected.schemaFingerprint != schemaFingerprint)
+    if (decidePetStateSchema(selected.schemaFingerprint, schemaFingerprint) ==
+        PetStateSchemaDecision::Reset)
     {
         discardSave(sd);
         nextSequence = 1;
