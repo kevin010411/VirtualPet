@@ -8,10 +8,12 @@
 #include "animation/application/AnimationController.h"
 #include "minigames/guess_item/domain/GuessItemGame.h"
 
+class PetBehaviorRuntime;
+
 class MinigameController : public GuessItemGameHost
 {
 public:
-    explicit MinigameController(AnimationController &animations);
+    MinigameController(AnimationController &animations, PetBehaviorRuntime &petBehavior);
 
     void startGuessItem();
     void reset();
@@ -23,6 +25,7 @@ public:
 
 private:
     AnimationController &animations;
+    PetBehaviorRuntime &petBehavior;
     GuessItemGame guessItem;
 
     void queueAnimation(const Animation &animation) override;
@@ -34,6 +37,7 @@ private:
     bool hasAnimation(AnimationId id) const override;
     bool hasAnimationPending(AnimationId id) const override;
     bool hasAnimationForOwner(AnimationOwner owner) const override;
+    void settleOutcome(GuessItemOutcome outcome) override;
 };
 
 #endif // ENABLE_GUESS_GAME

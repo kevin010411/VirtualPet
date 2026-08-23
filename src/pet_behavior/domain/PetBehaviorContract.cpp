@@ -131,6 +131,10 @@ public:
             return decodeAction(record);
         if (strcmp(record.fields[0], "action_effect") == 0)
             return decodeActionEffect(record);
+#if ENABLE_GUESS_GAME
+        if (strcmp(record.fields[0], "guess_effect") == 0)
+            return decodeGuessEffect(record);
+#endif
         if (strcmp(record.fields[0], "button") == 0)
             return decodeButton(record);
         if (strcmp(record.fields[0], "status") == 0)
@@ -145,7 +149,11 @@ public:
     bool complete(PetBehaviorConfig &destination) const
     {
         if (!identitySeen || !statusSeen || !idleSeen || candidate.buttonCount != kPetBehaviorButtonCount ||
-            candidate.statCount > kMaxPetBehaviorStats)
+            candidate.statCount > kMaxPetBehaviorStats
+#if ENABLE_GUESS_GAME
+            || !validGuessEffects()
+#endif
+        )
             return false;
         destination = candidate;
         return true;
@@ -156,6 +164,26 @@ private:
     bool identitySeen = false;
     bool statusSeen = false;
     bool idleSeen = false;
+
+#if ENABLE_GUESS_GAME
+    bool validGuessEffects() const
+    {
+        uint8_t outcomeCounts[kPetBehaviorGuessOutcomeCount] = {};
+        bool affectedSlots[kPetBehaviorGuessOutcomeCount][kPetBehaviorSlotCount] = {};
+        for (uint8_t index = 0; index < candidate.guessEffectCount; ++index)
+        {
+            const PetBehaviorGuessEffectConfig &effect = candidate.guessEffects[index];
+            const uint8_t outcome = static_cast<uint8_t>(effect.outcome);
+            if (!effect.active || outcome >= kPetBehaviorGuessOutcomeCount ||
+                effect.statSlot >= kPetBehaviorSlotCount || !candidate.stats[effect.statSlot].active ||
+                affectedSlots[outcome][effect.statSlot] || outcomeCounts[outcome] >= kMaxPetBehaviorStats)
+                return false;
+            affectedSlots[outcome][effect.statSlot] = true;
+            ++outcomeCounts[outcome];
+        }
+        return true;
+    }
+#endif
 
     bool decodeStatusHeader(const SdTextRecord &record)
     {
@@ -304,11 +332,11 @@ private:
             !parseSlot(record.fields[4], "custom", kPetBehaviorSlotCount, statSlot) ||
             !parseSigned16(record.fields[5], value))
             return false;
-        PetBehaviorActionEffectConfig::Operation operation;
+        PetBehaviorEffectOperation operation;
         if (strcmp(record.fields[3], "change") == 0)
-            operation = PetBehaviorActionEffectConfig::Operation::Change;
+            operation = PetBehaviorEffectOperation::Change;
         else if (strcmp(record.fields[3], "set") == 0)
-            operation = PetBehaviorActionEffectConfig::Operation::Set;
+            operation = PetBehaviorEffectOperation::Set;
         else
             return false;
         PetBehaviorActionEffectConfig &effect = candidate.actionEffects[slot];
@@ -321,6 +349,51 @@ private:
         effect.value = value;
         return true;
     }
+
+#if ENABLE_GUESS_GAME
+    bool decodeGuessEffect(const SdTextRecord &record)
+    {
+        uint8_t slot = 0;
+        uint8_t statSlot = 0;
+        int16_t value = 0;
+        if (record.fieldCount != 6 ||
+            !parseSlot(record.fields[1], "guess_effect", kMaxPetBehaviorGuessEffects, slot) ||
+            !parseSlot(record.fields[4], "custom", kPetBehaviorSlotCount, statSlot) ||
+            !parseSigned16(record.fields[5], value))
+            return false;
+
+        PetBehaviorGuessOutcome outcome;
+        if (strcmp(record.fields[2], "round_correct") == 0)
+            outcome = PetBehaviorGuessOutcome::RoundCorrect;
+        else if (strcmp(record.fields[2], "round_wrong") == 0)
+            outcome = PetBehaviorGuessOutcome::RoundWrong;
+        else if (strcmp(record.fields[2], "game_win") == 0)
+            outcome = PetBehaviorGuessOutcome::GameWin;
+        else if (strcmp(record.fields[2], "game_loss") == 0)
+            outcome = PetBehaviorGuessOutcome::GameLoss;
+        else
+            return false;
+
+        PetBehaviorEffectOperation operation;
+        if (strcmp(record.fields[3], "change") == 0)
+            operation = PetBehaviorEffectOperation::Change;
+        else if (strcmp(record.fields[3], "set") == 0)
+            operation = PetBehaviorEffectOperation::Set;
+        else
+            return false;
+
+        PetBehaviorGuessEffectConfig &effect = candidate.guessEffects[slot];
+        if (effect.active)
+            return false;
+        ++candidate.guessEffectCount;
+        effect.active = true;
+        effect.outcome = outcome;
+        effect.statSlot = statSlot;
+        effect.operation = operation;
+        effect.value = value;
+        return true;
+    }
+#endif
 
     bool decodeButton(const SdTextRecord &record)
     {

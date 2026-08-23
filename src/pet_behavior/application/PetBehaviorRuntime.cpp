@@ -79,6 +79,16 @@ bool PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     return true;
 }
 
+#if ENABLE_GUESS_GAME
+bool PetBehaviorRuntime::applyGuessOutcome(PetBehaviorGuessOutcome outcome)
+{
+    PetBehaviorStatValues state = readStats(petActions);
+    if (!applyPetBehaviorGuessOutcome(config, outcome, state))
+        return false;
+    return writeStats(state, petActions);
+}
+#endif
+
 const char *PetBehaviorRuntime::baseAnimation() const
 {
     const PetBehaviorStatValues state = readStats(petActions);

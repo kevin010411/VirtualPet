@@ -19,6 +19,9 @@ public:
     void initializeStats();
     bool advancePetDay();
     bool executeAction(uint8_t actionSlot);
+#if ENABLE_GUESS_GAME
+    bool applyGuessOutcome(PetBehaviorGuessOutcome outcome);
+#endif
     const char *baseAnimation() const;
 
 private:

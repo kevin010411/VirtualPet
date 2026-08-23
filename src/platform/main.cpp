@@ -671,6 +671,10 @@ void loop()
   buttons.handleConfirmLongPress(2000, onConfirmLongPress);
 
   const unsigned long sleepCheckNow = millis();
+  // Idle/base animation remains eligible for sleep.  A queued or active
+  // one-shot animation pauses the inactivity clock instead.
+  if (game.hasTransientAnimation())
+    g_lastInteractionMs = sleepCheckNow;
   if (sleepCheckNow - g_lastInteractionMs >= kSleepTimeoutMs)
   {
     enterSleep();

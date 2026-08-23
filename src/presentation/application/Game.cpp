@@ -33,7 +33,7 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
 #endif
 #if ENABLE_GUESS_GAME
       ,
-      minigame(std::make_unique<MinigameController>(*animations))
+      minigame(std::make_unique<MinigameController>(*animations, *petBehaviorRuntime))
 #endif
 {
 }
@@ -275,6 +275,13 @@ bool Game::startStartupAnimation()
     return beginStartupAnimation();
 }
 
+bool Game::hasTransientAnimation() const
+{
+    return animations->hasAnimationForOwner(AnimationOwner::Command) ||
+           animations->hasAnimationForOwner(AnimationOwner::Minigame) ||
+           animations->hasAnimationForOwner(AnimationOwner::System);
+}
+
 void Game::startBatteryAnimation()
 {
     if (!initialized)
@@ -443,6 +450,7 @@ bool Game::resetPet()
     firstStartResourceError = false;
     pendingEvolutionSpeciesCode[0] = '\0';
     pendingEvolutionOutfitCode[0] = '\0';
+    petActions->resetFirstStartCompleted();
     petActions->applyEvolutionTarget();
     renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
     renderer.reloadManifest();
@@ -455,13 +463,16 @@ bool Game::resetPet()
     refreshBaseAnimation();
     animations->requestFullRedraw();
     petActions->saveNow();
+    // startStartupAnimation() deliberately rejects calls before the game is
+    // ready.  A left+right reset must therefore re-enable the game before it
+    // queues FirstStart.
+    initialized = true;
     if (ENABLE_STARTUP_ANIMATION)
         startStartupAnimation();
     else if (isFirstLaunchSelectionPending())
         enterFirstLaunch();
     else
         enterCommand();
-    initialized = true;
     return true;
 }
 
@@ -638,15 +649,16 @@ bool Game::completePendingEvolutionIfReady()
     if (animations->hasAnimationForOwner(AnimationOwner::System))
         return false;
 
-    const bool applied = petActions->applyAppearance(pendingEvolutionSpeciesCode, pendingEvolutionOutfitCode);
+    petActions->applyAppearance(pendingEvolutionSpeciesCode, pendingEvolutionOutfitCode);
     pendingEvolution = false;
     pendingEvolutionSpeciesCode[0] = '\0';
     pendingEvolutionOutfitCode[0] = '\0';
-    if (applied)
-    {
-        refreshBaseAnimation();
-        animations->requestFullRedraw();
-    }
+    // applyAppearance() can report persistence failure after it has already
+    // changed the in-memory appearance and reloaded its manifest.  Always
+    // hand rendering back to the current base animation so that the display
+    // cannot remain on the completed Evolution frame.
+    refreshBaseAnimation();
+    animations->requestFullRedraw();
     return true;
 }
 

@@ -13,6 +13,23 @@ int16_t clampedChange(int16_t current, int16_t delta, int16_t minimum, int16_t m
         return maximum;
     return static_cast<int16_t>(next);
 }
+
+bool applyEffect(const PetBehaviorConfig &config,
+                 uint8_t statSlot,
+                 PetBehaviorEffectOperation operation,
+                 int16_t value,
+                 PetBehaviorStatValues &state,
+                 bool *affectedSlots)
+{
+    if (statSlot >= kPetBehaviorSlotCount || !config.stats[statSlot].active || affectedSlots[statSlot])
+        return false;
+    affectedSlots[statSlot] = true;
+    const PetBehaviorStatConfig &stat = config.stats[statSlot];
+    state.values[statSlot] = operation == PetBehaviorEffectOperation::Set
+                                 ? clampedChange(0, value, stat.minValue, stat.maxValue)
+                                 : clampedChange(state.values[statSlot], value, stat.minValue, stat.maxValue);
+    return true;
+}
 } // namespace
 
 void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStatValues &state)
@@ -51,16 +68,8 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
         const PetBehaviorActionEffectConfig &effect = config.actionEffects[index];
         if (!effect.active || effect.actionSlot != actionSlot)
             continue;
-        if (effect.statSlot >= kPetBehaviorSlotCount || !config.stats[effect.statSlot].active)
+        if (!applyEffect(config, effect.statSlot, effect.operation, effect.value, next, affectedSlots))
             return false;
-        if (affectedSlots[effect.statSlot])
-            return false;
-        affectedSlots[effect.statSlot] = true;
-
-        const PetBehaviorStatConfig &stat = config.stats[effect.statSlot];
-        next.values[effect.statSlot] = effect.operation == PetBehaviorActionEffectConfig::Operation::Set
-                                          ? clampedChange(0, effect.value, stat.minValue, stat.maxValue)
-                                          : clampedChange(next.values[effect.statSlot], effect.value, stat.minValue, stat.maxValue);
     }
 
     state = next;
@@ -70,6 +79,26 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
     playback.playbackCount = action.playbackCount;
     return true;
 }
+
+#if ENABLE_GUESS_GAME
+bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
+                                  PetBehaviorGuessOutcome outcome,
+                                  PetBehaviorStatValues &state)
+{
+    PetBehaviorStatValues next = state;
+    bool affectedSlots[kPetBehaviorSlotCount] = {};
+    for (uint8_t index = 0; index < config.guessEffectCount; ++index)
+    {
+        const PetBehaviorGuessEffectConfig &effect = config.guessEffects[index];
+        if (!effect.active || effect.outcome != outcome)
+            continue;
+        if (!applyEffect(config, effect.statSlot, effect.operation, effect.value, next, affectedSlots))
+            return false;
+    }
+    state = next;
+    return true;
+}
+#endif
 
 const char *resolvePetBehaviorBaseAnimation(const PetBehaviorConfig &config,
                                             const PetBehaviorStatValues &state)

@@ -4,17 +4,28 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "commands/domain/StatusSetContract.h"
+#include "shared/config/AppProfile.h"
 
 constexpr uint8_t kPetBehaviorSlotCount = 8;
 constexpr uint8_t kMaxPetBehaviorStats = 6;
 constexpr uint8_t kMaxPetBehaviorIdleTriggers = 16;
 constexpr uint8_t kMaxPetBehaviorActions = 8;
 constexpr uint8_t kMaxPetBehaviorActionEffects = kMaxPetBehaviorActions * kMaxPetBehaviorStats;
+#if ENABLE_GUESS_GAME
+constexpr uint8_t kPetBehaviorGuessOutcomeCount = 4;
+constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * kMaxPetBehaviorStats;
+#endif
 constexpr uint8_t kPetBehaviorButtonCount = 8;
 constexpr size_t kPetBehaviorAnimationTokenSize = 8;
 constexpr size_t kPetBehaviorSystemCommandTokenSize = 16;
 constexpr size_t kPetBehaviorStatNameSize = 17;
-constexpr size_t kMaxPetBehaviorContractBytes = 4096;
+constexpr size_t kMaxPetBehaviorContractBytes = 6144;
+
+enum class PetBehaviorEffectOperation : uint8_t
+{
+    Change,
+    Set,
+};
 
 struct PetBehaviorStatConfig
 {
@@ -50,16 +61,33 @@ struct PetBehaviorActionConfig
 
 struct PetBehaviorActionEffectConfig
 {
+    using Operation = PetBehaviorEffectOperation;
+
     bool active;
     uint8_t actionSlot;
     uint8_t statSlot;
-    enum class Operation : uint8_t
-    {
-        Change,
-        Set,
-    } operation;
+    Operation operation;
     int16_t value;
 };
+
+#if ENABLE_GUESS_GAME
+enum class PetBehaviorGuessOutcome : uint8_t
+{
+    RoundCorrect,
+    RoundWrong,
+    GameWin,
+    GameLoss,
+};
+
+struct PetBehaviorGuessEffectConfig
+{
+    bool active;
+    PetBehaviorGuessOutcome outcome;
+    uint8_t statSlot;
+    PetBehaviorEffectOperation operation;
+    int16_t value;
+};
+#endif
 
 enum class PetBehaviorButtonKind : uint8_t
 {
@@ -83,6 +111,9 @@ struct PetBehaviorConfig
     PetBehaviorIdleTriggerConfig idleTriggers[kMaxPetBehaviorIdleTriggers];
     PetBehaviorActionConfig actions[kPetBehaviorSlotCount];
     PetBehaviorActionEffectConfig actionEffects[kMaxPetBehaviorActionEffects];
+#if ENABLE_GUESS_GAME
+    PetBehaviorGuessEffectConfig guessEffects[kMaxPetBehaviorGuessEffects];
+#endif
     PetBehaviorButtonConfig buttons[kPetBehaviorButtonCount];
     StatusSetsConfig statusSets;
     char idleAnimation[kPetBehaviorAnimationTokenSize];
@@ -90,6 +121,9 @@ struct PetBehaviorConfig
     uint8_t idleTriggerCount;
     uint8_t actionCount;
     uint8_t actionEffectCount;
+#if ENABLE_GUESS_GAME
+    uint8_t guessEffectCount;
+#endif
     uint8_t buttonCount;
 };
 

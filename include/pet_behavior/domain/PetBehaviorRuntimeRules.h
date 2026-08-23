@@ -20,6 +20,11 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
                             uint8_t actionSlot,
                             PetBehaviorStatValues &state,
                             PetBehaviorActionPlayback &playback);
+#if ENABLE_GUESS_GAME
+bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
+                                  PetBehaviorGuessOutcome outcome,
+                                  PetBehaviorStatValues &state);
+#endif
 const char *resolvePetBehaviorBaseAnimation(const PetBehaviorConfig &config,
                                             const PetBehaviorStatValues &state);
 

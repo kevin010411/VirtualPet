@@ -39,6 +39,7 @@ public:
     void setRendererAssetAppearance(const char *speciesCode, const char *outfitCode);
     bool saveNow();
     bool startStartupAnimation();
+    bool hasTransientAnimation() const;
     void startBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
 

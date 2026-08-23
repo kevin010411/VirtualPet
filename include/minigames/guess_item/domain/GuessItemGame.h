@@ -26,6 +26,14 @@ enum class GuessItemSide
     Right
 };
 
+enum class GuessItemOutcome
+{
+    RoundCorrect,
+    RoundWrong,
+    GameWin,
+    GameLoss,
+};
+
 class GuessItemGameHost
 {
 public:
@@ -39,6 +47,7 @@ public:
     virtual bool hasAnimation(AnimationId id) const = 0;
     virtual bool hasAnimationPending(AnimationId id) const = 0;
     virtual bool hasAnimationForOwner(AnimationOwner owner) const = 0;
+    virtual void settleOutcome(GuessItemOutcome outcome) = 0;
 };
 
 class GuessItemGame

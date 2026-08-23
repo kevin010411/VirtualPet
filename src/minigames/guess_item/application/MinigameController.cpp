@@ -1,9 +1,12 @@
 #include "minigames/guess_item/application/MinigameController.h"
+#include "pet_behavior/application/PetBehaviorRuntime.h"
 
 #if ENABLE_GUESS_GAME
 
-MinigameController::MinigameController(AnimationController &animationsRef)
+MinigameController::MinigameController(AnimationController &animationsRef,
+                                       PetBehaviorRuntime &petBehaviorRef)
     : animations(animationsRef),
+      petBehavior(petBehaviorRef),
       guessItem(*this)
 {
 }
@@ -78,6 +81,26 @@ bool MinigameController::hasAnimationPending(AnimationId id) const
 bool MinigameController::hasAnimationForOwner(AnimationOwner owner) const
 {
     return animations.hasAnimationForOwner(owner);
+}
+
+void MinigameController::settleOutcome(GuessItemOutcome outcome)
+{
+    PetBehaviorGuessOutcome behaviorOutcome = PetBehaviorGuessOutcome::RoundCorrect;
+    switch (outcome)
+    {
+    case GuessItemOutcome::RoundWrong:
+        behaviorOutcome = PetBehaviorGuessOutcome::RoundWrong;
+        break;
+    case GuessItemOutcome::GameWin:
+        behaviorOutcome = PetBehaviorGuessOutcome::GameWin;
+        break;
+    case GuessItemOutcome::GameLoss:
+        behaviorOutcome = PetBehaviorGuessOutcome::GameLoss;
+        break;
+    default:
+        break;
+    }
+    petBehavior.applyGuessOutcome(behaviorOutcome);
 }
 
 #endif // ENABLE_GUESS_GAME
