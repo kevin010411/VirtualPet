@@ -3,7 +3,7 @@
 
 #include <SdFat.h>
 #include "appearance/ports/AppearanceLoader.h"
-#include "pet_behavior/domain/PetBehaviorTypes.h"
+#include "pet_behavior/domain/PetBehaviorStatSlot.h"
 
 class SdAppearanceLoader : public AppearanceLoader
 {
@@ -18,13 +18,7 @@ public:
     bool validateEvolutionContract(const PetBehaviorConfig &config) override;
 
 private:
-    struct EvolutionStatBinding
-    {
-        char name[kPetBehaviorStatNameSize];
-        uint8_t slot;
-    };
-    EvolutionStatBinding evolutionStats[kPetBehaviorSlotCount] = {};
-    uint8_t evolutionStatCount = 0;
+    ActivePetBehaviorStatSlots evolutionStatSlots;
     bool evolutionContractValidated = false;
     SdFat *sd;
 };

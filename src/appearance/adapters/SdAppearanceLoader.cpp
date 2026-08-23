@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "shared/sd/SdTextRecordReader.h"
 #include "shared/utils/TextBuffer.h"
 
@@ -14,17 +15,6 @@ constexpr size_t kMaxAppearanceIndexFileBytes = 8192;
 constexpr size_t kMaxAppearanceLineBytes = 192;
 constexpr int32_t kMinConditionValue = -2147483647L - 1L;
 constexpr int32_t kMaxConditionValue = 2147483647L;
-constexpr size_t kMaxStateAliases = 8;
-constexpr size_t kMaxStatNameLength = 23;
-
-struct StateAlias
-{
-    char name[kMaxStatNameLength + 1];
-    uint8_t customIndex;
-    int32_t minValue;
-    int32_t maxValue;
-    int32_t defaultValue;
-};
 
 bool isSpaceChar(char c)
 {
@@ -115,66 +105,23 @@ bool isValidAppearanceCode(const char *code)
     return true;
 }
 
-bool isValidStatName(const char *name)
+bool statValueBySource(
+    const char *source,
+    const PetStatSnapshot &stats,
+    const ActivePetBehaviorStatSlots &activeSlots,
+    int32_t &value)
 {
-    if (name == nullptr || name[0] == '\0')
+    if (source == nullptr)
         return false;
 
-    const size_t len = strlen(name);
-    if (len > kMaxStatNameLength)
-        return false;
-
-    for (size_t i = 0; i < len; ++i)
-    {
-        const char c = name[i];
-        const bool valid = (c >= 'a' && c <= 'z') ||
-                           (c >= 'A' && c <= 'Z') ||
-                           (c >= '0' && c <= '9') ||
-                           c == '_' || c == '-';
-        if (!valid)
-            return false;
-    }
-
-    return true;
-}
-
-void loadStateAliases(const PetBehaviorConfig &config, StateAlias aliases[], size_t maxAliases, size_t &aliasCount)
-{
-    aliasCount = 0;
-    if (aliases == nullptr || maxAliases == 0)
-        return;
-    for (uint8_t slot = 0; slot < kPetBehaviorSlotCount && aliasCount < maxAliases; ++slot)
-    {
-        const PetBehaviorStatConfig &stat = config.stats[slot];
-        if (!stat.active)
-            continue;
-        StateAlias &alias = aliases[aliasCount++];
-        strncpy(alias.name, stat.name, sizeof(alias.name) - 1);
-        alias.customIndex = slot;
-        alias.minValue = stat.minValue;
-        alias.maxValue = stat.maxValue;
-        alias.defaultValue = stat.initialValue;
-    }
-}
-
-bool statValueByName(const char *name, const PetStatSnapshot &stats, const StateAlias aliases[], size_t aliasCount, int32_t &value)
-{
-    if (name == nullptr)
-        return false;
-
-    if (strcmp(name, "stage_days") == 0)
+    if (strcmp(source, "stage_days") == 0)
         value = static_cast<int32_t>(stats.stage_days);
     else
     {
-        for (size_t i = 0; i < aliasCount; ++i)
-        {
-            if (strcmp(name, aliases[i].name) != 0)
-                continue;
-
-            value = stats.customStats[aliases[i].customIndex];
-            return true;
-        }
-        return false;
+        uint8_t slot = 0;
+        if (!activeSlots.resolve(source, slot))
+            return false;
+        value = stats.customStats[slot];
     }
 
     return true;
@@ -231,8 +178,7 @@ bool parseConditionRange(char *text, int32_t &minValue, int32_t &maxValue)
 
 bool conditionMatches(char *condition,
                       const PetStatSnapshot &stats,
-                      const StateAlias aliases[],
-                      size_t aliasCount)
+                      const ActivePetBehaviorStatSlots &activeSlots)
 {
     char *equals = strchr(condition, '=');
     if (equals == nullptr)
@@ -241,9 +187,6 @@ bool conditionMatches(char *condition,
     *equals = '\0';
     char *name = trimField(condition);
     char *rangeText = trimField(equals + 1);
-    if (!isValidStatName(name))
-        return false;
-
     if (strcmp(name, "species") == 0 || strcmp(name, "outfit") == 0)
     {
         const char *actual = strcmp(name, "species") == 0 ? stats.species : stats.outfit;
@@ -253,7 +196,7 @@ bool conditionMatches(char *condition,
     int32_t statValue = 0;
     int32_t minValue = 0;
     int32_t maxValue = 0;
-    if (!statValueByName(name, stats, aliases, aliasCount, statValue) ||
+    if (!statValueBySource(name, stats, activeSlots, statValue) ||
         !parseConditionRange(rangeText, minValue, maxValue))
     {
         return false;
@@ -264,8 +207,7 @@ bool conditionMatches(char *condition,
 
 bool conditionsMatch(char *conditions,
                      const PetStatSnapshot &stats,
-                     const StateAlias aliases[],
-                     size_t aliasCount)
+                     const ActivePetBehaviorStatSlots &activeSlots)
 {
     conditions = trimField(conditions);
     if (conditions == nullptr)
@@ -282,7 +224,7 @@ bool conditionsMatch(char *conditions,
 
         char *condition = trimField(cursor);
         if (condition == nullptr || condition[0] == '\0' ||
-            !conditionMatches(condition, stats, aliases, aliasCount))
+            !conditionMatches(condition, stats, activeSlots))
         {
             return false;
         }
@@ -293,7 +235,9 @@ bool conditionsMatch(char *conditions,
     return true;
 }
 
-bool conditionIsValid(char *condition, const StateAlias aliases[], size_t aliasCount)
+bool conditionIsValid(
+    char *condition,
+    const ActivePetBehaviorStatSlots &activeSlots)
 {
     char *equals = strchr(condition, '=');
     if (equals == nullptr)
@@ -301,24 +245,20 @@ bool conditionIsValid(char *condition, const StateAlias aliases[], size_t aliasC
     *equals = '\0';
     char *name = trimField(condition);
     char *value = trimField(equals + 1);
-    if (!isValidStatName(name))
-        return false;
     if (strcmp(name, "species") == 0 || strcmp(name, "outfit") == 0)
         return isValidAppearanceCode(value);
-    if (strcmp(name, "stage_days") != 0)
-    {
-        bool found = false;
-        for (size_t index = 0; index < aliasCount; ++index)
-            found = found || strcmp(name, aliases[index].name) == 0;
-        if (!found)
-            return false;
-    }
+    uint8_t slot = 0;
+    if (strcmp(name, "stage_days") != 0 &&
+        !activeSlots.resolve(name, slot))
+        return false;
     int32_t minimum = 0;
     int32_t maximum = 0;
     return parseConditionRange(value, minimum, maximum);
 }
 
-bool conditionsAreValid(char *conditions, const StateAlias aliases[], size_t aliasCount)
+bool conditionsAreValid(
+    char *conditions,
+    const ActivePetBehaviorStatSlots &activeSlots)
 {
     conditions = trimField(conditions);
     if (conditions == nullptr)
@@ -333,7 +273,7 @@ bool conditionsAreValid(char *conditions, const StateAlias aliases[], size_t ali
             *separator = '\0';
         char *condition = trimField(cursor);
         if (condition == nullptr || condition[0] == '\0' ||
-            !conditionIsValid(condition, aliases, aliasCount))
+            !conditionIsValid(condition, activeSlots))
             return false;
         cursor = separator == nullptr ? nullptr : separator + 1;
     }
@@ -485,25 +425,15 @@ SdAppearanceLoader::SdAppearanceLoader(SdFat *refSd) : sd(refSd)
 bool SdAppearanceLoader::validateEvolutionContract(const PetBehaviorConfig &config)
 {
     evolutionContractValidated = false;
-    evolutionStatCount = 0;
     if (sd == nullptr || !sd->exists(kEvolutionRulesPath))
         return false;
 
-    StateAlias aliases[kMaxStateAliases] = {};
-    size_t aliasCount = 0;
-    loadStateAliases(config, aliases, kMaxStateAliases, aliasCount);
-    for (size_t index = 0; index < aliasCount; ++index)
-    {
-        strncpy(evolutionStats[index].name, aliases[index].name, kPetBehaviorStatNameSize - 1);
-        evolutionStats[index].slot = aliases[index].customIndex;
-    }
-    evolutionStatCount = static_cast<uint8_t>(aliasCount);
+    evolutionStatSlots.configure(config);
     struct ValidationContext
     {
-        StateAlias *aliases;
-        size_t aliasCount;
+        const ActivePetBehaviorStatSlots *activeSlots;
         bool foundInitial;
-    } validation = {aliases, aliasCount, false};
+    } validation = {&evolutionStatSlots, false};
     bool valid = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
         ValidationContext &context = *static_cast<ValidationContext *>(rawContext);
         if (isIgnoredEvolutionRecord(record))
@@ -517,7 +447,7 @@ bool SdAppearanceLoader::validateEvolutionContract(const PetBehaviorConfig &conf
             context.foundInitial = true;
             return validInitial ? SdTextRecordAction::Continue : SdTextRecordAction::Error;
         }
-        return conditionsAreValid(rule.conditions, context.aliases, context.aliasCount)
+        return conditionsAreValid(rule.conditions, *context.activeSlots)
                    ? SdTextRecordAction::Continue
                    : SdTextRecordAction::Error;
     }, &validation);
@@ -581,24 +511,16 @@ bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats, Appea
     if (sd == nullptr || !sd->exists(kEvolutionRulesPath))
         return false;
 
-    StateAlias aliases[kMaxStateAliases] = {};
-    const size_t aliasCount = evolutionStatCount;
     if (!evolutionContractValidated)
         return false;
-    for (size_t index = 0; index < aliasCount; ++index)
-    {
-        strncpy(aliases[index].name, evolutionStats[index].name, sizeof(aliases[index].name) - 1);
-        aliases[index].customIndex = evolutionStats[index].slot;
-    }
 
     struct Context
     {
         const PetStatSnapshot *stats;
-        const StateAlias *aliases;
-        size_t aliasCount;
+        const ActivePetBehaviorStatSlots *activeSlots;
         AppearanceSelection *selection;
         bool found;
-    } context = {&stats, aliases, aliasCount, &selection, false};
+    } context = {&stats, &evolutionStatSlots, &selection, false};
     const bool loaded = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
         Context &context = *static_cast<Context *>(rawContext);
         if (isIgnoredEvolutionRecord(record))
@@ -606,7 +528,7 @@ bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats, Appea
         EvolutionRule rule = {};
         if (!parseEvolutionRule(record, rule) ||
             !sourceMatches(rule.sourceSpecies, *context.stats) ||
-            !conditionsMatch(rule.conditions, *context.stats, context.aliases, context.aliasCount))
+            !conditionsMatch(rule.conditions, *context.stats, *context.activeSlots))
             return SdTextRecordAction::Continue;
         strncpy(context.selection->speciesCode, rule.speciesCode, sizeof(context.selection->speciesCode) - 1);
         context.selection->speciesCode[sizeof(context.selection->speciesCode) - 1] = '\0';

@@ -3,6 +3,7 @@
 #include <string.h>
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/StatusSetSelection.h"
+#include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
 #include "shared/assets/AssetManifest.h"
 
@@ -32,15 +33,7 @@ bool petStatSlotForSource(
     const char *source,
     uint8_t &slot)
 {
-    for (uint8_t candidate = 0; candidate < kPetBehaviorSlotCount; ++candidate)
-    {
-        if (!config.stats[candidate].active ||
-            strcmp(source, config.stats[candidate].name) != 0)
-            continue;
-        slot = candidate;
-        return true;
-    }
-    return false;
+    return ActivePetBehaviorStatSlots(config).resolve(source, slot);
 }
 
 bool statusValueFromSnapshot(const char *source, const void *context, int32_t &value)

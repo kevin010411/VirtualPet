@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <string.h>
 #include "shared/sd/SdTextRecordReader.h"
+#include "pet_behavior/domain/PetBehaviorStatSlot.h"
 
 namespace
 {
@@ -149,7 +150,7 @@ public:
     bool complete(PetBehaviorConfig &destination) const
     {
         if (!identitySeen || !statusSeen || !idleSeen || candidate.buttonCount != kPetBehaviorButtonCount ||
-            candidate.statCount > kMaxPetBehaviorStats
+            candidate.statCount > kMaxPetBehaviorStats || !validStatusConditions()
 #if ENABLE_GUESS_GAME
             || !validGuessEffects()
 #endif
@@ -164,6 +165,28 @@ private:
     bool identitySeen = false;
     bool statusSeen = false;
     bool idleSeen = false;
+
+    bool validStatusConditions() const
+    {
+        const ActivePetBehaviorStatSlots activeSlots(candidate);
+        for (uint8_t setSlot = 0; setSlot < candidate.statusSets.count; ++setSlot)
+        {
+            const StatusSetConfig &set = candidate.statusSets.sets[setSlot];
+            for (uint8_t conditionSlot = 0; conditionSlot < set.conditionCount; ++conditionSlot)
+            {
+                const char *source = set.conditions[conditionSlot].source;
+                if (strcmp(source, "stage_days") == 0)
+                    continue;
+
+                uint8_t statSlot = 0;
+                if (!activeSlots.resolve(source, statSlot))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 
 #if ENABLE_GUESS_GAME
     bool validGuessEffects() const
