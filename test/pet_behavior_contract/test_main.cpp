@@ -3,6 +3,7 @@
 
 #include "pet_behavior/domain/PetBehaviorContract.h"
 #include "shared/sd/SdTextRecordReader.h"
+#include "slot_projection_fixture.h"
 
 namespace
 {
@@ -79,6 +80,24 @@ void testRecordsDecodeBySlotWithoutOrderingDependencies()
     assert(strcmp(config.statusSets.sets[0].conditions[0].source, "custom7") == 0);
 }
 
+#if ENABLE_GUESS_GAME
+void testWebExportedSlotProjectionTargetsOneRuntimeSlot()
+{
+    PetBehaviorConfig config = {};
+    assert(parsePetBehaviorContract(kSlotProjectionFixture, config));
+    assert(config.schemaFingerprint == 0x1B1C30C7UL);
+    assert(config.statCount == 1);
+    assert(config.stats[0].active);
+    assert(strcmp(config.stats[0].name, "custom0") == 0);
+    assert(config.idleTriggerCount == 1);
+    assert(config.idleTriggers[0].statSlot == 0);
+    assert(config.actionEffectCount == 1);
+    assert(config.actionEffects[0].statSlot == 0);
+    assert(config.guessEffectCount == 1);
+    assert(config.guessEffects[0].statSlot == 0);
+}
+#endif
+
 bool acceptRecord(void *, const SdTextRecord &)
 {
     return true;
@@ -137,6 +156,9 @@ int main()
 {
     testMinimalContractParsesCountsAndButtons();
     testRecordsDecodeBySlotWithoutOrderingDependencies();
+#if ENABLE_GUESS_GAME
+    testWebExportedSlotProjectionTargetsOneRuntimeSlot();
+#endif
     testSharedReaderRejectsFileBeyondCallerCapacity();
     testMalformedContractsFailClosed();
     return 0;
