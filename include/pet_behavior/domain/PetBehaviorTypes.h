@@ -57,6 +57,7 @@ struct PetBehaviorActionConfig
     bool active;
     char animation[kPetBehaviorAnimationTokenSize];
     uint8_t playbackCount;
+    uint8_t suspendDailyChangeDays;
 };
 
 struct PetBehaviorActionEffectConfig

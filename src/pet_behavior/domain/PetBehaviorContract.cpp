@@ -9,7 +9,7 @@ namespace
 {
 constexpr const char *kRuntimeContractPath = "/runtime_contract.txt";
 constexpr const char *kRuntimeContractIdentity = "runtime_contract";
-constexpr const char *kRuntimeContractVersion = "1";
+constexpr const char *kRuntimeContractVersion = "2";
 
 bool parseUnsigned(const char *text, uint32_t maximum, uint32_t &value)
 {
@@ -330,8 +330,10 @@ private:
     {
         uint8_t slot = 0;
         uint32_t playbackCount = 0;
-        if (record.fieldCount != 4 || !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, slot) ||
-            !parseUnsigned(record.fields[3], UINT8_MAX, playbackCount))
+        uint32_t suspendDailyChangeDays = 0;
+        if (record.fieldCount != 5 || !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, slot) ||
+            !parseUnsigned(record.fields[3], UINT8_MAX, playbackCount) ||
+            !parseUnsigned(record.fields[4], UINT8_MAX, suspendDailyChangeDays))
             return false;
         PetBehaviorActionConfig &action = candidate.actions[slot];
         if (!copyBounded(record.fields[2], action.animation, sizeof(action.animation)))
@@ -340,6 +342,7 @@ private:
             ++candidate.actionCount;
         action.active = true;
         action.playbackCount = static_cast<uint8_t>(playbackCount);
+        action.suspendDailyChangeDays = static_cast<uint8_t>(suspendDailyChangeDays);
         return true;
     }
 

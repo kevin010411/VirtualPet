@@ -33,6 +33,7 @@ void testInitialAndDailyChangesUseSparseSlotsAndClamp()
 {
     const PetBehaviorConfig config = behaviorConfig();
     PetBehaviorStatValues state = {};
+    PetBehaviorDailyChangePauses pauses = {};
     state.values[1] = 77;
 
     initializePetBehaviorStats(config, state);
@@ -40,7 +41,7 @@ void testInitialAndDailyChangesUseSparseSlotsAndClamp()
     assert(state.values[1] == 77);
     assert(state.values[3] == 100);
 
-    applyPetBehaviorDailyChanges(config, state);
+    applyPetBehaviorDailyChanges(config, state, pauses);
     assert(state.values[0] == 3);
     assert(state.values[3] == 100);
 }
@@ -49,10 +50,11 @@ void testZeroAndCompoundEffectsExecuteWithoutRequirements()
 {
     PetBehaviorConfig config = behaviorConfig();
     PetBehaviorStatValues state = {};
+    PetBehaviorDailyChangePauses pauses = {};
     initializePetBehaviorStats(config, state);
     PetBehaviorActionPlayback playback = {};
 
-    assert(applyPetBehaviorAction(config, 2, state, playback));
+    assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(state.values[0] == 10);
     assert(strcmp(playback.animation, "anim4") == 0);
     assert(playback.playbackCount == 5);
@@ -60,7 +62,7 @@ void testZeroAndCompoundEffectsExecuteWithoutRequirements()
     config.actionEffects[0] = {true, 2, 0, PetBehaviorActionEffectConfig::Operation::Change, INT16_MAX};
     config.actionEffects[1] = {true, 2, 3, PetBehaviorActionEffectConfig::Operation::Set, INT16_MIN};
     config.actionEffectCount = 2;
-    assert(applyPetBehaviorAction(config, 2, state, playback));
+    assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(state.values[0] == 20);
     assert(state.values[3] == 0);
 }
@@ -69,16 +71,17 @@ void testInactiveOrInvalidActionsDoNotMutateState()
 {
     PetBehaviorConfig config = behaviorConfig();
     PetBehaviorStatValues state = {};
+    PetBehaviorDailyChangePauses pauses = {};
     initializePetBehaviorStats(config, state);
     const PetBehaviorStatValues before = state;
     PetBehaviorActionPlayback playback = {};
 
-    assert(!applyPetBehaviorAction(config, 7, state, playback));
+    assert(!applyPetBehaviorAction(config, 7, state, pauses, playback));
     assert(memcmp(&state, &before, sizeof(state)) == 0);
 
     config.actionEffects[0] = {true, 2, 7, PetBehaviorActionEffectConfig::Operation::Change, 5};
     config.actionEffectCount = 1;
-    assert(!applyPetBehaviorAction(config, 2, state, playback));
+    assert(!applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(memcmp(&state, &before, sizeof(state)) == 0);
 }
 } // namespace

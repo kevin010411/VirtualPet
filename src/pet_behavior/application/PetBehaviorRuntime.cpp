@@ -25,7 +25,10 @@ bool writeStats(const PetBehaviorStatValues &state,
 PetBehaviorRuntime::PetBehaviorRuntime(const PetBehaviorConfig &configRef,
                                        PetActionController &petActionsRef,
                                        AnimationController &animationsRef)
-    : config(configRef), petActions(petActionsRef), animations(animationsRef)
+    : config(configRef),
+      petActions(petActionsRef),
+      animations(animationsRef),
+      dailyChangePauses{}
 {
 }
 
@@ -44,7 +47,7 @@ void PetBehaviorRuntime::initializeStats()
 bool PetBehaviorRuntime::advancePetDay()
 {
     PetBehaviorStatValues state = readStats(petActions);
-    applyPetBehaviorDailyChanges(config, state);
+    applyPetBehaviorDailyChanges(config, state, dailyChangePauses);
     return petActions.commitPetDay(state.values, kPetBehaviorSlotCount);
 }
 
@@ -54,11 +57,13 @@ bool PetBehaviorRuntime::executeAction(uint8_t actionSlot)
         return false;
 
     PetBehaviorStatValues state = readStats(petActions);
+    PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
     PetBehaviorActionPlayback playback = {};
-    if (!applyPetBehaviorAction(config, actionSlot, state, playback))
+    if (!applyPetBehaviorAction(config, actionSlot, state, nextPauses, playback))
         return false;
     if (!writeStats(state, petActions))
         return false;
+    dailyChangePauses = nextPauses;
 
     if (!animations.hasActionAnimation(playback.animation))
     {

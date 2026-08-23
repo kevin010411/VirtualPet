@@ -8,6 +8,11 @@ struct PetBehaviorStatValues
     int16_t values[kPetBehaviorSlotCount];
 };
 
+struct PetBehaviorDailyChangePauses
+{
+    uint8_t remainingDays[kPetBehaviorSlotCount];
+};
+
 struct PetBehaviorActionPlayback
 {
     char animation[kPetBehaviorAnimationTokenSize];
@@ -15,10 +20,13 @@ struct PetBehaviorActionPlayback
 };
 
 void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStatValues &state);
-void applyPetBehaviorDailyChanges(const PetBehaviorConfig &config, PetBehaviorStatValues &state);
+void applyPetBehaviorDailyChanges(const PetBehaviorConfig &config,
+                                  PetBehaviorStatValues &state,
+                                  PetBehaviorDailyChangePauses &pauses);
 bool applyPetBehaviorAction(const PetBehaviorConfig &config,
                             uint8_t actionSlot,
                             PetBehaviorStatValues &state,
+                            PetBehaviorDailyChangePauses &pauses,
                             PetBehaviorActionPlayback &playback);
 #if ENABLE_GUESS_GAME
 bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,

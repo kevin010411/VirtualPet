@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "pet_behavior/domain/PetBehaviorContract.h"
+#include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
 
 class AnimationController;
 class PetActionController;
@@ -28,6 +28,7 @@ private:
     const PetBehaviorConfig &config;
     PetActionController &petActions;
     AnimationController &animations;
+    PetBehaviorDailyChangePauses dailyChangePauses;
 };
 
 #endif // PET_BEHAVIOR_RUNTIME_H

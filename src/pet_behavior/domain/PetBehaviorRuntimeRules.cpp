@@ -41,20 +41,29 @@ void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStat
     }
 }
 
-void applyPetBehaviorDailyChanges(const PetBehaviorConfig &config, PetBehaviorStatValues &state)
+void applyPetBehaviorDailyChanges(const PetBehaviorConfig &config,
+                                  PetBehaviorStatValues &state,
+                                  PetBehaviorDailyChangePauses &pauses)
 {
     for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
     {
         const PetBehaviorStatConfig &stat = config.stats[slot];
-        if (stat.active)
-            state.values[slot] = clampedChange(
-                state.values[slot], stat.dailyChange, stat.minValue, stat.maxValue);
+        if (!stat.active)
+            continue;
+        if (pauses.remainingDays[slot] > 0)
+        {
+            --pauses.remainingDays[slot];
+            continue;
+        }
+        state.values[slot] = clampedChange(
+            state.values[slot], stat.dailyChange, stat.minValue, stat.maxValue);
     }
 }
 
 bool applyPetBehaviorAction(const PetBehaviorConfig &config,
                             uint8_t actionSlot,
                             PetBehaviorStatValues &state,
+                            PetBehaviorDailyChangePauses &pauses,
                             PetBehaviorActionPlayback &playback)
 {
     playback = {};
@@ -72,8 +81,16 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
             return false;
     }
 
-    state = next;
     const PetBehaviorActionConfig &action = config.actions[actionSlot];
+    for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
+    {
+        if (affectedSlots[slot] && next.values[slot] != state.values[slot] &&
+            pauses.remainingDays[slot] < action.suspendDailyChangeDays)
+        {
+            pauses.remainingDays[slot] = action.suspendDailyChangeDays;
+        }
+    }
+    state = next;
     strncpy(playback.animation, action.animation, sizeof(playback.animation) - 1);
     playback.animation[sizeof(playback.animation) - 1] = '\0';
     playback.playbackCount = action.playbackCount;
