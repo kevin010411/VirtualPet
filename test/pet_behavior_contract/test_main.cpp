@@ -67,37 +67,14 @@ void testMinimalContractParsesCountsAndButtons()
         assert(config.buttons[slot].kind == PetBehaviorButtonKind::Empty);
 }
 
-void testRecordsDecodeBySlotWithoutOrderingDependencies()
+void testSlotsBeyondConfiguredPetStatCapacityAreRejected()
 {
-    constexpr const char *contract =
-        "runtime_contract|1\n"
-        "action_effect|effect0|action7|change|custom7|5\n"
-        "button|1|user_action|action7\n"
-        "button|2|empty|\n"
-        "button|3|empty|\n"
-        "button|4|empty|\n"
-        "button|5|empty|\n"
-        "button|6|empty|\n"
-        "button|7|empty|\n"
-        "button|8|empty|\n"
-        "status_condition|set0|condition0|custom7|2|0|10\n"
-        "stat|custom7|5|0|10|-1\n"
-        "status_set|set0|StatusCustom7\n"
-        "action|action7|anim31|2\n"
-        "idle|anim0\n"
-        "status|1\n"
-        "pet_behavior|3|12345678\n"
-        "crc32|A167BD76\n";
     PetBehaviorConfig config = {};
-    assert(parsePetBehaviorContract(contract, config));
-    assert(config.schemaFingerprint == 0x12345678UL);
-    assert(config.stats[7].active);
-    assert(config.actions[7].active);
-    assert(config.actionEffects[0].statSlot == 7);
-    assert(config.buttons[0].actionSlot == 7);
-    assert(config.statusSets.count == 1);
-    assert(strcmp(config.statusSets.sets[0].animation, "StatusCustom7") == 0);
-    assert(strcmp(config.statusSets.sets[0].conditions[0].source, "custom7") == 0);
+    assert(!parsePetBehaviorContract(
+        "runtime_contract|1\n"
+        "pet_behavior|3|12345678\n"
+        "stat|custom6|5|0|10|-1\n",
+        config));
 }
 
 #if ENABLE_GUESS_GAME
@@ -108,7 +85,6 @@ void testWebExportedSlotProjectionTargetsOneRuntimeSlot()
     assert(config.schemaFingerprint == kSlotProjectionSchemaFingerprint);
     assert(config.statCount == 1);
     assert(config.stats[0].active);
-    assert(strcmp(config.stats[0].name, "custom0") == 0);
     assert(config.idleTriggerCount == 1);
     assert(config.idleTriggers[0].statSlot == 0);
     assert(config.actionEffectCount == 1);
@@ -220,7 +196,7 @@ void testMalformedContractsFailClosed()
 int main()
 {
     testMinimalContractParsesCountsAndButtons();
-    testRecordsDecodeBySlotWithoutOrderingDependencies();
+    testSlotsBeyondConfiguredPetStatCapacityAreRejected();
 #if ENABLE_GUESS_GAME
     testWebExportedSlotProjectionTargetsOneRuntimeSlot();
 #endif

@@ -39,7 +39,7 @@ Pet::Pet()
 
 bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount)
 {
-    if (customStats == nullptr || customStatCount != kPetCustomStatCount)
+    if (customStats == nullptr || customStatCount == 0 || customStatCount > kPetCustomStatCount)
         return false;
 
     const uint32_t nextStageDays = st.stage_days == UINT32_MAX ? UINT32_MAX : st.stage_days + 1;
@@ -49,10 +49,10 @@ bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount)
 
 bool Pet::commitPetStats(const int16_t *customStats, size_t customStatCount)
 {
-    if (customStats == nullptr || customStatCount != kPetCustomStatCount)
+    if (customStats == nullptr || customStatCount == 0 || customStatCount > kPetCustomStatCount)
         return false;
 
-    for (size_t index = 0; index < kPetCustomStatCount; ++index)
+    for (size_t index = 0; index < customStatCount; ++index)
         st.customStats[index] = customStats[index];
     return true;
 }

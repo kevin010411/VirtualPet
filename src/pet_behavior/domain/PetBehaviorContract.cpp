@@ -280,7 +280,6 @@ private:
         if (!stat.active)
             ++candidate.statCount;
         stat.active = true;
-        strcpy(stat.name, record.fields[1]);
         stat.initialValue = initialValue;
         stat.minValue = minValue;
         stat.maxValue = maxValue;

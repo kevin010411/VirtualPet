@@ -67,7 +67,7 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
                             PetBehaviorActionPlayback &playback)
 {
     playback = {};
-    if (actionSlot >= kPetBehaviorSlotCount || !config.actions[actionSlot].active)
+    if (actionSlot >= kMaxPetBehaviorActions || !config.actions[actionSlot].active)
         return false;
 
     PetBehaviorStatValues next = state;

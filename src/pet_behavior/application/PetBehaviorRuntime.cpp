@@ -34,7 +34,7 @@ PetBehaviorRuntime::PetBehaviorRuntime(const PetBehaviorConfig &configRef,
 
 bool PetBehaviorRuntime::hasAction(uint8_t actionSlot) const
 {
-    return actionSlot < kPetBehaviorSlotCount && config.actions[actionSlot].active;
+    return actionSlot < kMaxPetBehaviorActions && config.actions[actionSlot].active;
 }
 
 void PetBehaviorRuntime::initializeStats()

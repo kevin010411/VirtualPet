@@ -10,13 +10,11 @@ PetBehaviorConfig behaviorConfig()
 {
     PetBehaviorConfig config = {};
     config.stats[0].active = true;
-    strcpy(config.stats[0].name, "energy");
     config.stats[0].initialValue = 10;
     config.stats[0].minValue = -20;
     config.stats[0].maxValue = 20;
     config.stats[0].dailyChange = -7;
     config.stats[3].active = true;
-    strcpy(config.stats[3].name, "health");
     config.stats[3].initialValue = 100;
     config.stats[3].minValue = 0;
     config.stats[3].maxValue = 100;

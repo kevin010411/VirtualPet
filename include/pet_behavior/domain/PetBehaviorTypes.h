@@ -6,8 +6,10 @@
 #include "commands/domain/StatusSetContract.h"
 #include "shared/config/AppProfile.h"
 
-constexpr uint8_t kPetBehaviorSlotCount = 8;
-constexpr uint8_t kMaxPetBehaviorStats = 6;
+constexpr uint8_t kPetBehaviorSlotCount = APP_MAX_PET_STATS;
+constexpr uint8_t kMaxPetBehaviorStats = kPetBehaviorSlotCount;
+static_assert(kPetBehaviorSlotCount > 0, "Pet Stat capacity must be positive.");
+static_assert(kPetBehaviorSlotCount <= 10, "Pet Stat Slot tokens require one decimal digit.");
 constexpr uint8_t kMaxPetBehaviorIdleTriggers = 16;
 constexpr uint8_t kMaxPetBehaviorActions = 8;
 constexpr uint8_t kMaxPetBehaviorActionEffects = kMaxPetBehaviorActions * kMaxPetBehaviorStats;
@@ -18,7 +20,6 @@ constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * 
 constexpr uint8_t kPetBehaviorButtonCount = 8;
 constexpr size_t kPetBehaviorAnimationTokenSize = 8;
 constexpr size_t kPetBehaviorSystemCommandTokenSize = 16;
-constexpr size_t kPetBehaviorStatNameSize = 17;
 constexpr size_t kMaxPetBehaviorContractBytes = 6144;
 
 enum class PetBehaviorEffectOperation : uint8_t
@@ -30,7 +31,6 @@ enum class PetBehaviorEffectOperation : uint8_t
 struct PetBehaviorStatConfig
 {
     bool active;
-    char name[kPetBehaviorStatNameSize];
     int16_t initialValue;
     int16_t minValue;
     int16_t maxValue;
@@ -110,7 +110,7 @@ struct PetBehaviorConfig
     uint32_t schemaFingerprint;
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     PetBehaviorIdleTriggerConfig idleTriggers[kMaxPetBehaviorIdleTriggers];
-    PetBehaviorActionConfig actions[kPetBehaviorSlotCount];
+    PetBehaviorActionConfig actions[kMaxPetBehaviorActions];
     PetBehaviorActionEffectConfig actionEffects[kMaxPetBehaviorActionEffects];
 #if ENABLE_GUESS_GAME
     PetBehaviorGuessEffectConfig guessEffects[kMaxPetBehaviorGuessEffects];
