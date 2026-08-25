@@ -6,7 +6,6 @@
 
 constexpr size_t kStatusAnimationNameSize = 32;
 constexpr size_t kStatusSourceNameSize = 17;
-constexpr size_t kMaxStatusContractBytes = 896;
 constexpr uint8_t kMaxStatusSets = 5;
 constexpr uint8_t kMaxStatusConditions = 3;
 
@@ -40,8 +39,6 @@ struct StatusSetResolution
     uint16_t requiredFrames;
     bool playOnce;
 };
-
-bool parseStatusSetsContract(const char *contractText, StatusSetsConfig &config);
 
 bool resolveStatusSet(
     const StatusSetConfig &set,

@@ -1,12 +1,12 @@
 #include "appearance/adapters/SdAppearanceLoader.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include "appearance/adapters/EvolutionConditionContract.h"
 #include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "shared/sd/SdTextRecordReader.h"
 #include "shared/utils/TextBuffer.h"
+#include "shared/utils/UnsignedDecimal.h"
 
 namespace
 {
@@ -37,23 +37,6 @@ char *trimField(char *text)
         --end;
     }
     return text;
-}
-
-bool parseUnsignedField(const char *text, uint32_t &value)
-{
-    if (text == nullptr || text[0] == '\0')
-        return false;
-
-    uint32_t parsed = 0;
-    for (const char *cursor = text; *cursor != '\0'; ++cursor)
-    {
-        if (*cursor < '0' || *cursor > '9')
-            return false;
-        parsed = parsed * 10UL + static_cast<uint32_t>(*cursor - '0');
-    }
-
-    value = parsed;
-    return true;
 }
 
 bool parseSignedField(const char *text, int32_t &value)
@@ -242,56 +225,6 @@ bool evaluateEvolutionConditions(
 namespace
 {
 
-bool conditionIsValid(
-    char *condition,
-    const ActivePetBehaviorStatSlots &activeSlots)
-{
-    char *equals = strchr(condition, '=');
-    if (equals == nullptr)
-        return false;
-    *equals = '\0';
-    char *name = trimField(condition);
-    char *value = trimField(equals + 1);
-    if (strcmp(name, "species") == 0 || strcmp(name, "outfit") == 0)
-        return isValidAppearanceCode(value);
-    uint8_t slot = 0;
-    if (strcmp(name, "stage_days") != 0 &&
-        !activeSlots.resolve(name, slot))
-        return false;
-    int32_t minimum = 0;
-    int32_t maximum = 0;
-    return parseConditionRange(value, minimum, maximum);
-}
-
-} // namespace
-
-bool validateEvolutionConditions(
-    char *conditions,
-    const ActivePetBehaviorStatSlots &activeSlots)
-{
-    conditions = trimField(conditions);
-    if (conditions == nullptr)
-        return false;
-    if (conditions[0] == '\0')
-        return true;
-    char *cursor = conditions;
-    while (cursor != nullptr && *cursor != '\0')
-    {
-        char *separator = strchr(cursor, ',');
-        if (separator != nullptr)
-            *separator = '\0';
-        char *condition = trimField(cursor);
-        if (condition == nullptr || condition[0] == '\0' ||
-            !conditionIsValid(condition, activeSlots))
-            return false;
-        cursor = separator == nullptr ? nullptr : separator + 1;
-    }
-    return true;
-}
-
-namespace
-{
-
 struct EvolutionRule
 {
     char *sourceSpecies;
@@ -338,74 +271,6 @@ bool buildSpeciesOutfitListPath(char *dest, size_t destSize, const char *species
     return path.append("/index/") && path.append(speciesCode) && path.append(".txt") && path.ok();
 }
 
-bool evolutionSpeciesExists(SdFat *sd, const char *expectedCode)
-{
-    if (sd == nullptr || !isValidAppearanceCode(expectedCode))
-        return false;
-    struct Context
-    {
-        const char *expectedCode;
-        bool found;
-    } context = {expectedCode, false};
-    const bool loaded = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
-        Context &context = *static_cast<Context *>(rawContext);
-        if (isIgnoredEvolutionRecord(record))
-            return SdTextRecordAction::Continue;
-        EvolutionRule rule = {};
-        context.found = parseEvolutionRule(record, rule) && strcmp(rule.speciesCode, context.expectedCode) == 0;
-        return context.found ? SdTextRecordAction::Stop : SdTextRecordAction::Continue;
-    }, &context);
-    return loaded && context.found;
-}
-
-bool outfitExists(SdFat *sd, const char *speciesCode, const char *expectedCode)
-{
-    char path[32] = {};
-    if (sd == nullptr || !isValidAppearanceCode(expectedCode) ||
-        !buildSpeciesOutfitListPath(path, sizeof(path), speciesCode))
-        return false;
-    struct Context
-    {
-        const char *expectedCode;
-        bool found;
-    } context = {expectedCode, false};
-    const bool loaded = loadSdDelimitedTextRecords(sd, path, kMaxAppearanceIndexFileBytes, 128,
-        [](void *rawContext, const SdTextRecord &record) {
-            Context &context = *static_cast<Context *>(rawContext);
-            for (uint8_t index = 0; index < record.fieldCount; ++index)
-            {
-                context.found = strcmp(trimField(record.fields[index]), context.expectedCode) == 0;
-                if (context.found)
-                    return SdTextRecordAction::Stop;
-            }
-            return SdTextRecordAction::Continue;
-        }, &context);
-    return loaded && context.found;
-}
-
-bool conditionReferencesExist(char *conditions, SdFat *sd, const char *sourceSpecies)
-{
-    char *cursor = trimField(conditions);
-    while (cursor != nullptr && cursor[0] != '\0')
-    {
-        char *separator = strchr(cursor, ',');
-        if (separator != nullptr)
-            *separator = '\0';
-        char *equals = strchr(cursor, '=');
-        if (equals == nullptr)
-            return false;
-        *equals = '\0';
-        const char *name = trimField(cursor);
-        const char *value = trimField(equals + 1);
-        if (strcmp(name, "species") == 0 && !evolutionSpeciesExists(sd, value))
-            return false;
-        if (strcmp(name, "outfit") == 0 && !outfitExists(sd, sourceSpecies, value))
-            return false;
-        cursor = separator == nullptr ? nullptr : separator + 1;
-    }
-    return true;
-}
-
 bool buildOutfitPreviewPath(char *dest, size_t destSize, const char *speciesCode)
 {
     if (dest == nullptr || destSize == 0 || !isValidAppearanceCode(speciesCode))
@@ -434,57 +299,9 @@ SdAppearanceLoader::SdAppearanceLoader(SdFat *refSd) : sd(refSd)
 {
 }
 
-bool SdAppearanceLoader::validateEvolutionContract(const PetBehaviorConfig &config)
+void SdAppearanceLoader::configureRuntimeContract(const PetBehaviorConfig &config)
 {
-    evolutionContractValidated = false;
-    if (sd == nullptr || !sd->exists(kEvolutionRulesPath))
-        return false;
-
     evolutionStatSlots.configure(config);
-    struct ValidationContext
-    {
-        const ActivePetBehaviorStatSlots *activeSlots;
-        bool foundInitial;
-    } validation = {&evolutionStatSlots, false};
-    bool valid = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
-        ValidationContext &context = *static_cast<ValidationContext *>(rawContext);
-        if (isIgnoredEvolutionRecord(record))
-            return SdTextRecordAction::Continue;
-        EvolutionRule rule = {};
-        if (!parseEvolutionRule(record, rule))
-            return SdTextRecordAction::Error;
-        if (strcmp(rule.sourceSpecies, "init") == 0)
-        {
-            const bool validInitial = !context.foundInitial && rule.conditions[0] == '\0';
-            context.foundInitial = true;
-            return validInitial ? SdTextRecordAction::Continue : SdTextRecordAction::Error;
-        }
-        return validateEvolutionConditions(rule.conditions, *context.activeSlots)
-                   ? SdTextRecordAction::Continue
-                   : SdTextRecordAction::Error;
-    }, &validation);
-    valid = valid && validation.foundInitial;
-    if (valid)
-    {
-        struct ReferenceContext
-        {
-            SdFat *sd;
-        } references = {sd};
-        valid = loadEvolutionRecords(sd, [](void *rawContext, const SdTextRecord &record) {
-            ReferenceContext &context = *static_cast<ReferenceContext *>(rawContext);
-            if (isIgnoredEvolutionRecord(record))
-                return SdTextRecordAction::Continue;
-            EvolutionRule rule = {};
-            const bool recordValid = parseEvolutionRule(record, rule) &&
-                                     outfitExists(context.sd, rule.speciesCode, rule.outfitCode) &&
-                                     (strcmp(rule.sourceSpecies, "init") == 0 ||
-                                      (evolutionSpeciesExists(context.sd, rule.sourceSpecies) &&
-                                       conditionReferencesExist(rule.conditions, context.sd, rule.sourceSpecies)));
-            return recordValid ? SdTextRecordAction::Continue : SdTextRecordAction::Error;
-        }, &references);
-    }
-    evolutionContractValidated = valid;
-    return evolutionContractValidated;
 }
 
 bool SdAppearanceLoader::findInitialAppearance(AppearanceSelection &selection)
@@ -521,9 +338,6 @@ bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats, Appea
 {
     selection = {};
     if (sd == nullptr || !sd->exists(kEvolutionRulesPath))
-        return false;
-
-    if (!evolutionContractValidated)
         return false;
 
     struct Context
@@ -661,10 +475,10 @@ bool SdAppearanceLoader::findOutfitPreview(const char *speciesCode, const char *
             }
             if (fields[0][0] == '#' || strcmp(fields[0], context.outfitCode) != 0)
                 return SdTextRecordAction::Continue;
-            const uint16_t frameCount = static_cast<uint16_t>(strtoul(fields[1], nullptr, 10));
-            const uint16_t frameIntervalMs = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
-            const uint16_t width = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
-            const uint16_t height = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
+            const uint16_t frameCount = static_cast<uint16_t>(parseUnsignedDecimalUnchecked(fields[1]));
+            const uint16_t frameIntervalMs = static_cast<uint16_t>(parseUnsignedDecimalUnchecked(fields[2]));
+            const uint16_t width = static_cast<uint16_t>(parseUnsignedDecimalUnchecked(fields[3]));
+            const uint16_t height = static_cast<uint16_t>(parseUnsignedDecimalUnchecked(fields[4]));
             if (frameCount == 0 || width == 0 || height == 0 ||
                 !copyText(context.preview->outfitCode, sizeof(context.preview->outfitCode), fields[0]) ||
                 !copyText(context.preview->path, sizeof(context.preview->path), fields[5]))

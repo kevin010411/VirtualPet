@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include "pet/domain/Pet.h"
 
+struct PetBehaviorConfig;
+
 struct AppearanceSelection
 {
     char speciesCode[9];
@@ -21,13 +23,11 @@ struct OutfitPreview
     uint16_t frameIntervalMs;
 };
 
-struct PetBehaviorConfig;
-
 class AppearanceLoader
 {
 public:
     virtual ~AppearanceLoader() = default;
-    virtual bool validateEvolutionContract(const PetBehaviorConfig &) { return true; }
+    virtual void configureRuntimeContract(const PetBehaviorConfig &) {}
     virtual bool findInitialAppearance(AppearanceSelection &selection) = 0;
     virtual bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) = 0;
     virtual bool loadSpecies(char species[][9], size_t maxSpecies, size_t &speciesCount) = 0;

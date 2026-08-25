@@ -62,11 +62,7 @@ bool Game::prepare_game()
         return false;
     }
     petBehaviorLoaded = true;
-    if (!appearanceLoader.validateEvolutionContract(petBehaviorConfig))
-    {
-        startupConfigError = "evolution_rules.txt";
-        return false;
-    }
+    appearanceLoader.configureRuntimeContract(petBehaviorConfig);
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
     commands->configure(petBehaviorConfig);
     commands->resetSelection();
@@ -110,9 +106,9 @@ bool Game::finish_setup_game()
     if (!setupPrepared)
     {
         if (startupConfigError != nullptr)
-            renderer.showConfigLoadingError(startupConfigError);
+            renderer.showResourceError();
         else if (initialStateLoadingFailed)
-            renderer.showInitPetNotExist();
+            renderer.showResourceError();
         return false;
     }
 
@@ -130,7 +126,7 @@ void Game::loop_game()
 
     if (firstStartResourceError)
     {
-        renderer.showConfigLoadingError("first start resource");
+        renderer.showResourceError();
         return;
     }
 
@@ -183,7 +179,7 @@ void Game::loop_game()
 
     if (firstStartResourceError)
     {
-        renderer.showConfigLoadingError("first start resource");
+        renderer.showResourceError();
         return;
     }
 
@@ -244,13 +240,13 @@ void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfi
 {
     if (petBehaviorLoadingFailed)
     {
-        renderer.showConfigLoadingError("runtime_contract.txt");
+        renderer.showResourceError();
         return;
     }
     if (!pet.setSpeciesCode(speciesCode) || !pet.setOutfitCode(outfitCode))
     {
         initialized = false;
-        renderer.showInitPetNotExist();
+        renderer.showResourceError();
         return;
     }
 
@@ -562,10 +558,9 @@ bool Game::loadInitialPetState(bool allowSavedState, bool showError)
     AppearanceSelection initialAppearance = {};
     if (!appearanceLoader.findInitialAppearance(initialAppearance))
     {
-        strncpy(initialAppearance.speciesCode, APP_INITIAL_SPECIES, sizeof(initialAppearance.speciesCode) - 1);
-        initialAppearance.speciesCode[sizeof(initialAppearance.speciesCode) - 1] = '\0';
-        strncpy(initialAppearance.outfitCode, APP_INITIAL_OUTFIT, sizeof(initialAppearance.outfitCode) - 1);
-        initialAppearance.outfitCode[sizeof(initialAppearance.outfitCode) - 1] = '\0';
+        if (showError)
+            renderer.showResourceError();
+        return false;
     }
 
     pet.setDefaultState();
@@ -574,7 +569,7 @@ bool Game::loadInitialPetState(bool allowSavedState, bool showError)
     const bool applied = pet.setSpeciesCode(initialAppearance.speciesCode) &&
                          pet.setOutfitCode(initialAppearance.outfitCode);
     if (!applied && showError)
-        renderer.showInitPetNotExist();
+        renderer.showResourceError();
     return applied;
 }
 
@@ -710,7 +705,7 @@ bool Game::beginStartupAnimation()
         animations->clearByOwner(AnimationOwner::System);
         pendingFirstStartCompletion = false;
         firstStartResourceError = true;
-        renderer.showConfigLoadingError("first start resource");
+        renderer.showResourceError();
         return false;
     }
     if (!hasIntro && !hasSpeciesStart && !needsFirstStart)

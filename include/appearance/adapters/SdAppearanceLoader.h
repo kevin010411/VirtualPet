@@ -10,16 +10,14 @@ class SdAppearanceLoader : public AppearanceLoader
 public:
     explicit SdAppearanceLoader(SdFat *refSd);
 
+    void configureRuntimeContract(const PetBehaviorConfig &config) override;
     bool findInitialAppearance(AppearanceSelection &selection) override;
     bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) override;
     bool loadSpecies(char species[][9], size_t maxSpecies, size_t &speciesCount) override;
     bool loadOutfits(const char *speciesCode, char outfits[][9], size_t maxOutfits, size_t &outfitCount) override;
     bool findOutfitPreview(const char *speciesCode, const char *outfitCode, OutfitPreview &preview) override;
-    bool validateEvolutionContract(const PetBehaviorConfig &config) override;
-
 private:
     ActivePetBehaviorStatSlots evolutionStatSlots;
-    bool evolutionContractValidated = false;
     SdFat *sd;
 };
 

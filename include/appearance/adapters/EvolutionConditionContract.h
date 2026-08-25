@@ -4,10 +4,6 @@
 #include "pet/domain/Pet.h"
 #include "pet_behavior/domain/PetBehaviorStatSlot.h"
 
-bool validateEvolutionConditions(
-    char *conditions,
-    const ActivePetBehaviorStatSlots &activeSlots);
-
 bool evaluateEvolutionConditions(
     char *conditions,
     const PetStatSnapshot &stats,
