@@ -21,7 +21,6 @@ uint8_t arduinoStatusSetIndex(uint8_t setCount)
     return static_cast<uint8_t>(random(setCount));
 }
 #endif
-
 struct StatusValueContext
 {
     const PetStatSnapshot &stats;
@@ -78,6 +77,14 @@ void CommandExecutor::configureRuntimeContract(const PetBehaviorConfig &config)
     petBehaviorConfig = &config;
 }
 
+#if ENABLE_GUESS_GAME
+void CommandExecutor::commandGuessGame()
+{
+    animations.clearByOwner(AnimationOwner::Command);
+    currentResult.requestedMinigame = canPlayGuessItemGame();
+    currentResult.executed = currentResult.requestedMinigame;
+}
+#endif
 #if ENABLE_COMMAND_PREDICT
 AnimationId CommandExecutor::fortuneToAnimationId(int fortuneIndex)
 {
@@ -130,15 +137,6 @@ void CommandExecutor::commandPredict()
     animations.queueAnimation(Animation(AnimationId::PredAnim, gameTick * 20, true, AnimationOwner::Command, AnimationPriority::High));
     animations.queueAnimation(Animation(fortuneToAnimationId(random(1, maxFortune + 1)), gameTick * 2.4, false, AnimationOwner::Command, AnimationPriority::High));
     animations.markDirty();
-}
-#endif
-
-#if ENABLE_GUESS_GAME
-void CommandExecutor::commandHaveFun()
-{
-    animations.clearByOwner(AnimationOwner::Command);
-    currentResult.requestedMinigame = canPlayGuessItemGame();
-    currentResult.executed = currentResult.requestedMinigame;
 }
 #endif
 

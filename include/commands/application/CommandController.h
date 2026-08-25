@@ -11,7 +11,7 @@ enum class AppCommandId : uint8_t
 {
     None = APP_COMMAND_NONE,
     Predict = APP_COMMAND_PREDICT,
-    HaveFun = APP_COMMAND_HAVE_FUN,
+    GuessGame = APP_COMMAND_GUESS_GAME,
     ChangeOutfit = APP_COMMAND_CHANGE_OUTFIT,
     Status = APP_COMMAND_STATUS,
     ChangeSpecies = APP_COMMAND_CHANGE_SPECIES,
@@ -31,7 +31,7 @@ public:
     virtual void commandPredict() = 0;
 #endif
 #if ENABLE_GUESS_GAME
-    virtual void commandHaveFun() = 0;
+    virtual void commandGuessGame() = 0;
 #endif
 #if ENABLE_COMMAND_OUTFIT
     virtual void commandChangeOutfit() = 0;

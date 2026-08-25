@@ -56,7 +56,7 @@ private:
     void commandPredict() override;
 #endif
 #if ENABLE_GUESS_GAME
-    void commandHaveFun() override;
+    void commandGuessGame() override;
 #endif
 #if ENABLE_COMMAND_OUTFIT
     void commandChangeOutfit() override;
