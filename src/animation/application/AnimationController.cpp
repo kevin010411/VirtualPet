@@ -478,12 +478,12 @@ void AnimationController::clearPlaybackFailure(AnimationId id)
 
 void AnimationController::showActionAnimationError()
 {
-    renderer.showActionAnimationError();
+    renderer.showResourceError();
 }
 
 void AnimationController::showStatusNotFound()
 {
-    renderer.showStatusNotFound();
+    renderer.showResourceError();
 }
 
 void AnimationController::updateElapsed(unsigned long elapsed)

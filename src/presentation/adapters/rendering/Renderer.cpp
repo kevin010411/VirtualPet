@@ -47,15 +47,33 @@ const char *Renderer::assetExtension() const
 bool Renderer::showImageFile(const char *imgPath,
                              int xmin,
                              int ymin,
-                             int batchLines,
-                             const AnimationMeta *meta)
+                             int batchLines)
 {
-    const bool validateSize = meta != nullptr;
-    const uint16_t expectedWidth = validateSize ? meta->width : 0;
-    const uint16_t expectedHeight = validateSize ? meta->height : 0;
     return FrameDecoder::showRleImage(
         sdCard(), display(), readBuffer(), readBufferSize(), lineBuffer(), lineBufferPixels(),
-        imgPath, expectedWidth, expectedHeight, validateSize, xmin, ymin, batchLines);
+        imgPath, xmin, ymin, batchLines);
+}
+
+bool Renderer::showFramePath(const char *path, int xmin, int ymin, int batchLines)
+{
+    const bool ok = path != nullptr && showImageFile(path, xmin, ymin, batchLines);
+    if (!ok)
+        FrameDecoder::showResourceError(tft);
+    return ok;
+}
+
+bool Renderer::showManifestFrame(const AnimationMeta *meta, uint16_t frameIndex, int xmin, int ymin, int batchLines)
+{
+    if (meta == nullptr || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
+        return showFramePath(nullptr, xmin, ymin, batchLines);
+
+    const uint16_t maxFrame = meta->singleFile ? 1 : meta->frameCount;
+    const uint16_t safeFrame = frameIndex < 1 ? 1 : (frameIndex > maxFrame ? maxFrame : frameIndex);
+    char framePath[128];
+    const bool hasFramePath = meta->singleFile
+                                  ? FrameDecoder::replaceOrAppendExtension(framePath, sizeof(framePath), meta->path, assetExtension())
+                                  : FrameDecoder::buildFramePath(framePath, sizeof(framePath), meta->path, safeFrame, assetExtension());
+    return showFramePath(hasFramePath ? framePath : nullptr, xmin, ymin, batchLines);
 }
 
 void Renderer::initAnimations()
@@ -101,11 +119,7 @@ bool Renderer::reloadManifest()
     state->animationIndex = 1;
     state->maxFrame = 0;
     const bool loaded = state->manifest.load(SD, state->speciesCode, state->outfitCode);
-    if (state->manifest.hasPathError())
-        FrameDecoder::showPathError(tft);
-    else if (state->manifest.hasCapacityError())
-        FrameDecoder::showRegistryFullError(tft);
-    else if (!loaded)
+    if (!loaded || state->manifest.hasPathError() || state->manifest.hasCapacityError())
         FrameDecoder::showResourceError(tft);
     return loaded && !state->manifest.hasPathError() && !state->manifest.hasCapacityError();
 }
@@ -143,74 +157,25 @@ size_t Renderer::lineBufferPixels() const
 bool Renderer::ShowSDCardFrame(const char *base_path, uint16_t frame_index, int xmin, int ymin, int batch_lines)
 {
     if (base_path == nullptr || base_path[0] == '\0')
-    {
-        FrameDecoder::showResourceError(tft);
-        return false;
-    }
+        return showFramePath(nullptr, xmin, ymin, batch_lines);
 
     char candidatePath[128];
-    if (!FrameDecoder::buildFramePath(candidatePath, sizeof(candidatePath), base_path, frame_index, assetExtension()))
-    {
-        FrameDecoder::showResourceError(tft);
-        return false;
-    }
-
-    const bool ok = showImageFile(candidatePath, xmin, ymin, batch_lines, nullptr);
-    if (!ok)
-        FrameDecoder::showResourceError(tft);
-    return ok;
+    const bool hasFramePath = FrameDecoder::buildFramePath(candidatePath, sizeof(candidatePath), base_path, frame_index, assetExtension());
+    return showFramePath(hasFramePath ? candidatePath : nullptr, xmin, ymin, batch_lines);
 }
 
 bool Renderer::ShowAnimationFrame(AnimationId id, uint16_t frame_index, int xmin, int ymin, int batch_lines)
 {
-    const AnimationMeta *meta = state->manifest.metaFor(id);
-    if (id == AnimationId::None || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
-    {
-        FrameDecoder::showResourceError(tft);
-        return false;
-    }
-
-    const uint16_t maxFrame = meta->singleFile ? 1 : meta->frameCount;
-    uint16_t safeFrame = frame_index;
-    if (safeFrame < 1)
-        safeFrame = 1;
-    if (safeFrame > maxFrame)
-        safeFrame = maxFrame;
-
-    char framePath[128];
-    const bool hasFramePath = meta->singleFile
-                                  ? FrameDecoder::replaceOrAppendExtension(framePath, sizeof(framePath), meta->path, assetExtension())
-                                  : FrameDecoder::buildFramePath(framePath, sizeof(framePath), meta->path, safeFrame, assetExtension());
-    const bool ok = hasFramePath && showImageFile(framePath, xmin, ymin, batch_lines, meta);
-    if (!ok)
-        FrameDecoder::showResourceError(tft);
-    return ok;
+    return id == AnimationId::None
+               ? showFramePath(nullptr, xmin, ymin, batch_lines)
+               : showManifestFrame(state->manifest.metaFor(id), frame_index, xmin, ymin, batch_lines);
 }
 
 bool Renderer::ShowNamedAnimationFrame(const char *name, uint16_t frame_index, int xmin, int ymin, int batch_lines)
 {
-    const AnimationMeta *meta = state->manifest.metaForName(name);
-    if (name == nullptr || name[0] == '\0' || meta == nullptr || !meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
-    {
-        FrameDecoder::showResourceError(tft);
-        return false;
-    }
-
-    const uint16_t maxFrame = meta->singleFile ? 1 : meta->frameCount;
-    uint16_t safeFrame = frame_index;
-    if (safeFrame < 1)
-        safeFrame = 1;
-    if (safeFrame > maxFrame)
-        safeFrame = maxFrame;
-
-    char framePath[128];
-    const bool hasFramePath = meta->singleFile
-                                  ? FrameDecoder::replaceOrAppendExtension(framePath, sizeof(framePath), meta->path, assetExtension())
-                                  : FrameDecoder::buildFramePath(framePath, sizeof(framePath), meta->path, safeFrame, assetExtension());
-    const bool ok = hasFramePath && showImageFile(framePath, xmin, ymin, batch_lines, meta);
-    if (!ok)
-        FrameDecoder::showResourceError(tft);
-    return ok;
+    return name == nullptr || name[0] == '\0'
+               ? showFramePath(nullptr, xmin, ymin, batch_lines)
+               : showManifestFrame(state->manifest.metaForName(name), frame_index, xmin, ymin, batch_lines);
 }
 
 bool Renderer::setAnimation(AnimationId id, bool playOnce)
@@ -287,21 +252,7 @@ bool Renderer::advanceAnimationFrame()
                                     : state->manifest.metaFor(state->nowAnimId);
     bool ok = false;
 
-    if (!meta->configured || meta->frameCount == 0 || meta->path[0] == '\0')
-    {
-        FrameDecoder::showResourceError(tft);
-    }
-    else
-    {
-        char framePath[128];
-        const bool hasFramePath = meta->singleFile
-                                      ? FrameDecoder::replaceOrAppendExtension(framePath, sizeof(framePath), meta->path, assetExtension())
-                                      : FrameDecoder::buildFramePath(framePath, sizeof(framePath), meta->path, state->animationIndex, assetExtension());
-        if (hasFramePath)
-            ok = showImageFile(framePath, 0, 32, FrameDecoder::kWorkingBatchLines, meta);
-        if (!ok)
-            FrameDecoder::showResourceError(tft);
-    }
+    ok = showManifestFrame(meta, state->animationIndex, 0, 32, FrameDecoder::kWorkingBatchLines);
 
     if (ok)
     {
@@ -324,26 +275,6 @@ bool Renderer::animationFrameFailed() const
 void Renderer::showResourceError()
 {
     FrameDecoder::showResourceError(tft);
-}
-
-void Renderer::showActionAnimationError()
-{
-    FrameDecoder::showActionAnimationError(tft);
-}
-
-void Renderer::showInitPetNotExist()
-{
-    FrameDecoder::showInitPetNotExist(tft);
-}
-
-void Renderer::showConfigLoadingError(const char *resource)
-{
-    FrameDecoder::showConfigLoadingError(tft, resource);
-}
-
-void Renderer::showStatusNotFound()
-{
-    FrameDecoder::showStatusNotFound(tft);
 }
 
 #if ENABLE_DEBUG

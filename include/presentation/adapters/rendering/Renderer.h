@@ -28,11 +28,7 @@ public:
     bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
     bool animationFrameFailed() const;
-    void showInitPetNotExist();
-    void showConfigLoadingError(const char *resource);
     void showResourceError();
-    void showActionAnimationError();
-    void showStatusNotFound();
 #if ENABLE_DEBUG
     DebugDisplay &debugDisplay();
     void renderDebugOverlay();
@@ -53,8 +49,9 @@ private:
     bool showImageFile(const char *imgPath,
                        int xmin,
                        int ymin,
-                       int batchLines,
-                       const AnimationMeta *meta);
+                       int batchLines);
+    bool showFramePath(const char *path, int xmin, int ymin, int batchLines);
+    bool showManifestFrame(const AnimationMeta *meta, uint16_t frameIndex, int xmin, int ymin, int batchLines);
     Adafruit_ST7735 *display() const;
     uint8_t *readBuffer();
     size_t readBufferSize() const;

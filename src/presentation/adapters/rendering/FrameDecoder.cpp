@@ -16,73 +16,6 @@ void showResourceError(Adafruit_ST7735 *tft)
     tft->print("resource error");
 }
 
-void showPathError(Adafruit_ST7735 *tft)
-{
-    if (tft == nullptr)
-        return;
-
-    tft->fillRect(0, 32, kDefaultAnimWidth, kDefaultAnimHeight, ST77XX_BLACK);
-    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
-    tft->setCursor(8, 72);
-    tft->print("path error");
-}
-
-void showRegistryFullError(Adafruit_ST7735 *tft)
-{
-    if (tft == nullptr)
-        return;
-
-    tft->fillRect(0, 32, kDefaultAnimWidth, kDefaultAnimHeight, ST77XX_BLACK);
-    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
-    tft->setCursor(8, 72);
-    tft->print("registry full");
-}
-
-void showStatusNotFound(Adafruit_ST7735 *tft)
-{
-    if (tft == nullptr)
-        return;
-
-    tft->fillRect(0, 32, kDefaultAnimWidth, kDefaultAnimHeight, ST77XX_BLACK);
-    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
-    tft->setCursor(8, 72);
-    tft->print("status not found");
-}
-
-void showInitPetNotExist(Adafruit_ST7735 *tft)
-{
-    if (tft == nullptr)
-        return;
-
-    tft->fillScreen(ST77XX_BLACK);
-    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
-    tft->setCursor(8, 72);
-    tft->print("init pet not exist");
-}
-
-void showConfigLoadingError(Adafruit_ST7735 *tft, const char *resource)
-{
-    if (tft == nullptr)
-        return;
-
-    tft->fillScreen(ST77XX_BLACK);
-    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
-    tft->setCursor(0, 32);
-    tft->print(resource == nullptr ? "config error" : resource);
-    tft->print(" error");
-}
-
-void showActionAnimationError(Adafruit_ST7735 *tft)
-{
-    if (tft == nullptr)
-        return;
-
-    tft->fillRect(0, 32, kDefaultAnimWidth, kDefaultAnimHeight, ST77XX_BLACK);
-    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
-    tft->setCursor(8, 72);
-    tft->print("action animation error");
-}
-
 bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, const char *ext)
 {
     if (dest == nullptr || destSize == 0 || path == nullptr || ext == nullptr)
@@ -128,11 +61,6 @@ public:
         return true;
     }
 
-    bool hasTrailingData() const
-    {
-        return readPosition < readLength || file.available();
-    }
-
 private:
     bool readByte(uint8_t &value)
     {
@@ -172,9 +100,6 @@ bool showRleImage(SdFat *sd,
                   uint16_t *lineBuffer,
                   size_t lineBufferPixels,
                   const char *imgPath,
-                  uint16_t expectedWidth,
-                  uint16_t expectedHeight,
-                  bool validateExpectedSize,
                   int xmin,
                   int ymin,
                   int batchLines)
@@ -202,12 +127,6 @@ bool showRleImage(SdFat *sd,
         return false;
     }
 
-    if (validateExpectedSize && (width != expectedWidth || height != expectedHeight))
-    {
-        frameFile.close();
-        return false;
-    }
-
     const int safeBatchLines = (batchLines < 1) ? 1 : batchLines;
     const size_t lineCapacity = static_cast<size_t>(width) * static_cast<size_t>(safeBatchLines);
     if (lineBufferPixels < lineCapacity)
@@ -218,8 +137,6 @@ bool showRleImage(SdFat *sd,
 
     uint16_t runLength = 0;
     uint16_t runColor = 0;
-    size_t pixelsWritten = 0;
-    const size_t totalPixels = static_cast<size_t>(width) * height;
 
     for (uint16_t batchStartRow = 0; batchStartRow < height; batchStartRow = static_cast<uint16_t>(batchStartRow + safeBatchLines))
     {
@@ -254,18 +171,11 @@ bool showRleImage(SdFat *sd,
                     *dest++ = runColor;
 
                 lineCount += copyCount;
-                pixelsWritten += copyCount;
                 runLength = static_cast<uint16_t>(runLength - copyCount);
             }
         }
 
         tft->drawRGBBitmap(xmin, ymin + batchStartRow, lineBuffer, width, actualLines);
-    }
-
-    if (pixelsWritten != totalPixels || runLength != 0 || reader.hasTrailingData())
-    {
-        frameFile.close();
-        return false;
     }
 
     frameFile.close();

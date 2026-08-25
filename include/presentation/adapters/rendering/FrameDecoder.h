@@ -15,12 +15,6 @@ constexpr size_t kRleReadBufferBytes = 1024;
 constexpr size_t kLineBufferPixels = static_cast<size_t>(kDefaultAnimWidth) * kWorkingBatchLines;
 
 void showResourceError(Adafruit_ST7735 *tft);
-void showActionAnimationError(Adafruit_ST7735 *tft);
-void showPathError(Adafruit_ST7735 *tft);
-void showRegistryFullError(Adafruit_ST7735 *tft);
-void showStatusNotFound(Adafruit_ST7735 *tft);
-void showInitPetNotExist(Adafruit_ST7735 *tft);
-void showConfigLoadingError(Adafruit_ST7735 *tft, const char *resource);
 bool replaceOrAppendExtension(char *dest, size_t destSize, const char *path, const char *ext);
 bool buildFramePath(char *dest, size_t destSize, const char *basePath, uint16_t frameIndex, const char *ext);
 
@@ -31,9 +25,6 @@ bool showRleImage(SdFat *sd,
                   uint16_t *lineBuffer,
                   size_t lineBufferPixels,
                   const char *imgPath,
-                  uint16_t expectedWidth,
-                  uint16_t expectedHeight,
-                  bool validateExpectedSize,
                   int xmin,
                   int ymin,
                   int batchLines);

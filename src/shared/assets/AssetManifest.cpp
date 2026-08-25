@@ -1,9 +1,9 @@
 #include "shared/assets/AssetManifest.h"
 
-#include <stdlib.h>
 #include <string.h>
 #include "shared/sd/SdTextRecordReader.h"
 #include "shared/utils/TextBuffer.h"
+#include "shared/utils/UnsignedDecimal.h"
 
 namespace
 {
@@ -269,10 +269,10 @@ SdTextRecordAction loadManifestRecord(void *rawContext, const SdTextRecord &reco
         return SdTextRecordAction::Continue;
 
     AnimationMeta parsed = {};
-    parsed.frameIntervalMs = static_cast<uint16_t>(strtoul(fields[2], nullptr, 10));
-    parsed.frameCount = static_cast<uint16_t>(strtoul(fields[3], nullptr, 10));
-    parsed.width = static_cast<uint16_t>(strtoul(fields[4], nullptr, 10));
-    parsed.height = static_cast<uint16_t>(strtoul(fields[5], nullptr, 10));
+    parsed.frameIntervalMs = static_cast<uint16_t>(parseUnsignedDecimalUnchecked(fields[2]));
+    parsed.frameCount = static_cast<uint16_t>(parseUnsignedDecimalUnchecked(fields[3]));
+    parsed.width = static_cast<uint16_t>(parseUnsignedDecimalUnchecked(fields[4]));
+    parsed.height = static_cast<uint16_t>(parseUnsignedDecimalUnchecked(fields[5]));
     if (!copyManifestPath(parsed.path, sizeof(parsed.path), fields[6]))
     {
         gPathError = true;
