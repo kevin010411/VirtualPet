@@ -52,9 +52,15 @@ struct PetBehaviorIdleTriggerConfig
     char animation[kPetBehaviorAnimationTokenSize];
 };
 
+enum class PetBehaviorActionMode : uint8_t
+{
+    Standard,
+};
+
 struct PetBehaviorActionConfig
 {
     bool active;
+    PetBehaviorActionMode mode;
     char animation[kPetBehaviorAnimationTokenSize];
     uint8_t playbackCount;
     uint8_t suspendDailyChangeDays;

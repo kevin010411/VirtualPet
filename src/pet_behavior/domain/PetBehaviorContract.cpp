@@ -9,7 +9,7 @@ namespace
 {
 constexpr const char *kRuntimeContractPath = "/runtime_contract.txt";
 constexpr const char *kRuntimeContractIdentity = "runtime_contract";
-constexpr const char *kRuntimeContractVersion = "2";
+constexpr const char *kRuntimeContractVersion = "3";
 
 bool parseUnsigned(const char *text, uint32_t maximum, uint32_t &value)
 {
@@ -150,7 +150,7 @@ public:
     bool complete(PetBehaviorConfig &destination) const
     {
         if (!identitySeen || !statusSeen || !idleSeen || candidate.buttonCount != kPetBehaviorButtonCount ||
-            candidate.statCount > kMaxPetBehaviorStats || !validStatusConditions()
+            candidate.statCount > kMaxPetBehaviorStats || !validActions() || !validStatusConditions()
 #if ENABLE_GUESS_GAME
             || !validGuessEffects()
 #endif
@@ -165,6 +165,28 @@ private:
     bool identitySeen = false;
     bool statusSeen = false;
     bool idleSeen = false;
+
+    bool validActions() const
+    {
+        bool affectedSlots[kMaxPetBehaviorActions][kPetBehaviorSlotCount] = {};
+        for (uint8_t index = 0; index < candidate.actionEffectCount; ++index)
+        {
+            const PetBehaviorActionEffectConfig &effect = candidate.actionEffects[index];
+            if (!effect.active || effect.actionSlot >= kMaxPetBehaviorActions ||
+                !candidate.actions[effect.actionSlot].active || effect.statSlot >= kPetBehaviorSlotCount ||
+                !candidate.stats[effect.statSlot].active || affectedSlots[effect.actionSlot][effect.statSlot])
+                return false;
+            affectedSlots[effect.actionSlot][effect.statSlot] = true;
+        }
+        for (uint8_t slot = 0; slot < kPetBehaviorButtonCount; ++slot)
+        {
+            const PetBehaviorButtonConfig &button = candidate.buttons[slot];
+            if (button.active && button.kind == PetBehaviorButtonKind::UserAction &&
+                (button.actionSlot >= kMaxPetBehaviorActions || !candidate.actions[button.actionSlot].active))
+                return false;
+        }
+        return true;
+    }
 
     bool validStatusConditions() const
     {
@@ -330,16 +352,18 @@ private:
         uint8_t slot = 0;
         uint32_t playbackCount = 0;
         uint32_t suspendDailyChangeDays = 0;
-        if (record.fieldCount != 5 || !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, slot) ||
-            !parseUnsigned(record.fields[3], UINT8_MAX, playbackCount) ||
-            !parseUnsigned(record.fields[4], UINT8_MAX, suspendDailyChangeDays))
+        if (record.fieldCount != 6 ||
+            !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, slot) ||
+            strcmp(record.fields[2], "standard") != 0 ||
+            !parseUnsigned(record.fields[4], 5U, playbackCount) || playbackCount == 0 ||
+            !parseUnsigned(record.fields[5], UINT8_MAX, suspendDailyChangeDays))
             return false;
         PetBehaviorActionConfig &action = candidate.actions[slot];
-        if (!copyBounded(record.fields[2], action.animation, sizeof(action.animation)))
+        if (action.active || !copyBounded(record.fields[3], action.animation, sizeof(action.animation)))
             return false;
-        if (!action.active)
-            ++candidate.actionCount;
+        ++candidate.actionCount;
         action.active = true;
+        action.mode = PetBehaviorActionMode::Standard;
         action.playbackCount = static_cast<uint8_t>(playbackCount);
         action.suspendDailyChangeDays = static_cast<uint8_t>(suspendDailyChangeDays);
         return true;
@@ -365,8 +389,9 @@ private:
         else
             return false;
         PetBehaviorActionEffectConfig &effect = candidate.actionEffects[slot];
-        if (!effect.active)
-            ++candidate.actionEffectCount;
+        if (effect.active)
+            return false;
+        ++candidate.actionEffectCount;
         effect.active = true;
         effect.actionSlot = actionSlot;
         effect.statSlot = statSlot;
