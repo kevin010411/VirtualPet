@@ -93,7 +93,7 @@ bool parseHex32(const char *text, uint32_t &value)
     return true;
 }
 
-bool parseSlot(const char *token, const char *prefix, uint8_t capacity, uint8_t &slot)
+bool parseSlot(const char *token, const char *prefix, uint16_t capacity, uint8_t &slot)
 {
     if (token == nullptr || prefix == nullptr || capacity == 0)
         return false;
@@ -114,6 +114,17 @@ bool copyBounded(const char *source, char *destination, size_t capacity)
     return true;
 }
 
+bool parseEffectOperation(const char *token, PetBehaviorEffectOperation &operation)
+{
+    if (strcmp(token, "change") == 0)
+        operation = PetBehaviorEffectOperation::Change;
+    else if (strcmp(token, "set") == 0)
+        operation = PetBehaviorEffectOperation::Set;
+    else
+        return false;
+    return true;
+}
+
 class PetBehaviorDecoder
 {
 public:
@@ -131,10 +142,14 @@ public:
             return decodeIdleTrigger(record);
         if (strcmp(record.fields[0], "action") == 0)
             return decodeAction(record);
+        if (strcmp(record.fields[0], "action_outcome") == 0)
+            return decodeActionOutcome(record);
         if (strcmp(record.fields[0], "action_condition") == 0)
             return decodeActionCondition(record);
         if (strcmp(record.fields[0], "action_effect") == 0)
             return decodeActionEffect(record);
+        if (strcmp(record.fields[0], "action_outcome_effect") == 0)
+            return decodeActionOutcomeEffect(record);
 #if ENABLE_GUESS_GAME
         if (strcmp(record.fields[0], "guess_effect") == 0)
             return decodeGuessEffect(record);
@@ -172,13 +187,15 @@ private:
     bool validActions() const
     {
         bool affectedSlots[kMaxPetBehaviorActions][kPetBehaviorSlotCount] = {};
-        if (!validActionConditions())
+        if (!validActionConditions() || !validRandomOutcomes())
             return false;
         for (uint8_t index = 0; index < candidate.actionEffectCount; ++index)
         {
             const PetBehaviorActionEffectConfig &effect = candidate.actionEffects[index];
             if (!effect.active || effect.actionSlot >= kMaxPetBehaviorActions ||
-                !candidate.actions[effect.actionSlot].active || effect.statSlot >= kPetBehaviorSlotCount ||
+                !candidate.actions[effect.actionSlot].active ||
+                candidate.actions[effect.actionSlot].mode == PetBehaviorActionMode::RandomOutcome ||
+                effect.statSlot >= kPetBehaviorSlotCount ||
                 !candidate.stats[effect.statSlot].active || affectedSlots[effect.actionSlot][effect.statSlot])
                 return false;
             affectedSlots[effect.actionSlot][effect.statSlot] = true;
@@ -189,6 +206,59 @@ private:
             if (button.active && button.kind == PetBehaviorButtonKind::UserAction &&
                 (button.actionSlot >= kMaxPetBehaviorActions || !candidate.actions[button.actionSlot].active))
                 return false;
+        }
+        return true;
+    }
+
+    bool validRandomOutcomes() const
+    {
+        bool affectedSlots[kMaxPetBehaviorActions]
+                          [kMaxPetBehaviorRandomOutcomesPerAction]
+                          [kPetBehaviorSlotCount] = {};
+        for (uint8_t actionSlot = 0; actionSlot < kMaxPetBehaviorActions; ++actionSlot)
+        {
+            const PetBehaviorActionConfig &action = candidate.actions[actionSlot];
+            uint8_t outcomeCount = 0;
+            for (uint8_t outcomeSlot = 0;
+                 outcomeSlot < kMaxPetBehaviorRandomOutcomesPerAction;
+                 ++outcomeSlot)
+            {
+                const PetBehaviorRandomOutcomeConfig &outcome =
+                    candidate.randomOutcomes[actionSlot][outcomeSlot];
+                if (!outcome.active)
+                    continue;
+                if (!action.active || action.mode != PetBehaviorActionMode::RandomOutcome ||
+                    outcomeSlot != outcomeCount || outcome.weight == 0 || outcome.weight > 100 ||
+                    outcome.animationPlayback.animation[0] == '\0' ||
+                    outcome.animationPlayback.playbackCount == 0 ||
+                    outcome.animationPlayback.playbackCount > 5)
+                    return false;
+                ++outcomeCount;
+            }
+            if (action.active && action.mode == PetBehaviorActionMode::RandomOutcome)
+            {
+                if (outcomeCount < kMinPetBehaviorRandomOutcomesPerAction ||
+                    outcomeCount > kMaxPetBehaviorRandomOutcomesPerAction)
+                    return false;
+            }
+            else if (outcomeCount != 0)
+            {
+                return false;
+            }
+        }
+
+        for (uint16_t index = 0; index < candidate.randomOutcomeEffectCount; ++index)
+        {
+            const PetBehaviorRandomOutcomeEffectConfig &effect = candidate.randomOutcomeEffects[index];
+            if (!effect.active || effect.actionSlot >= kMaxPetBehaviorActions ||
+                effect.outcomeSlot >= kMaxPetBehaviorRandomOutcomesPerAction ||
+                !candidate.actions[effect.actionSlot].active ||
+                candidate.actions[effect.actionSlot].mode != PetBehaviorActionMode::RandomOutcome ||
+                !candidate.randomOutcomes[effect.actionSlot][effect.outcomeSlot].active ||
+                effect.statSlot >= kPetBehaviorSlotCount || !candidate.stats[effect.statSlot].active ||
+                affectedSlots[effect.actionSlot][effect.outcomeSlot][effect.statSlot])
+                return false;
+            affectedSlots[effect.actionSlot][effect.outcomeSlot][effect.statSlot] = true;
         }
         return true;
     }
@@ -263,7 +333,8 @@ private:
 
             if (!action.active)
                 continue;
-            if (action.mode == PetBehaviorActionMode::Standard)
+            if (action.mode == PetBehaviorActionMode::Standard ||
+                action.mode == PetBehaviorActionMode::RandomOutcome)
             {
                 if (conditionCount != 0)
                     return false;
@@ -490,6 +561,13 @@ private:
                 return false;
             }
         }
+        else if (strcmp(record.fields[2], "random_outcome") == 0)
+        {
+            if (record.fields[3][0] != '\0' || strcmp(record.fields[4], "0") != 0)
+                return false;
+            action.mode = PetBehaviorActionMode::RandomOutcome;
+            action.hasFallbackAnimation = false;
+        }
         else
         {
             return false;
@@ -498,6 +576,30 @@ private:
         action.active = true;
         action.animationPlayback.playbackCount = static_cast<uint8_t>(playbackCount);
         action.suspendDailyChangeDays = static_cast<uint8_t>(suspendDailyChangeDays);
+        return true;
+    }
+
+    bool decodeActionOutcome(const SdTextRecord &record)
+    {
+        uint8_t actionSlot = 0;
+        uint8_t outcomeSlot = 0;
+        uint32_t weight = 0;
+        uint32_t playbackCount = 0;
+        if (record.fieldCount != 6 ||
+            !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, actionSlot) ||
+            !parseSlot(record.fields[2], "outcome", kMaxPetBehaviorRandomOutcomesPerAction, outcomeSlot) ||
+            !parseUnsigned(record.fields[3], 100U, weight) || weight == 0 ||
+            !parseUnsigned(record.fields[5], 5U, playbackCount) || playbackCount == 0)
+            return false;
+
+        PetBehaviorRandomOutcomeConfig &outcome = candidate.randomOutcomes[actionSlot][outcomeSlot];
+        if (outcome.active ||
+            !copyBounded(record.fields[4], outcome.animationPlayback.animation,
+                         sizeof(outcome.animationPlayback.animation)))
+            return false;
+        outcome.active = true;
+        outcome.weight = static_cast<uint8_t>(weight);
+        outcome.animationPlayback.playbackCount = static_cast<uint8_t>(playbackCount);
         return true;
     }
 
@@ -556,11 +658,7 @@ private:
             !parseSigned16(record.fields[5], value))
             return false;
         PetBehaviorEffectOperation operation;
-        if (strcmp(record.fields[3], "change") == 0)
-            operation = PetBehaviorEffectOperation::Change;
-        else if (strcmp(record.fields[3], "set") == 0)
-            operation = PetBehaviorEffectOperation::Set;
-        else
+        if (!parseEffectOperation(record.fields[3], operation))
             return false;
         PetBehaviorActionEffectConfig &effect = candidate.actionEffects[slot];
         if (effect.active)
@@ -568,6 +666,38 @@ private:
         ++candidate.actionEffectCount;
         effect.active = true;
         effect.actionSlot = actionSlot;
+        effect.statSlot = statSlot;
+        effect.operation = operation;
+        effect.value = value;
+        return true;
+    }
+
+    bool decodeActionOutcomeEffect(const SdTextRecord &record)
+    {
+        uint8_t slot = 0;
+        uint8_t actionSlot = 0;
+        uint8_t outcomeSlot = 0;
+        uint8_t statSlot = 0;
+        int16_t value = 0;
+        if (record.fieldCount != 7 ||
+            !parseSlot(record.fields[1], "outcome_effect", kMaxPetBehaviorRandomOutcomeEffects, slot) ||
+            !parseSlot(record.fields[2], "action", kMaxPetBehaviorActions, actionSlot) ||
+            !parseSlot(record.fields[3], "outcome", kMaxPetBehaviorRandomOutcomesPerAction, outcomeSlot) ||
+            !parseSlot(record.fields[5], "custom", kPetBehaviorSlotCount, statSlot) ||
+            !parseSigned16(record.fields[6], value))
+            return false;
+
+        PetBehaviorEffectOperation operation;
+        if (!parseEffectOperation(record.fields[4], operation))
+            return false;
+
+        PetBehaviorRandomOutcomeEffectConfig &effect = candidate.randomOutcomeEffects[slot];
+        if (effect.active)
+            return false;
+        ++candidate.randomOutcomeEffectCount;
+        effect.active = true;
+        effect.actionSlot = actionSlot;
+        effect.outcomeSlot = outcomeSlot;
         effect.statSlot = statSlot;
         effect.operation = operation;
         effect.value = value;
@@ -599,11 +729,7 @@ private:
             return false;
 
         PetBehaviorEffectOperation operation;
-        if (strcmp(record.fields[3], "change") == 0)
-            operation = PetBehaviorEffectOperation::Change;
-        else if (strcmp(record.fields[3], "set") == 0)
-            operation = PetBehaviorEffectOperation::Set;
-        else
+        if (!parseEffectOperation(record.fields[3], operation))
             return false;
 
         PetBehaviorGuessEffectConfig &effect = candidate.guessEffects[slot];

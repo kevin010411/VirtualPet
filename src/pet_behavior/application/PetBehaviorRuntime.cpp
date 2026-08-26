@@ -22,6 +22,11 @@ bool writeStats(const PetBehaviorStatValues &state,
 {
     return petActions.commitPetStats(state.values, kPetBehaviorSlotCount);
 }
+
+uint16_t arduinoRandomBelow(uint16_t upperExclusive)
+{
+    return static_cast<uint16_t>(random(upperExclusive));
+}
 } // namespace
 
 PetBehaviorRuntime::PetBehaviorRuntime(const PetBehaviorConfig &configRef,
@@ -61,7 +66,8 @@ bool PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     PetBehaviorStatValues state = readStats(petActions);
     PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
     PetBehaviorActionPlayback playback = {};
-    if (!applyPetBehaviorAction(config, actionSlot, state, nextPauses, playback))
+    if (!applyPetBehaviorAction(
+            config, actionSlot, state, nextPauses, playback, arduinoRandomBelow))
         return false;
     if (!writeStats(state, petActions))
         return false;

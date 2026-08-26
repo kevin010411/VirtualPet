@@ -15,7 +15,13 @@ constexpr uint8_t kMaxPetBehaviorActions = 8;
 constexpr uint8_t kMaxPetBehaviorActionConditionsPerAction = 4;
 constexpr uint8_t kMaxPetBehaviorActionConditions =
     kMaxPetBehaviorActions * kMaxPetBehaviorActionConditionsPerAction;
+constexpr uint8_t kMinPetBehaviorRandomOutcomesPerAction = 2;
+constexpr uint8_t kMaxPetBehaviorRandomOutcomesPerAction = 3;
 constexpr uint8_t kMaxPetBehaviorActionEffects = kMaxPetBehaviorActions * kMaxPetBehaviorStats;
+constexpr uint16_t kMaxPetBehaviorRandomOutcomeEffects =
+    kMaxPetBehaviorActions * kMaxPetBehaviorRandomOutcomesPerAction * kMaxPetBehaviorStats;
+static_assert(kMaxPetBehaviorRandomOutcomeEffects <= UINT8_MAX,
+              "Random Outcome effect tokens require one byte.");
 #if ENABLE_GUESS_GAME
 constexpr uint8_t kPetBehaviorGuessOutcomeCount = 4;
 constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * kMaxPetBehaviorStats;
@@ -23,7 +29,7 @@ constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * 
 constexpr uint8_t kPetBehaviorButtonCount = 8;
 constexpr size_t kPetBehaviorAnimationTokenSize = 8;
 constexpr size_t kPetBehaviorSystemCommandTokenSize = 16;
-constexpr size_t kMaxPetBehaviorContractBytes = 6144;
+constexpr size_t kMaxPetBehaviorContractBytes = 24576;
 
 enum class PetBehaviorEffectOperation : uint8_t
 {
@@ -59,6 +65,7 @@ enum class PetBehaviorActionMode : uint8_t
 {
     Standard,
     ConditionalAnimation,
+    RandomOutcome,
 };
 
 enum class PetBehaviorActionConditionSource : uint8_t
@@ -92,6 +99,13 @@ struct PetBehaviorActionConfig
     uint8_t suspendDailyChangeDays;
 };
 
+struct PetBehaviorRandomOutcomeConfig
+{
+    bool active;
+    uint8_t weight;
+    PetBehaviorAnimationPlaybackConfig animationPlayback;
+};
+
 struct PetBehaviorActionConditionConfig
 {
     bool active;
@@ -112,6 +126,16 @@ struct PetBehaviorActionEffectConfig
     uint8_t actionSlot;
     uint8_t statSlot;
     Operation operation;
+    int16_t value;
+};
+
+struct PetBehaviorRandomOutcomeEffectConfig
+{
+    bool active;
+    uint8_t actionSlot;
+    uint8_t outcomeSlot;
+    uint8_t statSlot;
+    PetBehaviorEffectOperation operation;
     int16_t value;
 };
 
@@ -155,8 +179,11 @@ struct PetBehaviorConfig
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     PetBehaviorIdleTriggerConfig idleTriggers[kMaxPetBehaviorIdleTriggers];
     PetBehaviorActionConfig actions[kMaxPetBehaviorActions];
+    PetBehaviorRandomOutcomeConfig
+        randomOutcomes[kMaxPetBehaviorActions][kMaxPetBehaviorRandomOutcomesPerAction];
     PetBehaviorActionConditionConfig actionConditions[kMaxPetBehaviorActionConditions];
     PetBehaviorActionEffectConfig actionEffects[kMaxPetBehaviorActionEffects];
+    PetBehaviorRandomOutcomeEffectConfig randomOutcomeEffects[kMaxPetBehaviorRandomOutcomeEffects];
 #if ENABLE_GUESS_GAME
     PetBehaviorGuessEffectConfig guessEffects[kMaxPetBehaviorGuessEffects];
 #endif
@@ -168,6 +195,7 @@ struct PetBehaviorConfig
     uint8_t actionCount;
     uint8_t actionConditionCount;
     uint8_t actionEffectCount;
+    uint16_t randomOutcomeEffectCount;
 #if ENABLE_GUESS_GAME
     uint8_t guessEffectCount;
 #endif
