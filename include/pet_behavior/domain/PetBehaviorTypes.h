@@ -12,6 +12,9 @@ static_assert(kPetBehaviorSlotCount > 0, "Pet Stat capacity must be positive.");
 static_assert(kPetBehaviorSlotCount <= 10, "Pet Stat Slot tokens require one decimal digit.");
 constexpr uint8_t kMaxPetBehaviorIdleTriggers = 16;
 constexpr uint8_t kMaxPetBehaviorActions = 8;
+constexpr uint8_t kMaxPetBehaviorActionConditionsPerAction = 4;
+constexpr uint8_t kMaxPetBehaviorActionConditions =
+    kMaxPetBehaviorActions * kMaxPetBehaviorActionConditionsPerAction;
 constexpr uint8_t kMaxPetBehaviorActionEffects = kMaxPetBehaviorActions * kMaxPetBehaviorStats;
 #if ENABLE_GUESS_GAME
 constexpr uint8_t kPetBehaviorGuessOutcomeCount = 4;
@@ -55,15 +58,45 @@ struct PetBehaviorIdleTriggerConfig
 enum class PetBehaviorActionMode : uint8_t
 {
     Standard,
+    ConditionalAnimation,
+};
+
+enum class PetBehaviorActionConditionSource : uint8_t
+{
+    PetStat,
+    StageDays,
+};
+
+enum class PetBehaviorActionConditionOperator : uint8_t
+{
+    LessThan,
+    LessThanOrEqual,
+    Equal,
+    GreaterThanOrEqual,
+    GreaterThan,
 };
 
 struct PetBehaviorActionConfig
 {
     bool active;
     PetBehaviorActionMode mode;
+    bool hasFallbackAnimation;
     char animation[kPetBehaviorAnimationTokenSize];
     uint8_t playbackCount;
     uint8_t suspendDailyChangeDays;
+};
+
+struct PetBehaviorActionConditionConfig
+{
+    bool active;
+    uint8_t actionSlot;
+    uint8_t priority;
+    PetBehaviorActionConditionSource source;
+    uint8_t statSlot;
+    PetBehaviorActionConditionOperator comparison;
+    int32_t threshold;
+    char animation[kPetBehaviorAnimationTokenSize];
+    uint8_t playbackCount;
 };
 
 struct PetBehaviorActionEffectConfig
@@ -117,6 +150,7 @@ struct PetBehaviorConfig
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     PetBehaviorIdleTriggerConfig idleTriggers[kMaxPetBehaviorIdleTriggers];
     PetBehaviorActionConfig actions[kMaxPetBehaviorActions];
+    PetBehaviorActionConditionConfig actionConditions[kMaxPetBehaviorActionConditions];
     PetBehaviorActionEffectConfig actionEffects[kMaxPetBehaviorActionEffects];
 #if ENABLE_GUESS_GAME
     PetBehaviorGuessEffectConfig guessEffects[kMaxPetBehaviorGuessEffects];
@@ -127,6 +161,7 @@ struct PetBehaviorConfig
     uint8_t statCount;
     uint8_t idleTriggerCount;
     uint8_t actionCount;
+    uint8_t actionConditionCount;
     uint8_t actionEffectCount;
 #if ENABLE_GUESS_GAME
     uint8_t guessEffectCount;

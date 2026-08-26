@@ -30,6 +30,74 @@ bool applyEffect(const PetBehaviorConfig &config,
                                  : clampedChange(state.values[statSlot], value, stat.minValue, stat.maxValue);
     return true;
 }
+
+bool conditionMatches(const PetBehaviorActionConditionConfig &condition,
+                      const PetBehaviorStatValues &state)
+{
+    int64_t current = state.stageDays;
+    if (condition.source == PetBehaviorActionConditionSource::PetStat)
+    {
+        if (condition.statSlot >= kPetBehaviorSlotCount)
+            return false;
+        current = state.values[condition.statSlot];
+    }
+
+    const int64_t threshold = condition.threshold;
+    switch (condition.comparison)
+    {
+    case PetBehaviorActionConditionOperator::LessThan:
+        return current < threshold;
+    case PetBehaviorActionConditionOperator::LessThanOrEqual:
+        return current <= threshold;
+    case PetBehaviorActionConditionOperator::Equal:
+        return current == threshold;
+    case PetBehaviorActionConditionOperator::GreaterThanOrEqual:
+        return current >= threshold;
+    case PetBehaviorActionConditionOperator::GreaterThan:
+        return current > threshold;
+    }
+    return false;
+}
+
+void copyPlayback(const char *animation, uint8_t playbackCount, PetBehaviorActionPlayback &playback)
+{
+    strncpy(playback.animation, animation, sizeof(playback.animation) - 1);
+    playback.animation[sizeof(playback.animation) - 1] = '\0';
+    playback.playbackCount = playbackCount;
+}
+
+bool selectActionPlayback(const PetBehaviorConfig &config,
+                          uint8_t actionSlot,
+                          const PetBehaviorStatValues &state,
+                          PetBehaviorActionPlayback &playback)
+{
+    const PetBehaviorActionConfig &action = config.actions[actionSlot];
+    if (action.mode == PetBehaviorActionMode::Standard)
+    {
+        copyPlayback(action.animation, action.playbackCount, playback);
+        return true;
+    }
+
+    const PetBehaviorActionConditionConfig *selected = nullptr;
+    for (uint8_t index = 0; index < config.actionConditionCount; ++index)
+    {
+        const PetBehaviorActionConditionConfig &condition = config.actionConditions[index];
+        if (!condition.active || condition.actionSlot != actionSlot ||
+            !conditionMatches(condition, state))
+            continue;
+        if (selected == nullptr || condition.priority < selected->priority)
+            selected = &condition;
+    }
+    if (selected != nullptr)
+    {
+        copyPlayback(selected->animation, selected->playbackCount, playback);
+        return true;
+    }
+    if (!action.hasFallbackAnimation)
+        return false;
+    copyPlayback(action.animation, action.playbackCount, playback);
+    return true;
+}
 } // namespace
 
 void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStatValues &state)
@@ -70,6 +138,9 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
     if (actionSlot >= kMaxPetBehaviorActions || !config.actions[actionSlot].active)
         return false;
 
+    if (!selectActionPlayback(config, actionSlot, state, playback))
+        return false;
+
     PetBehaviorStatValues next = state;
     bool affectedSlots[kPetBehaviorSlotCount] = {};
     for (uint8_t index = 0; index < config.actionEffectCount; ++index)
@@ -91,9 +162,6 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
         }
     }
     state = next;
-    strncpy(playback.animation, action.animation, sizeof(playback.animation) - 1);
-    playback.animation[sizeof(playback.animation) - 1] = '\0';
-    playback.playbackCount = action.playbackCount;
     return true;
 }
 

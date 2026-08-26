@@ -10,8 +10,10 @@ namespace
 PetBehaviorStatValues readStats(const PetActionController &petActions)
 {
     PetBehaviorStatValues state = {};
+    const PetStatSnapshot snapshot = petActions.statSnapshot();
     for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
-        state.values[slot] = petActions.customStat(slot);
+        state.values[slot] = snapshot.customStats[slot];
+    state.stageDays = snapshot.stage_days;
     return state;
 }
 

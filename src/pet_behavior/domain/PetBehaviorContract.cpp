@@ -130,6 +130,8 @@ public:
             return decodeIdleTrigger(record);
         if (strcmp(record.fields[0], "action") == 0)
             return decodeAction(record);
+        if (strcmp(record.fields[0], "action_condition") == 0)
+            return decodeActionCondition(record);
         if (strcmp(record.fields[0], "action_effect") == 0)
             return decodeActionEffect(record);
 #if ENABLE_GUESS_GAME
@@ -169,6 +171,8 @@ private:
     bool validActions() const
     {
         bool affectedSlots[kMaxPetBehaviorActions][kPetBehaviorSlotCount] = {};
+        if (!validActionConditions())
+            return false;
         for (uint8_t index = 0; index < candidate.actionEffectCount; ++index)
         {
             const PetBehaviorActionEffectConfig &effect = candidate.actionEffects[index];
@@ -183,6 +187,139 @@ private:
             const PetBehaviorButtonConfig &button = candidate.buttons[slot];
             if (button.active && button.kind == PetBehaviorButtonKind::UserAction &&
                 (button.actionSlot >= kMaxPetBehaviorActions || !candidate.actions[button.actionSlot].active))
+                return false;
+        }
+        return true;
+    }
+
+    struct ConditionInterval
+    {
+        int64_t minimum;
+        int64_t maximum;
+    };
+
+    bool conditionInterval(const PetBehaviorActionConditionConfig &condition,
+                           int64_t domainMinimum,
+                           int64_t domainMaximum,
+                           ConditionInterval &interval) const
+    {
+        const int64_t threshold = condition.threshold;
+        switch (condition.comparison)
+        {
+        case PetBehaviorActionConditionOperator::LessThan:
+            interval = {domainMinimum, threshold - 1};
+            break;
+        case PetBehaviorActionConditionOperator::LessThanOrEqual:
+            interval = {domainMinimum, threshold};
+            break;
+        case PetBehaviorActionConditionOperator::Equal:
+            interval = {threshold, threshold};
+            break;
+        case PetBehaviorActionConditionOperator::GreaterThanOrEqual:
+            interval = {threshold, domainMaximum};
+            break;
+        case PetBehaviorActionConditionOperator::GreaterThan:
+            interval = {threshold + 1, domainMaximum};
+            break;
+        }
+        if (interval.minimum < domainMinimum)
+            interval.minimum = domainMinimum;
+        if (interval.maximum > domainMaximum)
+            interval.maximum = domainMaximum;
+        return interval.minimum <= interval.maximum;
+    }
+
+    bool conditionsCoverDomain(const PetBehaviorActionConditionConfig *const *conditions,
+                               uint8_t count,
+                               int64_t domainMinimum,
+                               int64_t domainMaximum) const
+    {
+        ConditionInterval intervals[kMaxPetBehaviorActionConditionsPerAction] = {};
+        uint8_t intervalCount = 0;
+        for (uint8_t index = 0; index < count; ++index)
+        {
+            ConditionInterval interval = {};
+            if (!conditionInterval(*conditions[index], domainMinimum, domainMaximum, interval))
+                continue;
+            uint8_t position = intervalCount;
+            while (position > 0 && intervals[position - 1].minimum > interval.minimum)
+            {
+                intervals[position] = intervals[position - 1];
+                --position;
+            }
+            intervals[position] = interval;
+            ++intervalCount;
+        }
+        if (intervalCount == 0 || intervals[0].minimum > domainMinimum)
+            return false;
+
+        int64_t coveredThrough = intervals[0].maximum;
+        for (uint8_t index = 1; index < intervalCount && coveredThrough < domainMaximum; ++index)
+        {
+            if (intervals[index].minimum > coveredThrough + 1)
+                return false;
+            if (intervals[index].maximum > coveredThrough)
+                coveredThrough = intervals[index].maximum;
+        }
+        return coveredThrough >= domainMaximum;
+    }
+
+    bool validActionConditions() const
+    {
+        for (uint8_t actionSlot = 0; actionSlot < kMaxPetBehaviorActions; ++actionSlot)
+        {
+            const PetBehaviorActionConfig &action = candidate.actions[actionSlot];
+            const PetBehaviorActionConditionConfig *conditions[kMaxPetBehaviorActionConditionsPerAction] = {};
+            uint8_t conditionCount = 0;
+            for (uint8_t index = 0; index < candidate.actionConditionCount; ++index)
+            {
+                const PetBehaviorActionConditionConfig &condition = candidate.actionConditions[index];
+                if (!condition.active || condition.actionSlot >= kMaxPetBehaviorActions)
+                    return false;
+                if (condition.actionSlot != actionSlot)
+                    continue;
+                if (!action.active || action.mode != PetBehaviorActionMode::ConditionalAnimation ||
+                    conditionCount >= kMaxPetBehaviorActionConditionsPerAction)
+                    return false;
+                for (uint8_t existing = 0; existing < conditionCount; ++existing)
+                {
+                    if (conditions[existing]->priority == condition.priority)
+                        return false;
+                }
+                if (condition.source == PetBehaviorActionConditionSource::PetStat &&
+                    (condition.statSlot >= kPetBehaviorSlotCount || !candidate.stats[condition.statSlot].active))
+                    return false;
+                conditions[conditionCount++] = &condition;
+            }
+
+            if (!action.active)
+                continue;
+            if (action.mode == PetBehaviorActionMode::Standard)
+            {
+                if (conditionCount != 0)
+                    return false;
+                continue;
+            }
+            if (conditionCount == 0)
+                return false;
+            if (action.hasFallbackAnimation)
+                continue;
+
+            const PetBehaviorActionConditionConfig &first = *conditions[0];
+            for (uint8_t index = 1; index < conditionCount; ++index)
+            {
+                if (conditions[index]->source != first.source ||
+                    (first.source == PetBehaviorActionConditionSource::PetStat &&
+                     conditions[index]->statSlot != first.statSlot))
+                    return false;
+            }
+            const int64_t domainMinimum = first.source == PetBehaviorActionConditionSource::StageDays
+                                              ? 0
+                                              : candidate.stats[first.statSlot].minValue;
+            const int64_t domainMaximum = first.source == PetBehaviorActionConditionSource::StageDays
+                                              ? static_cast<int64_t>(UINT32_MAX)
+                                              : candidate.stats[first.statSlot].maxValue;
+            if (!conditionsCoverDomain(conditions, conditionCount, domainMinimum, domainMaximum))
                 return false;
         }
         return true;
@@ -354,18 +491,93 @@ private:
         uint32_t suspendDailyChangeDays = 0;
         if (record.fieldCount != 6 ||
             !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, slot) ||
-            strcmp(record.fields[2], "standard") != 0 ||
-            !parseUnsigned(record.fields[4], 5U, playbackCount) || playbackCount == 0 ||
             !parseUnsigned(record.fields[5], UINT8_MAX, suspendDailyChangeDays))
             return false;
         PetBehaviorActionConfig &action = candidate.actions[slot];
-        if (action.active || !copyBounded(record.fields[3], action.animation, sizeof(action.animation)))
+        if (action.active)
             return false;
+        if (strcmp(record.fields[2], "standard") == 0)
+        {
+            if (!copyBounded(record.fields[3], action.animation, sizeof(action.animation)) ||
+                !parseUnsigned(record.fields[4], 5U, playbackCount) || playbackCount == 0)
+                return false;
+            action.mode = PetBehaviorActionMode::Standard;
+            action.hasFallbackAnimation = true;
+        }
+        else if (strcmp(record.fields[2], "conditional_animation") == 0)
+        {
+            action.mode = PetBehaviorActionMode::ConditionalAnimation;
+            action.hasFallbackAnimation = record.fields[3][0] != '\0';
+            if (action.hasFallbackAnimation)
+            {
+                if (!copyBounded(record.fields[3], action.animation, sizeof(action.animation)) ||
+                    !parseUnsigned(record.fields[4], 5U, playbackCount) || playbackCount == 0)
+                    return false;
+            }
+            else if (strcmp(record.fields[4], "0") != 0)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            return false;
+        }
         ++candidate.actionCount;
         action.active = true;
-        action.mode = PetBehaviorActionMode::Standard;
         action.playbackCount = static_cast<uint8_t>(playbackCount);
         action.suspendDailyChangeDays = static_cast<uint8_t>(suspendDailyChangeDays);
+        return true;
+    }
+
+    bool decodeActionCondition(const SdTextRecord &record)
+    {
+        uint8_t actionSlot = 0;
+        uint32_t priority = 0;
+        int32_t threshold = 0;
+        uint32_t playbackCount = 0;
+        if (record.fieldCount != 8 || candidate.actionConditionCount >= kMaxPetBehaviorActionConditions ||
+            !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, actionSlot) ||
+            !parseUnsigned(record.fields[2], UINT8_MAX, priority) ||
+            !parseSigned32(record.fields[5], threshold) ||
+            !parseUnsigned(record.fields[7], 5U, playbackCount) || playbackCount == 0)
+            return false;
+
+        PetBehaviorActionConditionConfig &condition =
+            candidate.actionConditions[candidate.actionConditionCount];
+        if (!copyBounded(record.fields[6], condition.animation, sizeof(condition.animation)))
+            return false;
+        if (strcmp(record.fields[3], "stage_days") == 0)
+        {
+            condition.source = PetBehaviorActionConditionSource::StageDays;
+        }
+        else if (parseSlot(record.fields[3], "custom", kPetBehaviorSlotCount, condition.statSlot))
+        {
+            condition.source = PetBehaviorActionConditionSource::PetStat;
+        }
+        else
+        {
+            return false;
+        }
+        if (strcmp(record.fields[4], "<") == 0)
+            condition.comparison = PetBehaviorActionConditionOperator::LessThan;
+        else if (strcmp(record.fields[4], "<=") == 0)
+            condition.comparison = PetBehaviorActionConditionOperator::LessThanOrEqual;
+        else if (strcmp(record.fields[4], "=") == 0)
+            condition.comparison = PetBehaviorActionConditionOperator::Equal;
+        else if (strcmp(record.fields[4], ">=") == 0)
+            condition.comparison = PetBehaviorActionConditionOperator::GreaterThanOrEqual;
+        else if (strcmp(record.fields[4], ">") == 0)
+            condition.comparison = PetBehaviorActionConditionOperator::GreaterThan;
+        else
+            return false;
+
+        condition.active = true;
+        condition.actionSlot = actionSlot;
+        condition.priority = static_cast<uint8_t>(priority);
+        condition.threshold = threshold;
+        condition.playbackCount = static_cast<uint8_t>(playbackCount);
+        ++candidate.actionConditionCount;
         return true;
     }
 
