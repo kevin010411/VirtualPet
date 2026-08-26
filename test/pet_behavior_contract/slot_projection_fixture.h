@@ -8,13 +8,13 @@
 // The saved Web identity is custom4; runtime records expose only custom0.
 constexpr uint32_t kSlotProjectionSchemaFingerprint = 0xE1719630UL;
 constexpr const char *kSlotProjectionFixture =
-    "runtime_contract|1\n"
+    "runtime_contract|3\n"
     "pet_behavior|3|E1719630\n"
     "status|1\n"
     "stat|custom0|100|0|100|-2\n"
     "idle|anim0\n"
     "idle_trigger|trigger0|custom0|<|20|anim5\n"
-    "action|action0|anim6|1\n"
+    "action|action0|standard|anim6|1|0\n"
     "action_effect|effect0|action0|change|custom0|7\n"
     "guess_effect|guess_effect0|round_correct|set|custom0|88\n"
     "button|1|user_action|action0\n"
@@ -27,7 +27,7 @@ constexpr const char *kSlotProjectionFixture =
     "button|8|system_command|status\n"
     "status_set|set0|StatusCustom4\n"
     "status_condition|set0|condition0|custom0|2|0|100\n"
-    "crc32|D44082F8\n";
+    "crc32|1BDBEE5F\n";
 
 constexpr const char *kSlotProjectionEvolutionFixture =
     "# source species|target species|target outfit|conditions\n"

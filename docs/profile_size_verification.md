@@ -71,3 +71,20 @@ python tools\profile_size_report.py -e default --top-bss 20
 | `small` | 53968 | 240 | 7504 | 54208 | 7744 |
 | `new_taipei_childrens_day` | 51036 | 240 | 6304 | 51276 | 6544 |
 | `dipsyho` | 52268 | 240 | 6544 | 52508 | 6784 |
+
+## Schema-v11 Action mode capacity measurement
+
+2026-08-26 使用實際目標 `project_12`（STM32F103C8，64 KiB Flash / 20 KiB
+RAM）量測 Conditional Animation 與 Random Outcome 的 linked-binary 成本。A/B
+兩邊使用相同的 `platformio.ini` 與 library versions：
+
+| Revision | Action capacity | Flash | RAM |
+| --- | --- | ---: | ---: |
+| `c7b9e9f` | Standard only | 59132 B | 6740 B |
+| `7bb3136` | Standard + 4 conditions + 3 Outcomes | 61848 B | 8936 B |
+| Delta | bounded Conditional/Random capacity | +2716 B | +2196 B |
+
+測試 fixture 會同時載入一個 4-rule Conditional Action 與一個 3-Outcome Random
+Action。韌體以固定陣列配置所有 Action 的上限，因此 RAM delta 是 profile 可交付的
+完整 bounded capacity 成本，不會隨 SD fixture 當下使用的 record 數量改變。最終
+`project_12` 尚餘 3688 B Flash 與 11544 B RAM。

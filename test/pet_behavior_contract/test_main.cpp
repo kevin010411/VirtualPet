@@ -28,7 +28,7 @@ bool fixtureStatusValue(const char *source, const void *rawContext, int32_t &val
 }
 
 constexpr const char *kMinimalContract =
-    "runtime_contract|1\n"
+    "runtime_contract|3\n"
     "pet_behavior|3|00000000\n"
     "status|1\n"
     "status_set|set0|Status\n"
@@ -41,7 +41,7 @@ constexpr const char *kMinimalContract =
     "button|6|empty|\n"
     "button|7|empty|\n"
     "button|8|empty|\n"
-    "crc32|47D27BCA\n";
+    "crc32|EEA13AB1\n";
 
 void assertRejectedAndCleared(const char *contract)
 {
