@@ -1,7 +1,9 @@
 #include <assert.h>
+#include <fstream>
+#include <iterator>
 #include <string.h>
+#include <string>
 
-#include "action_modes_v11_fixture.h"
 #include "pet/adapters/PetStateSchemaDecision.h"
 #include "pet_behavior/domain/PetBehaviorContract.h"
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
@@ -13,10 +15,12 @@ uint16_t selectSecondWeight(uint16_t)
     return 1;
 }
 
-void testWebExportedV11ActionModesParseAndExecute()
+constexpr uint32_t kActionModesV11SchemaFingerprint = 0xE6546C8AUL;
+
+void testWebExportedV11ActionModesParseAndExecute(const char *contract)
 {
     PetBehaviorConfig config = {};
-    assert(parsePetBehaviorContract(kActionModesV11Fixture, config));
+    assert(parsePetBehaviorContract(contract, config));
     assert(config.schemaFingerprint == kActionModesV11SchemaFingerprint);
     assert(decidePetStateSchema(
                kActionModesV11SchemaFingerprint,
@@ -56,15 +60,33 @@ void testPriorRuntimeContractFailsClosed()
     assert(!parsePetBehaviorContract(
         "runtime_contract|2\n"
         "pet_behavior|3|00000000\n"
-        "crc32|00000000\n",
+        "status|1\n"
+        "status_set|set0|Status\n"
+        "idle|anim0\n"
+        "button|1|empty|\n"
+        "button|2|empty|\n"
+        "button|3|empty|\n"
+        "button|4|empty|\n"
+        "button|5|empty|\n"
+        "button|6|empty|\n"
+        "button|7|empty|\n"
+        "button|8|empty|\n"
+        "crc32|57A0192C\n",
         config));
     assert(config.actionCount == 0);
 }
 } // namespace
 
-int main()
+int main(int argc, char **argv)
 {
-    testWebExportedV11ActionModesParseAndExecute();
+    assert(argc == 2);
+    std::ifstream fixture(argv[1], std::ios::binary);
+    assert(fixture);
+    const std::string contract{
+        std::istreambuf_iterator<char>(fixture),
+        std::istreambuf_iterator<char>()};
+    assert(!contract.empty());
+    testWebExportedV11ActionModesParseAndExecute(contract.c_str());
     testPriorRuntimeContractFailsClosed();
     return 0;
 }
