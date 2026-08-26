@@ -21,8 +21,8 @@ PetBehaviorConfig behaviorConfig()
     config.stats[3].dailyChange = 50;
     config.statCount = 2;
     config.actions[2].active = true;
-    strcpy(config.actions[2].animation, "anim4");
-    config.actions[2].playbackCount = 5;
+    strcpy(config.actions[2].animationPlayback.animation, "anim4");
+    config.actions[2].animationPlayback.playbackCount = 5;
     config.actionCount = 1;
     return config;
 }

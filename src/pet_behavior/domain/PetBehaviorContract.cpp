@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <string.h>
 #include "shared/sd/SdTextRecordReader.h"
+#include "pet_behavior/domain/PetBehaviorActionConditionRules.h"
 #include "pet_behavior/domain/PetBehaviorStatSlot.h"
 
 namespace
@@ -192,54 +193,22 @@ private:
         return true;
     }
 
-    struct ConditionInterval
-    {
-        int64_t minimum;
-        int64_t maximum;
-    };
-
-    bool conditionInterval(const PetBehaviorActionConditionConfig &condition,
-                           int64_t domainMinimum,
-                           int64_t domainMaximum,
-                           ConditionInterval &interval) const
-    {
-        const int64_t threshold = condition.threshold;
-        switch (condition.comparison)
-        {
-        case PetBehaviorActionConditionOperator::LessThan:
-            interval = {domainMinimum, threshold - 1};
-            break;
-        case PetBehaviorActionConditionOperator::LessThanOrEqual:
-            interval = {domainMinimum, threshold};
-            break;
-        case PetBehaviorActionConditionOperator::Equal:
-            interval = {threshold, threshold};
-            break;
-        case PetBehaviorActionConditionOperator::GreaterThanOrEqual:
-            interval = {threshold, domainMaximum};
-            break;
-        case PetBehaviorActionConditionOperator::GreaterThan:
-            interval = {threshold + 1, domainMaximum};
-            break;
-        }
-        if (interval.minimum < domainMinimum)
-            interval.minimum = domainMinimum;
-        if (interval.maximum > domainMaximum)
-            interval.maximum = domainMaximum;
-        return interval.minimum <= interval.maximum;
-    }
-
     bool conditionsCoverDomain(const PetBehaviorActionConditionConfig *const *conditions,
                                uint8_t count,
                                int64_t domainMinimum,
                                int64_t domainMaximum) const
     {
-        ConditionInterval intervals[kMaxPetBehaviorActionConditionsPerAction] = {};
+        PetBehaviorActionConditionInterval intervals[kMaxPetBehaviorActionConditionsPerAction] = {};
         uint8_t intervalCount = 0;
         for (uint8_t index = 0; index < count; ++index)
         {
-            ConditionInterval interval = {};
-            if (!conditionInterval(*conditions[index], domainMinimum, domainMaximum, interval))
+            PetBehaviorActionConditionInterval interval = {};
+            if (!petBehaviorActionConditionInterval(
+                    conditions[index]->comparison,
+                    conditions[index]->threshold,
+                    domainMinimum,
+                    domainMaximum,
+                    interval))
                 continue;
             uint8_t position = intervalCount;
             while (position > 0 && intervals[position - 1].minimum > interval.minimum)
@@ -498,7 +467,8 @@ private:
             return false;
         if (strcmp(record.fields[2], "standard") == 0)
         {
-            if (!copyBounded(record.fields[3], action.animation, sizeof(action.animation)) ||
+            if (!copyBounded(record.fields[3], action.animationPlayback.animation,
+                             sizeof(action.animationPlayback.animation)) ||
                 !parseUnsigned(record.fields[4], 5U, playbackCount) || playbackCount == 0)
                 return false;
             action.mode = PetBehaviorActionMode::Standard;
@@ -510,7 +480,8 @@ private:
             action.hasFallbackAnimation = record.fields[3][0] != '\0';
             if (action.hasFallbackAnimation)
             {
-                if (!copyBounded(record.fields[3], action.animation, sizeof(action.animation)) ||
+                if (!copyBounded(record.fields[3], action.animationPlayback.animation,
+                                 sizeof(action.animationPlayback.animation)) ||
                     !parseUnsigned(record.fields[4], 5U, playbackCount) || playbackCount == 0)
                     return false;
             }
@@ -525,7 +496,7 @@ private:
         }
         ++candidate.actionCount;
         action.active = true;
-        action.playbackCount = static_cast<uint8_t>(playbackCount);
+        action.animationPlayback.playbackCount = static_cast<uint8_t>(playbackCount);
         action.suspendDailyChangeDays = static_cast<uint8_t>(suspendDailyChangeDays);
         return true;
     }
@@ -545,7 +516,8 @@ private:
 
         PetBehaviorActionConditionConfig &condition =
             candidate.actionConditions[candidate.actionConditionCount];
-        if (!copyBounded(record.fields[6], condition.animation, sizeof(condition.animation)))
+        if (!copyBounded(record.fields[6], condition.animationPlayback.animation,
+                         sizeof(condition.animationPlayback.animation)))
             return false;
         if (strcmp(record.fields[3], "stage_days") == 0)
         {
@@ -559,24 +531,14 @@ private:
         {
             return false;
         }
-        if (strcmp(record.fields[4], "<") == 0)
-            condition.comparison = PetBehaviorActionConditionOperator::LessThan;
-        else if (strcmp(record.fields[4], "<=") == 0)
-            condition.comparison = PetBehaviorActionConditionOperator::LessThanOrEqual;
-        else if (strcmp(record.fields[4], "=") == 0)
-            condition.comparison = PetBehaviorActionConditionOperator::Equal;
-        else if (strcmp(record.fields[4], ">=") == 0)
-            condition.comparison = PetBehaviorActionConditionOperator::GreaterThanOrEqual;
-        else if (strcmp(record.fields[4], ">") == 0)
-            condition.comparison = PetBehaviorActionConditionOperator::GreaterThan;
-        else
+        if (!parsePetBehaviorActionConditionOperator(record.fields[4], condition.comparison))
             return false;
 
         condition.active = true;
         condition.actionSlot = actionSlot;
         condition.priority = static_cast<uint8_t>(priority);
         condition.threshold = threshold;
-        condition.playbackCount = static_cast<uint8_t>(playbackCount);
+        condition.animationPlayback.playbackCount = static_cast<uint8_t>(playbackCount);
         ++candidate.actionConditionCount;
         return true;
     }

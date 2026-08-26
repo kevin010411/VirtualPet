@@ -14,11 +14,7 @@ struct PetBehaviorDailyChangePauses
     uint8_t remainingDays[kPetBehaviorSlotCount];
 };
 
-struct PetBehaviorActionPlayback
-{
-    char animation[kPetBehaviorAnimationTokenSize];
-    uint8_t playbackCount;
-};
+using PetBehaviorActionPlayback = PetBehaviorAnimationPlaybackConfig;
 
 void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStatValues &state);
 void applyPetBehaviorDailyChanges(const PetBehaviorConfig &config,

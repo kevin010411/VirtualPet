@@ -74,6 +74,13 @@ enum class PetBehaviorActionConditionOperator : uint8_t
     Equal,
     GreaterThanOrEqual,
     GreaterThan,
+    Count,
+};
+
+struct PetBehaviorAnimationPlaybackConfig
+{
+    char animation[kPetBehaviorAnimationTokenSize];
+    uint8_t playbackCount;
 };
 
 struct PetBehaviorActionConfig
@@ -81,8 +88,7 @@ struct PetBehaviorActionConfig
     bool active;
     PetBehaviorActionMode mode;
     bool hasFallbackAnimation;
-    char animation[kPetBehaviorAnimationTokenSize];
-    uint8_t playbackCount;
+    PetBehaviorAnimationPlaybackConfig animationPlayback;
     uint8_t suspendDailyChangeDays;
 };
 
@@ -95,8 +101,7 @@ struct PetBehaviorActionConditionConfig
     uint8_t statSlot;
     PetBehaviorActionConditionOperator comparison;
     int32_t threshold;
-    char animation[kPetBehaviorAnimationTokenSize];
-    uint8_t playbackCount;
+    PetBehaviorAnimationPlaybackConfig animationPlayback;
 };
 
 struct PetBehaviorActionEffectConfig

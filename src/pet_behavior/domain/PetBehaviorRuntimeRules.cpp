@@ -1,6 +1,6 @@
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
 
-#include <string.h>
+#include "pet_behavior/domain/PetBehaviorActionConditionRules.h"
 
 namespace
 {
@@ -42,28 +42,7 @@ bool conditionMatches(const PetBehaviorActionConditionConfig &condition,
         current = state.values[condition.statSlot];
     }
 
-    const int64_t threshold = condition.threshold;
-    switch (condition.comparison)
-    {
-    case PetBehaviorActionConditionOperator::LessThan:
-        return current < threshold;
-    case PetBehaviorActionConditionOperator::LessThanOrEqual:
-        return current <= threshold;
-    case PetBehaviorActionConditionOperator::Equal:
-        return current == threshold;
-    case PetBehaviorActionConditionOperator::GreaterThanOrEqual:
-        return current >= threshold;
-    case PetBehaviorActionConditionOperator::GreaterThan:
-        return current > threshold;
-    }
-    return false;
-}
-
-void copyPlayback(const char *animation, uint8_t playbackCount, PetBehaviorActionPlayback &playback)
-{
-    strncpy(playback.animation, animation, sizeof(playback.animation) - 1);
-    playback.animation[sizeof(playback.animation) - 1] = '\0';
-    playback.playbackCount = playbackCount;
+    return petBehaviorActionConditionMatches(condition.comparison, condition.threshold, current);
 }
 
 bool selectActionPlayback(const PetBehaviorConfig &config,
@@ -74,7 +53,7 @@ bool selectActionPlayback(const PetBehaviorConfig &config,
     const PetBehaviorActionConfig &action = config.actions[actionSlot];
     if (action.mode == PetBehaviorActionMode::Standard)
     {
-        copyPlayback(action.animation, action.playbackCount, playback);
+        playback = action.animationPlayback;
         return true;
     }
 
@@ -90,12 +69,12 @@ bool selectActionPlayback(const PetBehaviorConfig &config,
     }
     if (selected != nullptr)
     {
-        copyPlayback(selected->animation, selected->playbackCount, playback);
+        playback = selected->animationPlayback;
         return true;
     }
     if (!action.hasFallbackAnimation)
         return false;
-    copyPlayback(action.animation, action.playbackCount, playback);
+    playback = action.animationPlayback;
     return true;
 }
 } // namespace
