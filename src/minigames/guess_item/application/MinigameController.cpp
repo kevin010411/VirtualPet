@@ -41,6 +41,11 @@ void MinigameController::onConfirm()
     guessItem.onMid();
 }
 
+void MinigameController::onPlaybackFailed()
+{
+    guessItem.onPlaybackFailed();
+}
+
 bool MinigameController::isActive() const
 {
     return guessItem.isActive();

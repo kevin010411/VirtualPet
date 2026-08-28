@@ -96,6 +96,7 @@ private:
     bool isFirstLaunchSelectionPending() const;
     bool startFirstLaunchRequiredCommand();
     bool beginStartupAnimation();
+    void handlePlaybackResult(PlaybackResult playbackResult);
     void completeFirstStartIfReady(PlaybackResult playbackResult);
     void enterFirstLaunch();
     void enterCommand();

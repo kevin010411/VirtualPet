@@ -177,6 +177,7 @@ void Game::loop_game()
 #endif
 
     const PlaybackResult playbackResult = animations->tick(now);
+    handlePlaybackResult(playbackResult);
     completeFirstStartIfReady(playbackResult);
 
     if (flow.isFatalError())
@@ -218,7 +219,9 @@ void Game::redrawAllNow()
     // Repaint the entire center area even when an animation frame was already
     // considered current before STOP mode.
     animations->requestFullRedraw();
-    animations->tick(now);
+    const PlaybackResult playbackResult = animations->tick(now);
+    handlePlaybackResult(playbackResult);
+    completeFirstStartIfReady(playbackResult);
 
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
@@ -801,6 +804,33 @@ void Game::completeFirstStartIfReady(PlaybackResult playbackResult)
 #if !ENABLE_FIRST_START_ANIMATION
     (void)playbackResult;
 #endif
+}
+
+void Game::handlePlaybackResult(PlaybackResult playbackResult)
+{
+    if (playbackResult != PlaybackResult::PlaybackFailed)
+        return;
+
+    if (pendingEvolution)
+    {
+        animations->cancelAll();
+        completePendingEvolutionIfReady();
+        return;
+    }
+
+#if ENABLE_GUESS_GAME
+    if (flow.isMinigame())
+    {
+        minigame->onPlaybackFailed();
+        return;
+    }
+#endif
+
+    if (flow.isCommand())
+    {
+        animations->cancelAll();
+        renderer.showResourceError();
+    }
 }
 
 void Game::enterFirstLaunch()

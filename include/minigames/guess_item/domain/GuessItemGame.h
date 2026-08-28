@@ -58,6 +58,7 @@ public:
     void onLeft();
     void onRight();
     void onMid();
+    void onPlaybackFailed();
     bool isActive() const;
 
 private:

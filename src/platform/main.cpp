@@ -311,6 +311,7 @@ void enterSleep()
       g_voltageState = VoltageState::Dimmed;
       g_measuredVoltageState = sampleVoltageState();
       g_lowBatteryMode = false;
+      game.endBatteryAnimation();
       g_criticalBelowSince = 0;
       g_voltageRecoverySince = millis();
     }

@@ -21,6 +21,7 @@ public:
     void onLeft();
     void onRight();
     void onConfirm();
+    void onPlaybackFailed();
     bool isActive() const;
 
 private:

@@ -228,6 +228,21 @@ void GuessItemGame::onMid()
     lastMoveTime = millis();
 }
 
+void GuessItemGame::onPlaybackFailed()
+{
+    host.cancelPlayback();
+    if (state == GuessItemState::Starting)
+    {
+        submitPromptAnimation();
+        state = GuessItemState::WaitingItem;
+        lastMoveTime = millis();
+    }
+    else if (state == GuessItemState::Win || state == GuessItemState::Lose)
+    {
+        state = GuessItemState::Inactive;
+    }
+}
+
 void GuessItemGame::reset()
 {
     correctCount = 0;
