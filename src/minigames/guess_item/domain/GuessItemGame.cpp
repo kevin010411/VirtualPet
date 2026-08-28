@@ -265,7 +265,7 @@ void GuessItemGame::handleGuess(GuessItemSide player)
         host.settleOutcome(GuessItemOutcome::RoundWrong);
     }
 
-    Animation sequence[2];
+    Animation sequence[3];
     uint8_t sequenceCount = 0;
     const AnimationId itemResult = itemResultAnimation(itemSide, player);
     if (host.hasAnimation(itemResult))
@@ -291,11 +291,31 @@ void GuessItemGame::handleGuess(GuessItemSide player)
         }
     }
 #endif
+
+    const bool isFinalRound = correctCount + wrongCount >= kMaxGuessCount;
+    GuessItemState nextState = GuessItemState::ShowingResult;
+    if (isFinalRound)
+    {
+#if !(ENABLE_GUESS_GAME_SINGLE_ROUND && !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT)
+        const bool won = correctCount > wrongCount;
+        const AnimationId finalAnimation = won ? AnimationId::GuessWin : AnimationId::GuessLoss;
+        // Keep the final outcome adjacent to LL/LR/RL/RR (and optional
+        // GuessRight/GuessWrong) so no waiting state separates playback.
+        if (host.hasAnimation(finalAnimation))
+        {
+            sequence[sequenceCount] = Animation::complete(finalAnimation);
+            ++sequenceCount;
+        }
+        host.settleOutcome(won ? GuessItemOutcome::GameWin : GuessItemOutcome::GameLoss);
+        nextState = won ? GuessItemState::Win : GuessItemState::Lose;
+#endif
+    }
+
     if (sequenceCount > 0)
         host.replace(AnimationSequence(sequence, sequenceCount));
     else
         host.cancelPlayback();
-    state = GuessItemState::ShowingResult;
+    state = nextState;
     lastMoveTime = millis();
 }
 
