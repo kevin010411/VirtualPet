@@ -97,7 +97,7 @@ private:
     bool startFirstLaunchRequiredCommand();
     bool beginStartupAnimation();
     void handlePlaybackResult(PlaybackResult playbackResult);
-    void completeFirstStartIfReady(PlaybackResult playbackResult);
+    void completeFirstStartIfReady(const PlaybackTickResult &playbackResult);
     void enterFirstLaunch();
     void enterCommand();
 };

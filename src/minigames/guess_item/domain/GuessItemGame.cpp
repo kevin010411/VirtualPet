@@ -89,15 +89,13 @@ void GuessItemGame::start()
     if (host.hasAnimation(AnimationId::GuessStart) && hasItemPrompts)
     {
         promptAnimationId = randomItemAnimation();
-        Animation sequence[2];
-        const bool builtStart = host.buildCompleteAnimation(AnimationId::GuessStart, sequence[0]) ==
-                                PlaybackResult::Accepted;
-        sequence[1] = Animation(promptAnimationId, kItemPromptLoopDurationMs, false);
+        const Animation sequence[] = {
+            Animation::complete(AnimationId::GuessStart),
+            Animation(promptAnimationId, kItemPromptLoopDurationMs, false),
+        };
         // Queue the first prompt behind GuessStart so playback never falls back
         // to idle between the introductory animation and the user's turn.
-        const PlaybackResult result = builtStart
-                                          ? host.submit(AnimationSequence(sequence, 2), PlaybackMode::Replace)
-                                          : PlaybackResult::PlaybackFailed;
+        const PlaybackResult result = host.submit(AnimationSequence(sequence, 2), PlaybackMode::Replace);
         if (result == PlaybackResult::Accepted)
         {
             state = GuessItemState::Starting;
@@ -174,9 +172,8 @@ void GuessItemGame::update()
             host.cancelPlayback();
             if (host.hasAnimation(finalAnimation))
             {
-                Animation animation;
-                if (host.buildCompleteAnimation(finalAnimation, animation) == PlaybackResult::Accepted)
-                    host.submit(AnimationSequence(&animation, 1), PlaybackMode::Replace);
+                const Animation animation = Animation::complete(finalAnimation);
+                host.submit(AnimationSequence(&animation, 1), PlaybackMode::Replace);
             }
             lastMoveTime = now;
 #endif
@@ -270,26 +267,27 @@ void GuessItemGame::handleGuess(GuessItemSide player)
 
     Animation sequence[2];
     uint8_t sequenceCount = 0;
-    if (host.buildCompleteAnimation(itemResultAnimation(itemSide, player), sequence[sequenceCount]) ==
-        PlaybackResult::Accepted)
+    const AnimationId itemResult = itemResultAnimation(itemSide, player);
+    if (host.hasAnimation(itemResult))
+    {
+        sequence[sequenceCount] = Animation::complete(itemResult);
         ++sequenceCount;
+    }
 #if !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
     if (correct)
     {
         if (host.hasAnimation(AnimationId::GuessRight))
         {
-            if (host.buildCompleteAnimation(AnimationId::GuessRight, sequence[sequenceCount]) ==
-                PlaybackResult::Accepted)
-                ++sequenceCount;
+            sequence[sequenceCount] = Animation::complete(AnimationId::GuessRight);
+            ++sequenceCount;
         }
     }
     else
     {
         if (host.hasAnimation(AnimationId::GuessWrong))
         {
-            if (host.buildCompleteAnimation(AnimationId::GuessWrong, sequence[sequenceCount]) ==
-                PlaybackResult::Accepted)
-                ++sequenceCount;
+            sequence[sequenceCount] = Animation::complete(AnimationId::GuessWrong);
+            ++sequenceCount;
         }
     }
 #endif

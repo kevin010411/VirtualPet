@@ -161,12 +161,7 @@ void CommandExecutor::commandStatus()
 void CommandExecutor::queueStatusAnimation()
 {
     if (!queueStatusSetsAnimation())
-        showStatusNotFound();
-}
-
-void CommandExecutor::showStatusNotFound()
-{
-    animations.showResourceError();
+        currentResult.resourceError = true;
 }
 
 bool CommandExecutor::queueStatusSetsAnimation()

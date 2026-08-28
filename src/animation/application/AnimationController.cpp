@@ -48,8 +48,8 @@ void AnimationController::resetPlaybackState()
     showAnimationId = AnimationId::None;
     showUsesNamedAnimation = false;
     showNamedAnimation[0] = '\0';
-    failedAnimationId = AnimationId::None;
     playbackFailedThisTick = false;
+    playbackFailedAnimationIdThisTick = AnimationId::None;
 }
 
 void AnimationController::setBaseAnimation(AnimationId baseAnimation)
@@ -181,85 +181,6 @@ PlaybackResult AnimationController::submit(const AnimationSequence &sequence, Pl
     return PlaybackResult::Accepted;
 }
 
-PlaybackResult AnimationController::buildCompleteAnimation(AnimationId id, Animation &animation) const
-{
-    const uint16_t frameCount = renderer.frameCountFor(id);
-    const unsigned long frameIntervalMs = renderer.frameIntervalFor(id, frameIntervalSlow);
-    if (id == AnimationId::None || frameCount == 0 || frameIntervalMs == 0)
-        return PlaybackResult::AnimationMissing;
-
-    animation = Animation(id, completePlaybackDuration(frameCount, frameIntervalMs), true);
-    return PlaybackResult::Accepted;
-}
-
-PlaybackResult AnimationController::buildRepeatedActionAnimation(const char *baseName,
-                                                                  uint8_t playbackCount,
-                                                                  Animation &animation,
-                                                                  char *selectedName,
-                                                                  size_t selectedNameSize) const
-{
-    if (baseName == nullptr || baseName[0] == '\0' || playbackCount == 0 ||
-        playbackCount > kMaxRepeatedActionPlaybackCount)
-        return PlaybackResult::PlaybackFailed;
-
-    const char *selectedAnimation = baseName;
-    AnimationId selectedId = AnimationId::None;
-    bool usesNamedAnimation = false;
-    uint16_t frameCount = 0;
-    unsigned long frameIntervalMs = frameIntervalSlow;
-
-    const uint8_t variantCount = renderer.variantCountFor(baseName);
-    if (variantCount > 0)
-    {
-        selectedAnimation = renderer.variantNameFor(baseName, static_cast<uint8_t>(random(variantCount)));
-        if (selectedAnimation == nullptr || !hasNamedAnimation(selectedAnimation))
-            return PlaybackResult::AnimationMissing;
-
-        usesNamedAnimation = true;
-        frameCount = renderer.frameCountForName(selectedAnimation);
-        frameIntervalMs = renderer.frameIntervalForName(selectedAnimation, frameIntervalSlow);
-    }
-    else
-    {
-        selectedId = animationIdFromName(baseName);
-        if (selectedId != AnimationId::None)
-        {
-            if (!hasAnimation(selectedId))
-                return PlaybackResult::AnimationMissing;
-
-            frameCount = renderer.frameCountFor(selectedId);
-            frameIntervalMs = renderer.frameIntervalFor(selectedId, frameIntervalSlow);
-        }
-        else
-        {
-            if (!hasNamedAnimation(baseName))
-                return PlaybackResult::AnimationMissing;
-
-            usesNamedAnimation = true;
-            frameCount = renderer.frameCountForName(baseName);
-            frameIntervalMs = renderer.frameIntervalForName(baseName, frameIntervalSlow);
-        }
-    }
-
-    if (frameCount == 0 || frameIntervalMs == 0)
-        return PlaybackResult::AnimationMissing;
-
-    if (usesNamedAnimation && strlen(selectedAnimation) >= sizeof(animation.namedAnimation))
-        return PlaybackResult::PlaybackFailed;
-
-    animation = usesNamedAnimation
-                    ? Animation(selectedAnimation, completePlaybackDuration(frameCount, frameIntervalMs), true)
-                    : Animation(selectedId, completePlaybackDuration(frameCount, frameIntervalMs), true);
-
-    animation.repeatCount = playbackCount;
-    if (selectedName != nullptr && selectedNameSize > 0)
-    {
-        strncpy(selectedName, selectedAnimation, selectedNameSize - 1);
-        selectedName[selectedNameSize - 1] = '\0';
-    }
-    return PlaybackResult::Accepted;
-}
-
 void AnimationController::cancelAll()
 {
     animationQueueCount = 0;
@@ -297,11 +218,6 @@ void AnimationController::requestFullRedraw()
     lastFrameTime = 0;
 }
 
-void AnimationController::showResourceError()
-{
-    renderer.showResourceError();
-}
-
 bool AnimationController::hasAnimationPending(AnimationId id) const
 {
     if (hasActiveAnimation && activeAnimation.id == id)
@@ -312,17 +228,6 @@ bool AnimationController::hasAnimationPending(AnimationId id) const
             return true;
     }
     return false;
-}
-
-bool AnimationController::hasPlaybackFailure(AnimationId id) const
-{
-    return failedAnimationId == id;
-}
-
-void AnimationController::clearPlaybackFailure(AnimationId id)
-{
-    if (failedAnimationId == id)
-        failedAnimationId = AnimationId::None;
 }
 
 void AnimationController::updateElapsed(unsigned long elapsed)
@@ -348,7 +253,7 @@ void AnimationController::completeActiveAnimation()
     if (activeAnimation.repeatCount > 1 && activeAnimation.playOnce && activeRepeatsRemaining > 1)
     {
         --activeRepeatsRemaining;
-        displayDuration = static_cast<long>(activeAnimation.durationMs);
+        displayDuration = static_cast<long>(resolvedDuration(activeAnimation));
         dirtyAnimation = true;
         animateDone = false;
         return;
@@ -371,7 +276,21 @@ void AnimationController::tryStartNextAnimation()
     --animationQueueCount;
     hasActiveAnimation = true;
     activeRepeatsRemaining = activeAnimation.repeatCount == 0 ? 1 : activeAnimation.repeatCount;
-    displayDuration = static_cast<long>(activeAnimation.durationMs);
+    displayDuration = static_cast<long>(resolvedDuration(activeAnimation));
+}
+
+unsigned long AnimationController::resolvedDuration(const Animation &animation) const
+{
+    if (!animation.usesAutomaticDuration())
+        return animation.durationMs;
+
+    const uint16_t frameCount = animation.usesNamedAnimation
+                                    ? renderer.frameCountForName(animation.namedAnimation)
+                                    : renderer.frameCountFor(animation.id);
+    const unsigned long frameIntervalMs = animation.usesNamedAnimation
+                                              ? renderer.frameIntervalForName(animation.namedAnimation, frameIntervalSlow)
+                                              : renderer.frameIntervalFor(animation.id, frameIntervalSlow);
+    return completePlaybackDuration(frameCount, frameIntervalMs);
 }
 
 unsigned long AnimationController::completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const
@@ -384,9 +303,10 @@ unsigned long AnimationController::completePlaybackDuration(uint16_t frameCount,
     return frameIntervalMs * frameTransitions + kCompletePlaybackSafetyMs;
 }
 
-PlaybackResult AnimationController::tick(unsigned long now)
+PlaybackTickResult AnimationController::tick(unsigned long now)
 {
     playbackFailedThisTick = false;
+    playbackFailedAnimationIdThisTick = AnimationId::None;
     if (lastPlaybackUpdateTime == 0)
         lastPlaybackUpdateTime = now;
 
@@ -403,7 +323,10 @@ PlaybackResult AnimationController::tick(unsigned long now)
         completeActiveAnimation();
         render(now);
     }
-    return playbackFailedThisTick ? PlaybackResult::PlaybackFailed : PlaybackResult::Accepted;
+    return {
+        playbackFailedThisTick ? PlaybackResult::PlaybackFailed : PlaybackResult::Accepted,
+        playbackFailedAnimationIdThisTick,
+    };
 }
 
 void AnimationController::render(unsigned long now)
@@ -459,7 +382,7 @@ void AnimationController::render(unsigned long now)
             animateDone = !rendered;
             if (!rendered)
             {
-                failedAnimationId = activeAnimation.id;
+                playbackFailedAnimationIdThisTick = activeAnimation.id;
                 playbackFailedThisTick = true;
             }
         }
@@ -473,7 +396,7 @@ void AnimationController::render(unsigned long now)
                 animateDone = renderer.advanceAnimationFrame();
                 if (renderer.animationFrameFailed() && hasActiveAnimation)
                 {
-                    failedAnimationId = activeAnimation.id;
+                    playbackFailedAnimationIdThisTick = activeAnimation.id;
                     playbackFailedThisTick = true;
                 }
             }
@@ -494,7 +417,7 @@ void AnimationController::render(unsigned long now)
         animateDone |= renderer.advanceAnimationFrame();
         if (renderer.animationFrameFailed() && hasActiveAnimation)
         {
-            failedAnimationId = activeAnimation.id;
+            playbackFailedAnimationIdThisTick = activeAnimation.id;
             playbackFailedThisTick = true;
         }
     }

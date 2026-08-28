@@ -56,11 +56,6 @@ PlaybackResult MinigameController::submit(const AnimationSequence &sequence, Pla
     return animations.submit(sequence, mode);
 }
 
-PlaybackResult MinigameController::buildCompleteAnimation(AnimationId id, Animation &animation) const
-{
-    return animations.buildCompleteAnimation(id, animation);
-}
-
 void MinigameController::cancelPlayback()
 {
     animations.cancelAll();

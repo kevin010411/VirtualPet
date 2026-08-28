@@ -23,7 +23,7 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       appearanceLoader(appearanceLoaderRef),
       petActions(std::make_unique<PetActionController>(pet, petStorage, renderer, appearanceLoader)),
       animations(std::make_unique<AnimationController>(renderer)),
-      petBehaviorRuntime(std::make_unique<PetBehaviorRuntime>(petBehaviorConfig, *petActions, *animations)),
+      petBehaviorRuntime(std::make_unique<PetBehaviorRuntime>(petBehaviorConfig, *petActions, *animations, renderer)),
       commandExecutor(std::make_unique<CommandExecutor>(*petActions, *animations)),
       commands(std::make_unique<CommandController>(*commandExecutor)),
       layout(std::make_unique<LayoutRenderer>(renderer, *commands))
@@ -176,8 +176,8 @@ void Game::loop_game()
     }
 #endif
 
-    const PlaybackResult playbackResult = animations->tick(now);
-    handlePlaybackResult(playbackResult);
+    const PlaybackTickResult playbackResult = animations->tick(now);
+    handlePlaybackResult(playbackResult.result);
     completeFirstStartIfReady(playbackResult);
 
     if (flow.isFatalError())
@@ -219,8 +219,8 @@ void Game::redrawAllNow()
     // Repaint the entire center area even when an animation frame was already
     // considered current before STOP mode.
     animations->requestFullRedraw();
-    const PlaybackResult playbackResult = animations->tick(now);
-    handlePlaybackResult(playbackResult);
+    const PlaybackTickResult playbackResult = animations->tick(now);
+    handlePlaybackResult(playbackResult.result);
     completeFirstStartIfReady(playbackResult);
 
 #if ENABLE_APPEARANCE_SELECTION
@@ -431,8 +431,11 @@ void Game::OnConfirmKey()
     const PetBehaviorButtonConfig &behaviorButton = petBehaviorConfig.buttons[selectedSlot];
     if (behaviorButton.active && behaviorButton.kind == PetBehaviorButtonKind::UserAction)
     {
-        if (petBehaviorRuntime->executeAction(behaviorButton.actionSlot))
+        const PetBehaviorActionResult actionResult = petBehaviorRuntime->executeAction(behaviorButton.actionSlot);
+        if (actionResult != PetBehaviorActionResult::Rejected)
         {
+            if (actionResult == PetBehaviorActionResult::AppliedAnimationMissing)
+                renderer.showResourceError();
             refreshBaseAnimation();
             layout->enterAction(animations->currentAnimationId(), selectedSlot);
         }
@@ -496,6 +499,8 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
         return;
 
     layout->enterAction(result.layoutId, selectedSlot);
+    if (result.resourceError)
+        renderer.showResourceError();
 
 #if ENABLE_COMMAND_OUTFIT
     if (result.requestedOutfit)
@@ -682,13 +687,10 @@ bool Game::beginEvolutionAnimation(const AppearanceSelection &selection)
     pendingEvolutionOutfitCode[sizeof(pendingEvolutionOutfitCode) - 1] = '\0';
     pendingEvolution = true;
 
-    Animation animation;
-    const PlaybackResult buildResult = animations->buildRepeatedActionAnimation("Evolution", 2, animation);
-    const PlaybackResult submitResult = buildResult == PlaybackResult::Accepted
-                                            ? animations->submit(
-                                                  AnimationSequence(&animation, 1),
-                                                  PlaybackMode::Replace)
-                                            : buildResult;
+    const Animation animation = Animation::complete(AnimationId::Evolution, 2);
+    const PlaybackResult submitResult = animations->submit(
+        AnimationSequence(&animation, 1),
+        PlaybackMode::Replace);
     if (submitResult != PlaybackResult::Accepted)
     {
         pendingEvolution = false;
@@ -726,8 +728,6 @@ bool Game::beginStartupAnimation()
 
     flow.requestStartup();
     pendingFirstStartCompletion = needsFirstStart;
-    animations->clearPlaybackFailure(AnimationId::FirstStart);
-
     Animation sequence[3];
     uint8_t sequenceCount = 0;
 
@@ -777,14 +777,14 @@ bool Game::beginStartupAnimation()
 #endif
 }
 
-void Game::completeFirstStartIfReady(PlaybackResult playbackResult)
+void Game::completeFirstStartIfReady(const PlaybackTickResult &playbackResult)
 {
 #if ENABLE_FIRST_START_ANIMATION
     if (!pendingFirstStartCompletion)
         return;
 
-    if (playbackResult == PlaybackResult::PlaybackFailed &&
-        animations->hasPlaybackFailure(AnimationId::FirstStart))
+    if (playbackResult.result == PlaybackResult::PlaybackFailed &&
+        playbackResult.animationId == AnimationId::FirstStart)
     {
         pendingFirstStartCompletion = false;
         animations->cancelAll();

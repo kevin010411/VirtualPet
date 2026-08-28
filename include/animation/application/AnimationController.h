@@ -23,21 +23,12 @@ public:
     bool hasActionAnimation(AnimationId id) const;
     bool hasAnimations(const AnimationId *ids, size_t count) const;
     PlaybackResult submit(const AnimationSequence &sequence, PlaybackMode mode);
-    PlaybackResult buildCompleteAnimation(AnimationId id, Animation &animation) const;
-    PlaybackResult buildRepeatedActionAnimation(const char *baseName,
-                                                uint8_t playbackCount,
-                                                Animation &animation,
-                                                char *selectedName = nullptr,
-                                                size_t selectedNameSize = 0) const;
     void cancelAll();
     bool isBusy() const;
     bool hasAnimationPending(AnimationId id) const;
-    bool hasPlaybackFailure(AnimationId id) const;
-    void clearPlaybackFailure(AnimationId id);
     AnimationId currentAnimationId() const;
     void requestFullRedraw();
-    void showResourceError();
-    PlaybackResult tick(unsigned long now);
+    PlaybackTickResult tick(unsigned long now);
     void startBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
     unsigned long frameIntervalFor(AnimationId id) const;
@@ -68,8 +59,8 @@ private:
     AnimationId showAnimationId = AnimationId::None;
     bool showUsesNamedAnimation = false;
     char showNamedAnimation[32] = {};
-    AnimationId failedAnimationId = AnimationId::None;
     bool playbackFailedThisTick = false;
+    AnimationId playbackFailedAnimationIdThisTick = AnimationId::None;
 
     void resetPlaybackState();
     unsigned long completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const;
@@ -77,6 +68,7 @@ private:
     void completeActiveAnimation();
     void render(unsigned long now);
     void tryStartNextAnimation();
+    unsigned long resolvedDuration(const Animation &animation) const;
     PlaybackResult validate(const Animation &animation) const;
     bool hasActionAnimation(const char *baseName) const;
 };

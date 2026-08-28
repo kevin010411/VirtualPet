@@ -30,7 +30,6 @@ private:
     GuessItemGame guessItem;
 
     PlaybackResult submit(const AnimationSequence &sequence, PlaybackMode mode) override;
-    PlaybackResult buildCompleteAnimation(AnimationId id, Animation &animation) const override;
     void cancelPlayback() override;
     bool isPlaybackBusy() const override;
     bool hasAnimation(AnimationId id) const override;

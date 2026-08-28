@@ -64,6 +64,12 @@ enum class PlaybackResult : uint8_t
     PlaybackFailed,
 };
 
+struct PlaybackTickResult
+{
+    PlaybackResult result;
+    AnimationId animationId;
+};
+
 struct Animation
 {
     AnimationId id;
@@ -107,7 +113,22 @@ struct Animation
         }
     }
 
+    static Animation complete(AnimationId animationId, uint8_t playbackCount = 1)
+    {
+        Animation animation(animationId, 0, true);
+        animation.repeatCount = playbackCount;
+        return animation;
+    }
+
+    static Animation complete(const char *animationName, uint8_t playbackCount = 1)
+    {
+        Animation animation(animationName, 0, true);
+        animation.repeatCount = playbackCount;
+        return animation;
+    }
+
     bool isFixedFrame() const { return frameIndex != 0; }
+    bool usesAutomaticDuration() const { return playOnce && durationMs == 0 && !isFixedFrame(); }
 };
 
 struct AnimationSequence

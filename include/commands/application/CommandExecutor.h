@@ -16,6 +16,7 @@ struct CommandResult
     bool requestedOutfit = false;
     bool requestedSpecies = false;
     bool requestedMinigame = false;
+    bool resourceError = false;
 };
 
 class CommandExecutor : public CommandHost
@@ -43,7 +44,6 @@ private:
     static AnimationId fortuneToAnimationId(int fortuneIndex);
 #endif
     void queueStatusAnimation();
-    void showStatusNotFound();
     bool queueStatusSetsAnimation();
 #if ENABLE_GUESS_GAME
     bool canPlayGuessItemGame() const;
