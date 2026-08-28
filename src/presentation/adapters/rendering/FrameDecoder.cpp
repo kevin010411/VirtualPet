@@ -61,6 +61,12 @@ public:
         return true;
     }
 
+    bool hasTrailingData()
+    {
+        uint8_t ignored = 0;
+        return readByte(ignored);
+    }
+
 private:
     bool readByte(uint8_t &value)
     {
@@ -90,6 +96,39 @@ private:
     size_t readBufferSize = 0;
     size_t readPosition = 0;
     size_t readLength = 0;
+};
+
+class TftFrameWriteSession
+{
+public:
+    TftFrameWriteSession(Adafruit_ST7735 *display,
+                         bool enabled,
+                         int x,
+                         int y,
+                         uint16_t width,
+                         uint16_t height)
+        : tft(enabled ? display : nullptr)
+    {
+        if (tft == nullptr)
+            return;
+
+        tft->startWrite();
+        tft->setAddrWindow(x, y, width, height);
+    }
+
+    ~TftFrameWriteSession()
+    {
+        if (tft != nullptr)
+            tft->endWrite();
+    }
+
+    bool active() const
+    {
+        return tft != nullptr;
+    }
+
+private:
+    Adafruit_ST7735 *tft;
 };
 } // namespace
 
@@ -135,8 +174,15 @@ bool showRleImage(SdFat *sd,
         return false;
     }
 
-    uint16_t runLength = 0;
+    constexpr uint16_t kRunFlag = 0x8000;
+    constexpr uint16_t kPacketLengthMask = 0x7FFF;
+    uint16_t packetRemaining = 0;
+    bool packetIsRun = false;
     uint16_t runColor = 0;
+    const bool frameFullyVisible = xmin >= 0 && ymin >= 0 &&
+                                   static_cast<uint32_t>(xmin) + width <= static_cast<uint32_t>(tft->width()) &&
+                                   static_cast<uint32_t>(ymin) + height <= static_cast<uint32_t>(tft->height());
+    TftFrameWriteSession writeSession(tft, frameFullyVisible, xmin, ymin, width, height);
 
     for (uint16_t batchStartRow = 0; batchStartRow < height; batchStartRow = static_cast<uint16_t>(batchStartRow + safeBatchLines))
     {
@@ -149,15 +195,19 @@ bool showRleImage(SdFat *sd,
 
             while (lineCount < width)
             {
-                if (runLength == 0)
+                if (packetRemaining == 0)
                 {
-                    if (!reader.readU16LE(runLength) || !reader.readU16LE(runColor))
+                    uint16_t packetHeader = 0;
+                    if (!reader.readU16LE(packetHeader))
                     {
                         frameFile.close();
                         return false;
                     }
 
-                    if (runLength == 0)
+                    packetRemaining = static_cast<uint16_t>(packetHeader & kPacketLengthMask);
+                    packetIsRun = (packetHeader & kRunFlag) != 0;
+                    if (packetRemaining == 0 ||
+                        (packetIsRun && !reader.readU16LE(runColor)))
                     {
                         frameFile.close();
                         return false;
@@ -165,17 +215,44 @@ bool showRleImage(SdFat *sd,
                 }
 
                 const size_t remainingLine = static_cast<size_t>(width) - lineCount;
-                const size_t copyCount = (runLength < remainingLine) ? runLength : remainingLine;
+                const size_t copyCount = (packetRemaining < remainingLine) ? packetRemaining : remainingLine;
                 uint16_t *dest = destLine + lineCount;
-                for (size_t i = 0; i < copyCount; ++i)
-                    *dest++ = runColor;
+                if (packetIsRun)
+                {
+                    for (size_t i = 0; i < copyCount; ++i)
+                        *dest++ = runColor;
+                }
+                else
+                {
+                    for (size_t i = 0; i < copyCount; ++i)
+                    {
+                        if (!reader.readU16LE(*dest++))
+                        {
+                            frameFile.close();
+                            return false;
+                        }
+                    }
+                }
 
                 lineCount += copyCount;
-                runLength = static_cast<uint16_t>(runLength - copyCount);
+                packetRemaining = static_cast<uint16_t>(packetRemaining - copyCount);
             }
         }
 
-        tft->drawRGBBitmap(xmin, ymin + batchStartRow, lineBuffer, width, actualLines);
+        if (writeSession.active())
+        {
+            tft->writePixels(lineBuffer, static_cast<uint32_t>(width) * actualLines);
+        }
+        else
+        {
+            tft->drawRGBBitmap(xmin, ymin + batchStartRow, lineBuffer, width, actualLines);
+        }
+    }
+
+    if (packetRemaining != 0 || reader.hasTrailingData())
+    {
+        frameFile.close();
+        return false;
     }
 
     frameFile.close();

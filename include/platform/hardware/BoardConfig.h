@@ -12,6 +12,7 @@ constexpr int TftCsPin = PB12;
 constexpr int TftDcPin = PA8;
 constexpr int TftRstPin = PB14;
 constexpr int TftBacklightPin = PA9;
+constexpr uint32_t TftSpiHz = 18000000;
 
 constexpr int NextCommandButtonPin = PA12;
 constexpr int PreviousCommandButtonPin = PA10;

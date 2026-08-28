@@ -1,10 +1,10 @@
 # Renderer 資源格式說明
 
-目前韌體從 SD 卡渲染 RLE 圖片序列。BMP 可保留在資源工具流程中作為開發檢查或中間格式，但不再編入韌體 runtime。
+目前韌體從 SD 卡渲染 Literal/Run 16-bit RGB565 圖片序列。資源路徑沿用 `.rle` 副檔名與 manifest 的 `rle` 格式名稱。BMP 可保留在資源工具流程中作為開發檢查或中間格式，但不再編入韌體 runtime。
 
 資源流程建議使用適合串流讀取的格式：
 
-1. RLE 壓縮 RGB565 序列
+1. Literal/Run 16-bit RGB565 序列
 - 用少量解碼成本換取較低的 SD 頻寬需求。
 - 很適合純色區塊或重複像素較多的場景。
 - 適合 SD I/O 是瓶頸的情境。
@@ -23,19 +23,22 @@
 - `index.txt` 的格式欄位必須是 `rle`；`bmp` 行會被忽略。
 - manifest 路徑超過韌體 path buffer 時，TFT 會顯示 `path error`。
 
-Renderer 使用的 RLE 檔案配置：
+Renderer 使用的 Literal/Run 16-bit 檔案配置：
 
 1. 檔案標頭
 - `uint16_t width`，little-endian
 - `uint16_t height`，little-endian
 
 2. 像素串流
-- 重複封包：
-- `uint16_t run_length`，little-endian
-- `uint16_t rgb565_color`，little-endian
+- 每個封包先寫入一個 little-endian `uint16_t packet_header`
+- `packet_header` 的最高位為封包種類：`0` 是 Literal、`1` 是 Run
+- 低 15 位是像素數，合法範圍為 `1..32767`；`0` 無效
+- Literal 封包後接 `count` 個 little-endian `uint16_t rgb565_color`
+- Run 封包後只接一個 little-endian `uint16_t rgb565_color`
 
 3. 解碼規則
-- 將每個封包展開為 `run_length` 個 `rgb565_color` 像素
+- Literal 封包依序複製後續的 `count` 個顏色
+- Run 封包將後續的一個顏色重複 `count` 次
 - 展開後的像素總數必須等於 `width * height`
 - 不使用結束標記；當所有像素剛好解碼完成時，串流即結束
 

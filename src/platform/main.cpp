@@ -377,6 +377,7 @@ static void TFT_Reset(unsigned long lowMs, unsigned long highMs)
 static void configureTft()
 {
   tft.initR(BoardConfig::TftInitTab);
+  tft.setSPISpeed(BoardConfig::TftSpiHz);
   tft.setDisplayOffset(BoardConfig::TftColOffset, BoardConfig::TftRowOffset);
   tft.setRotation(0);
   tft.fillScreen(ST77XX_BLACK);
@@ -575,6 +576,7 @@ void setup()
 #endif
   finishTftStartupReset(tftResetLowStartedAt);
   tft.beginStartup(millis());
+  tft.setSPISpeed(BoardConfig::TftSpiHz);
 
   // The controller must finish software reset before Sleep Out. Start the
   // 500 ms Sleep Out window first, then fill it with SD and game preparation.
