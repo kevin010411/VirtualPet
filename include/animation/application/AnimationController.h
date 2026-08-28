@@ -21,63 +21,25 @@ public:
     bool hasAnimation(AnimationId id) const;
     bool hasNamedAnimation(const char *name) const;
     bool hasActionAnimation(AnimationId id) const;
-    bool hasActionAnimation(const char *baseName) const;
     bool hasAnimations(const AnimationId *ids, size_t count) const;
-    void queueAnimation(const Animation &animation);
-    void queueNamedAnimation(const char *name,
-                             unsigned long durationMs,
-                             bool playOnce,
-                             AnimationOwner owner,
-                             AnimationPriority priority,
-                             uint16_t fixedFrameIndex = 0);
-    bool queueActionAnimation(AnimationId id,
-                              unsigned long durationMs,
-                              bool playOnce,
-                              AnimationOwner owner,
-                              AnimationPriority priority);
-    bool queueActionAnimation(const char *baseName,
-                              unsigned long durationMs,
-                              bool playOnce,
-                              AnimationOwner owner,
-                              AnimationPriority priority);
-    bool queueActionAnimation(AnimationId id,
-                              unsigned long durationMs,
-                              bool playOnce,
-                              AnimationOwner owner,
-                              AnimationPriority priority,
-                              char *selectedName,
-                              size_t selectedNameSize);
-    bool queueActionAnimation(const char *baseName,
-                              unsigned long durationMs,
-                              bool playOnce,
-                              AnimationOwner owner,
-                              AnimationPriority priority,
-                              char *selectedName,
-                              size_t selectedNameSize);
-    bool queueCompleteAnimation(AnimationId id,
-                                AnimationOwner owner,
-                                AnimationPriority priority);
-    bool queueRepeatedActionAnimation(const char *baseName,
-                                      uint8_t playbackCount,
-                                      AnimationOwner owner,
-                                      AnimationPriority priority,
-                                      char *selectedName = nullptr,
-                                      size_t selectedNameSize = 0);
-    void clearByOwner(AnimationOwner owner);
-    bool hasAnimationForOwner(AnimationOwner owner) const;
+    PlaybackResult submit(const AnimationSequence &sequence, PlaybackMode mode);
+    PlaybackResult buildCompleteAnimation(AnimationId id, Animation &animation) const;
+    PlaybackResult buildRepeatedActionAnimation(const char *baseName,
+                                                uint8_t playbackCount,
+                                                Animation &animation,
+                                                char *selectedName = nullptr,
+                                                size_t selectedNameSize = 0) const;
+    void cancelAll();
+    bool isBusy() const;
     bool hasAnimationPending(AnimationId id) const;
     bool hasPlaybackFailure(AnimationId id) const;
     void clearPlaybackFailure(AnimationId id);
-    AnimationId currentCommandAnimationId() const;
-    void markDirty();
+    AnimationId currentAnimationId() const;
     void requestFullRedraw();
     void showResourceError();
-    void showActionAnimationError();
-    void showStatusNotFound();
-    void tick(unsigned long now);
+    PlaybackResult tick(unsigned long now);
     void startBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
-    unsigned long defaultFrameInterval() const;
     unsigned long frameIntervalFor(AnimationId id) const;
     unsigned long frameIntervalForName(const char *name) const;
     uint16_t frameCountFor(AnimationId id) const;
@@ -107,6 +69,7 @@ private:
     bool showUsesNamedAnimation = false;
     char showNamedAnimation[32] = {};
     AnimationId failedAnimationId = AnimationId::None;
+    bool playbackFailedThisTick = false;
 
     void resetPlaybackState();
     unsigned long completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const;
@@ -114,6 +77,8 @@ private:
     void completeActiveAnimation();
     void render(unsigned long now);
     void tryStartNextAnimation();
+    PlaybackResult validate(const Animation &animation) const;
+    bool hasActionAnimation(const char *baseName) const;
 };
 
 #endif // ANIMATION_CONTROLLER_H

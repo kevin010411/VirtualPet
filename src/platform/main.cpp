@@ -453,7 +453,7 @@ static void leaveLowBatteryMode(unsigned long now)
 {
   g_lowBatteryMode = false;
   buttons.clearFlags();
-  game.requestFullRedraw();
+  game.endBatteryAnimation();
   noteInteraction(now);
   if (!g_restoreBacklightAfterRender)
     setBacklightTarget(brightnessForVoltageState(g_voltageState));

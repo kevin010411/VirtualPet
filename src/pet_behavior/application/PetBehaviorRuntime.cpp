@@ -73,21 +73,26 @@ bool PetBehaviorRuntime::executeAction(uint8_t actionSlot)
         return false;
     dailyChangePauses = nextPauses;
 
-    if (!animations.hasActionAnimation(playback.animation))
+    Animation animation;
+    const PlaybackResult buildResult = animations.buildRepeatedActionAnimation(
+        playback.animation,
+        playback.playbackCount,
+        animation);
+    if (buildResult == PlaybackResult::AnimationMissing)
     {
-        animations.showActionAnimationError();
+        animations.showResourceError();
     }
-    else if (!animations.queueRepeatedActionAnimation(
-            playback.animation,
-            playback.playbackCount,
-            AnimationOwner::Command,
-            AnimationPriority::High))
+    else if (buildResult != PlaybackResult::Accepted)
     {
         return true;
     }
     else
     {
-        animations.markDirty();
+        const PlaybackResult submitResult = animations.submit(
+            AnimationSequence(&animation, 1),
+            PlaybackMode::Replace);
+        if (submitResult == PlaybackResult::AnimationMissing)
+            animations.showResourceError();
     }
     return true;
 }

@@ -49,6 +49,7 @@ void AnimationController::resetPlaybackState()
     showUsesNamedAnimation = false;
     showNamedAnimation[0] = '\0';
     failedAnimationId = AnimationId::None;
+    playbackFailedThisTick = false;
 }
 
 void AnimationController::setBaseAnimation(AnimationId baseAnimation)
@@ -127,173 +128,79 @@ bool AnimationController::hasAnimations(const AnimationId *ids, size_t count) co
     return true;
 }
 
-void AnimationController::queueAnimation(const Animation &animation)
+PlaybackResult AnimationController::validate(const Animation &animation) const
 {
+    if (animation.repeatCount == 0 || animation.repeatCount > kMaxRepeatedActionPlaybackCount)
+        return PlaybackResult::PlaybackFailed;
+
+    uint16_t frameCount = 0;
     if (animation.usesNamedAnimation)
     {
-        if (!hasNamedAnimation(animation.namedAnimation))
-            return;
+        if (animation.namedAnimation[0] == '\0')
+            return PlaybackResult::PlaybackFailed;
+        frameCount = renderer.frameCountForName(animation.namedAnimation);
     }
-    else if (animation.id != AnimationId::None && !hasAnimation(animation.id))
+    else
     {
-        return;
+        if (animation.id == AnimationId::None)
+            return PlaybackResult::PlaybackFailed;
+        frameCount = renderer.frameCountFor(animation.id);
     }
 
-    uint8_t insertAt = animationQueueCount;
-    for (uint8_t index = 0; index < animationQueueCount; ++index)
-    {
-        if (static_cast<uint8_t>(animation.priority) > static_cast<uint8_t>(animationQueue[index].priority))
-        {
-            insertAt = index;
-            break;
-        }
-    }
-
-    if (animationQueueCount == kMaxQueuedAnimations)
-    {
-        if (insertAt >= kMaxQueuedAnimations)
-            return;
-        --animationQueueCount;
-    }
-
-    for (uint8_t index = animationQueueCount; index > insertAt; --index)
-        animationQueue[index] = animationQueue[index - 1];
-
-    animationQueue[insertAt] = animation;
-    ++animationQueueCount;
+    if (frameCount == 0)
+        return PlaybackResult::AnimationMissing;
+    if (animation.isFixedFrame() && animation.frameIndex > frameCount)
+        return PlaybackResult::PlaybackFailed;
+    return PlaybackResult::Accepted;
 }
 
-void AnimationController::queueNamedAnimation(const char *name,
-                                              unsigned long durationMs,
-                                              bool playOnce,
-                                              AnimationOwner owner,
-                                              AnimationPriority priority,
-                                              uint16_t fixedFrameIndex)
+PlaybackResult AnimationController::submit(const AnimationSequence &sequence, PlaybackMode mode)
 {
-    if (name == nullptr || name[0] == '\0' || !hasNamedAnimation(name))
-        return;
+    if (sequence.items == nullptr || sequence.count == 0)
+        return PlaybackResult::PlaybackFailed;
+    if (sequence.count > kMaxQueuedAnimations)
+        return PlaybackResult::QueueFull;
 
-    Animation animation(AnimationId::None, durationMs, playOnce, owner, priority, fixedFrameIndex);
-    animation.usesNamedAnimation = true;
-    strncpy(animation.namedAnimation, name, sizeof(animation.namedAnimation) - 1);
-    animation.namedAnimation[sizeof(animation.namedAnimation) - 1] = '\0';
-    queueAnimation(animation);
-}
-
-bool AnimationController::queueActionAnimation(AnimationId id,
-                                                unsigned long durationMs,
-                                                bool playOnce,
-                                                AnimationOwner owner,
-                                                AnimationPriority priority)
-{
-    if (id == AnimationId::None)
-        return false;
-    return queueActionAnimation(animationNameFromId(id), durationMs, playOnce, owner, priority, nullptr, 0);
-}
-
-bool AnimationController::queueActionAnimation(const char *baseName,
-                                                unsigned long durationMs,
-                                                bool playOnce,
-                                                AnimationOwner owner,
-                                                AnimationPriority priority)
-{
-    return queueActionAnimation(baseName, durationMs, playOnce, owner, priority, nullptr, 0);
-}
-
-bool AnimationController::queueActionAnimation(AnimationId id,
-                                                unsigned long durationMs,
-                                                bool playOnce,
-                                                AnimationOwner owner,
-                                                AnimationPriority priority,
-                                                char *selectedName,
-                                                size_t selectedNameSize)
-{
-    if (id == AnimationId::None)
-        return false;
-    return queueActionAnimation(animationNameFromId(id), durationMs, playOnce, owner, priority, selectedName, selectedNameSize);
-}
-
-bool AnimationController::queueActionAnimation(const char *baseName,
-                                                unsigned long durationMs,
-                                                bool playOnce,
-                                                AnimationOwner owner,
-                                                AnimationPriority priority,
-                                                char *selectedName,
-                                                size_t selectedNameSize)
-{
-    if (baseName == nullptr || baseName[0] == '\0')
-        return false;
-
-    const uint8_t variantCount = renderer.variantCountFor(baseName);
-    if (variantCount > 0)
+    for (uint8_t index = 0; index < sequence.count; ++index)
     {
-        const char *variantName = renderer.variantNameFor(baseName, static_cast<uint8_t>(random(variantCount)));
-        if (variantName == nullptr || !hasNamedAnimation(variantName))
-            return false;
-        queueNamedAnimation(variantName, durationMs, playOnce, owner, priority);
-        if (selectedName != nullptr && selectedNameSize > 0)
-        {
-            strncpy(selectedName, variantName, selectedNameSize - 1);
-            selectedName[selectedNameSize - 1] = '\0';
-        }
-        return true;
+        const PlaybackResult result = validate(sequence.items[index]);
+        if (result != PlaybackResult::Accepted)
+            return result;
     }
 
-    const AnimationId id = animationIdFromName(baseName);
-    if (id != AnimationId::None)
-    {
-        if (!hasAnimation(id))
-            return false;
-        queueAnimation(Animation(id, durationMs, playOnce, owner, priority));
-        if (selectedName != nullptr && selectedNameSize > 0)
-        {
-            strncpy(selectedName, baseName, selectedNameSize - 1);
-            selectedName[selectedNameSize - 1] = '\0';
-        }
-        return true;
-    }
+    if (mode == PlaybackMode::Append &&
+        sequence.count > static_cast<uint8_t>(kMaxQueuedAnimations - animationQueueCount))
+        return PlaybackResult::QueueFull;
 
-    if (!hasNamedAnimation(baseName))
-        return false;
-    queueNamedAnimation(baseName, durationMs, playOnce, owner, priority);
-    if (selectedName != nullptr && selectedNameSize > 0)
-    {
-        strncpy(selectedName, baseName, selectedNameSize - 1);
-        selectedName[selectedNameSize - 1] = '\0';
-    }
-    return true;
+    if (mode == PlaybackMode::Replace)
+        cancelAll();
+
+    for (uint8_t index = 0; index < sequence.count; ++index)
+        animationQueue[animationQueueCount++] = sequence.items[index];
+    dirtyAnimation = true;
+    return PlaybackResult::Accepted;
 }
 
-bool AnimationController::queueCompleteAnimation(AnimationId id,
-                                                 AnimationOwner owner,
-                                                 AnimationPriority priority)
+PlaybackResult AnimationController::buildCompleteAnimation(AnimationId id, Animation &animation) const
 {
-    if (!hasAnimation(id))
-        return false;
-
     const uint16_t frameCount = renderer.frameCountFor(id);
     const unsigned long frameIntervalMs = renderer.frameIntervalFor(id, frameIntervalSlow);
-    if (frameCount == 0 || frameIntervalMs == 0)
-        return false;
+    if (id == AnimationId::None || frameCount == 0 || frameIntervalMs == 0)
+        return PlaybackResult::AnimationMissing;
 
-    queueAnimation(Animation(id,
-                             completePlaybackDuration(frameCount, frameIntervalMs),
-                             true,
-                             owner,
-                             priority));
-    return true;
+    animation = Animation(id, completePlaybackDuration(frameCount, frameIntervalMs), true);
+    return PlaybackResult::Accepted;
 }
 
-bool AnimationController::queueRepeatedActionAnimation(const char *baseName,
-                                                        uint8_t playbackCount,
-                                                        AnimationOwner owner,
-                                                        AnimationPriority priority,
-                                                        char *selectedName,
-                                                        size_t selectedNameSize)
+PlaybackResult AnimationController::buildRepeatedActionAnimation(const char *baseName,
+                                                                  uint8_t playbackCount,
+                                                                  Animation &animation,
+                                                                  char *selectedName,
+                                                                  size_t selectedNameSize) const
 {
     if (baseName == nullptr || baseName[0] == '\0' || playbackCount == 0 ||
         playbackCount > kMaxRepeatedActionPlaybackCount)
-        return false;
+        return PlaybackResult::PlaybackFailed;
 
     const char *selectedAnimation = baseName;
     AnimationId selectedId = AnimationId::None;
@@ -306,7 +213,7 @@ bool AnimationController::queueRepeatedActionAnimation(const char *baseName,
     {
         selectedAnimation = renderer.variantNameFor(baseName, static_cast<uint8_t>(random(variantCount)));
         if (selectedAnimation == nullptr || !hasNamedAnimation(selectedAnimation))
-            return false;
+            return PlaybackResult::AnimationMissing;
 
         usesNamedAnimation = true;
         frameCount = renderer.frameCountForName(selectedAnimation);
@@ -318,7 +225,7 @@ bool AnimationController::queueRepeatedActionAnimation(const char *baseName,
         if (selectedId != AnimationId::None)
         {
             if (!hasAnimation(selectedId))
-                return false;
+                return PlaybackResult::AnimationMissing;
 
             frameCount = renderer.frameCountFor(selectedId);
             frameIntervalMs = renderer.frameIntervalFor(selectedId, frameIntervalSlow);
@@ -326,7 +233,7 @@ bool AnimationController::queueRepeatedActionAnimation(const char *baseName,
         else
         {
             if (!hasNamedAnimation(baseName))
-                return false;
+                return PlaybackResult::AnimationMissing;
 
             usesNamedAnimation = true;
             frameCount = renderer.frameCountForName(baseName);
@@ -335,107 +242,49 @@ bool AnimationController::queueRepeatedActionAnimation(const char *baseName,
     }
 
     if (frameCount == 0 || frameIntervalMs == 0)
-        return false;
+        return PlaybackResult::AnimationMissing;
 
-    bool canQueue = animationQueueCount < kMaxQueuedAnimations;
-    if (!canQueue)
-    {
-        for (uint8_t index = 0; index < animationQueueCount; ++index)
-        {
-            if (static_cast<uint8_t>(priority) > static_cast<uint8_t>(animationQueue[index].priority))
-            {
-                canQueue = true;
-                break;
-            }
-        }
-    }
-    if (!canQueue)
-        return false;
-
-    Animation animation(selectedId,
-                        completePlaybackDuration(frameCount, frameIntervalMs),
-                        true,
-                        owner,
-                        priority);
     if (usesNamedAnimation && strlen(selectedAnimation) >= sizeof(animation.namedAnimation))
-        return false;
+        return PlaybackResult::PlaybackFailed;
+
+    animation = usesNamedAnimation
+                    ? Animation(selectedAnimation, completePlaybackDuration(frameCount, frameIntervalMs), true)
+                    : Animation(selectedId, completePlaybackDuration(frameCount, frameIntervalMs), true);
 
     animation.repeatCount = playbackCount;
-    animation.usesNamedAnimation = usesNamedAnimation;
-    if (usesNamedAnimation)
-    {
-        strncpy(animation.namedAnimation, selectedAnimation, sizeof(animation.namedAnimation) - 1);
-        animation.namedAnimation[sizeof(animation.namedAnimation) - 1] = '\0';
-    }
-    queueAnimation(animation);
-
     if (selectedName != nullptr && selectedNameSize > 0)
     {
         strncpy(selectedName, selectedAnimation, selectedNameSize - 1);
         selectedName[selectedNameSize - 1] = '\0';
     }
-    return true;
+    return PlaybackResult::Accepted;
 }
 
-void AnimationController::clearByOwner(AnimationOwner owner)
+void AnimationController::cancelAll()
 {
-    for (uint8_t index = 0; index < animationQueueCount;)
-    {
-        if (animationQueue[index].owner == owner)
-        {
-            for (uint8_t move = index + 1; move < animationQueueCount; ++move)
-                animationQueue[move - 1] = animationQueue[move];
-            --animationQueueCount;
-        }
-        else
-        {
-            ++index;
-        }
-    }
-
-    if (hasActiveAnimation && activeAnimation.owner == owner)
-    {
-        hasActiveAnimation = false;
-        activeAnimation = Animation();
-        activeRepeatsRemaining = 0;
-        displayDuration = 0;
-        animateDone = true;
-        showAnimationId = AnimationId::None;
-        showUsesNamedAnimation = false;
-        showNamedAnimation[0] = '\0';
-    }
-}
-
-bool AnimationController::hasAnimationForOwner(AnimationOwner owner) const
-{
-    if (hasActiveAnimation && activeAnimation.owner == owner)
-        return true;
-
-    for (uint8_t index = 0; index < animationQueueCount; ++index)
-    {
-        if (animationQueue[index].owner == owner)
-            return true;
-    }
-    return false;
-}
-
-AnimationId AnimationController::currentCommandAnimationId() const
-{
-    if (hasActiveAnimation && activeAnimation.owner == AnimationOwner::Command)
-        return activeAnimation.id;
-
-    for (uint8_t index = 0; index < animationQueueCount; ++index)
-    {
-        if (animationQueue[index].owner == AnimationOwner::Command)
-            return animationQueue[index].id;
-    }
-
-    return AnimationId::None;
-}
-
-void AnimationController::markDirty()
-{
+    animationQueueCount = 0;
+    hasActiveAnimation = false;
+    activeAnimation = Animation();
+    activeRepeatsRemaining = 0;
+    displayDuration = 0;
     dirtyAnimation = true;
+    animateDone = true;
+    showAnimationId = AnimationId::None;
+    showUsesNamedAnimation = false;
+    showNamedAnimation[0] = '\0';
+    lastFrameTime = 0;
+}
+
+bool AnimationController::isBusy() const
+{
+    return hasActiveAnimation || animationQueueCount > 0;
+}
+
+AnimationId AnimationController::currentAnimationId() const
+{
+    if (hasActiveAnimation)
+        return activeAnimation.id;
+    return animationQueueCount > 0 ? animationQueue[0].id : AnimationId::None;
 }
 
 void AnimationController::requestFullRedraw()
@@ -474,16 +323,6 @@ void AnimationController::clearPlaybackFailure(AnimationId id)
 {
     if (failedAnimationId == id)
         failedAnimationId = AnimationId::None;
-}
-
-void AnimationController::showActionAnimationError()
-{
-    renderer.showResourceError();
-}
-
-void AnimationController::showStatusNotFound()
-{
-    renderer.showResourceError();
 }
 
 void AnimationController::updateElapsed(unsigned long elapsed)
@@ -545,8 +384,9 @@ unsigned long AnimationController::completePlaybackDuration(uint16_t frameCount,
     return frameIntervalMs * frameTransitions + kCompletePlaybackSafetyMs;
 }
 
-void AnimationController::tick(unsigned long now)
+PlaybackResult AnimationController::tick(unsigned long now)
 {
+    playbackFailedThisTick = false;
     if (lastPlaybackUpdateTime == 0)
         lastPlaybackUpdateTime = now;
 
@@ -563,6 +403,7 @@ void AnimationController::tick(unsigned long now)
         completeActiveAnimation();
         render(now);
     }
+    return playbackFailedThisTick ? PlaybackResult::PlaybackFailed : PlaybackResult::Accepted;
 }
 
 void AnimationController::render(unsigned long now)
@@ -612,9 +453,15 @@ void AnimationController::render(unsigned long now)
                             : renderer.frameIntervalFor(showAnimationId, frameIntervalSlow);
         if (hasActiveAnimation && activeAnimation.isFixedFrame())
         {
-            animateDone = showUsesNamedAnimation
-                              ? !renderer.ShowNamedAnimationFrame(showNamedAnimation, activeAnimation.frameIndex)
-                              : !renderer.ShowAnimationFrame(showAnimationId, activeAnimation.frameIndex);
+            const bool rendered = showUsesNamedAnimation
+                                      ? renderer.ShowNamedAnimationFrame(showNamedAnimation, activeAnimation.frameIndex)
+                                      : renderer.ShowAnimationFrame(showAnimationId, activeAnimation.frameIndex);
+            animateDone = !rendered;
+            if (!rendered)
+            {
+                failedAnimationId = activeAnimation.id;
+                playbackFailedThisTick = true;
+            }
         }
         else
         {
@@ -625,7 +472,10 @@ void AnimationController::render(unsigned long now)
             {
                 animateDone = renderer.advanceAnimationFrame();
                 if (renderer.animationFrameFailed() && hasActiveAnimation)
+                {
                     failedAnimationId = activeAnimation.id;
+                    playbackFailedThisTick = true;
+                }
             }
         }
         dirtyAnimation = false;
@@ -643,15 +493,16 @@ void AnimationController::render(unsigned long now)
         }
         animateDone |= renderer.advanceAnimationFrame();
         if (renderer.animationFrameFailed() && hasActiveAnimation)
+        {
             failedAnimationId = activeAnimation.id;
+            playbackFailedThisTick = true;
+        }
     }
 }
 
 void AnimationController::startBatteryAnimation()
 {
-    clearByOwner(AnimationOwner::Command);
-    clearByOwner(AnimationOwner::Minigame);
-    clearByOwner(AnimationOwner::System);
+    cancelAll();
     showAnimationId = AnimationId::Battery;
     showUsesNamedAnimation = false;
     showNamedAnimation[0] = '\0';
@@ -660,6 +511,7 @@ void AnimationController::startBatteryAnimation()
     animateDone = !renderer.setAnimation(showAnimationId, false);
     if (!animateDone)
         animateDone = renderer.advanceAnimationFrame();
+    dirtyAnimation = false;
 }
 
 void AnimationController::updateBatteryAnimation(unsigned long now)
@@ -669,11 +521,6 @@ void AnimationController::updateBatteryAnimation(unsigned long now)
 
     lastFrameTime = now;
     renderer.advanceAnimationFrame();
-}
-
-unsigned long AnimationController::defaultFrameInterval() const
-{
-    return frameIntervalSlow;
 }
 
 unsigned long AnimationController::frameIntervalFor(AnimationId id) const

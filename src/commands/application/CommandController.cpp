@@ -5,37 +5,37 @@
 
 namespace
 {
-#define COMMAND_SLOT(commandId, label, canFn, execFn, clearFirst) \
-    { commandId, label, &CommandController::canFn, &CommandController::execFn, true, clearFirst }
+#define COMMAND_SLOT(commandId, label, canFn, execFn) \
+    { commandId, label, &CommandController::canFn, &CommandController::execFn, true }
 #if ENABLE_COMMAND_PREDICT
-#define COMMAND_SLOT_PREDICT COMMAND_SLOT(AppCommandId::Predict, "PREDICT", canPredict, executePredict, true)
+#define COMMAND_SLOT_PREDICT COMMAND_SLOT(AppCommandId::Predict, "PREDICT", canPredict, executePredict)
 #else
 #define COMMAND_SLOT_PREDICT CommandController::emptySlot()
 #endif
 
 #if ENABLE_COMMAND_OUTFIT
-#define COMMAND_SLOT_CHANGE_OUTFIT COMMAND_SLOT(AppCommandId::ChangeOutfit, "CHANGE_OUTFIT", canAlwaysExecute, executeChangeOutfit, true)
+#define COMMAND_SLOT_CHANGE_OUTFIT COMMAND_SLOT(AppCommandId::ChangeOutfit, "CHANGE_OUTFIT", canAlwaysExecute, executeChangeOutfit)
 #else
 #define COMMAND_SLOT_CHANGE_OUTFIT CommandController::emptySlot()
 #endif
 
 #if ENABLE_COMMAND_SPECIES
-#define COMMAND_SLOT_CHANGE_SPECIES COMMAND_SLOT(AppCommandId::ChangeSpecies, "CHANGE_SPECIES", canAlwaysExecute, executeChangeSpecies, true)
+#define COMMAND_SLOT_CHANGE_SPECIES COMMAND_SLOT(AppCommandId::ChangeSpecies, "CHANGE_SPECIES", canAlwaysExecute, executeChangeSpecies)
 #else
 #define COMMAND_SLOT_CHANGE_SPECIES CommandController::emptySlot()
 #endif
 
 #if ENABLE_GUESS_GAME
-#define COMMAND_SLOT_GUESS_GAME COMMAND_SLOT(AppCommandId::GuessGame, "GUESS_GAME", canAlwaysExecute, executeGuessGame, false)
+#define COMMAND_SLOT_GUESS_GAME COMMAND_SLOT(AppCommandId::GuessGame, "GUESS_GAME", canAlwaysExecute, executeGuessGame)
 #else
 #define COMMAND_SLOT_GUESS_GAME CommandController::emptySlot()
 #endif
-#define COMMAND_SLOT_STATUS COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus, true)
+#define COMMAND_SLOT_STATUS COMMAND_SLOT(AppCommandId::Status, "STATUS", canStatus, executeStatus)
 } // namespace
 
 constexpr CommandController::CommandSlot CommandController::emptySlot()
 {
-    return {AppCommandId::None, "NO_OP", nullptr, nullptr, false, false};
+    return {AppCommandId::None, "NO_OP", nullptr, nullptr, false};
 }
 
 CommandController::CommandSlot CommandController::systemCommandSlot(const char *token)
@@ -60,7 +60,7 @@ CommandController::CommandSlot CommandController::buttonSlot(const PetBehaviorBu
     if (!button.active || button.kind == PetBehaviorButtonKind::Empty)
         return emptySlot();
     if (button.kind == PetBehaviorButtonKind::UserAction)
-        return COMMAND_SLOT(AppCommandId::UserAction, "USER_ACTION", canAlwaysExecute, executeUserAction, false);
+        return COMMAND_SLOT(AppCommandId::UserAction, "USER_ACTION", canAlwaysExecute, executeUserAction);
     if (button.kind == PetBehaviorButtonKind::SystemCommand)
         return systemCommandSlot(button.systemCommand);
     return emptySlot();
@@ -117,9 +117,6 @@ bool CommandController::executeCurrent()
 
     if (slot.canExecute != nullptr && !(this->*slot.canExecute)())
         return false;
-
-    if (slot.clearCommandAnimations)
-        host.commandClearCommandAnimations();
 
     (this->*slot.execute)();
     return true;

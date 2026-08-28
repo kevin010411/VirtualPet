@@ -41,6 +41,7 @@ public:
     bool startStartupAnimation();
     bool hasTransientAnimation() const;
     void startBatteryAnimation();
+    void endBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
 
     void OnLeftKey();
@@ -74,7 +75,6 @@ private:
     bool dirtySelect = true;
     bool pendingEvolution = false;
     bool pendingFirstStartCompletion = false;
-    bool firstStartResourceError = false;
     bool initialized = false;
     bool petBehaviorLoadingFailed = false;
     bool petBehaviorLoaded = false;
@@ -85,7 +85,7 @@ private:
     char pendingEvolutionOutfitCode[9] = {};
 
     void refreshBaseAnimation();
-    void syncActionLayoutWithAnimationQueue();
+    void syncActionLayoutWithPlayback();
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
     bool loadInitialPetState(bool allowSavedState, bool showError = true);
@@ -96,7 +96,7 @@ private:
     bool isFirstLaunchSelectionPending() const;
     bool startFirstLaunchRequiredCommand();
     bool beginStartupAnimation();
-    void completeFirstStartIfReady();
+    void completeFirstStartIfReady(PlaybackResult playbackResult);
     void enterFirstLaunch();
     void enterCommand();
 };

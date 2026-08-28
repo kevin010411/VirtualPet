@@ -30,6 +30,16 @@ bool AppFlowController::isMinigame() const
     return currentStage == AppStage::Minigame;
 }
 
+bool AppFlowController::isBattery() const
+{
+    return currentStage == AppStage::Battery;
+}
+
+bool AppFlowController::isFatalError() const
+{
+    return currentStage == AppStage::FatalError;
+}
+
 void AppFlowController::beginFirstLaunch()
 {
     currentStage = AppStage::FirstLaunch;
@@ -50,8 +60,29 @@ void AppFlowController::onMinigameEnded()
     enterCommand();
 }
 
+void AppFlowController::enterBattery()
+{
+    if (currentStage == AppStage::Battery || currentStage == AppStage::FatalError)
+        return;
+    stageBeforeBattery = currentStage;
+    currentStage = AppStage::Battery;
+}
+
+void AppFlowController::leaveBattery()
+{
+    if (currentStage == AppStage::Battery)
+        currentStage = stageBeforeBattery;
+}
+
+void AppFlowController::enterFatalError()
+{
+    currentStage = AppStage::FatalError;
+}
+
 bool AppFlowController::requestStartup()
 {
+    if (currentStage == AppStage::Battery || currentStage == AppStage::FatalError)
+        return false;
     currentStage = AppStage::Startup;
     return true;
 }

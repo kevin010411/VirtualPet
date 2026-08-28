@@ -51,7 +51,6 @@ private:
 
     bool commandHasAnimation(AnimationId id) const override;
     bool commandCanStatus() const override;
-    void commandClearCommandAnimations() override;
 #if ENABLE_COMMAND_PREDICT
     void commandPredict() override;
 #endif

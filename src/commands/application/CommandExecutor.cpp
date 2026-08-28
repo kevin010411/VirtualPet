@@ -80,7 +80,6 @@ void CommandExecutor::configureRuntimeContract(const PetBehaviorConfig &config)
 #if ENABLE_GUESS_GAME
 void CommandExecutor::commandGuessGame()
 {
-    animations.clearByOwner(AnimationOwner::Command);
     currentResult.requestedMinigame = canPlayGuessItemGame();
     currentResult.executed = currentResult.requestedMinigame;
 }
@@ -125,18 +124,17 @@ bool CommandExecutor::commandCanStatus() const
     return true;
 }
 
-void CommandExecutor::commandClearCommandAnimations()
-{
-    animations.clearByOwner(AnimationOwner::Command);
-}
-
 #if ENABLE_COMMAND_PREDICT
 void CommandExecutor::commandPredict()
 {
     currentResult.layoutId = AnimationId::PredAnim;
-    animations.queueAnimation(Animation(AnimationId::PredAnim, gameTick * 20, true, AnimationOwner::Command, AnimationPriority::High));
-    animations.queueAnimation(Animation(fortuneToAnimationId(random(1, maxFortune + 1)), gameTick * 2.4, false, AnimationOwner::Command, AnimationPriority::High));
-    animations.markDirty();
+    const Animation sequence[] = {
+        Animation(AnimationId::PredAnim, gameTick * 20, true),
+        Animation(fortuneToAnimationId(random(1, maxFortune + 1)), gameTick * 2.4, false),
+    };
+    currentResult.executed = animations.submit(
+                                 AnimationSequence(sequence, sizeof(sequence) / sizeof(sequence[0])),
+                                 PlaybackMode::Replace) == PlaybackResult::Accepted;
 }
 #endif
 
@@ -168,7 +166,7 @@ void CommandExecutor::queueStatusAnimation()
 
 void CommandExecutor::showStatusNotFound()
 {
-    animations.showStatusNotFound();
+    animations.showResourceError();
 }
 
 bool CommandExecutor::queueStatusSetsAnimation()
@@ -197,28 +195,24 @@ bool CommandExecutor::queueStatusSetsAnimation()
     {
         if (!animations.hasAnimation(AnimationId::Status))
             return false;
-        animations.queueAnimation(Animation(
+        const Animation animation(
             AnimationId::Status,
             gameTick * 10,
-            true,
-            AnimationOwner::Command,
-            AnimationPriority::Normal));
-        animations.markDirty();
-        return true;
+            true);
+        return animations.submit(AnimationSequence(&animation, 1), PlaybackMode::Replace) ==
+               PlaybackResult::Accepted;
     }
 
     if (animations.frameCountForName(resolution.animation) != resolution.requiredFrames)
         return false;
 
-    animations.queueNamedAnimation(
+    const Animation animation(
         resolution.animation,
         gameTick * 4,
         false,
-        AnimationOwner::Command,
-        AnimationPriority::Normal,
         resolution.frame);
-    animations.markDirty();
-    return true;
+    return animations.submit(AnimationSequence(&animation, 1), PlaybackMode::Replace) ==
+           PlaybackResult::Accepted;
 }
 
 #if ENABLE_GUESS_GAME

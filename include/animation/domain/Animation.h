@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <stddef.h>
+#include <string.h>
 
 enum class AnimationId : uint8_t
 {
@@ -49,20 +50,18 @@ constexpr size_t kAnimationIdCount = static_cast<size_t>(AnimationId::Count);
 AnimationId animationIdFromName(const char *name);
 const char *animationNameFromId(AnimationId id);
 
-enum class AnimationOwner : uint8_t
+enum class PlaybackMode : uint8_t
 {
-    BaseState = 0,
-    Command = 1,
-    Minigame = 2,
-    System = 3
+    Append,
+    Replace,
 };
 
-enum class AnimationPriority : uint8_t
+enum class PlaybackResult : uint8_t
 {
-    Base = 0,
-    Normal = 1,
-    High = 2,
-    Critical = 3
+    Accepted,
+    AnimationMissing,
+    QueueFull,
+    PlaybackFailed,
 };
 
 struct Animation
@@ -70,8 +69,6 @@ struct Animation
     AnimationId id;
     unsigned long durationMs;
     bool playOnce;
-    AnimationOwner owner;
-    AnimationPriority priority;
     uint16_t frameIndex;
     uint8_t repeatCount;
     bool usesNamedAnimation;
@@ -80,20 +77,46 @@ struct Animation
     Animation(AnimationId animationId = AnimationId::None,
               unsigned long duration = 0,
               bool once = false,
-              AnimationOwner animationOwner = AnimationOwner::BaseState,
-              AnimationPriority animationPriority = AnimationPriority::Base,
               uint16_t fixedFrameIndex = 0)
         : id(animationId),
           durationMs(duration),
           playOnce(once),
-          owner(animationOwner),
-          priority(animationPriority),
           frameIndex(fixedFrameIndex),
           repeatCount(1),
           usesNamedAnimation(false),
           namedAnimation{} {}
 
+    Animation(const char *animationName,
+              unsigned long duration,
+              bool once,
+              uint16_t fixedFrameIndex = 0)
+        : id(AnimationId::None),
+          durationMs(duration),
+          playOnce(once),
+          frameIndex(fixedFrameIndex),
+          repeatCount(1),
+          usesNamedAnimation(true),
+          namedAnimation{}
+    {
+        if (animationName != nullptr)
+        {
+            if (strlen(animationName) >= sizeof(namedAnimation))
+                return;
+            strncpy(namedAnimation, animationName, sizeof(namedAnimation) - 1);
+            namedAnimation[sizeof(namedAnimation) - 1] = '\0';
+        }
+    }
+
     bool isFixedFrame() const { return frameIndex != 0; }
+};
+
+struct AnimationSequence
+{
+    const Animation *items;
+    uint8_t count;
+
+    AnimationSequence(const Animation *sequenceItems, uint8_t sequenceCount)
+        : items(sequenceItems), count(sequenceCount) {}
 };
 
 #endif

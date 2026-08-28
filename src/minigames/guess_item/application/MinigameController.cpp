@@ -46,26 +46,24 @@ bool MinigameController::isActive() const
     return guessItem.isActive();
 }
 
-void MinigameController::queueAnimation(const Animation &animation)
+PlaybackResult MinigameController::submit(const AnimationSequence &sequence, PlaybackMode mode)
 {
-    animations.queueAnimation(animation);
+    return animations.submit(sequence, mode);
 }
 
-bool MinigameController::queueCompleteAnimation(AnimationId id,
-                                                 AnimationOwner owner,
-                                                 AnimationPriority priority)
+PlaybackResult MinigameController::buildCompleteAnimation(AnimationId id, Animation &animation) const
 {
-    return animations.queueCompleteAnimation(id, owner, priority);
+    return animations.buildCompleteAnimation(id, animation);
 }
 
-void MinigameController::clearAnimationsByOwner(AnimationOwner owner)
+void MinigameController::cancelPlayback()
 {
-    animations.clearByOwner(owner);
+    animations.cancelAll();
 }
 
-void MinigameController::markAnimationDirty()
+bool MinigameController::isPlaybackBusy() const
 {
-    animations.markDirty();
+    return animations.isBusy();
 }
 
 bool MinigameController::hasAnimation(AnimationId id) const
@@ -76,11 +74,6 @@ bool MinigameController::hasAnimation(AnimationId id) const
 bool MinigameController::hasAnimationPending(AnimationId id) const
 {
     return animations.hasAnimationPending(id);
-}
-
-bool MinigameController::hasAnimationForOwner(AnimationOwner owner) const
-{
-    return animations.hasAnimationForOwner(owner);
 }
 
 void MinigameController::settleOutcome(GuessItemOutcome outcome)

@@ -25,7 +25,6 @@ public:
 
     virtual bool commandHasAnimation(AnimationId id) const = 0;
     virtual bool commandCanStatus() const = 0;
-    virtual void commandClearCommandAnimations() = 0;
 
 #if ENABLE_COMMAND_PREDICT
     virtual void commandPredict() = 0;
@@ -72,7 +71,6 @@ private:
         CanExecute canExecute;
         Execute execute;
         bool visible;
-        bool clearCommandAnimations;
     };
 
     CommandHost &host;
