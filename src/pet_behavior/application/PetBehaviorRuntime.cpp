@@ -124,10 +124,8 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     else if (buildResult != PlaybackResult::Accepted)
         return PetBehaviorActionResult::Applied;
 
-    const PlaybackResult submitResult = animations.submit(
-        AnimationSequence(&animation, 1),
-        PlaybackMode::Replace);
-    return submitResult == PlaybackResult::AnimationMissing
+    const PlaybackResult replaceResult = animations.replace(AnimationSequence(&animation, 1));
+    return replaceResult == PlaybackResult::AnimationMissing
                ? PetBehaviorActionResult::AppliedAnimationMissing
                : PetBehaviorActionResult::Applied;
 }

@@ -22,7 +22,7 @@ public:
     bool hasNamedAnimation(const char *name) const;
     bool hasActionAnimation(AnimationId id) const;
     bool hasAnimations(const AnimationId *ids, size_t count) const;
-    PlaybackResult submit(const AnimationSequence &sequence, PlaybackMode mode);
+    PlaybackResult replace(const AnimationSequence &sequence);
     void cancelAll();
     bool isBusy() const;
     bool hasAnimationPending(AnimationId id) const;

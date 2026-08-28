@@ -50,12 +50,6 @@ constexpr size_t kAnimationIdCount = static_cast<size_t>(AnimationId::Count);
 AnimationId animationIdFromName(const char *name);
 const char *animationNameFromId(AnimationId id);
 
-enum class PlaybackMode : uint8_t
-{
-    Append,
-    Replace,
-};
-
 enum class PlaybackResult : uint8_t
 {
     Accepted,

@@ -20,23 +20,23 @@
 
 ### `AnimationController`
 
-- 驗證並原子接受一個 bounded sequence。
+- 逐項驗證 bounded sequence，只保留可播放項目。
 - 以固定容量 8 的 FIFO 保存普通播放項目，不使用動態配置。
 - 負責 frame timing、完整播放的 safety duration、重複播放、取消與 base/idle fallback。
 - 回報 submission 與 runtime playback 結果，不決定產品錯誤政策。
 
-## Sequence submission
+## Sequence replacement
 
-普通播放只有兩種提交模式：
+普通播放只有一個 replacement interface：
 
 ```cpp
-submit(sequence, PlaybackMode::Append)
-submit(sequence, PlaybackMode::Replace)
+replace(sequence)
 ```
 
-- `Append`：把完整 sequence 接在目前 queued playback 之後。
-- `Replace`：先驗證完整 sequence；只有驗證與容量檢查全部成功後，才取消目前播放並換入新 sequence。
-- sequence 是 all-or-nothing。任何一項缺少資源、描述無效或容量不足，都不會加入部分項目。
+- `replace()` 取消目前 active 與 queued playback，再按原順序檢查新 sequence。
+- 有效項目加入固定 FIFO；缺少資源或描述無效的項目直接略過，不阻止同組其他動畫播放。
+- 至少一項可播放時回傳 `Accepted`；整組都無法播放時回傳第一個失敗結果。
+- 不提供 Append。每個 owning flow 必須明確描述這次要取代目前播放的完整候選順序。
 - queue 空且沒有 active playback 時，下一次 `tick()` 回到既有 base/idle animation。
 
 ## Animation 描述
@@ -50,9 +50,9 @@ submit(sequence, PlaybackMode::Replace)
 
 Submission 使用 `PlaybackResult`：
 
-- `Accepted`：完整 sequence 已接受。
-- `AnimationMissing`：manifest 沒有必要動畫；既有 queue 保持不變。
-- `QueueFull`：完整 sequence 無法放入固定 queue；既有 queue 保持不變。
+- `Accepted`：sequence 至少有一個可播放項目，所有有效項目已按順序加入。
+- `AnimationMissing`：整組沒有可播放項目，第一個失敗原因是 manifest 缺少動畫。
+- `QueueFull`：呼叫端提交的 sequence 本身超過固定容量 8。
 - `PlaybackFailed`：描述無效，或已接受的動畫在實際讀取／繪製 frame 時失敗。
 
 `tick()` 回傳 `PlaybackTickResult`，其中包含 bounded `PlaybackResult` 與當次失敗的

@@ -74,10 +74,10 @@ bool GuessItemGame::hasItemPromptAnimations() const
            host.hasAnimation(AnimationId::GuessItem4);
 }
 
-PlaybackResult GuessItemGame::submitPromptAnimation(PlaybackMode mode)
+PlaybackResult GuessItemGame::replacePromptAnimation()
 {
     const Animation prompt(promptAnimationId, kItemPromptLoopDurationMs, false);
-    return host.submit(AnimationSequence(&prompt, 1), mode);
+    return host.replace(AnimationSequence(&prompt, 1));
 }
 
 void GuessItemGame::start()
@@ -93,23 +93,23 @@ void GuessItemGame::start()
             Animation::complete(AnimationId::GuessStart),
             Animation(promptAnimationId, kItemPromptLoopDurationMs, false),
         };
-        // Queue the first prompt behind GuessStart so playback never falls back
-        // to idle between the introductory animation and the user's turn.
-        const PlaybackResult result = host.submit(AnimationSequence(sequence, 2), PlaybackMode::Replace);
+        // Keep the playable start and prompt items adjacent so playback does not
+        // fall back to idle between the introduction and the user's turn.
+        const PlaybackResult result = host.replace(AnimationSequence(sequence, 2));
         if (result == PlaybackResult::Accepted)
         {
             state = GuessItemState::Starting;
         }
         else
         {
-            submitPromptAnimation();
+            replacePromptAnimation();
             state = GuessItemState::WaitingItem;
         }
     }
     else
     {
         promptAnimationId = hasItemPrompts ? randomItemAnimation() : AnimationId::GuessStart;
-        submitPromptAnimation();
+        replacePromptAnimation();
         state = GuessItemState::WaitingItem;
     }
 
@@ -150,7 +150,7 @@ void GuessItemGame::update()
         if (hasItemPromptAnimations() && now - lastMoveTime > kItemPromptSwitchIntervalMs)
         {
             promptAnimationId = randomItemAnimationExcept(promptAnimationId);
-            submitPromptAnimation();
+            replacePromptAnimation();
             lastMoveTime = now;
         }
         break;
@@ -173,7 +173,7 @@ void GuessItemGame::update()
             if (host.hasAnimation(finalAnimation))
             {
                 const Animation animation = Animation::complete(finalAnimation);
-                host.submit(AnimationSequence(&animation, 1), PlaybackMode::Replace);
+                host.replace(AnimationSequence(&animation, 1));
             }
             lastMoveTime = now;
 #endif
@@ -182,7 +182,7 @@ void GuessItemGame::update()
         {
             state = GuessItemState::WaitingItem;
             promptAnimationId = randomItemAnimation();
-            submitPromptAnimation();
+            replacePromptAnimation();
             lastMoveTime = now;
         }
         break;
@@ -230,7 +230,7 @@ void GuessItemGame::onPlaybackFailed()
     host.cancelPlayback();
     if (state == GuessItemState::Starting)
     {
-        submitPromptAnimation();
+        replacePromptAnimation();
         state = GuessItemState::WaitingItem;
         lastMoveTime = millis();
     }
@@ -292,7 +292,7 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     }
 #endif
     if (sequenceCount > 0)
-        host.submit(AnimationSequence(sequence, sequenceCount), PlaybackMode::Replace);
+        host.replace(AnimationSequence(sequence, sequenceCount));
     else
         host.cancelPlayback();
     state = GuessItemState::ShowingResult;

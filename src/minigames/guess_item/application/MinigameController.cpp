@@ -51,9 +51,9 @@ bool MinigameController::isActive() const
     return guessItem.isActive();
 }
 
-PlaybackResult MinigameController::submit(const AnimationSequence &sequence, PlaybackMode mode)
+PlaybackResult MinigameController::replace(const AnimationSequence &sequence)
 {
-    return animations.submit(sequence, mode);
+    return animations.replace(sequence);
 }
 
 void MinigameController::cancelPlayback()

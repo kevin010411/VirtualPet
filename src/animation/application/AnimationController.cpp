@@ -154,30 +154,26 @@ PlaybackResult AnimationController::validate(const Animation &animation) const
     return PlaybackResult::Accepted;
 }
 
-PlaybackResult AnimationController::submit(const AnimationSequence &sequence, PlaybackMode mode)
+PlaybackResult AnimationController::replace(const AnimationSequence &sequence)
 {
     if (sequence.items == nullptr || sequence.count == 0)
         return PlaybackResult::PlaybackFailed;
     if (sequence.count > kMaxQueuedAnimations)
         return PlaybackResult::QueueFull;
 
+    cancelAll();
+    PlaybackResult firstFailure = PlaybackResult::Accepted;
     for (uint8_t index = 0; index < sequence.count; ++index)
     {
         const PlaybackResult result = validate(sequence.items[index]);
-        if (result != PlaybackResult::Accepted)
-            return result;
+        if (result == PlaybackResult::Accepted)
+            animationQueue[animationQueueCount++] = sequence.items[index];
+        else if (firstFailure == PlaybackResult::Accepted)
+            firstFailure = result;
     }
 
-    if (mode == PlaybackMode::Append &&
-        sequence.count > static_cast<uint8_t>(kMaxQueuedAnimations - animationQueueCount))
-        return PlaybackResult::QueueFull;
-
-    if (mode == PlaybackMode::Replace)
-        cancelAll();
-
-    for (uint8_t index = 0; index < sequence.count; ++index)
-        animationQueue[animationQueueCount++] = sequence.items[index];
-    dirtyAnimation = true;
+    if (animationQueueCount == 0)
+        return firstFailure;
     return PlaybackResult::Accepted;
 }
 

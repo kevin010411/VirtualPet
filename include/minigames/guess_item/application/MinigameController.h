@@ -29,7 +29,7 @@ private:
     PetBehaviorRuntime &petBehavior;
     GuessItemGame guessItem;
 
-    PlaybackResult submit(const AnimationSequence &sequence, PlaybackMode mode) override;
+    PlaybackResult replace(const AnimationSequence &sequence) override;
     void cancelPlayback() override;
     bool isPlaybackBusy() const override;
     bool hasAnimation(AnimationId id) const override;

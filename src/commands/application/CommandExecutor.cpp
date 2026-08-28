@@ -132,9 +132,9 @@ void CommandExecutor::commandPredict()
         Animation(AnimationId::PredAnim, gameTick * 20, true),
         Animation(fortuneToAnimationId(random(1, maxFortune + 1)), gameTick * 2.4, false),
     };
-    currentResult.executed = animations.submit(
-                                 AnimationSequence(sequence, sizeof(sequence) / sizeof(sequence[0])),
-                                 PlaybackMode::Replace) == PlaybackResult::Accepted;
+    currentResult.executed = animations.replace(
+                                 AnimationSequence(sequence, sizeof(sequence) / sizeof(sequence[0]))) ==
+                             PlaybackResult::Accepted;
 }
 #endif
 
@@ -194,7 +194,7 @@ bool CommandExecutor::queueStatusSetsAnimation()
             AnimationId::Status,
             gameTick * 10,
             true);
-        return animations.submit(AnimationSequence(&animation, 1), PlaybackMode::Replace) ==
+        return animations.replace(AnimationSequence(&animation, 1)) ==
                PlaybackResult::Accepted;
     }
 
@@ -206,7 +206,7 @@ bool CommandExecutor::queueStatusSetsAnimation()
         gameTick * 4,
         false,
         resolution.frame);
-    return animations.submit(AnimationSequence(&animation, 1), PlaybackMode::Replace) ==
+    return animations.replace(AnimationSequence(&animation, 1)) ==
            PlaybackResult::Accepted;
 }
 

@@ -688,10 +688,8 @@ bool Game::beginEvolutionAnimation(const AppearanceSelection &selection)
     pendingEvolution = true;
 
     const Animation animation = Animation::complete(AnimationId::Evolution, 2);
-    const PlaybackResult submitResult = animations->submit(
-        AnimationSequence(&animation, 1),
-        PlaybackMode::Replace);
-    if (submitResult != PlaybackResult::Accepted)
+    const PlaybackResult replaceResult = animations->replace(AnimationSequence(&animation, 1));
+    if (replaceResult != PlaybackResult::Accepted)
     {
         pendingEvolution = false;
         pendingEvolutionSpeciesCode[0] = '\0';
@@ -758,7 +756,7 @@ bool Game::beginStartupAnimation()
         sequence[sequenceCount++] = Animation(AnimationId::Start, startupDuration, true);
     }
 
-    if (animations->submit(AnimationSequence(sequence, sequenceCount), PlaybackMode::Replace) !=
+    if (animations->replace(AnimationSequence(sequence, sequenceCount)) !=
         PlaybackResult::Accepted)
     {
         pendingFirstStartCompletion = false;
