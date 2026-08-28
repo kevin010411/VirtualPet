@@ -33,8 +33,7 @@ PlaybackResult resolveActionAnimation(const PetBehaviorActionPlayback &playback,
                                       Renderer &renderer,
                                       Animation &animation)
 {
-    if (playback.animation[0] == '\0' || playback.playbackCount == 0 ||
-        playback.playbackCount > kMaxRepeatedActionPlaybackCount)
+    if (playback.animation[0] == '\0' || playback.playbackCount == 0)
         return PlaybackResult::PlaybackFailed;
 
     const char *selectedAnimation = playback.animation;
