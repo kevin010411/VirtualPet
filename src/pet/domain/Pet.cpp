@@ -1,13 +1,15 @@
 #include "pet/domain/Pet.h"
 
 #include <string.h>
+#include <stdio.h>
+#include "shared/utils/CanonicalDecimal.h"
 
 namespace
 {
 constexpr uint32_t kFirstLaunchCompleteFlag = 0x1UL;
 constexpr uint32_t kFirstStartCompletedFlag = 0x2UL;
 
-bool copyAppearanceCode(char *dest, size_t destSize, const char *source)
+bool copyPersistedAppearanceText(char *dest, size_t destSize, const char *source)
 {
     if (dest == nullptr || destSize == 0 || source == nullptr || source[0] == '\0')
         return false;
@@ -29,6 +31,19 @@ bool copyAppearanceCode(char *dest, size_t destSize, const char *source)
 
     strcpy(dest, source);
     return true;
+}
+
+uint8_t parseAppearanceSlot(const char *text)
+{
+    uint32_t value = 0;
+    if (!CanonicalDecimal::parseUnsigned(text, UINT8_MAX, value, false))
+        return 0;
+    return static_cast<uint8_t>(value);
+}
+
+bool writeAppearanceSlot(char *destination, size_t destinationSize, uint8_t slot)
+{
+    return slot != 0 && snprintf(destination, destinationSize, "%u", slot) > 0;
 }
 } // namespace
 
@@ -64,8 +79,8 @@ void Pet::setDefaultState()
     st.version = kPetStateVersion;
     st.sequence = 0;
     st.schemaFingerprint = 0;
-    strcpy(st.species, "dino");
-    strcpy(st.outfit, "base");
+    strcpy(st.speciesSlotText, "1");
+    strcpy(st.outfitSlotText, "1");
     st.stage_days = 0;
     for (size_t i = 0; i < PetStatSnapshot::kCustomStatCount; ++i)
         st.customStats[i] = 0;
@@ -83,14 +98,14 @@ const PersistedPetState &Pet::persistentState() const
     return st;
 }
 
-const char *Pet::speciesCode() const
+uint8_t Pet::speciesSlot() const
 {
-    return st.species[0] == '\0' ? "dino" : st.species;
+    return parseAppearanceSlot(st.speciesSlotText);
 }
 
-const char *Pet::outfitCode() const
+uint8_t Pet::outfitSlot() const
 {
-    return st.outfit[0] == '\0' ? "base" : st.outfit;
+    return parseAppearanceSlot(st.outfitSlotText);
 }
 
 uint32_t Pet::stageDays() const
@@ -102,10 +117,8 @@ PetStatSnapshot Pet::statSnapshot() const
 {
     PetStatSnapshot snapshot = {};
     snapshot.stage_days = st.stage_days;
-    strncpy(snapshot.species, speciesCode(), sizeof(snapshot.species) - 1);
-    snapshot.species[sizeof(snapshot.species) - 1] = '\0';
-    strncpy(snapshot.outfit, outfitCode(), sizeof(snapshot.outfit) - 1);
-    snapshot.outfit[sizeof(snapshot.outfit) - 1] = '\0';
+    snapshot.speciesSlot = speciesSlot();
+    snapshot.outfitSlot = outfitSlot();
     for (size_t i = 0; i < PetStatSnapshot::kCustomStatCount; ++i)
         snapshot.customStats[i] = st.customStats[i];
     return snapshot;
@@ -147,23 +160,26 @@ bool Pet::changeCustomStatClamped(uint8_t index, int16_t delta, int16_t minValue
     return true;
 }
 
-bool Pet::setSpeciesCode(const char *code)
+bool Pet::setSpeciesSlot(uint8_t slot)
 {
-    char nextSpecies[sizeof(st.species)] = {};
-    if (!copyAppearanceCode(nextSpecies, sizeof(nextSpecies), code))
+    char text[sizeof(st.speciesSlotText)] = {};
+    if (!writeAppearanceSlot(text, sizeof(text), slot))
         return false;
-
-    if (strcmp(st.species, nextSpecies) != 0)
+    if (strcmp(st.speciesSlotText, text) != 0)
     {
-        strcpy(st.species, nextSpecies);
+        strcpy(st.speciesSlotText, text);
         st.stage_days = 0;
     }
     return true;
 }
 
-bool Pet::setOutfitCode(const char *code)
+bool Pet::setOutfitSlot(uint8_t slot)
 {
-    return copyAppearanceCode(st.outfit, sizeof(st.outfit), code);
+    char text[sizeof(st.outfitSlotText)] = {};
+    if (!writeAppearanceSlot(text, sizeof(text), slot))
+        return false;
+    strcpy(st.outfitSlotText, text);
+    return true;
 }
 
 bool Pet::isFirstLaunchComplete() const
@@ -204,10 +220,10 @@ bool Pet::restoreState(const PersistedPetState &state)
     st = state;
     st.version = kPetStateVersion;
     char appearanceCode[9] = {};
-    if (!copyAppearanceCode(appearanceCode, sizeof(appearanceCode), st.species))
-        strcpy(st.species, "dino");
-    if (!copyAppearanceCode(appearanceCode, sizeof(appearanceCode), st.outfit))
-        strcpy(st.outfit, "base");
+    if (!copyPersistedAppearanceText(appearanceCode, sizeof(appearanceCode), st.speciesSlotText))
+        strcpy(st.speciesSlotText, "dino");
+    if (!copyPersistedAppearanceText(appearanceCode, sizeof(appearanceCode), st.outfitSlotText))
+        strcpy(st.outfitSlotText, "base");
 
     return true;
 }

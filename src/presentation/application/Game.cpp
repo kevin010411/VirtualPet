@@ -1,6 +1,5 @@
 #include "presentation/application/Game.h"
 
-#include <string.h>
 #include "animation/application/AnimationController.h"
 #include "commands/application/CommandController.h"
 #include "commands/application/CommandExecutor.h"
@@ -56,25 +55,36 @@ bool Game::prepare_game()
     initialStateLoadingFailed = false;
     if (startupConfigError != nullptr)
         return false;
-    if (petBehaviorLoadingFailed || !loadPetBehaviorContract(animations->sdCard(), petBehaviorConfig))
+    AssetData::RuntimeManifest manifest = {};
+    if (petBehaviorLoadingFailed ||
+        !AssetData::loadRuntimeManifest(animations->sdCard(), manifest))
+    {
+        petBehaviorLoadingFailed = true;
+        petBehaviorLoaded = false;
+        startupConfigError = "asset_manifest.txt";
+        return false;
+    }
+
+    petBehaviorConfig = {};
+    petBehaviorConfig.assetManifest = manifest;
+    appearanceLoader.configureRuntimeContract(petBehaviorConfig);
+    AppearanceSelection initialAppearance = {};
+    if (!appearanceLoader.findInitialAppearance(initialAppearance) ||
+        !configureActiveAppearance(initialAppearance.speciesSlot, initialAppearance.outfitSlot))
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
         startupConfigError = "runtime_contract.txt";
         return false;
     }
-    petBehaviorLoaded = true;
-    appearanceLoader.configureRuntimeContract(petBehaviorConfig);
-    commandExecutor->configureRuntimeContract(petBehaviorConfig);
-    commands->configure(petBehaviorConfig);
     commands->resetSelection();
     layout->begin();
 
     dirtySelect = true;
     pendingEvolution = false;
     pendingFirstStartCompletion = false;
-    pendingEvolutionSpeciesCode[0] = '\0';
-    pendingEvolutionOutfitCode[0] = '\0';
+    pendingEvolutionSpeciesSlot = 0;
+    pendingEvolutionOutfitSlot = 0;
     last_tick_time = millis();
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
@@ -89,13 +99,18 @@ bool Game::prepare_game()
         return false;
     }
 
+    if (!configureActiveAppearance(petActions->speciesSlot(), petActions->outfitSlot()))
+    {
+        petBehaviorLoadingFailed = true;
+        petBehaviorLoaded = false;
+        startupConfigError = "runtime_contract.txt";
+        return false;
+    }
+
     // A successfully restored appearance is authoritative. Re-evaluating the
     // evolution table here can immediately replace a saved later-stage species
     // with an earlier wildcard/fallback match before the startup animation.
     // Evolution is still evaluated by handleEvolution() during normal ticks.
-    renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
-    // Animation setup reloads the manifest and selects the initial Idle
-    // variant, so it must run after the active appearance is known.
     animations->setup(petBehaviorConfig.idleAnimation);
 
     setupPrepared = true;
@@ -115,6 +130,12 @@ bool Game::finish_setup_game()
     }
 
     layout->drawAll();
+    if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+    {
+        flow.enterFatalError();
+        renderer.showResourceError();
+        return false;
+    }
 
     initialized = true;
     enterCommand();
@@ -125,6 +146,9 @@ void Game::loop_game()
 {
     if (!initialized)
         return;
+
+    if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+        flow.enterFatalError();
 
     if (flow.isFatalError())
     {
@@ -241,23 +265,61 @@ void Game::redrawAllNow()
 #endif
 }
 
-void Game::setRendererAssetAppearance(const char *speciesCode, const char *outfitCode)
+void Game::setRendererAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
     if (petBehaviorLoadingFailed)
     {
         renderer.showResourceError();
         return;
     }
-    if (!pet.setSpeciesCode(speciesCode) || !pet.setOutfitCode(outfitCode))
+    if (!configureActiveAppearance(speciesSlot, outfitSlot) ||
+        !pet.setSpeciesSlot(speciesSlot) || !pet.setOutfitSlot(outfitSlot))
     {
         initialized = false;
         renderer.showResourceError();
         return;
     }
 
-    renderer.setAssetAppearance(pet.speciesCode(), pet.outfitCode());
-    renderer.reloadManifest();
     refreshBaseAnimation();
+}
+
+bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
+{
+    char errorResource[20] = {};
+    if (!loadPetBehaviorContract(animations->sdCard(), speciesSlot, outfitSlot,
+                                 petBehaviorConfig, errorResource, sizeof(errorResource)))
+    {
+        renderer.recordAssetDataErrorResource(errorResource);
+        petBehaviorLoaded = false;
+        petBehaviorLoadingFailed = true;
+        flow.enterFatalError();
+        return false;
+    }
+    if (!renderer.configureAssetBundle(petBehaviorConfig.assetManifest.bundleId))
+    {
+        petBehaviorLoaded = false;
+        petBehaviorLoadingFailed = true;
+        flow.enterFatalError();
+        return false;
+    }
+
+    renderer.setAssetAppearance(speciesSlot, outfitSlot);
+    appearanceLoader.configureRuntimeContract(petBehaviorConfig);
+    if (!appearanceLoader.validateRuntimeContracts(pet.statSnapshot()))
+    {
+        renderer.recordAssetDataErrorResource(appearanceLoader.firstAssetDataErrorResource());
+        petBehaviorLoaded = false;
+        petBehaviorLoadingFailed = true;
+        flow.enterFatalError();
+        renderer.showResourceError(appearanceLoader.firstAssetDataErrorResource());
+        return false;
+    }
+    animations->configureRuntimeContract(petBehaviorConfig);
+    commandExecutor->configureRuntimeContract(petBehaviorConfig);
+    commands->configure(petBehaviorConfig);
+    layout->configureRuntimeContract(petBehaviorConfig);
+    petBehaviorLoaded = true;
+    return true;
 }
 
 bool Game::saveNow()
@@ -379,29 +441,36 @@ void Game::OnConfirmKey()
     {
         if (appearanceSelection->isSelectingSpecies())
         {
-            char selectedSpecies[9] = {};
-            char selectedOutfit[9] = {};
+            uint8_t selectedSpecies = 0;
+            uint8_t selectedOutfit = 0;
             const bool confirmed = appearanceSelection->onConfirmSpecies(
-                selectedSpecies,
-                sizeof(selectedSpecies),
-                selectedOutfit,
-                sizeof(selectedOutfit));
+                selectedSpecies, selectedOutfit);
             if (confirmed)
             {
-                petActions->applyAppearance(selectedSpecies, selectedOutfit);
-                refreshBaseAnimation();
+                if (configureActiveAppearance(selectedSpecies, selectedOutfit))
+                {
+                    petActions->applyAppearance(selectedSpecies, selectedOutfit);
+                    refreshBaseAnimation();
+                }
+                else
+                    renderer.showResourceError();
             }
             animations->requestFullRedraw();
             completeFirstLaunchIfNeeded(AppCommandId::ChangeSpecies);
             return;
         }
 
-        char selectedOutfit[9] = {};
-        const bool confirmed = appearanceSelection->onConfirm(selectedOutfit, sizeof(selectedOutfit));
+        uint8_t selectedOutfit = 0;
+        const bool confirmed = appearanceSelection->onConfirm(selectedOutfit);
         if (confirmed)
         {
-            petActions->applyAppearance(petActions->speciesCode(), selectedOutfit);
-            refreshBaseAnimation();
+            if (configureActiveAppearance(petActions->speciesSlot(), selectedOutfit))
+            {
+                petActions->applyAppearance(petActions->speciesSlot(), selectedOutfit);
+                refreshBaseAnimation();
+            }
+            else
+                renderer.showResourceError();
         }
         animations->requestFullRedraw();
         completeFirstLaunchIfNeeded(AppCommandId::ChangeOutfit);
@@ -437,7 +506,7 @@ void Game::OnConfirmKey()
             if (actionResult == PetBehaviorActionResult::AppliedAnimationMissing)
                 renderer.showResourceError();
             refreshBaseAnimation();
-            layout->enterAction(animations->currentAnimationId(), selectedSlot);
+            layout->enterAction(animations->currentPlaybackRole(), selectedSlot);
         }
         return;
     }
@@ -456,12 +525,20 @@ bool Game::resetPet()
 
     pendingEvolution = false;
     pendingFirstStartCompletion = false;
-    pendingEvolutionSpeciesCode[0] = '\0';
-    pendingEvolutionOutfitCode[0] = '\0';
+    pendingEvolutionSpeciesSlot = 0;
+    pendingEvolutionOutfitSlot = 0;
     petActions->resetFirstStartCompleted();
-    petActions->applyEvolutionTarget();
-    renderer.setAssetAppearance(petActions->speciesCode(), petActions->outfitCode());
-    renderer.reloadManifest();
+    AppearanceSelection evolution = {};
+    if (petActions->findEvolutionTarget(evolution))
+    {
+        if (!configureActiveAppearance(evolution.speciesSlot, evolution.outfitSlot))
+            return false;
+        petActions->applyAppearance(evolution.speciesSlot, evolution.outfitSlot);
+    }
+    else if (!configureActiveAppearance(petActions->speciesSlot(), petActions->outfitSlot()))
+    {
+        return false;
+    }
     animations->cancelAll();
 #if ENABLE_GUESS_GAME
     minigame->reset();
@@ -490,7 +567,7 @@ void Game::refreshBaseAnimation()
 void Game::syncActionLayoutWithPlayback()
 {
     if (flow.isCommand())
-        layout->updateAction(animations->currentAnimationId());
+        layout->updateAction(animations->currentPlaybackRole());
 }
 
 void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
@@ -498,14 +575,14 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
     if (!result.executed)
         return;
 
-    layout->enterAction(result.layoutId, selectedSlot);
+    layout->enterAction(result.layoutPlaybackRole, selectedSlot);
     if (result.resourceError)
         renderer.showResourceError();
 
 #if ENABLE_COMMAND_OUTFIT
     if (result.requestedOutfit)
     {
-        if (appearanceSelection->start(petActions->speciesCode(), petActions->outfitCode()))
+        if (appearanceSelection->start(petActions->speciesSlot(), petActions->outfitSlot()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
@@ -517,7 +594,7 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
 #if ENABLE_COMMAND_SPECIES
     if (result.requestedSpecies)
     {
-        if (appearanceSelection->startSpecies(petActions->speciesCode()))
+        if (appearanceSelection->startSpecies(petActions->speciesSlot()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
@@ -565,7 +642,11 @@ bool Game::loadInitialPetState(bool allowSavedState, bool showError)
 {
     if (allowSavedState && petStorage.load(pet, petBehaviorConfig.schemaFingerprint))
     {
-        return true;
+        OutfitPreview preview = {};
+        if (pet.speciesSlot() != 0 && pet.outfitSlot() != 0 &&
+            appearanceLoader.findOutfitPreview(
+                pet.speciesSlot(), pet.outfitSlot(), preview))
+            return true;
     }
 
     AppearanceSelection initialAppearance = {};
@@ -579,8 +660,8 @@ bool Game::loadInitialPetState(bool allowSavedState, bool showError)
     pet.setDefaultState();
     pet.setSchemaFingerprint(petBehaviorConfig.schemaFingerprint);
     petBehaviorRuntime->initializeStats();
-    const bool applied = pet.setSpeciesCode(initialAppearance.speciesCode) &&
-                         pet.setOutfitCode(initialAppearance.outfitCode);
+    const bool applied = pet.setSpeciesSlot(initialAppearance.speciesSlot) &&
+                         pet.setOutfitSlot(initialAppearance.outfitSlot);
     if (!applied && showError)
         renderer.showResourceError();
     return applied;
@@ -592,7 +673,7 @@ bool Game::startFirstLaunchRequiredCommand()
     switch (flow.firstLaunchRequiredCommand())
     {
     case AppCommandId::ChangeOutfit:
-        if (appearanceSelection->start(petActions->speciesCode(), petActions->outfitCode()))
+        if (appearanceSelection->start(petActions->speciesSlot(), petActions->outfitSlot()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
@@ -600,7 +681,7 @@ bool Game::startFirstLaunchRequiredCommand()
         }
         break;
     case AppCommandId::ChangeSpecies:
-        if (appearanceSelection->startSpecies(petActions->speciesCode()))
+        if (appearanceSelection->startSpecies(petActions->speciesSlot()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
@@ -653,10 +734,15 @@ bool Game::completePendingEvolutionIfReady()
     if (animations->isBusy())
         return false;
 
-    petActions->applyAppearance(pendingEvolutionSpeciesCode, pendingEvolutionOutfitCode);
+    if (!configureActiveAppearance(pendingEvolutionSpeciesSlot, pendingEvolutionOutfitSlot))
+    {
+        renderer.showResourceError();
+        return false;
+    }
+    petActions->applyAppearance(pendingEvolutionSpeciesSlot, pendingEvolutionOutfitSlot);
     pendingEvolution = false;
-    pendingEvolutionSpeciesCode[0] = '\0';
-    pendingEvolutionOutfitCode[0] = '\0';
+    pendingEvolutionSpeciesSlot = 0;
+    pendingEvolutionOutfitSlot = 0;
     // applyAppearance() can report persistence failure after it has already
     // changed the in-memory appearance and reloaded its manifest.  Always
     // hand rendering back to the current base animation so that the display
@@ -670,30 +756,43 @@ void Game::handleEvolution()
 {
     AppearanceSelection selection = {};
     if (!petActions->findEvolutionTarget(selection))
+    {
+        if (!appearanceLoader.lastContractLoadSucceeded())
+        {
+            petBehaviorLoaded = false;
+            petBehaviorLoadingFailed = true;
+            flow.enterFatalError();
+            renderer.showResourceError(appearanceLoader.firstAssetDataErrorResource());
+        }
         return;
+    }
 
     if (!beginEvolutionAnimation(selection))
-        petActions->applyAppearance(selection.speciesCode, selection.outfitCode);
+    {
+        if (configureActiveAppearance(selection.speciesSlot, selection.outfitSlot))
+            petActions->applyAppearance(selection.speciesSlot, selection.outfitSlot);
+        else
+            renderer.showResourceError();
+    }
 }
 
 bool Game::beginEvolutionAnimation(const AppearanceSelection &selection)
 {
-    if (!animations->hasAnimation(AnimationId::Evolution))
+    if (!animations->hasAnimation(selection.evolutionAnimation))
         return false;
 
-    strncpy(pendingEvolutionSpeciesCode, selection.speciesCode, sizeof(pendingEvolutionSpeciesCode) - 1);
-    pendingEvolutionSpeciesCode[sizeof(pendingEvolutionSpeciesCode) - 1] = '\0';
-    strncpy(pendingEvolutionOutfitCode, selection.outfitCode, sizeof(pendingEvolutionOutfitCode) - 1);
-    pendingEvolutionOutfitCode[sizeof(pendingEvolutionOutfitCode) - 1] = '\0';
+    pendingEvolutionSpeciesSlot = selection.speciesSlot;
+    pendingEvolutionOutfitSlot = selection.outfitSlot;
     pendingEvolution = true;
 
-    const Animation animation = Animation::complete(AnimationId::Evolution, 2);
+    const Animation animation = Animation::complete(
+        selection.evolutionAnimation, 2, FirmwarePlaybackRole::Evolution);
     const PlaybackResult replaceResult = animations->replace(AnimationSequence(&animation, 1));
     if (replaceResult != PlaybackResult::Accepted)
     {
         pendingEvolution = false;
-        pendingEvolutionSpeciesCode[0] = '\0';
-        pendingEvolutionOutfitCode[0] = '\0';
+        pendingEvolutionSpeciesSlot = 0;
+        pendingEvolutionOutfitSlot = 0;
         return false;
     }
     return true;
@@ -702,10 +801,10 @@ bool Game::beginEvolutionAnimation(const AppearanceSelection &selection)
 bool Game::beginStartupAnimation()
 {
 #if ENABLE_STARTUP_ANIMATION
-    const bool hasIntro = animations->hasAnimation(AnimationId::StartIntro);
-    const bool hasSpeciesStart = animations->hasAnimation(AnimationId::Start);
+    const bool hasIntro = animations->hasAnimation(FirmwarePlaybackRole::StartIntro);
+    const bool hasSpeciesStart = animations->hasAnimation(FirmwarePlaybackRole::Start);
     const bool needsFirstStart = ENABLE_FIRST_START_ANIMATION && !petActions->isFirstStartCompleted();
-    const bool hasFirstStart = animations->hasAnimation(AnimationId::FirstStart);
+    const bool hasFirstStart = animations->hasAnimation(FirmwarePlaybackRole::FirstStart);
     if (needsFirstStart && !hasFirstStart)
     {
         flow.requestStartup();
@@ -733,27 +832,27 @@ bool Game::beginStartupAnimation()
     {
         const unsigned long introDuration = max(
             gameTick,
-            static_cast<unsigned long>(animations->frameCountFor(AnimationId::StartIntro)) *
-                animations->frameIntervalFor(AnimationId::StartIntro));
-        sequence[sequenceCount++] = Animation(AnimationId::StartIntro, introDuration, true);
+            static_cast<unsigned long>(animations->frameCountFor(FirmwarePlaybackRole::StartIntro)) *
+                animations->frameIntervalFor(FirmwarePlaybackRole::StartIntro));
+        sequence[sequenceCount++] = Animation(FirmwarePlaybackRole::StartIntro, introDuration, true);
     }
 
     if (needsFirstStart)
     {
         const unsigned long firstStartDuration = max(
             gameTick,
-            static_cast<unsigned long>(animations->frameCountFor(AnimationId::FirstStart)) *
-                animations->frameIntervalFor(AnimationId::FirstStart));
-        sequence[sequenceCount++] = Animation(AnimationId::FirstStart, firstStartDuration, true);
+            static_cast<unsigned long>(animations->frameCountFor(FirmwarePlaybackRole::FirstStart)) *
+                animations->frameIntervalFor(FirmwarePlaybackRole::FirstStart));
+        sequence[sequenceCount++] = Animation(FirmwarePlaybackRole::FirstStart, firstStartDuration, true);
     }
 
     if (hasSpeciesStart)
     {
         const unsigned long startupDuration = max(
             gameTick,
-            static_cast<unsigned long>(animations->frameCountFor(AnimationId::Start)) *
-                animations->frameIntervalFor(AnimationId::Start));
-        sequence[sequenceCount++] = Animation(AnimationId::Start, startupDuration, true);
+            static_cast<unsigned long>(animations->frameCountFor(FirmwarePlaybackRole::Start)) *
+                animations->frameIntervalFor(FirmwarePlaybackRole::Start));
+        sequence[sequenceCount++] = Animation(FirmwarePlaybackRole::Start, startupDuration, true);
     }
 
     if (animations->replace(AnimationSequence(sequence, sequenceCount)) !=
@@ -782,7 +881,7 @@ void Game::completeFirstStartIfReady(const PlaybackTickResult &playbackResult)
         return;
 
     if (playbackResult.result == PlaybackResult::PlaybackFailed &&
-        playbackResult.animationId == AnimationId::FirstStart)
+        playbackResult.playbackRole == FirmwarePlaybackRole::FirstStart)
     {
         pendingFirstStartCompletion = false;
         animations->cancelAll();
@@ -790,7 +889,7 @@ void Game::completeFirstStartIfReady(const PlaybackTickResult &playbackResult)
         return;
     }
 
-    if (animations->hasAnimationPending(AnimationId::FirstStart))
+    if (animations->hasAnimationPending(FirmwarePlaybackRole::FirstStart))
         return;
 
     pendingFirstStartCompletion = false;
@@ -808,6 +907,14 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
 {
     if (playbackResult != PlaybackResult::PlaybackFailed)
         return;
+
+    if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+    {
+        animations->cancelAll();
+        flow.enterFatalError();
+        renderer.showResourceError();
+        return;
+    }
 
     if (pendingEvolution)
     {

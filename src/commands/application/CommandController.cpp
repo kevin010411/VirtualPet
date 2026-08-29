@@ -184,19 +184,19 @@ bool CommandController::canAlwaysExecute() const
 #if ENABLE_COMMAND_PREDICT
 bool CommandController::canPredict() const
 {
-    const AnimationId required[] = {
-        AnimationId::PredAnim,
-        AnimationId::Predict1,
-        AnimationId::Predict2,
-        AnimationId::Predict3,
-        AnimationId::Predict4,
-        AnimationId::Predict5,
-        AnimationId::Predict6,
-        AnimationId::Predict7,
-        AnimationId::Predict8,
-        AnimationId::Predict9,
-        AnimationId::Predict10,
-        AnimationId::Predict11};
+    const FirmwarePlaybackRole required[] = {
+        FirmwarePlaybackRole::PredAnim,
+        FirmwarePlaybackRole::Predict1,
+        FirmwarePlaybackRole::Predict2,
+        FirmwarePlaybackRole::Predict3,
+        FirmwarePlaybackRole::Predict4,
+        FirmwarePlaybackRole::Predict5,
+        FirmwarePlaybackRole::Predict6,
+        FirmwarePlaybackRole::Predict7,
+        FirmwarePlaybackRole::Predict8,
+        FirmwarePlaybackRole::Predict9,
+        FirmwarePlaybackRole::Predict10,
+        FirmwarePlaybackRole::Predict11};
     return hasAnimations(required, sizeof(required) / sizeof(required[0]));
 }
 #endif
@@ -206,7 +206,7 @@ bool CommandController::canStatus() const
     return host.commandCanStatus();
 }
 
-bool CommandController::hasAnimations(const AnimationId *ids, size_t count) const
+bool CommandController::hasAnimations(const FirmwarePlaybackRole *ids, size_t count) const
 {
     if (ids == nullptr)
         return false;

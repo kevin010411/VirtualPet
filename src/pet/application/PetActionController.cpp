@@ -21,8 +21,8 @@ bool PetActionController::loadOrInitial(const AppearanceSelection &initialAppear
     {
         pet.setDefaultState();
         pet.setSchemaFingerprint(schemaFingerprint);
-        pet.setSpeciesCode(initialAppearance.speciesCode);
-        pet.setOutfitCode(initialAppearance.outfitCode);
+        pet.setSpeciesSlot(initialAppearance.speciesSlot);
+        pet.setOutfitSlot(initialAppearance.outfitSlot);
     }
     return loaded;
 }
@@ -40,7 +40,7 @@ bool PetActionController::saveNow()
         saved ? "OK" : "FAIL",
         petStorage.lastSaveSlot(),
         static_cast<unsigned long>(petStorage.lastSaveSequence()));
-    snprintf(detail, sizeof(detail), "%s/%s", pet.speciesCode(), pet.outfitCode());
+    snprintf(detail, sizeof(detail), "%u/%u", pet.speciesSlot(), pet.outfitSlot());
     renderer.debugDisplay().showMessage(title, detail);
 #endif
     if (saved)
@@ -79,7 +79,7 @@ bool PetActionController::findEvolutionTarget(AppearanceSelection &selection) co
     if (!appearanceLoader.findEvolutionTarget(pet.statSnapshot(), selection))
         return false;
 
-    return strcmp(pet.speciesCode(), selection.speciesCode) != 0;
+    return pet.speciesSlot() != selection.speciesSlot;
 }
 
 bool PetActionController::applyEvolutionTarget()
@@ -88,16 +88,15 @@ bool PetActionController::applyEvolutionTarget()
     if (!findEvolutionTarget(selection))
         return false;
 
-    return applyAppearance(selection.speciesCode, selection.outfitCode);
+    return applyAppearance(selection.speciesSlot, selection.outfitSlot);
 }
 
-bool PetActionController::applyAppearance(const char *speciesCode, const char *outfitCode)
+bool PetActionController::applyAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
-    if (!pet.setSpeciesCode(speciesCode) || !pet.setOutfitCode(outfitCode))
+    if (!pet.setSpeciesSlot(speciesSlot) || !pet.setOutfitSlot(outfitSlot))
         return false;
 
-    renderer.setAssetAppearance(pet.speciesCode(), pet.outfitCode());
-    renderer.reloadManifest();
+    renderer.setAssetAppearance(pet.speciesSlot(), pet.outfitSlot());
     return saveNow();
 }
 
@@ -151,14 +150,14 @@ void PetActionController::resetFirstStartCompleted()
     pet.resetFirstStartCompleted();
 }
 
-const char *PetActionController::speciesCode() const
+uint8_t PetActionController::speciesSlot() const
 {
-    return pet.speciesCode();
+    return pet.speciesSlot();
 }
 
-const char *PetActionController::outfitCode() const
+uint8_t PetActionController::outfitSlot() const
 {
-    return pet.outfitCode();
+    return pet.outfitSlot();
 }
 
 PetStatSnapshot PetActionController::statSnapshot() const

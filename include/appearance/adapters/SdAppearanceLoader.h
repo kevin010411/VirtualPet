@@ -11,14 +11,22 @@ public:
     explicit SdAppearanceLoader(SdFat *refSd);
 
     void configureRuntimeContract(const PetBehaviorConfig &config) override;
+    bool validateRuntimeContracts(const PetStatSnapshot &stats) override;
+    bool lastContractLoadSucceeded() const override;
+    const char *firstAssetDataErrorResource() const override;
     bool findInitialAppearance(AppearanceSelection &selection) override;
     bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) override;
-    bool loadSpecies(char species[][9], size_t maxSpecies, size_t &speciesCount) override;
-    bool loadOutfits(const char *speciesCode, char outfits[][9], size_t maxOutfits, size_t &outfitCount) override;
-    bool findOutfitPreview(const char *speciesCode, const char *outfitCode, OutfitPreview &preview) override;
+    bool loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount) override;
+    bool loadOutfits(uint8_t speciesSlot, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount) override;
+    bool findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, OutfitPreview &preview) override;
 private:
-    ActivePetBehaviorStatSlots evolutionStatSlots;
     SdFat *sd;
+    uint8_t verificationScratch[AssetData::kVerificationScratchBytes] = {};
+    BundleReader bundleReader;
+    ActivePetBehaviorStatSlots evolutionStatSlots;
+    AssetData::RuntimeManifest assetManifest;
+    bool lastContractSucceeded = true;
+    char contractErrorResource[20] = {};
 };
 
 #endif // SD_APPEARANCE_LOADER_H

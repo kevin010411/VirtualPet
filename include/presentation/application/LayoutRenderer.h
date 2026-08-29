@@ -6,17 +6,19 @@
 
 class CommandController;
 class Renderer;
+struct PetBehaviorConfig;
 
 class LayoutRenderer
 {
 public:
     LayoutRenderer(Renderer &renderer, CommandController &commands);
 
+    void configureRuntimeContract(const PetBehaviorConfig &config);
     void begin();
     void drawAll();
     void drawSelection();
-    bool enterAction(AnimationId id, int activeSlot);
-    bool updateAction(AnimationId id);
+    bool enterAction(FirmwarePlaybackRole id, int activeSlot);
+    bool updateAction(FirmwarePlaybackRole id);
     bool endAction();
     bool isActionActive() const;
 
@@ -27,15 +29,14 @@ private:
 
     Renderer &renderer;
     CommandController &commands;
-    bool actionLayouts[kAnimationIdCount] = {};
+    const PetBehaviorConfig *runtimeContract = nullptr;
     bool actionMode = false;
-    AnimationId activeAction = AnimationId::None;
+    FirmwarePlaybackRole activeAction = FirmwarePlaybackRole::None;
     int activeActionSlot = -1;
 
-    void loadActionLayouts();
     bool drawSlot(int slot, bool selected);
-    bool drawSlotFromPath(int slot, const char *path);
-    bool hasActionLayout(AnimationId id) const;
+    bool hasActionLayout(FirmwarePlaybackRole id) const;
+    uint8_t layoutVersion(FirmwarePlaybackRole id) const;
     static int slotX(int slot);
     static int slotY(int slot);
 };

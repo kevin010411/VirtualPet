@@ -261,8 +261,8 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
 }
 #endif
 
-const char *resolvePetBehaviorBaseAnimation(const PetBehaviorConfig &config,
-                                            const PetBehaviorStatValues &state)
+AssetData::AnimationRef resolvePetBehaviorBaseAnimation(const PetBehaviorConfig &config,
+                                                        const PetBehaviorStatValues &state)
 {
     for (uint8_t index = 0; index < config.idleTriggerCount; ++index)
     {

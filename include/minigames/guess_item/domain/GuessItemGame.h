@@ -41,8 +41,8 @@ public:
     virtual PlaybackResult replace(const AnimationSequence &sequence) = 0;
     virtual void cancelPlayback() = 0;
     virtual bool isPlaybackBusy() const = 0;
-    virtual bool hasAnimation(AnimationId id) const = 0;
-    virtual bool hasAnimationPending(AnimationId id) const = 0;
+    virtual bool hasAnimation(FirmwarePlaybackRole id) const = 0;
+    virtual bool hasAnimationPending(FirmwarePlaybackRole id) const = 0;
     virtual void settleOutcome(GuessItemOutcome outcome) = 0;
 };
 
@@ -70,7 +70,7 @@ private:
     int correctCount;
     int wrongCount;
     GuessItemSide itemSide;
-    AnimationId promptAnimationId;
+    FirmwarePlaybackRole promptPlaybackRole;
     unsigned long lastMoveTime = 0;
 };
 

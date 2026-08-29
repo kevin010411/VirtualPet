@@ -33,40 +33,14 @@ PlaybackResult resolveActionAnimation(const PetBehaviorActionPlayback &playback,
                                       Renderer &renderer,
                                       Animation &animation)
 {
-    if (playback.animation[0] == '\0' || playback.playbackCount == 0)
+    if (!playback.animation.valid() || playback.playbackCount == 0)
         return PlaybackResult::PlaybackFailed;
-
-    const char *selectedAnimation = playback.animation;
-    const uint8_t variantCount = renderer.variantCountFor(playback.animation);
-    if (variantCount > 0)
-    {
-        selectedAnimation = renderer.variantNameFor(
-            playback.animation,
-            static_cast<uint8_t>(random(variantCount)));
-        if (selectedAnimation == nullptr || renderer.frameCountForName(selectedAnimation) == 0)
-            return PlaybackResult::AnimationMissing;
-
-        animation = Animation::complete(selectedAnimation, playback.playbackCount);
-        return animation.namedAnimation[0] == '\0'
-                   ? PlaybackResult::PlaybackFailed
-                   : PlaybackResult::Accepted;
-    }
-
-    const AnimationId animationId = animationIdFromName(playback.animation);
-    if (animationId != AnimationId::None)
-    {
-        if (renderer.frameCountFor(animationId) == 0)
-            return PlaybackResult::AnimationMissing;
-        animation = Animation::complete(animationId, playback.playbackCount);
-        return PlaybackResult::Accepted;
-    }
-
-    if (renderer.frameCountForName(playback.animation) == 0)
+    const uint8_t versionCount = renderer.versionCountFor(playback.animation);
+    if (versionCount == 0)
         return PlaybackResult::AnimationMissing;
     animation = Animation::complete(playback.animation, playback.playbackCount);
-    return animation.namedAnimation[0] == '\0'
-               ? PlaybackResult::PlaybackFailed
-               : PlaybackResult::Accepted;
+    animation.versionIndex = versionCount == 1 ? 0 : static_cast<uint8_t>(random(versionCount));
+    return PlaybackResult::Accepted;
 }
 } // namespace
 
@@ -139,7 +113,7 @@ bool PetBehaviorRuntime::applyGuessOutcome(PetBehaviorGuessOutcome outcome)
 }
 #endif
 
-const char *PetBehaviorRuntime::baseAnimation() const
+AssetData::AnimationRef PetBehaviorRuntime::baseAnimation() const
 {
     const PetBehaviorStatValues state = readStats(petActions);
     return resolvePetBehaviorBaseAnimation(config, state);

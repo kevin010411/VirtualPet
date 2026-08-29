@@ -36,7 +36,7 @@ public:
     void loop_game();
     void requestFullRedraw();
     void redrawAllNow();
-    void setRendererAssetAppearance(const char *speciesCode, const char *outfitCode);
+    void setRendererAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     bool saveNow();
     bool startStartupAnimation();
     bool hasTransientAnimation() const;
@@ -81,9 +81,10 @@ private:
     bool setupPrepared = false;
     bool initialStateLoadingFailed = false;
     const char *startupConfigError = nullptr;
-    char pendingEvolutionSpeciesCode[9] = {};
-    char pendingEvolutionOutfitCode[9] = {};
+    uint8_t pendingEvolutionSpeciesSlot = 0;
+    uint8_t pendingEvolutionOutfitSlot = 0;
 
+    bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     void refreshBaseAnimation();
     void syncActionLayoutWithPlayback();
     void handleCommandResult(const CommandResult &result, int selectedSlot);

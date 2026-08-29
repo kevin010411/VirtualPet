@@ -7,34 +7,33 @@
 #include "animation/domain/Animation.h"
 
 class Renderer;
+struct PetBehaviorConfig;
 
 class AnimationController
 {
 public:
     explicit AnimationController(Renderer &renderer);
 
-    void setup(AnimationId baseAnimation);
-    void setup(const char *baseAnimation);
-    void setBaseAnimation(AnimationId baseAnimation);
-    void setBaseAnimation(const char *baseAnimation);
-    AnimationId baseAnimation() const;
-    bool hasAnimation(AnimationId id) const;
-    bool hasNamedAnimation(const char *name) const;
-    bool hasActionAnimation(AnimationId id) const;
-    bool hasAnimations(const AnimationId *ids, size_t count) const;
+    void configureRuntimeContract(const PetBehaviorConfig &config);
+    void setup(const AssetData::AnimationRef &baseAnimation);
+    void setBaseAnimation(const AssetData::AnimationRef &baseAnimation);
+    AssetData::AnimationRef baseAnimation() const;
+    bool hasAnimation(FirmwarePlaybackRole id) const;
+    bool hasAnimation(const AssetData::AnimationRef &animation) const;
+    bool hasActionAnimation(FirmwarePlaybackRole id) const;
+    bool hasAnimations(const FirmwarePlaybackRole *ids, size_t count) const;
     PlaybackResult replace(const AnimationSequence &sequence);
     void cancelAll();
     bool isBusy() const;
-    bool hasAnimationPending(AnimationId id) const;
-    AnimationId currentAnimationId() const;
+    bool hasAnimationPending(FirmwarePlaybackRole id) const;
+    FirmwarePlaybackRole currentPlaybackRole() const;
     void requestFullRedraw();
     PlaybackTickResult tick(unsigned long now);
     void startBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
-    unsigned long frameIntervalFor(AnimationId id) const;
-    unsigned long frameIntervalForName(const char *name) const;
-    uint16_t frameCountFor(AnimationId id) const;
-    uint16_t frameCountForName(const char *name) const;
+    unsigned long frameIntervalFor(FirmwarePlaybackRole id) const;
+    uint16_t frameCountFor(FirmwarePlaybackRole id) const;
+    uint16_t frameCountFor(const AssetData::AnimationRef &animation) const;
     SdFat *sdCard() const;
 
 private:
@@ -45,10 +44,10 @@ private:
     Animation animationQueue[kMaxQueuedAnimations] = {};
     uint8_t animationQueueCount = 0;
     Animation activeAnimation = {};
+    const PetBehaviorConfig *runtimeContract = nullptr;
     bool hasActiveAnimation = false;
     uint8_t activeRepeatsRemaining = 0;
-    AnimationId baseAnimationId = AnimationId::Idle;
-    bool baseUsesNamedAnimation = false;
+    AssetData::AnimationRef baseAnimationRef = {};
     BaseAnimationRotation baseRotation;
     long displayDuration = 0;
     bool dirtyAnimation = true;
@@ -56,11 +55,11 @@ private:
     unsigned long frameInterval = frameIntervalSlow;
     unsigned long lastFrameTime = 0;
     unsigned long lastPlaybackUpdateTime = 0;
-    AnimationId showAnimationId = AnimationId::None;
-    bool showUsesNamedAnimation = false;
-    char showNamedAnimation[32] = {};
+    FirmwarePlaybackRole showPlaybackRole = FirmwarePlaybackRole::None;
+    AssetData::AnimationRef showAnimation = {};
+    uint8_t showVersionIndex = 0;
     bool playbackFailedThisTick = false;
-    AnimationId playbackFailedAnimationIdThisTick = AnimationId::None;
+    FirmwarePlaybackRole playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
 
     void resetPlaybackState();
     unsigned long completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const;
@@ -70,7 +69,8 @@ private:
     void tryStartNextAnimation();
     unsigned long resolvedDuration(const Animation &animation) const;
     PlaybackResult validate(const Animation &animation) const;
-    bool hasActionAnimation(const char *baseName) const;
+    AssetData::AnimationRef systemAnimation(FirmwarePlaybackRole id) const;
+    AssetData::AnimationRef resolvedAnimation(const Animation &animation) const;
 };
 
 #endif // ANIMATION_CONTROLLER_H

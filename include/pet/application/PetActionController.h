@@ -23,7 +23,7 @@ public:
     bool commitPetDay(const int16_t *customStats, size_t customStatCount);
     bool findEvolutionTarget(AppearanceSelection &selection) const;
     bool applyEvolutionTarget();
-    bool applyAppearance(const char *speciesCode, const char *outfitCode);
+    bool applyAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
 
     int16_t customStat(uint8_t index) const;
     bool setCustomStat(uint8_t index, int16_t value);
@@ -37,8 +37,8 @@ public:
     void markFirstStartCompleted();
     void resetFirstStartCompleted();
 
-    const char *speciesCode() const;
-    const char *outfitCode() const;
+    uint8_t speciesSlot() const;
+    uint8_t outfitSlot() const;
     PetStatSnapshot statSnapshot() const;
 
 private:

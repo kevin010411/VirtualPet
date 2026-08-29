@@ -12,7 +12,7 @@ struct CommandResult
 {
     bool executed = false;
     AppCommandId commandId = AppCommandId::None;
-    AnimationId layoutId = AnimationId::None;
+    FirmwarePlaybackRole layoutPlaybackRole = FirmwarePlaybackRole::None;
     bool requestedOutfit = false;
     bool requestedSpecies = false;
     bool requestedMinigame = false;
@@ -41,7 +41,7 @@ private:
 #endif
 
 #if ENABLE_COMMAND_PREDICT
-    static AnimationId fortuneToAnimationId(int fortuneIndex);
+    static FirmwarePlaybackRole fortuneToPlaybackRole(int fortuneIndex);
 #endif
     void queueStatusAnimation();
     bool queueStatusSetsAnimation();
@@ -49,7 +49,7 @@ private:
     bool canPlayGuessItemGame() const;
 #endif
 
-    bool commandHasAnimation(AnimationId id) const override;
+    bool commandHasAnimation(FirmwarePlaybackRole id) const override;
     bool commandCanStatus() const override;
 #if ENABLE_COMMAND_PREDICT
     void commandPredict() override;

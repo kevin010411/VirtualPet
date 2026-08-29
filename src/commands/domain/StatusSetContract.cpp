@@ -1,20 +1,7 @@
 #include "commands/domain/StatusSetContract.h"
 
-#include <string.h>
-
 namespace
 {
-bool copyText(char *destination, size_t destinationSize, const char *source)
-{
-    if (destination == nullptr || destinationSize == 0 || source == nullptr || source[0] == '\0')
-        return false;
-    const size_t length = strlen(source);
-    if (length >= destinationSize)
-        return false;
-    memcpy(destination, source, length + 1);
-    return true;
-}
-
 uint8_t levelForValue(int32_t value, int32_t minValue, int32_t maxValue, uint8_t levels)
 {
     if (levels <= 1 || value <= minValue)
@@ -35,12 +22,11 @@ bool resolveStatusSet(
     StatusSetResolution &resolution)
 {
     resolution = {};
-    if (!copyText(resolution.animation, sizeof(resolution.animation), set.animation))
+    if (!set.animation.valid())
         return false;
+    resolution.animation = set.animation;
     if (set.conditionCount == 0)
     {
-        if (strcmp(set.animation, "Status") != 0)
-            return false;
         resolution.playOnce = true;
         return true;
     }

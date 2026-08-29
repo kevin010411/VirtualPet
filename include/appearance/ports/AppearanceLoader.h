@@ -4,21 +4,22 @@
 #include <Arduino.h>
 #include <stddef.h>
 #include "pet/domain/Pet.h"
+#include "shared/assets/AssetRuntimeContract.h"
 
 struct PetBehaviorConfig;
 
 struct AppearanceSelection
 {
-    char speciesCode[9];
-    char outfitCode[9];
+    uint8_t speciesSlot;
+    uint8_t outfitSlot;
+    AssetData::AnimationRef evolutionAnimation;
 };
 
 struct OutfitPreview
 {
-    char outfitCode[9];
-    char path[96];
-    uint16_t width;
-    uint16_t height;
+    uint8_t speciesSlot;
+    uint8_t outfitSlot;
+    AssetData::AnimationRef animation;
     uint16_t frameCount;
     uint16_t frameIntervalMs;
 };
@@ -28,11 +29,14 @@ class AppearanceLoader
 public:
     virtual ~AppearanceLoader() = default;
     virtual void configureRuntimeContract(const PetBehaviorConfig &) {}
+    virtual bool validateRuntimeContracts(const PetStatSnapshot &stats) = 0;
+    virtual bool lastContractLoadSucceeded() const = 0;
+    virtual const char *firstAssetDataErrorResource() const = 0;
     virtual bool findInitialAppearance(AppearanceSelection &selection) = 0;
     virtual bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) = 0;
-    virtual bool loadSpecies(char species[][9], size_t maxSpecies, size_t &speciesCount) = 0;
-    virtual bool loadOutfits(const char *speciesCode, char outfits[][9], size_t maxOutfits, size_t &outfitCount) = 0;
-    virtual bool findOutfitPreview(const char *speciesCode, const char *outfitCode, OutfitPreview &preview) = 0;
+    virtual bool loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount) = 0;
+    virtual bool loadOutfits(uint8_t speciesSlot, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount) = 0;
+    virtual bool findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, OutfitPreview &preview) = 0;
 };
 
 #endif // APPEARANCE_LOADER_H

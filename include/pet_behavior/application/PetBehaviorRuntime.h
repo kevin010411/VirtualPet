@@ -31,7 +31,7 @@ public:
 #if ENABLE_GUESS_GAME
     bool applyGuessOutcome(PetBehaviorGuessOutcome outcome);
 #endif
-    const char *baseAnimation() const;
+    AssetData::AnimationRef baseAnimation() const;
 
 private:
     const PetBehaviorConfig &config;

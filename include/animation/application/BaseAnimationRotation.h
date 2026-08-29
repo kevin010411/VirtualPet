@@ -2,6 +2,7 @@
 #define BASE_ANIMATION_ROTATION_H
 
 #include <Arduino.h>
+#include "shared/assets/AssetRuntimeContract.h"
 
 class Renderer;
 
@@ -9,22 +10,20 @@ class BaseAnimationRotation
 {
 public:
     void reset();
-    bool setBaseAnimation(const char *baseAnimation, const Renderer &renderer);
-    bool onLoopCompletedAndRotateIfDue(const Renderer &renderer);
-    const char *selectedAnimation() const;
+    bool setBaseAnimation(const AssetData::AnimationRef &baseAnimation, Renderer &renderer);
+    bool onLoopCompletedAndRotateIfDue(Renderer &renderer);
+    AssetData::AnimationRef selectedAnimation() const;
+    uint8_t selectedVersion() const;
 
 private:
     static constexpr uint8_t kLoopsPerSelection = 10;
-    static constexpr size_t kAnimationNameSize = 32;
-
-    char baseAnimationName[kAnimationNameSize] = {};
-    char selectedAnimationName[kAnimationNameSize] = {};
+    AssetData::AnimationRef baseAnimation = {};
+    uint8_t selectedVersionIndex = 0;
     uint8_t completedLoops = 0;
 
-    bool selectVersion(const char *baseAnimation,
-                       const Renderer &renderer,
-                       char *destination,
-                       size_t destinationSize) const;
+    bool selectVersion(const AssetData::AnimationRef &animation,
+                       Renderer &renderer,
+                       uint8_t &versionIndex) const;
 };
 
 #endif // BASE_ANIMATION_ROTATION_H

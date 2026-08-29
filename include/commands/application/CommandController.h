@@ -23,7 +23,7 @@ class CommandHost
 public:
     virtual ~CommandHost() = default;
 
-    virtual bool commandHasAnimation(AnimationId id) const = 0;
+    virtual bool commandHasAnimation(FirmwarePlaybackRole id) const = 0;
     virtual bool commandCanStatus() const = 0;
 
 #if ENABLE_COMMAND_PREDICT
@@ -88,7 +88,7 @@ private:
     bool canPredict() const;
 #endif
     bool canStatus() const;
-    bool hasAnimations(const AnimationId *ids, size_t count) const;
+    bool hasAnimations(const FirmwarePlaybackRole *ids, size_t count) const;
 
 #if ENABLE_COMMAND_PREDICT
     void executePredict();

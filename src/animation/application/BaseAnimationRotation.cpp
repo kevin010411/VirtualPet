@@ -3,68 +3,61 @@
 #include <string.h>
 #include "presentation/adapters/rendering/Renderer.h"
 
+
 void BaseAnimationRotation::reset()
 {
-    baseAnimationName[0] = '\0';
-    selectedAnimationName[0] = '\0';
+    baseAnimation = {};
+    selectedVersionIndex = 0;
     completedLoops = 0;
 }
 
-bool BaseAnimationRotation::setBaseAnimation(const char *baseAnimation, const Renderer &renderer)
+bool BaseAnimationRotation::setBaseAnimation(const AssetData::AnimationRef &animation,
+                                             Renderer &renderer)
 {
-    if (baseAnimation == nullptr || baseAnimation[0] == '\0' ||
-        strlen(baseAnimation) >= sizeof(baseAnimationName) ||
-        strcmp(baseAnimationName, baseAnimation) == 0)
-    {
+    if (!animation.valid() ||
+        (baseAnimation.speciesSlot == animation.speciesSlot &&
+         baseAnimation.outfitSlot == animation.outfitSlot &&
+         baseAnimation.animationId == animation.animationId))
         return false;
-    }
-
-    char selected[kAnimationNameSize] = {};
-    if (!selectVersion(baseAnimation, renderer, selected, sizeof(selected)))
+    uint8_t version = 0;
+    if (!selectVersion(animation, renderer, version))
         return false;
-
-    strncpy(baseAnimationName, baseAnimation, sizeof(baseAnimationName) - 1);
-    baseAnimationName[sizeof(baseAnimationName) - 1] = '\0';
-    strncpy(selectedAnimationName, selected, sizeof(selectedAnimationName) - 1);
-    selectedAnimationName[sizeof(selectedAnimationName) - 1] = '\0';
+    baseAnimation = animation;
+    selectedVersionIndex = version;
     completedLoops = 0;
     return true;
 }
 
-bool BaseAnimationRotation::onLoopCompletedAndRotateIfDue(const Renderer &renderer)
+bool BaseAnimationRotation::onLoopCompletedAndRotateIfDue(Renderer &renderer)
 {
-    if (baseAnimationName[0] == '\0' || ++completedLoops < kLoopsPerSelection)
+    if (!baseAnimation.valid() || ++completedLoops < kLoopsPerSelection)
         return false;
-
     completedLoops = 0;
-    char selected[kAnimationNameSize] = {};
-    if (!selectVersion(baseAnimationName, renderer, selected, sizeof(selected)))
+    uint8_t nextVersion = 0;
+    if (!selectVersion(baseAnimation, renderer, nextVersion))
         return false;
-
-    const bool selectionChanged = strcmp(selectedAnimationName, selected) != 0;
-    strncpy(selectedAnimationName, selected, sizeof(selectedAnimationName) - 1);
-    selectedAnimationName[sizeof(selectedAnimationName) - 1] = '\0';
-    return selectionChanged;
+    const bool changed = nextVersion != selectedVersionIndex;
+    selectedVersionIndex = nextVersion;
+    return changed;
 }
 
-const char *BaseAnimationRotation::selectedAnimation() const
+AssetData::AnimationRef BaseAnimationRotation::selectedAnimation() const
 {
-    return selectedAnimationName;
+    return baseAnimation;
 }
 
-bool BaseAnimationRotation::selectVersion(const char *baseAnimation,
-                                          const Renderer &renderer,
-                                          char *destination,
-                                          size_t destinationSize) const
+uint8_t BaseAnimationRotation::selectedVersion() const
 {
-    const uint8_t variantCount = renderer.variantCountFor(baseAnimation);
-    const char *selected = variantCount > 0
-                               ? renderer.variantNameFor(baseAnimation, static_cast<uint8_t>(random(variantCount)))
-                               : baseAnimation;
-    if (selected == nullptr || selected[0] == '\0' || strlen(selected) >= destinationSize)
-        return false;
+    return selectedVersionIndex;
+}
 
-    strncpy(destination, selected, destinationSize - 1);
-    destination[destinationSize - 1] = '\0';
+bool BaseAnimationRotation::selectVersion(const AssetData::AnimationRef &animation,
+                                          Renderer &renderer,
+                                          uint8_t &versionIndex) const
+{
+    const uint8_t count = renderer.versionCountFor(animation);
+    if (count == 0)
+        return false;
+    versionIndex = count == 1 ? 0 : static_cast<uint8_t>(random(count));
     return true;
 }

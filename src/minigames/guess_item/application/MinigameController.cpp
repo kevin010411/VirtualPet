@@ -66,12 +66,12 @@ bool MinigameController::isPlaybackBusy() const
     return animations.isBusy();
 }
 
-bool MinigameController::hasAnimation(AnimationId id) const
+bool MinigameController::hasAnimation(FirmwarePlaybackRole id) const
 {
     return animations.hasAnimation(id);
 }
 
-bool MinigameController::hasAnimationPending(AnimationId id) const
+bool MinigameController::hasAnimationPending(FirmwarePlaybackRole id) const
 {
     return animations.hasAnimationPending(id);
 }

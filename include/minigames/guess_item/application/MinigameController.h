@@ -32,8 +32,8 @@ private:
     PlaybackResult replace(const AnimationSequence &sequence) override;
     void cancelPlayback() override;
     bool isPlaybackBusy() const override;
-    bool hasAnimation(AnimationId id) const override;
-    bool hasAnimationPending(AnimationId id) const override;
+    bool hasAnimation(FirmwarePlaybackRole id) const override;
+    bool hasAnimationPending(FirmwarePlaybackRole id) const override;
     void settleOutcome(GuessItemOutcome outcome) override;
 };
 

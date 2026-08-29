@@ -10,21 +10,20 @@ AppearanceSelectionController::AppearanceSelectionController(Renderer &rendererR
 {
 }
 
-bool AppearanceSelectionController::start(const char *sourceSpeciesCode, const char *currentOutfitCode)
+bool AppearanceSelectionController::start(uint8_t sourceSpeciesSlot, uint8_t currentOutfitSlot)
 {
     selectingSpecies = false;
-    strncpy(speciesCode, sourceSpeciesCode, sizeof(speciesCode) - 1);
-    speciesCode[sizeof(speciesCode) - 1] = '\0';
+    speciesSlot = sourceSpeciesSlot;
     outfitOptionCount = 0;
     selectedOutfitIndex = 0;
     hasSelectedOutfitPreview = false;
 
-    if (!appearanceLoader.loadOutfits(speciesCode, outfitOptions, maxOutfitOptions, outfitOptionCount))
+    if (!appearanceLoader.loadOutfits(speciesSlot, outfitOptions, maxOutfitOptions, outfitOptionCount))
         return false;
 
     for (size_t i = 0; i < outfitOptionCount; ++i)
     {
-        if (strcmp(outfitOptions[i], currentOutfitCode) == 0)
+        if (outfitOptions[i] == currentOutfitSlot)
         {
             selectedOutfitIndex = i;
             break;
@@ -42,7 +41,7 @@ bool AppearanceSelectionController::start(const char *sourceSpeciesCode, const c
     return true;
 }
 
-bool AppearanceSelectionController::startSpecies(const char *currentSpeciesCode)
+bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot)
 {
     selectingOutfit = false;
     speciesOptionCount = 0;
@@ -55,9 +54,9 @@ bool AppearanceSelectionController::startSpecies(const char *currentSpeciesCode)
     for (size_t i = 0; i < speciesOptionCount; ++i)
     {
         size_t defaultOutfitCount = 0;
-        speciesDefaultOutfits[i][0] = '\0';
+        speciesDefaultOutfits[i] = 0;
         appearanceLoader.loadOutfits(speciesOptions[i], &speciesDefaultOutfits[i], 1, defaultOutfitCount);
-        if (strcmp(speciesOptions[i], currentSpeciesCode) == 0)
+        if (speciesOptions[i] == currentSpeciesSlot)
             selectedSpeciesIndex = i;
     }
 
@@ -92,36 +91,32 @@ void AppearanceSelectionController::onRight()
     changeSelection(1);
 }
 
-bool AppearanceSelectionController::onConfirm(char *selectedOutfit, size_t selectedOutfitSize)
+bool AppearanceSelectionController::onConfirm(uint8_t &selectedOutfitSlot)
 {
-    if (selectedOutfit == nullptr || selectedOutfitSize == 0 || outfitOptionCount == 0 || selectedOutfitIndex >= outfitOptionCount)
+    if (outfitOptionCount == 0 || selectedOutfitIndex >= outfitOptionCount)
     {
         exit();
         return false;
     }
 
-    strncpy(selectedOutfit, outfitOptions[selectedOutfitIndex], selectedOutfitSize - 1);
-    selectedOutfit[selectedOutfitSize - 1] = '\0';
+    selectedOutfitSlot = outfitOptions[selectedOutfitIndex];
     playSelectedChooseAnimation();
     exit();
     return true;
 }
 
-bool AppearanceSelectionController::onConfirmSpecies(char *selectedSpecies, size_t selectedSpeciesSize, char *selectedOutfit, size_t selectedOutfitSize)
+bool AppearanceSelectionController::onConfirmSpecies(uint8_t &selectedSpeciesSlot,
+                                                     uint8_t &selectedOutfitSlot)
 {
-    if (selectedSpecies == nullptr || selectedSpeciesSize == 0 ||
-        selectedOutfit == nullptr || selectedOutfitSize == 0 ||
-        speciesOptionCount == 0 || selectedSpeciesIndex >= speciesOptionCount ||
-        speciesDefaultOutfits[selectedSpeciesIndex][0] == '\0')
+    if (speciesOptionCount == 0 || selectedSpeciesIndex >= speciesOptionCount ||
+        speciesDefaultOutfits[selectedSpeciesIndex] == 0)
     {
         exit();
         return false;
     }
 
-    strncpy(selectedSpecies, speciesOptions[selectedSpeciesIndex], selectedSpeciesSize - 1);
-    selectedSpecies[selectedSpeciesSize - 1] = '\0';
-    strncpy(selectedOutfit, speciesDefaultOutfits[selectedSpeciesIndex], selectedOutfitSize - 1);
-    selectedOutfit[selectedOutfitSize - 1] = '\0';
+    selectedSpeciesSlot = speciesOptions[selectedSpeciesIndex];
+    selectedOutfitSlot = speciesDefaultOutfits[selectedSpeciesIndex];
     playSelectedChooseAnimation();
     exit();
     return true;
@@ -159,7 +154,7 @@ void AppearanceSelectionController::render(unsigned long now)
         return;
 
     lastOutfitPreviewFrameTime = now;
-    renderer.ShowSDCardFrame(selectedOutfitPreview.path, outfitPreviewFrame, 0, 32);
+    renderer.ShowAnimationFrame(selectedOutfitPreview.animation, 0, outfitPreviewFrame, 0, 32);
     dirtyOutfitPreview = false;
 
     ++outfitPreviewFrame;
@@ -175,12 +170,14 @@ bool AppearanceSelectionController::loadSelectedOutfitPreview()
     if (selectedOutfitIndex >= outfitOptionCount)
         return false;
 
-    hasSelectedOutfitPreview = appearanceLoader.findOutfitPreview(speciesCode, outfitOptions[selectedOutfitIndex], selectedOutfitPreview);
+    hasSelectedOutfitPreview = appearanceLoader.findOutfitPreview(
+        speciesSlot, outfitOptions[selectedOutfitIndex], selectedOutfitPreview);
     if (hasSelectedOutfitPreview)
     {
-        outfitPreviewInterval = selectedOutfitPreview.frameIntervalMs == 0
-                                    ? frameIntervalSlow
-                                    : max(1UL, static_cast<unsigned long>(selectedOutfitPreview.frameIntervalMs));
+        selectedOutfitPreview.frameCount = renderer.frameCountFor(selectedOutfitPreview.animation);
+        outfitPreviewInterval = renderer.frameIntervalFor(
+            selectedOutfitPreview.animation, 0, frameIntervalSlow);
+        hasSelectedOutfitPreview = selectedOutfitPreview.frameCount > 0;
     }
     else
     {
@@ -195,7 +192,7 @@ bool AppearanceSelectionController::loadSelectedSpeciesPreview()
     hasSelectedOutfitPreview = false;
     selectedOutfitPreview = {};
     outfitPreviewFrame = 1;
-    if (selectedSpeciesIndex >= speciesOptionCount || speciesDefaultOutfits[selectedSpeciesIndex][0] == '\0')
+    if (selectedSpeciesIndex >= speciesOptionCount || speciesDefaultOutfits[selectedSpeciesIndex] == 0)
         return false;
 
     hasSelectedOutfitPreview = appearanceLoader.findOutfitPreview(
@@ -204,9 +201,10 @@ bool AppearanceSelectionController::loadSelectedSpeciesPreview()
         selectedOutfitPreview);
     if (hasSelectedOutfitPreview)
     {
-        outfitPreviewInterval = selectedOutfitPreview.frameIntervalMs == 0
-                                    ? frameIntervalSlow
-                                    : max(1UL, static_cast<unsigned long>(selectedOutfitPreview.frameIntervalMs));
+        selectedOutfitPreview.frameCount = renderer.frameCountFor(selectedOutfitPreview.animation);
+        outfitPreviewInterval = renderer.frameIntervalFor(
+            selectedOutfitPreview.animation, 0, frameIntervalSlow);
+        hasSelectedOutfitPreview = selectedOutfitPreview.frameCount > 0;
     }
     else
     {
@@ -222,27 +220,13 @@ void AppearanceSelectionController::playSelectedChooseAnimation()
     if (!hasSelectedOutfitPreview)
         return;
 
-    const size_t outfitLen = strlen(selectedOutfitPreview.outfitCode);
-    if (outfitLen == 0 || outfitLen + 1 >= sizeof(selectedOutfitPreview.outfitCode))
-        return;
-
-    char chooseOutfitCode[9] = {};
-    strncpy(chooseOutfitCode, selectedOutfitPreview.outfitCode, sizeof(chooseOutfitCode) - 2);
-    chooseOutfitCode[sizeof(chooseOutfitCode) - 2] = '\0';
-    strcat(chooseOutfitCode, "c");
-
-    const char *previewSpeciesCode = selectingSpecies ? speciesOptions[selectedSpeciesIndex] : speciesCode;
-    OutfitPreview choosePreview = {};
-    if (!appearanceLoader.findOutfitPreview(previewSpeciesCode, chooseOutfitCode, choosePreview))
-        return;
-
-    const unsigned long interval = choosePreview.frameIntervalMs == 0
-                                       ? frameIntervalSlow
-                                       : max(1UL, static_cast<unsigned long>(choosePreview.frameIntervalMs));
-    for (uint16_t frame = 1; frame <= choosePreview.frameCount; ++frame)
+    const unsigned long interval = renderer.frameIntervalFor(
+        selectedOutfitPreview.animation, 0, frameIntervalSlow);
+    const uint16_t frameCount = renderer.frameCountFor(selectedOutfitPreview.animation);
+    for (uint16_t frame = 1; frame <= frameCount; ++frame)
     {
-        renderer.ShowSDCardFrame(choosePreview.path, frame, 0, 32);
-        if (frame < choosePreview.frameCount)
+        renderer.ShowAnimationFrame(selectedOutfitPreview.animation, 0, frame, 0, 32);
+        if (frame < frameCount)
             delay(interval);
     }
 #endif

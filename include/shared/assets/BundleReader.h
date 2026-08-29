@@ -88,6 +88,8 @@ public:
     bool configureBundle(const AssetData::BundleId &bundleId);
     bool resolveAnimation(const AssetData::AssetFrameAddress &address,
                           AssetData::AnimationRecord &animation);
+    bool tryResolveAnimation(const AssetData::AssetFrameAddress &address,
+                             AssetData::AnimationRecord &animation);
     bool openFrame(const AssetData::AssetFrameAddress &address,
                    AssetData::OpenFrame &frame);
     void rejectDecodedFrame(const AssetData::AssetFrameAddress &address);

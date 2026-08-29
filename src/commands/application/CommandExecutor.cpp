@@ -5,16 +5,9 @@
 #include "commands/domain/StatusSetSelection.h"
 #include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
-#include "shared/assets/AssetManifest.h"
 
 namespace
 {
-static_assert(
-    AssetManifest::kMaxAnimationNameLength + 1 >= kStatusAnimationNameSize,
-    "Asset manifest names must hold every Status Animation ID.");
-static_assert(
-    sizeof(((Animation *)nullptr)->namedAnimation) >= kStatusAnimationNameSize,
-    "Queued animation names must hold every Status Animation ID.");
 #if !ENABLE_SEQUENTIAL_STATUS_SET_SELECTION
 uint8_t arduinoStatusSetIndex(uint8_t setCount)
 {
@@ -85,36 +78,36 @@ void CommandExecutor::commandGuessGame()
 }
 #endif
 #if ENABLE_COMMAND_PREDICT
-AnimationId CommandExecutor::fortuneToAnimationId(int fortuneIndex)
+FirmwarePlaybackRole CommandExecutor::fortuneToPlaybackRole(int fortuneIndex)
 {
     switch (fortuneIndex)
     {
     case 1:
-        return AnimationId::Predict1;
+        return FirmwarePlaybackRole::Predict1;
     case 2:
-        return AnimationId::Predict2;
+        return FirmwarePlaybackRole::Predict2;
     case 3:
-        return AnimationId::Predict3;
+        return FirmwarePlaybackRole::Predict3;
     case 4:
-        return AnimationId::Predict4;
+        return FirmwarePlaybackRole::Predict4;
     case 5:
-        return AnimationId::Predict5;
+        return FirmwarePlaybackRole::Predict5;
     case 6:
-        return AnimationId::Predict6;
+        return FirmwarePlaybackRole::Predict6;
     case 7:
-        return AnimationId::Predict7;
+        return FirmwarePlaybackRole::Predict7;
     case 8:
-        return AnimationId::Predict8;
+        return FirmwarePlaybackRole::Predict8;
     case 9:
-        return AnimationId::Predict9;
+        return FirmwarePlaybackRole::Predict9;
     case 10:
-        return AnimationId::Predict10;
+        return FirmwarePlaybackRole::Predict10;
     default:
-        return AnimationId::Predict11;
+        return FirmwarePlaybackRole::Predict11;
     }
 }
 #endif
-bool CommandExecutor::commandHasAnimation(AnimationId id) const
+bool CommandExecutor::commandHasAnimation(FirmwarePlaybackRole id) const
 {
     return animations.hasActionAnimation(id);
 }
@@ -127,10 +120,10 @@ bool CommandExecutor::commandCanStatus() const
 #if ENABLE_COMMAND_PREDICT
 void CommandExecutor::commandPredict()
 {
-    currentResult.layoutId = AnimationId::PredAnim;
+    currentResult.layoutPlaybackRole = FirmwarePlaybackRole::PredAnim;
     const Animation sequence[] = {
-        Animation(AnimationId::PredAnim, gameTick * 20, true),
-        Animation(fortuneToAnimationId(random(1, maxFortune + 1)), gameTick * 2.4, false),
+        Animation(FirmwarePlaybackRole::PredAnim, gameTick * 20, true),
+        Animation(fortuneToPlaybackRole(random(1, maxFortune + 1)), gameTick * 2.4, false),
     };
     currentResult.executed = animations.replace(
                                  AnimationSequence(sequence, sizeof(sequence) / sizeof(sequence[0]))) ==
@@ -154,7 +147,7 @@ void CommandExecutor::commandChangeSpecies()
 
 void CommandExecutor::commandStatus()
 {
-    currentResult.layoutId = AnimationId::Status;
+    currentResult.layoutPlaybackRole = FirmwarePlaybackRole::Status;
     queueStatusAnimation();
 }
 
@@ -188,24 +181,27 @@ bool CommandExecutor::queueStatusSetsAnimation()
 
     if (resolution.playOnce)
     {
-        if (!animations.hasAnimation(AnimationId::Status))
+        if (!animations.hasAnimation(resolution.animation))
             return false;
         const Animation animation(
-            AnimationId::Status,
+            resolution.animation,
             gameTick * 10,
-            true);
+            true,
+            0,
+            FirmwarePlaybackRole::Status);
         return animations.replace(AnimationSequence(&animation, 1)) ==
                PlaybackResult::Accepted;
     }
 
-    if (animations.frameCountForName(resolution.animation) != resolution.requiredFrames)
+    if (animations.frameCountFor(resolution.animation) != resolution.requiredFrames)
         return false;
 
     const Animation animation(
         resolution.animation,
         gameTick * 4,
         false,
-        resolution.frame);
+        resolution.frame,
+        FirmwarePlaybackRole::Status);
     return animations.replace(AnimationSequence(&animation, 1)) ==
            PlaybackResult::Accepted;
 }
@@ -213,27 +209,27 @@ bool CommandExecutor::queueStatusSetsAnimation()
 #if ENABLE_GUESS_GAME
 bool CommandExecutor::canPlayGuessItemGame() const
 {
-    const AnimationId requiredResults[] = {
+    const FirmwarePlaybackRole requiredResults[] = {
 #if ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
-        AnimationId::GuessLL,
-        AnimationId::GuessRR,
-        AnimationId::GuessWin,
-        AnimationId::GuessLoss};
+        FirmwarePlaybackRole::GuessLL,
+        FirmwarePlaybackRole::GuessRR,
+        FirmwarePlaybackRole::GuessWin,
+        FirmwarePlaybackRole::GuessLoss};
 #else
-        AnimationId::GuessLL,
-        AnimationId::GuessLR,
-        AnimationId::GuessRL,
-        AnimationId::GuessRR};
+        FirmwarePlaybackRole::GuessLL,
+        FirmwarePlaybackRole::GuessLR,
+        FirmwarePlaybackRole::GuessRL,
+        FirmwarePlaybackRole::GuessRR};
 #endif
     if (!animations.hasAnimations(requiredResults, sizeof(requiredResults) / sizeof(requiredResults[0])))
         return false;
 
-    const AnimationId itemPrompts[] = {
-        AnimationId::GuessItem1,
-        AnimationId::GuessItem2,
-        AnimationId::GuessItem3,
-        AnimationId::GuessItem4};
-    return animations.hasAnimation(AnimationId::GuessStart) ||
+    const FirmwarePlaybackRole itemPrompts[] = {
+        FirmwarePlaybackRole::GuessItem1,
+        FirmwarePlaybackRole::GuessItem2,
+        FirmwarePlaybackRole::GuessItem3,
+        FirmwarePlaybackRole::GuessItem4};
+    return animations.hasAnimation(FirmwarePlaybackRole::GuessStart) ||
            animations.hasAnimations(itemPrompts, sizeof(itemPrompts) / sizeof(itemPrompts[0]));
 }
 #endif

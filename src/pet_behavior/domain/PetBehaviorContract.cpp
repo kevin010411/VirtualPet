@@ -2,32 +2,24 @@
 
 #include <limits.h>
 #include <string.h>
+#include "shared/assets/AssetRuntimeContract.h"
 #include "shared/sd/SdTextRecordReader.h"
 #include "pet_behavior/domain/PetBehaviorActionConditionRules.h"
 #include "pet_behavior/domain/PetBehaviorStatSlot.h"
+#include "shared/utils/CanonicalDecimal.h"
 
 namespace
 {
 constexpr const char *kRuntimeContractPath = "/runtime_contract.txt";
 constexpr const char *kRuntimeContractIdentity = "runtime_contract";
-constexpr const char *kRuntimeContractVersion = "3";
+constexpr const char *kRuntimeContractVersion = "4";
+constexpr const char *kFlowContractPath = "/flow_contract.txt";
+constexpr const char *kLayoutContractPath = "/layout_contract.txt";
+constexpr size_t kMaxAuxiliaryContractBytes = 16384;
 
 bool parseUnsigned(const char *text, uint32_t maximum, uint32_t &value)
 {
-    if (text == nullptr || text[0] == '\0')
-        return false;
-    uint32_t parsed = 0;
-    for (const char *cursor = text; *cursor != '\0'; ++cursor)
-    {
-        if (*cursor < '0' || *cursor > '9')
-            return false;
-        const uint32_t digit = static_cast<uint32_t>(*cursor - '0');
-        if (parsed > (maximum - digit) / 10U)
-            return false;
-        parsed = parsed * 10U + digit;
-    }
-    value = parsed;
-    return true;
+    return CanonicalDecimal::parseUnsigned(text, maximum, value);
 }
 
 bool parseSigned(const char *text, uint32_t positiveMaximum, uint32_t negativeMaximum, int32_t &value)
@@ -83,8 +75,8 @@ bool parseHex32(const char *text, uint32_t &value)
         uint8_t digit = 0;
         if (*cursor >= '0' && *cursor <= '9')
             digit = static_cast<uint8_t>(*cursor - '0');
-        else if (*cursor >= 'A' && *cursor <= 'F')
-            digit = static_cast<uint8_t>(*cursor - 'A' + 10);
+        else if (*cursor >= 'a' && *cursor <= 'f')
+            digit = static_cast<uint8_t>(*cursor - 'a' + 10);
         else
             return false;
         parsed = (parsed << 4U) | digit;
@@ -128,9 +120,27 @@ bool parseEffectOperation(const char *token, PetBehaviorEffectOperation &operati
 class PetBehaviorDecoder
 {
 public:
+    PetBehaviorDecoder(const AssetData::RuntimeManifest &manifest,
+                       uint8_t speciesSlot,
+                       uint8_t outfitSlot,
+                       BundleReader *bundleReader = nullptr)
+        : manifest_(manifest), speciesSlot_(speciesSlot), outfitSlot_(outfitSlot),
+          bundleReader_(bundleReader)
+    {
+        candidate.assetManifest = manifest;
+        candidate.activeSpeciesSlot = speciesSlot;
+        candidate.activeOutfitSlot = outfitSlot;
+    }
+
     bool process(const SdTextRecord &record)
     {
         if (record.fieldCount == 0)
+            return false;
+        if (strcmp(record.fields[0], "asset_data") == 0)
+            return decodeAssetData(record);
+        if (strcmp(record.fields[0], "bundle_id") == 0)
+            return decodeBundleId(record);
+        if (!assetDataSeen || !bundleSeen)
             return false;
         if (strcmp(record.fields[0], "pet_behavior") == 0)
             return decodePetBehaviorHeader(record);
@@ -142,6 +152,8 @@ public:
             return decodeIdleTrigger(record);
         if (strcmp(record.fields[0], "action") == 0)
             return decodeAction(record);
+        if (strcmp(record.fields[0], "action_animation") == 0)
+            return decodeActionAnimation(record);
         if (strcmp(record.fields[0], "action_outcome") == 0)
             return decodeActionOutcome(record);
         if (strcmp(record.fields[0], "action_condition") == 0)
@@ -160,6 +172,8 @@ public:
             return decodeStatusHeader(record);
         if (strcmp(record.fields[0], "status_set") == 0)
             return decodeStatusSet(record);
+        if (strcmp(record.fields[0], "status_animation") == 0)
+            return decodeStatusAnimation(record);
         if (strcmp(record.fields[0], "status_condition") == 0)
             return decodeStatusCondition(record);
         return false;
@@ -167,7 +181,8 @@ public:
 
     bool complete(PetBehaviorConfig &destination) const
     {
-        if (!identitySeen || !statusSeen || !idleSeen || candidate.buttonCount != kPetBehaviorButtonCount ||
+        if (!assetDataSeen || !bundleSeen || !identitySeen || !statusSeen || !idleSeen ||
+            candidate.buttonCount != kPetBehaviorButtonCount ||
             candidate.statCount > kMaxPetBehaviorStats || !validActions() || !validStatusConditions()
 #if ENABLE_GUESS_GAME
             || !validGuessEffects()
@@ -180,15 +195,69 @@ public:
 
 private:
     PetBehaviorConfig candidate = {};
+    const AssetData::RuntimeManifest &manifest_;
+    uint8_t speciesSlot_;
+    uint8_t outfitSlot_;
+    BundleReader *bundleReader_;
+    bool assetDataSeen = false;
+    bool bundleSeen = false;
     bool identitySeen = false;
     bool statusSeen = false;
     bool idleSeen = false;
+
+    bool decodeAssetData(const SdTextRecord &record)
+    {
+        if (assetDataSeen || record.fieldCount != 2 || strcmp(record.fields[1], "1") != 0)
+            return false;
+        assetDataSeen = true;
+        return true;
+    }
+
+    bool decodeBundleId(const SdTextRecord &record)
+    {
+        AssetData::BundleId bundleId = {};
+        if (bundleSeen || record.fieldCount != 2 ||
+            !AssetData::parseBundleId(record.fields[1], bundleId) ||
+            !AssetData::sameBundleId(bundleId, manifest_.bundleId))
+            return false;
+        bundleSeen = true;
+        return true;
+    }
+
+    bool decodeReference(const char *scope, const char *animationId,
+                         AssetData::AnimationRef &reference, bool &selected) const
+    {
+        AssetData::AnimationRef parsed = {};
+        if (!AssetData::parseAnimationRef(scope, animationId, manifest_, parsed) ||
+            (bundleReader_ != nullptr &&
+             !AssetData::animationReferenceExists(*bundleReader_, parsed)))
+            return false;
+        selected = parsed.speciesSlot == speciesSlot_ && parsed.outfitSlot == outfitSlot_;
+        if (selected)
+            reference = parsed;
+        return true;
+    }
 
     bool validActions() const
     {
         bool affectedSlots[kMaxPetBehaviorActions][kPetBehaviorSlotCount] = {};
         if (!validActionConditions() || !validRandomOutcomes())
             return false;
+        for (uint8_t actionSlot = 0; actionSlot < kMaxPetBehaviorActions; ++actionSlot)
+        {
+            const PetBehaviorActionConfig &action = candidate.actions[actionSlot];
+            if (!action.active)
+                continue;
+            if (action.mode == PetBehaviorActionMode::Standard &&
+                (!action.hasFallbackAnimation || !action.animationPlayback.animation.valid()))
+                return false;
+            if (action.mode == PetBehaviorActionMode::ConditionalAnimation &&
+                action.hasFallbackAnimation && !action.animationPlayback.animation.valid())
+                return false;
+            if (action.mode == PetBehaviorActionMode::RandomOutcome &&
+                action.animationPlayback.animation.valid())
+                return false;
+        }
         for (uint8_t index = 0; index < candidate.actionEffectCount; ++index)
         {
             const PetBehaviorActionEffectConfig &effect = candidate.actionEffects[index];
@@ -229,7 +298,7 @@ private:
                     continue;
                 if (!action.active || action.mode != PetBehaviorActionMode::RandomOutcome ||
                     outcomeSlot != outcomeCount || outcome.weight == 0 || outcome.weight > 100 ||
-                    outcome.animationPlayback.animation[0] == '\0' ||
+                    !outcome.animationPlayback.animation.valid() ||
                     outcome.animationPlayback.playbackCount == 0 ||
                     outcome.animationPlayback.playbackCount > 5)
                     return false;
@@ -371,6 +440,8 @@ private:
         for (uint8_t setSlot = 0; setSlot < candidate.statusSets.count; ++setSlot)
         {
             const StatusSetConfig &set = candidate.statusSets.sets[setSlot];
+            if (!set.animation.valid())
+                return false;
             for (uint8_t conditionSlot = 0; conditionSlot < set.conditionCount; ++conditionSlot)
             {
                 const char *source = set.conditions[conditionSlot].source;
@@ -418,14 +489,29 @@ private:
     bool decodeStatusSet(const SdTextRecord &record)
     {
         uint8_t slot = 0;
-        if (record.fieldCount != 3 ||
+        if (record.fieldCount != 2 ||
             !parseSlot(record.fields[1], "set", kMaxStatusSets, slot))
-            return false;
-        StatusSetConfig &set = candidate.statusSets.sets[slot];
-        if (!copyBounded(record.fields[2], set.animation, sizeof(set.animation)))
             return false;
         if (candidate.statusSets.count <= slot)
             candidate.statusSets.count = static_cast<uint8_t>(slot + 1);
+        return true;
+    }
+
+    bool decodeStatusAnimation(const SdTextRecord &record)
+    {
+        uint8_t slot = 0;
+        AssetData::AnimationRef reference = {};
+        bool selected = false;
+        if (record.fieldCount != 4 ||
+            !parseSlot(record.fields[1], "set", kMaxStatusSets, slot) ||
+            !decodeReference(record.fields[2], record.fields[3], reference, selected))
+            return false;
+        if (!selected)
+            return true;
+        StatusSetConfig &set = candidate.statusSets.sets[slot];
+        if (set.animation.valid())
+            return false;
+        set.animation = reference;
         return true;
     }
 
@@ -457,7 +543,7 @@ private:
 
     bool decodePetBehaviorHeader(const SdTextRecord &record)
     {
-        if (record.fieldCount != 3 || strcmp(record.fields[1], "3") != 0 || identitySeen ||
+        if (record.fieldCount != 3 || strcmp(record.fields[1], "4") != 0 || identitySeen ||
             !parseHex32(record.fields[2], candidate.schemaFingerprint))
             return false;
         identitySeen = true;
@@ -488,9 +574,16 @@ private:
 
     bool decodeIdle(const SdTextRecord &record)
     {
-        if (record.fieldCount != 2 || idleSeen ||
-            !copyBounded(record.fields[1], candidate.idleAnimation, sizeof(candidate.idleAnimation)))
+        AssetData::AnimationRef reference = {};
+        bool selected = false;
+        if (record.fieldCount != 3 ||
+            !decodeReference(record.fields[1], record.fields[2], reference, selected))
             return false;
+        if (!selected)
+            return true;
+        if (idleSeen)
+            return false;
+        candidate.idleAnimation = reference;
         idleSeen = true;
         return true;
     }
@@ -500,7 +593,7 @@ private:
         uint8_t slot = 0;
         uint8_t statSlot = 0;
         int16_t threshold = 0;
-        if (record.fieldCount != 6 ||
+        if (record.fieldCount != 7 ||
             !parseSlot(record.fields[1], "trigger", kMaxPetBehaviorIdleTriggers, slot) ||
             !parseSlot(record.fields[2], "custom", kPetBehaviorSlotCount, statSlot) ||
             !parseSigned16(record.fields[4], threshold))
@@ -512,8 +605,14 @@ private:
             comparison = PetBehaviorIdleTriggerOperator::GreaterThan;
         else
             return false;
+        AssetData::AnimationRef reference = {};
+        bool selected = false;
+        if (!decodeReference(record.fields[5], record.fields[6], reference, selected))
+            return false;
+        if (!selected)
+            return true;
         PetBehaviorIdleTriggerConfig &trigger = candidate.idleTriggers[slot];
-        if (!copyBounded(record.fields[5], trigger.animation, sizeof(trigger.animation)))
+        if (trigger.active)
             return false;
         if (!trigger.active)
             ++candidate.idleTriggerCount;
@@ -521,6 +620,7 @@ private:
         trigger.statSlot = statSlot;
         trigger.comparison = comparison;
         trigger.threshold = threshold;
+        trigger.animation = reference;
         return true;
     }
 
@@ -529,42 +629,28 @@ private:
         uint8_t slot = 0;
         uint32_t playbackCount = 0;
         uint32_t suspendDailyChangeDays = 0;
-        if (record.fieldCount != 6 ||
+        if (record.fieldCount != 5 ||
             !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, slot) ||
-            !parseUnsigned(record.fields[5], UINT8_MAX, suspendDailyChangeDays))
+            !parseUnsigned(record.fields[3], 5U, playbackCount) ||
+            !parseUnsigned(record.fields[4], UINT8_MAX, suspendDailyChangeDays))
             return false;
         PetBehaviorActionConfig &action = candidate.actions[slot];
         if (action.active)
             return false;
         if (strcmp(record.fields[2], "standard") == 0)
         {
-            if (!copyBounded(record.fields[3], action.animationPlayback.animation,
-                             sizeof(action.animationPlayback.animation)) ||
-                !parseUnsigned(record.fields[4], 5U, playbackCount) || playbackCount == 0)
+            if (playbackCount == 0)
                 return false;
             action.mode = PetBehaviorActionMode::Standard;
-            action.hasFallbackAnimation = true;
+            action.hasFallbackAnimation = false;
         }
         else if (strcmp(record.fields[2], "conditional_animation") == 0)
         {
             action.mode = PetBehaviorActionMode::ConditionalAnimation;
-            action.hasFallbackAnimation = record.fields[3][0] != '\0';
-            if (action.hasFallbackAnimation)
-            {
-                if (!copyBounded(record.fields[3], action.animationPlayback.animation,
-                                 sizeof(action.animationPlayback.animation)) ||
-                    !parseUnsigned(record.fields[4], 5U, playbackCount) || playbackCount == 0)
-                    return false;
-            }
-            else if (strcmp(record.fields[4], "0") != 0)
-            {
-                return false;
-            }
+            action.hasFallbackAnimation = false;
         }
         else if (strcmp(record.fields[2], "random_outcome") == 0)
         {
-            if (record.fields[3][0] != '\0' || strcmp(record.fields[4], "0") != 0)
-                return false;
             action.mode = PetBehaviorActionMode::RandomOutcome;
             action.hasFallbackAnimation = false;
         }
@@ -579,26 +665,50 @@ private:
         return true;
     }
 
+    bool decodeActionAnimation(const SdTextRecord &record)
+    {
+        uint8_t actionSlot = 0;
+        AssetData::AnimationRef reference = {};
+        bool selected = false;
+        if (record.fieldCount != 4 ||
+            !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, actionSlot) ||
+            !decodeReference(record.fields[2], record.fields[3], reference, selected))
+            return false;
+        if (!selected)
+            return true;
+        PetBehaviorActionConfig &action = candidate.actions[actionSlot];
+        if (!action.active || action.mode == PetBehaviorActionMode::RandomOutcome ||
+            action.animationPlayback.animation.valid())
+            return false;
+        action.animationPlayback.animation = reference;
+        action.hasFallbackAnimation = true;
+        return true;
+    }
+
     bool decodeActionOutcome(const SdTextRecord &record)
     {
         uint8_t actionSlot = 0;
         uint8_t outcomeSlot = 0;
         uint32_t weight = 0;
         uint32_t playbackCount = 0;
-        if (record.fieldCount != 6 ||
+        if (record.fieldCount != 7 ||
             !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, actionSlot) ||
             !parseSlot(record.fields[2], "outcome", kMaxPetBehaviorRandomOutcomesPerAction, outcomeSlot) ||
             !parseUnsigned(record.fields[3], 100U, weight) || weight == 0 ||
-            !parseUnsigned(record.fields[5], 5U, playbackCount) || playbackCount == 0)
+            !parseUnsigned(record.fields[6], 5U, playbackCount) || playbackCount == 0)
             return false;
-
+        AssetData::AnimationRef reference = {};
+        bool selected = false;
+        if (!decodeReference(record.fields[4], record.fields[5], reference, selected))
+            return false;
+        if (!selected)
+            return true;
         PetBehaviorRandomOutcomeConfig &outcome = candidate.randomOutcomes[actionSlot][outcomeSlot];
-        if (outcome.active ||
-            !copyBounded(record.fields[4], outcome.animationPlayback.animation,
-                         sizeof(outcome.animationPlayback.animation)))
+        if (outcome.active)
             return false;
         outcome.active = true;
         outcome.weight = static_cast<uint8_t>(weight);
+        outcome.animationPlayback.animation = reference;
         outcome.animationPlayback.playbackCount = static_cast<uint8_t>(playbackCount);
         return true;
     }
@@ -609,18 +719,22 @@ private:
         uint32_t priority = 0;
         int32_t threshold = 0;
         uint32_t playbackCount = 0;
-        if (record.fieldCount != 8 || candidate.actionConditionCount >= kMaxPetBehaviorActionConditions ||
+        if (record.fieldCount != 9 ||
             !parseSlot(record.fields[1], "action", kMaxPetBehaviorActions, actionSlot) ||
             !parseUnsigned(record.fields[2], UINT8_MAX, priority) ||
             !parseSigned32(record.fields[5], threshold) ||
-            !parseUnsigned(record.fields[7], 5U, playbackCount) || playbackCount == 0)
+            !parseUnsigned(record.fields[8], 5U, playbackCount) || playbackCount == 0)
             return false;
-
+        AssetData::AnimationRef reference = {};
+        bool selected = false;
+        if (!decodeReference(record.fields[6], record.fields[7], reference, selected))
+            return false;
+        if (!selected)
+            return true;
+        if (candidate.actionConditionCount >= kMaxPetBehaviorActionConditions)
+            return false;
         PetBehaviorActionConditionConfig &condition =
             candidate.actionConditions[candidate.actionConditionCount];
-        if (!copyBounded(record.fields[6], condition.animationPlayback.animation,
-                         sizeof(condition.animationPlayback.animation)))
-            return false;
         if (strcmp(record.fields[3], "stage_days") == 0)
         {
             condition.source = PetBehaviorActionConditionSource::StageDays;
@@ -640,6 +754,7 @@ private:
         condition.actionSlot = actionSlot;
         condition.priority = static_cast<uint8_t>(priority);
         condition.threshold = threshold;
+        condition.animationPlayback.animation = reference;
         condition.animationPlayback.playbackCount = static_cast<uint8_t>(playbackCount);
         ++candidate.actionConditionCount;
         return true;
@@ -783,21 +898,306 @@ bool decodeRecord(void *context, const SdTextRecord &record)
 {
     return context != nullptr && static_cast<PetBehaviorDecoder *>(context)->process(record);
 }
+
+bool referenceForActiveScope(const AssetData::AnimationRef &reference,
+                             uint8_t speciesSlot,
+                             uint8_t outfitSlot)
+{
+    return reference.shared() ||
+           (reference.speciesSlot == speciesSlot && reference.outfitSlot == outfitSlot);
+}
+
+FirmwarePlaybackRole flowPlaybackRole(const char *kind, uint8_t slot)
+{
+    if (strcmp(kind, "predict") == 0)
+    {
+        const FirmwarePlaybackRole values[] = {
+            FirmwarePlaybackRole::PredAnim, FirmwarePlaybackRole::Predict1, FirmwarePlaybackRole::Predict2,
+            FirmwarePlaybackRole::Predict3, FirmwarePlaybackRole::Predict4, FirmwarePlaybackRole::Predict5,
+            FirmwarePlaybackRole::Predict6, FirmwarePlaybackRole::Predict7, FirmwarePlaybackRole::Predict8,
+            FirmwarePlaybackRole::Predict9, FirmwarePlaybackRole::Predict10, FirmwarePlaybackRole::Predict11};
+        return slot < sizeof(values) / sizeof(values[0]) ? values[slot] : FirmwarePlaybackRole::None;
+    }
+    if (strcmp(kind, "guess") == 0)
+    {
+        const FirmwarePlaybackRole values[] = {
+            FirmwarePlaybackRole::GuessStart, FirmwarePlaybackRole::GuessItem1, FirmwarePlaybackRole::GuessItem2,
+            FirmwarePlaybackRole::GuessItem3, FirmwarePlaybackRole::GuessItem4, FirmwarePlaybackRole::GuessLL,
+            FirmwarePlaybackRole::GuessLR, FirmwarePlaybackRole::GuessRL, FirmwarePlaybackRole::GuessRR,
+            FirmwarePlaybackRole::GuessWin, FirmwarePlaybackRole::GuessLoss, FirmwarePlaybackRole::GuessRight,
+            FirmwarePlaybackRole::GuessWrong};
+        return slot < sizeof(values) / sizeof(values[0]) ? values[slot] : FirmwarePlaybackRole::None;
+    }
+    if (strcmp(kind, "startup") == 0)
+    {
+        const FirmwarePlaybackRole values[] = {
+            FirmwarePlaybackRole::Start, FirmwarePlaybackRole::StartIntro, FirmwarePlaybackRole::FirstStart};
+        return slot < sizeof(values) / sizeof(values[0]) ? values[slot] : FirmwarePlaybackRole::None;
+    }
+    return FirmwarePlaybackRole::None;
+}
+
+class FlowDecoder
+{
+public:
+    FlowDecoder(PetBehaviorConfig &config, BundleReader &bundleReader)
+        : config_(config), bundleReader_(bundleReader) {}
+
+    bool process(const SdTextRecord &record)
+    {
+        if (record.fieldOverflow || record.fieldCount == 0)
+            return false;
+        if (strcmp(record.fields[0], "asset_data") == 0)
+        {
+            if (assetDataSeen_ || record.fieldCount != 2 || strcmp(record.fields[1], "1") != 0)
+                return false;
+            assetDataSeen_ = true;
+            return true;
+        }
+        if (strcmp(record.fields[0], "bundle_id") == 0)
+        {
+            AssetData::BundleId bundleId = {};
+            if (!assetDataSeen_ || bundleSeen_ || record.fieldCount != 2 ||
+                !AssetData::parseBundleId(record.fields[1], bundleId) ||
+                !AssetData::sameBundleId(bundleId, config_.assetManifest.bundleId))
+                return false;
+            bundleSeen_ = true;
+            return true;
+        }
+        if (!assetDataSeen_ || !bundleSeen_)
+            return false;
+        if (strcmp(record.fields[0], "guess_game") == 0)
+            return record.fieldCount == 5;
+        if (strcmp(record.fields[0], "shared_asset") == 0)
+            return decodeShared(record);
+        if (strcmp(record.fields[0], "flow") == 0)
+            return decodeFlow(record);
+        return false;
+    }
+
+    bool complete() const { return assetDataSeen_ && bundleSeen_ && batterySeen_; }
+
+private:
+    bool decodeShared(const SdTextRecord &record)
+    {
+        AssetData::AnimationRef reference = {};
+        if (record.fieldCount != 4 || strcmp(record.fields[1], "battery") != 0 ||
+            !AssetData::parseAnimationRef(record.fields[2], record.fields[3],
+                                          config_.assetManifest, reference) ||
+            !reference.shared() ||
+            !AssetData::animationReferenceExists(bundleReader_, reference) || batterySeen_)
+            return false;
+        config_.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Battery)] = reference;
+        batterySeen_ = true;
+        return true;
+    }
+
+    bool decodeFlow(const SdTextRecord &record)
+    {
+        uint32_t slot = 0;
+        AssetData::AnimationRef reference = {};
+        if (record.fieldCount != 5 || !parseUnsigned(record.fields[2], 12U, slot) ||
+            !AssetData::parseAnimationRef(record.fields[3], record.fields[4],
+                                          config_.assetManifest, reference) ||
+            !AssetData::animationReferenceExists(bundleReader_, reference))
+            return false;
+        const FirmwarePlaybackRole playbackRole = flowPlaybackRole(record.fields[1], static_cast<uint8_t>(slot));
+        if (playbackRole == FirmwarePlaybackRole::None)
+            return false;
+        if (!referenceForActiveScope(reference, config_.activeSpeciesSlot, config_.activeOutfitSlot))
+            return true;
+        AssetData::AnimationRef &destination =
+            config_.systemAnimations[static_cast<size_t>(playbackRole)];
+        if (destination.valid())
+            return false;
+        destination = reference;
+        return true;
+    }
+
+    PetBehaviorConfig &config_;
+    BundleReader &bundleReader_;
+    bool assetDataSeen_ = false;
+    bool bundleSeen_ = false;
+    bool batterySeen_ = false;
+};
+
+bool decodeFlowRecord(void *context, const SdTextRecord &record)
+{
+    return context != nullptr && static_cast<FlowDecoder *>(context)->process(record);
+}
+
+class LayoutDecoder
+{
+public:
+    LayoutDecoder(PetBehaviorConfig &config, BundleReader &bundleReader)
+        : config_(config), bundleReader_(bundleReader) {}
+
+    bool process(const SdTextRecord &record)
+    {
+        if (record.fieldOverflow || record.fieldCount == 0)
+            return false;
+        if (strcmp(record.fields[0], "asset_data") == 0)
+        {
+            if (assetDataSeen_ || record.fieldCount != 2 || strcmp(record.fields[1], "1") != 0)
+                return false;
+            assetDataSeen_ = true;
+            return true;
+        }
+        if (strcmp(record.fields[0], "bundle_id") == 0)
+        {
+            AssetData::BundleId bundleId = {};
+            if (!assetDataSeen_ || bundleSeen_ || record.fieldCount != 2 ||
+                !AssetData::parseBundleId(record.fields[1], bundleId) ||
+                !AssetData::sameBundleId(bundleId, config_.assetManifest.bundleId))
+                return false;
+            bundleSeen_ = true;
+            return true;
+        }
+        if (!assetDataSeen_ || !bundleSeen_)
+            return false;
+        if (strcmp(record.fields[0], "button_count") == 0)
+        {
+            uint32_t count = 0;
+            if (buttonCountSeen_ || record.fieldCount != 2 ||
+                !parseUnsigned(record.fields[1], kPetBehaviorButtonCount, count) ||
+                count != kPetBehaviorButtonCount)
+                return false;
+            buttonCountSeen_ = true;
+            return true;
+        }
+        if (strcmp(record.fields[0], "action_layout") == 0)
+        {
+            uint32_t playbackRole = 0;
+            uint32_t versionIndex = 0;
+            if (record.fieldCount != 3 ||
+                !parseUnsigned(record.fields[1], kFirmwarePlaybackRoleCount - 1U, playbackRole) ||
+                playbackRole == 0 ||
+                !parseUnsigned(record.fields[2], AssetData::kMaxVersions - 1U, versionIndex) ||
+                versionIndex == 0 || versionIndex != nextLayoutVersion_ ||
+                config_.actionLayoutVersions[playbackRole] != 0)
+                return false;
+            config_.actionLayoutVersions[playbackRole] = static_cast<uint8_t>(versionIndex);
+            ++nextLayoutVersion_;
+            return true;
+        }
+        if (strcmp(record.fields[0], "layout") != 0 || record.fieldCount != 4)
+            return false;
+        AssetData::AnimationRef reference = {};
+        if (!AssetData::parseAnimationRef(record.fields[2], record.fields[3],
+                                          config_.assetManifest, reference) ||
+            !reference.shared() ||
+            !AssetData::animationReferenceExists(bundleReader_, reference))
+            return false;
+        AssetData::AnimationRef *destination = nullptr;
+        if (strcmp(record.fields[1], "unselected") == 0)
+            destination = &config_.layoutUnselected;
+        else if (strcmp(record.fields[1], "selected") == 0)
+            destination = &config_.layoutSelected;
+        else
+            return false;
+        if (destination->valid())
+            return false;
+        *destination = reference;
+        return true;
+    }
+
+    bool complete() const
+    {
+        if (!assetDataSeen_ || !bundleSeen_ || !buttonCountSeen_ ||
+            !config_.layoutUnselected.valid() || !config_.layoutSelected.valid())
+            return false;
+        for (size_t role = 0; role < kFirmwarePlaybackRoleCount; ++role)
+        {
+            const uint8_t version = config_.actionLayoutVersions[role];
+            if (version != 0 &&
+                (!AssetData::animationReferenceExists(bundleReader_, config_.layoutUnselected, version) ||
+                 !AssetData::animationReferenceExists(bundleReader_, config_.layoutSelected, version)))
+                return false;
+        }
+        return true;
+    }
+
+private:
+    PetBehaviorConfig &config_;
+    BundleReader &bundleReader_;
+    bool assetDataSeen_ = false;
+    bool bundleSeen_ = false;
+    bool buttonCountSeen_ = false;
+    uint8_t nextLayoutVersion_ = 1;
+};
+
+bool decodeLayoutRecord(void *context, const SdTextRecord &record)
+{
+    return context != nullptr && static_cast<LayoutDecoder *>(context)->process(record);
+}
+
+void copyLoadError(char *destination, size_t capacity,
+                   const char *fallback, const BundleReader *reader = nullptr)
+{
+    if (destination == nullptr || capacity == 0)
+        return;
+    const char *pack = reader == nullptr ? nullptr : reader->firstErrorResource();
+    const char *resource = pack != nullptr && pack[0] != '\0' ? pack : fallback;
+    strncpy(destination, resource, capacity - 1);
+    destination[capacity - 1] = '\0';
+}
 } // namespace
 
-bool parsePetBehaviorContract(const char *contractText, PetBehaviorConfig &config)
+bool parsePetBehaviorContract(const char *contractText,
+                              const AssetData::RuntimeManifest &manifest,
+                              uint8_t speciesSlot,
+                              uint8_t outfitSlot,
+                              PetBehaviorConfig &config)
 {
     config = {};
-    PetBehaviorDecoder decoder;
+    PetBehaviorDecoder decoder(manifest, speciesSlot, outfitSlot);
     return parseSdTextRecords(contractText, kMaxPetBehaviorContractBytes, kRuntimeContractIdentity,
                               kRuntimeContractVersion, decodeRecord, &decoder) && decoder.complete(config);
 }
 
-bool loadPetBehaviorContract(SdFat *sd, PetBehaviorConfig &config)
+bool loadPetBehaviorContract(SdFat *sd,
+                             uint8_t speciesSlot,
+                             uint8_t outfitSlot,
+                             PetBehaviorConfig &config,
+                             char *errorResource,
+                             size_t errorResourceCapacity)
 {
     config = {};
-    PetBehaviorDecoder decoder;
-    return loadSdTextRecords(sd, kRuntimeContractPath, kMaxPetBehaviorContractBytes,
-                             kRuntimeContractIdentity, kRuntimeContractVersion, decodeRecord, &decoder) &&
-           decoder.complete(config);
+    if (errorResource != nullptr && errorResourceCapacity != 0)
+        errorResource[0] = '\0';
+    AssetData::RuntimeManifest manifest = {};
+    if (speciesSlot == 0 || outfitSlot == 0 || !AssetData::loadRuntimeManifest(sd, manifest))
+    {
+        copyLoadError(errorResource, errorResourceCapacity, "asset_manifest");
+        return false;
+    }
+    uint8_t verificationScratch[AssetData::kVerificationScratchBytes] = {};
+    BundleReader bundleReader(sd, verificationScratch, sizeof(verificationScratch));
+    if (!bundleReader.configureBundle(manifest.bundleId))
+    {
+        copyLoadError(errorResource, errorResourceCapacity, "asset data", &bundleReader);
+        return false;
+    }
+    PetBehaviorDecoder decoder(manifest, speciesSlot, outfitSlot, &bundleReader);
+    if (!loadSdTextRecords(sd, kRuntimeContractPath, kMaxPetBehaviorContractBytes,
+                           kRuntimeContractIdentity, kRuntimeContractVersion, decodeRecord, &decoder) ||
+        !decoder.complete(config))
+    {
+        copyLoadError(errorResource, errorResourceCapacity, "runtime_contract", &bundleReader);
+        return false;
+    }
+    FlowDecoder flow(config, bundleReader);
+    if (!loadSdTextRecords(sd, kFlowContractPath, kMaxAuxiliaryContractBytes,
+                           "flow_contract", "1", decodeFlowRecord, &flow) || !flow.complete())
+    {
+        copyLoadError(errorResource, errorResourceCapacity, "flow_contract", &bundleReader);
+        return false;
+    }
+    LayoutDecoder layout(config, bundleReader);
+    const bool loaded = loadSdTextRecords(sd, kLayoutContractPath, kMaxAuxiliaryContractBytes,
+                                          "layout_contract", "1", decodeLayoutRecord, &layout) &&
+                        layout.complete();
+    if (!loaded)
+        copyLoadError(errorResource, errorResourceCapacity, "layout_contract", &bundleReader);
+    return loaded;
 }

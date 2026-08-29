@@ -109,6 +109,23 @@ bool BundleReader::resolveAnimation(const AssetData::AssetFrameAddress &address,
     return true;
 }
 
+bool BundleReader::tryResolveAnimation(const AssetData::AssetFrameAddress &address,
+                                       AssetData::AnimationRecord &animation)
+{
+    animation = AssetData::AnimationRecord{};
+    if (!validateAddress(address))
+        return false;
+
+    File file;
+    PackHeader header;
+    if (!openVerifiedPack(address.speciesSlot, file, header))
+        return false;
+
+    const bool found = findAnimation(file, header, address, animation);
+    file.close();
+    return found;
+}
+
 bool BundleReader::openFrame(const AssetData::AssetFrameAddress &address,
                              AssetData::OpenFrame &frame)
 {

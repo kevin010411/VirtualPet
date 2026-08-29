@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "animation/domain/Animation.h"
 #include "commands/domain/StatusSetContract.h"
 #include "shared/config/AppProfile.h"
 
@@ -27,7 +28,6 @@ constexpr uint8_t kPetBehaviorGuessOutcomeCount = 4;
 constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * kMaxPetBehaviorStats;
 #endif
 constexpr uint8_t kPetBehaviorButtonCount = 8;
-constexpr size_t kPetBehaviorAnimationTokenSize = 8;
 constexpr size_t kPetBehaviorSystemCommandTokenSize = 16;
 constexpr size_t kMaxPetBehaviorContractBytes = 24576;
 
@@ -58,7 +58,7 @@ struct PetBehaviorIdleTriggerConfig
     uint8_t statSlot;
     PetBehaviorIdleTriggerOperator comparison;
     int16_t threshold;
-    char animation[kPetBehaviorAnimationTokenSize];
+    AssetData::AnimationRef animation;
 };
 
 enum class PetBehaviorActionMode : uint8_t
@@ -86,7 +86,7 @@ enum class PetBehaviorActionConditionOperator : uint8_t
 
 struct PetBehaviorAnimationPlaybackConfig
 {
-    char animation[kPetBehaviorAnimationTokenSize];
+    AssetData::AnimationRef animation;
     uint8_t playbackCount;
 };
 
@@ -175,6 +175,11 @@ struct PetBehaviorButtonConfig
 
 struct PetBehaviorConfig
 {
+    AssetData::RuntimeManifest assetManifest;
+    AssetData::AnimationRef systemAnimations[kFirmwarePlaybackRoleCount];
+    AssetData::AnimationRef layoutUnselected;
+    AssetData::AnimationRef layoutSelected;
+    uint8_t actionLayoutVersions[kFirmwarePlaybackRoleCount];
     uint32_t schemaFingerprint;
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     PetBehaviorIdleTriggerConfig idleTriggers[kMaxPetBehaviorIdleTriggers];
@@ -189,7 +194,9 @@ struct PetBehaviorConfig
 #endif
     PetBehaviorButtonConfig buttons[kPetBehaviorButtonCount];
     StatusSetsConfig statusSets;
-    char idleAnimation[kPetBehaviorAnimationTokenSize];
+    AssetData::AnimationRef idleAnimation;
+    uint8_t activeSpeciesSlot;
+    uint8_t activeOutfitSlot;
     uint8_t statCount;
     uint8_t idleTriggerCount;
     uint8_t actionCount;

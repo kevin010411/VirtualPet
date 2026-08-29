@@ -20,39 +20,39 @@ namespace
     constexpr int kMaxGuessCount = 3;
 #endif
 
-    AnimationId randomItemAnimation()
+    FirmwarePlaybackRole randomItemAnimation()
     {
         switch (random(1, 5))
         {
         case 1:
-            return AnimationId::GuessItem1;
+            return FirmwarePlaybackRole::GuessItem1;
         case 2:
-            return AnimationId::GuessItem2;
+            return FirmwarePlaybackRole::GuessItem2;
         case 3:
-            return AnimationId::GuessItem3;
+            return FirmwarePlaybackRole::GuessItem3;
         default:
-            return AnimationId::GuessItem4;
+            return FirmwarePlaybackRole::GuessItem4;
         }
     }
 
-    AnimationId randomItemAnimationExcept(AnimationId current)
+    FirmwarePlaybackRole randomItemAnimationExcept(FirmwarePlaybackRole current)
     {
-        AnimationId next = randomItemAnimation();
+        FirmwarePlaybackRole next = randomItemAnimation();
         while (next == current)
             next = randomItemAnimation();
 
         return next;
     }
 
-    AnimationId itemResultAnimation(GuessItemSide itemSide, GuessItemSide playerSide)
+    FirmwarePlaybackRole itemResultAnimation(GuessItemSide itemSide, GuessItemSide playerSide)
     {
 #if ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
         (void)itemSide;
-        return (playerSide == GuessItemSide::Left) ? AnimationId::GuessLL : AnimationId::GuessRR;
+        return (playerSide == GuessItemSide::Left) ? FirmwarePlaybackRole::GuessLL : FirmwarePlaybackRole::GuessRR;
 #else
-        constexpr AnimationId kResultByPetAndItem[2][2] = {
-            {AnimationId::GuessLL, AnimationId::GuessLR},
-            {AnimationId::GuessRL, AnimationId::GuessRR},
+        constexpr FirmwarePlaybackRole kResultByPetAndItem[2][2] = {
+            {FirmwarePlaybackRole::GuessLL, FirmwarePlaybackRole::GuessLR},
+            {FirmwarePlaybackRole::GuessRL, FirmwarePlaybackRole::GuessRR},
         };
 
         return kResultByPetAndItem[static_cast<int>(playerSide)][static_cast<int>(itemSide)];
@@ -68,15 +68,15 @@ GuessItemGame::GuessItemGame(GuessItemGameHost &hostRef)
 
 bool GuessItemGame::hasItemPromptAnimations() const
 {
-    return host.hasAnimation(AnimationId::GuessItem1) &&
-           host.hasAnimation(AnimationId::GuessItem2) &&
-           host.hasAnimation(AnimationId::GuessItem3) &&
-           host.hasAnimation(AnimationId::GuessItem4);
+    return host.hasAnimation(FirmwarePlaybackRole::GuessItem1) &&
+           host.hasAnimation(FirmwarePlaybackRole::GuessItem2) &&
+           host.hasAnimation(FirmwarePlaybackRole::GuessItem3) &&
+           host.hasAnimation(FirmwarePlaybackRole::GuessItem4);
 }
 
 PlaybackResult GuessItemGame::replacePromptAnimation()
 {
-    const Animation prompt(promptAnimationId, kItemPromptLoopDurationMs, false);
+    const Animation prompt(promptPlaybackRole, kItemPromptLoopDurationMs, false);
     return host.replace(AnimationSequence(&prompt, 1));
 }
 
@@ -86,12 +86,12 @@ void GuessItemGame::start()
 
     const bool hasItemPrompts = hasItemPromptAnimations();
 
-    if (host.hasAnimation(AnimationId::GuessStart) && hasItemPrompts)
+    if (host.hasAnimation(FirmwarePlaybackRole::GuessStart) && hasItemPrompts)
     {
-        promptAnimationId = randomItemAnimation();
+        promptPlaybackRole = randomItemAnimation();
         const Animation sequence[] = {
-            Animation::complete(AnimationId::GuessStart),
-            Animation(promptAnimationId, kItemPromptLoopDurationMs, false),
+            Animation::complete(FirmwarePlaybackRole::GuessStart),
+            Animation(promptPlaybackRole, kItemPromptLoopDurationMs, false),
         };
         // Keep the playable start and prompt items adjacent so playback does not
         // fall back to idle between the introduction and the user's turn.
@@ -108,7 +108,7 @@ void GuessItemGame::start()
     }
     else
     {
-        promptAnimationId = hasItemPrompts ? randomItemAnimation() : AnimationId::GuessStart;
+        promptPlaybackRole = hasItemPrompts ? randomItemAnimation() : FirmwarePlaybackRole::GuessStart;
         replacePromptAnimation();
         state = GuessItemState::WaitingItem;
     }
@@ -130,7 +130,7 @@ void GuessItemGame::update()
     switch (state)
     {
     case GuessItemState::Starting:
-        if (!host.hasAnimationPending(AnimationId::GuessStart))
+        if (!host.hasAnimationPending(FirmwarePlaybackRole::GuessStart))
         {
             state = GuessItemState::WaitingItem;
             lastMoveTime = now;
@@ -149,7 +149,7 @@ void GuessItemGame::update()
     case GuessItemState::WaitingInput:
         if (hasItemPromptAnimations() && now - lastMoveTime > kItemPromptSwitchIntervalMs)
         {
-            promptAnimationId = randomItemAnimationExcept(promptAnimationId);
+            promptPlaybackRole = randomItemAnimationExcept(promptPlaybackRole);
             replacePromptAnimation();
             lastMoveTime = now;
         }
@@ -168,7 +168,7 @@ void GuessItemGame::update()
             lastMoveTime = now;
 #else
             state = won ? GuessItemState::Win : GuessItemState::Lose;
-            const AnimationId finalAnimation = (state == GuessItemState::Win) ? AnimationId::GuessWin : AnimationId::GuessLoss;
+            const FirmwarePlaybackRole finalAnimation = (state == GuessItemState::Win) ? FirmwarePlaybackRole::GuessWin : FirmwarePlaybackRole::GuessLoss;
             host.cancelPlayback();
             if (host.hasAnimation(finalAnimation))
             {
@@ -181,7 +181,7 @@ void GuessItemGame::update()
         else
         {
             state = GuessItemState::WaitingItem;
-            promptAnimationId = randomItemAnimation();
+            promptPlaybackRole = randomItemAnimation();
             replacePromptAnimation();
             lastMoveTime = now;
         }
@@ -245,7 +245,7 @@ void GuessItemGame::reset()
     correctCount = 0;
     wrongCount = 0;
     itemSide = GuessItemSide::Left;
-    promptAnimationId = AnimationId::GuessItem1;
+    promptPlaybackRole = FirmwarePlaybackRole::GuessItem1;
     state = GuessItemState::Inactive;
     lastMoveTime = 0;
 }
@@ -267,7 +267,7 @@ void GuessItemGame::handleGuess(GuessItemSide player)
 
     Animation sequence[3];
     uint8_t sequenceCount = 0;
-    const AnimationId itemResult = itemResultAnimation(itemSide, player);
+    const FirmwarePlaybackRole itemResult = itemResultAnimation(itemSide, player);
     if (host.hasAnimation(itemResult))
     {
         sequence[sequenceCount] = Animation::complete(itemResult);
@@ -276,17 +276,17 @@ void GuessItemGame::handleGuess(GuessItemSide player)
 #if !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
     if (correct)
     {
-        if (host.hasAnimation(AnimationId::GuessRight))
+        if (host.hasAnimation(FirmwarePlaybackRole::GuessRight))
         {
-            sequence[sequenceCount] = Animation::complete(AnimationId::GuessRight);
+            sequence[sequenceCount] = Animation::complete(FirmwarePlaybackRole::GuessRight);
             ++sequenceCount;
         }
     }
     else
     {
-        if (host.hasAnimation(AnimationId::GuessWrong))
+        if (host.hasAnimation(FirmwarePlaybackRole::GuessWrong))
         {
-            sequence[sequenceCount] = Animation::complete(AnimationId::GuessWrong);
+            sequence[sequenceCount] = Animation::complete(FirmwarePlaybackRole::GuessWrong);
             ++sequenceCount;
         }
     }
@@ -298,7 +298,7 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     {
 #if !(ENABLE_GUESS_GAME_SINGLE_ROUND && !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT)
         const bool won = correctCount > wrongCount;
-        const AnimationId finalAnimation = won ? AnimationId::GuessWin : AnimationId::GuessLoss;
+        const FirmwarePlaybackRole finalAnimation = won ? FirmwarePlaybackRole::GuessWin : FirmwarePlaybackRole::GuessLoss;
         // Keep the final outcome adjacent to LL/LR/RL/RR (and optional
         // GuessRight/GuessWrong) so no waiting state separates playback.
         if (host.hasAnimation(finalAnimation))

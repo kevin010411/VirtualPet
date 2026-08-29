@@ -3,8 +3,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "shared/assets/AssetRuntimeContract.h"
 
-constexpr size_t kStatusAnimationNameSize = 32;
 constexpr size_t kStatusSourceNameSize = 17;
 constexpr uint8_t kMaxStatusSets = 5;
 constexpr uint8_t kMaxStatusConditions = 3;
@@ -19,7 +19,7 @@ struct StatusSetCondition
 
 struct StatusSetConfig
 {
-    char animation[kStatusAnimationNameSize];
+    AssetData::AnimationRef animation;
     StatusSetCondition conditions[kMaxStatusConditions];
     uint8_t conditionCount;
 };
@@ -34,7 +34,7 @@ using StatusValueSource = bool (*)(const char *source, const void *context, int3
 
 struct StatusSetResolution
 {
-    char animation[kStatusAnimationNameSize];
+    AssetData::AnimationRef animation;
     uint16_t frame;
     uint16_t requiredFrames;
     bool playOnce;

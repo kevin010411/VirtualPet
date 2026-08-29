@@ -29,8 +29,8 @@ bool parseCrc32(const char *text, uint32_t &value)
         uint8_t digit = 0;
         if (*cursor >= '0' && *cursor <= '9')
             digit = static_cast<uint8_t>(*cursor - '0');
-        else if (*cursor >= 'A' && *cursor <= 'F')
-            digit = static_cast<uint8_t>(*cursor - 'A' + 10);
+        else if (*cursor >= 'a' && *cursor <= 'f')
+            digit = static_cast<uint8_t>(*cursor - 'a' + 10);
         else
             return false;
         parsed = (parsed << 4U) | digit;
@@ -70,9 +70,8 @@ public:
         if (length == 0 || length >= kSdTextRecordMaxLineBytes || finished)
             return false;
         if (line[length - 1] == '\r')
-            line[--length] = '\0';
-        else
-            line[length] = '\0';
+            return false;
+        line[length] = '\0';
         if (length == 0)
             return false;
 

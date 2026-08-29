@@ -3,9 +3,9 @@
 
 #include <Arduino.h>
 #include <stddef.h>
-#include <string.h>
+#include "shared/assets/AssetRuntimeContract.h"
 
-enum class AnimationId : uint8_t
+enum class FirmwarePlaybackRole : uint8_t
 {
     None = 0,
     Idle,
@@ -45,10 +45,7 @@ enum class AnimationId : uint8_t
     Count
 };
 
-constexpr size_t kAnimationIdCount = static_cast<size_t>(AnimationId::Count);
-
-AnimationId animationIdFromName(const char *name);
-const char *animationNameFromId(AnimationId id);
+constexpr size_t kFirmwarePlaybackRoleCount = static_cast<size_t>(FirmwarePlaybackRole::Count);
 
 enum class PlaybackResult : uint8_t
 {
@@ -61,62 +58,56 @@ enum class PlaybackResult : uint8_t
 struct PlaybackTickResult
 {
     PlaybackResult result;
-    AnimationId animationId;
+    FirmwarePlaybackRole playbackRole;
 };
 
 struct Animation
 {
-    AnimationId id;
+    FirmwarePlaybackRole playbackRole;
     unsigned long durationMs;
     bool playOnce;
     uint16_t frameIndex;
     uint8_t repeatCount;
-    bool usesNamedAnimation;
-    char namedAnimation[32];
+    AssetData::AnimationRef asset;
+    uint8_t versionIndex;
 
-    Animation(AnimationId animationId = AnimationId::None,
+    Animation(FirmwarePlaybackRole playbackRole = FirmwarePlaybackRole::None,
               unsigned long duration = 0,
               bool once = false,
               uint16_t fixedFrameIndex = 0)
-        : id(animationId),
+        : playbackRole(playbackRole),
           durationMs(duration),
           playOnce(once),
           frameIndex(fixedFrameIndex),
           repeatCount(1),
-          usesNamedAnimation(false),
-          namedAnimation{} {}
+          asset{},
+          versionIndex(0) {}
 
-    Animation(const char *animationName,
+    Animation(const AssetData::AnimationRef &animation,
               unsigned long duration,
               bool once,
-              uint16_t fixedFrameIndex = 0)
-        : id(AnimationId::None),
+              uint16_t fixedFrameIndex = 0,
+              FirmwarePlaybackRole playbackRole = FirmwarePlaybackRole::None)
+        : playbackRole(playbackRole),
           durationMs(duration),
           playOnce(once),
           frameIndex(fixedFrameIndex),
           repeatCount(1),
-          usesNamedAnimation(true),
-          namedAnimation{}
-    {
-        if (animationName != nullptr)
-        {
-            if (strlen(animationName) >= sizeof(namedAnimation))
-                return;
-            strncpy(namedAnimation, animationName, sizeof(namedAnimation) - 1);
-            namedAnimation[sizeof(namedAnimation) - 1] = '\0';
-        }
-    }
+          asset(animation),
+          versionIndex(0) {}
 
-    static Animation complete(AnimationId animationId, uint8_t playbackCount = 1)
+    static Animation complete(FirmwarePlaybackRole playbackRole, uint8_t playbackCount = 1)
     {
-        Animation animation(animationId, 0, true);
+        Animation animation(playbackRole, 0, true);
         animation.repeatCount = playbackCount;
         return animation;
     }
 
-    static Animation complete(const char *animationName, uint8_t playbackCount = 1)
+    static Animation complete(const AssetData::AnimationRef &animationRef,
+                              uint8_t playbackCount = 1,
+                              FirmwarePlaybackRole playbackRole = FirmwarePlaybackRole::None)
     {
-        Animation animation(animationName, 0, true);
+        Animation animation(animationRef, 0, true, 0, playbackRole);
         animation.repeatCount = playbackCount;
         return animation;
     }

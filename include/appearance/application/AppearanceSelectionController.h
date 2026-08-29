@@ -11,14 +11,14 @@ class AppearanceSelectionController
 public:
     AppearanceSelectionController(Renderer &renderer, AppearanceLoader &appearanceLoader);
 
-    bool start(const char *speciesCode, const char *currentOutfitCode);
-    bool startSpecies(const char *currentSpeciesCode);
+    bool start(uint8_t speciesSlot, uint8_t currentOutfitSlot);
+    bool startSpecies(uint8_t currentSpeciesSlot);
     bool isActive() const;
     bool isSelectingSpecies() const;
     void onLeft();
     void onRight();
-    bool onConfirm(char *selectedOutfit, size_t selectedOutfitSize);
-    bool onConfirmSpecies(char *selectedSpecies, size_t selectedSpeciesSize, char *selectedOutfit, size_t selectedOutfitSize);
+    bool onConfirm(uint8_t &selectedOutfitSlot);
+    bool onConfirmSpecies(uint8_t &selectedSpeciesSlot, uint8_t &selectedOutfitSlot);
     void exit();
     void requestFullRedraw();
     void render(unsigned long now);
@@ -32,10 +32,10 @@ private:
     AppearanceLoader &appearanceLoader;
     bool selectingOutfit = false;
     bool selectingSpecies = false;
-    char speciesCode[9] = "dino";
-    char speciesOptions[maxSpeciesOptions][9] = {};
-    char outfitOptions[maxOutfitOptions][9] = {};
-    char speciesDefaultOutfits[maxSpeciesOptions][9] = {};
+    uint8_t speciesSlot = 1;
+    uint8_t speciesOptions[maxSpeciesOptions] = {};
+    uint8_t outfitOptions[maxOutfitOptions] = {};
+    uint8_t speciesDefaultOutfits[maxSpeciesOptions] = {};
     size_t speciesOptionCount = 0;
     size_t outfitOptionCount = 0;
     size_t selectedSpeciesIndex = 0;
