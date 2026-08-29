@@ -20,6 +20,11 @@ public:
     void initAnimations();
     void setAssetAppearance(const char *speciesCode, const char *outfitCode);
     bool reloadManifest();
+    bool configureAssetBundle(const AssetData::BundleId &bundleId);
+    bool ShowDataFrame(const AssetData::AssetFrameAddress &address,
+                       int xmin = 0,
+                       int ymin = 32,
+                       int batch_lines = 12);
     bool ShowSDCardFrame(const char *base_path, uint16_t frame_index, int xmin = 0, int ymin = 0, int batch_lines = 12);
     bool ShowAnimationFrame(AnimationId id, uint16_t frame_index, int xmin = 0, int ymin = 32, int batch_lines = 4);
     bool ShowNamedAnimationFrame(const char *name, uint16_t frame_index, int xmin = 0, int ymin = 32, int batch_lines = 12);
@@ -40,6 +45,8 @@ public:
     const char *variantNameFor(const char *baseName, uint8_t index) const;
     unsigned long frameIntervalFor(AnimationId id, unsigned long defaultIntervalMs) const;
     unsigned long frameIntervalForName(const char *name, unsigned long defaultIntervalMs) const;
+    AssetData::BundleError firstAssetDataError() const;
+    const char *firstAssetDataErrorResource() const;
     SdFat *sdCard() const;
 
 private:

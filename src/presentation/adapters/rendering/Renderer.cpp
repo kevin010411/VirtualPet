@@ -9,6 +9,11 @@
 
 struct Renderer::AnimationState
 {
+    explicit AnimationState(SdFat *sd)
+        : bundleReader(sd, readBuffer, AssetData::kVerificationScratchBytes)
+    {
+    }
+
     AnimationId nowAnimId = AnimationId::None;
     uint16_t animationIndex = 0;
     uint16_t maxFrame = 0;
@@ -16,7 +21,8 @@ struct Renderer::AnimationState
     bool animationFrameFailed = false;
     char speciesCode[9] = "dino";
     char outfitCode[9] = "base";
-    uint8_t readBuffer[FrameDecoder::kRleReadBufferBytes] = {};
+    alignas(uint16_t) uint8_t readBuffer[FrameDecoder::kDataReadBufferBytes] = {};
+    BundleReader bundleReader;
     uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
     AssetManifest manifest;
     const AnimationMeta *namedAnimationMeta = nullptr;
@@ -27,7 +33,7 @@ struct Renderer::AnimationState
 };
 
 Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
-    : tft(ref_tft), SD(ref_SD), state(new AnimationState())
+    : tft(ref_tft), SD(ref_SD), state(new AnimationState(ref_SD))
 #if ENABLE_DEBUG
       , debug(ref_tft)
 #endif
@@ -124,6 +130,11 @@ bool Renderer::reloadManifest()
     return loaded && !state->manifest.hasPathError() && !state->manifest.hasCapacityError();
 }
 
+bool Renderer::configureAssetBundle(const AssetData::BundleId &bundleId)
+{
+    return state->bundleReader.configureBundle(bundleId);
+}
+
 Adafruit_ST7735 *Renderer::display() const
 {
     return tft;
@@ -152,6 +163,19 @@ uint16_t *Renderer::lineBuffer()
 size_t Renderer::lineBufferPixels() const
 {
     return sizeof(state->lineBuffer) / sizeof(state->lineBuffer[0]);
+}
+
+bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
+                             int xmin,
+                             int ymin,
+                             int batch_lines)
+{
+    const bool ok = FrameDecoder::showDataFrame(
+        state->bundleReader, address, display(), readBuffer(), readBufferSize(),
+        lineBuffer(), lineBufferPixels(), xmin, ymin, batch_lines);
+    if (!ok)
+        FrameDecoder::showAssetDataError(tft, state->bundleReader.firstErrorResource());
+    return ok;
 }
 
 bool Renderer::ShowSDCardFrame(const char *base_path, uint16_t frame_index, int xmin, int ymin, int batch_lines)
@@ -338,4 +362,14 @@ unsigned long Renderer::frameIntervalForName(const char *name, unsigned long def
         return defaultIntervalMs;
 
     return max(1UL, static_cast<unsigned long>(meta->frameIntervalMs));
+}
+
+AssetData::BundleError Renderer::firstAssetDataError() const
+{
+    return state->bundleReader.firstError();
+}
+
+const char *Renderer::firstAssetDataErrorResource() const
+{
+    return state->bundleReader.firstErrorResource();
 }
