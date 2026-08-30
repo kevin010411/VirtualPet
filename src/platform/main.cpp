@@ -641,6 +641,12 @@ void setup()
 #endif
 
   g_sdReady = true;
+  // Keep the temporary boot-stage labels visible before any potentially
+  // blocking SD read begins.  Normally game preparation overlaps this window.
+  while (!tft.advanceStartup(millis()))
+    delay(1);
+  finishPhasedTftStartup();
+  setBacklightImmediate(kBacklightNormal);
 #if ENABLE_DEBUG
   const unsigned long gamePrepareStartedAt = millis();
 #endif
@@ -650,9 +656,6 @@ void setup()
   g_startupTiming.gameSetupMs = g_startupTiming.gamePrepareMs;
 #endif
 
-  while (!tft.advanceStartup(millis()))
-    delay(1);
-  finishPhasedTftStartup();
 #if ENABLE_DEBUG
   g_startupTiming.tftInitMs = millis() - tftInitStartedAt;
   const unsigned long gameFinishStartedAt = millis();
@@ -666,6 +669,10 @@ void setup()
   {
     if (!gamePrepared)
       game.finish_setup_game();
+    // finish_setup_game() renders a concise resource error for a failed
+    // runtime load, but the normal backlight target is only applied after a
+    // successful boot.  Reveal that error instead of leaving a black screen.
+    setBacklightImmediate(kBacklightNormal);
     return;
   }
   if (kStartupPostSetupMs > 0)

@@ -100,7 +100,17 @@ bool Game::prepare_game()
         return false;
     }
 
-    if (!configureActiveAppearance(petActions->speciesSlot(), petActions->outfitSlot()))
+    // The initial contract already validated the active asset references.
+    // A first-launch state normally selects that same appearance, so do not
+    // reopen and revalidate the complete SD table a second time.  Reload only
+    // when a compatible saved state actually restored a different appearance.
+    const uint8_t restoredSpeciesSlot = pet.speciesSlot();
+    const uint8_t restoredOutfitSlot = pet.outfitSlot();
+    const bool appearanceChanged =
+        restoredSpeciesSlot != petBehaviorConfig.activeSpeciesSlot ||
+        restoredOutfitSlot != petBehaviorConfig.activeOutfitSlot;
+    if (appearanceChanged &&
+        !configureActiveAppearance(restoredSpeciesSlot, restoredOutfitSlot))
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
