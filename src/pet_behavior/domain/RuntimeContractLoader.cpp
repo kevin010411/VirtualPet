@@ -13,6 +13,7 @@ void copyLoadError(char *destination, size_t capacity, const char *resource)
     strncpy(destination, resource, capacity - 1);
     destination[capacity - 1] = '\0';
 }
+
 } // namespace
 
 bool loadRuntimeContract(SdFat *sd,
@@ -43,9 +44,8 @@ bool loadRuntimeContract(SdFat *sd,
         return false;
     }
 
-    PetBehaviorConfig candidate = {};
     if (!loadCompleteRuntimeTable(sd, manifest, bundleReader,
-                                  speciesSlot, outfitSlot, candidate))
+                                  speciesSlot, outfitSlot, config))
     {
         const char *resource = bundleReader.firstErrorResource();
         copyLoadError(errorResource, errorResourceCapacity,
@@ -53,6 +53,5 @@ bool loadRuntimeContract(SdFat *sd,
         return false;
     }
 
-    config = candidate;
     return true;
 }

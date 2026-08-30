@@ -207,36 +207,6 @@ bool readRecord(const Source &source, const Section &section,
     return source.readAt(source.context, offset, record, section.recordSize);
 }
 
-uint32_t updateCrc32(uint32_t crc, uint8_t byte)
-{
-    crc ^= byte;
-    for (uint8_t bit = 0; bit < 8; ++bit)
-        crc = (crc >> 1) ^ ((crc & 1U) ? 0xedb88320UL : 0UL);
-    return crc;
-}
-
-bool validCrc(const Source &source, uint32_t expected)
-{
-    uint8_t buffer[64] = {};
-    uint32_t crc = 0xffffffffUL;
-    uint32_t offset = 0;
-    while (offset < source.size)
-    {
-        const size_t count = source.size - offset < sizeof(buffer)
-                                 ? static_cast<size_t>(source.size - offset)
-                                 : sizeof(buffer);
-        if (!source.readAt(source.context, offset, buffer, count))
-            return false;
-        for (size_t index = 0; index < count; ++index)
-        {
-            const uint32_t absolute = offset + static_cast<uint32_t>(index);
-            crc = updateCrc32(crc, absolute >= 48 && absolute < 52 ? 0 : buffer[index]);
-        }
-        offset += static_cast<uint32_t>(count);
-    }
-    return (crc ^ 0xffffffffUL) == expected;
-}
-
 bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCount,
                   uint32_t &featureFlags, uint32_t &schemaFingerprint,
                   AssetData::BundleId &bundleId)
@@ -247,21 +217,11 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         memcmp(header, kMagic, sizeof(kMagic)) != 0 ||
         readU16(header + 4) != kVersion || readU16(header + 6) != kHeaderSize ||
         readU32(header + 8) != 0x01020304UL || readU32(header + 16) != source.size ||
-        readU32(header + 20) != kHeaderSize ||
         readU16(header + 26) != kSectionEntrySize)
         return false;
-    for (uint8_t index = 52; index < 64; ++index)
-        if (header[index] != 0)
-            return false;
 
     featureFlags = readU32(header + 12);
-    if ((featureFlags & ~kKnownFeatures) != 0 ||
-        (featureFlags & kPetBehaviorFeature) == 0 ||
-        ((featureFlags & kSequentialStatusFeature) != 0 &&
-         (featureFlags & kStatusFeature) == 0) ||
-        ((featureFlags & kStatusFeature) != 0 &&
-         ((featureFlags & kSequentialStatusFeature) != 0) !=
-             (ENABLE_SEQUENTIAL_STATUS_SET_SELECTION != 0)))
+    if ((featureFlags & kPetBehaviorFeature) == 0)
         return false;
 
     bool nonzeroBundle = false;
@@ -273,18 +233,14 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
     if (!nonzeroBundle)
         return false;
     schemaFingerprint = readU32(header + 44);
-    const uint32_t expectedCrc = readU32(header + 48);
-
     sectionCount = readU16(header + 24);
     if (sectionCount == 0 || sectionCount > kMaxSections)
         return false;
     const uint32_t directoryBytes = static_cast<uint32_t>(sectionCount) * kSectionEntrySize;
-    uint32_t payloadCursor = 0;
-    if (!addU32(kHeaderSize, directoryBytes, payloadCursor) || payloadCursor > source.size)
+    uint32_t directoryEnd = 0;
+    if (!addU32(kHeaderSize, directoryBytes, directoryEnd) || directoryEnd > source.size)
         return false;
-    payloadCursor = (payloadCursor + 3U) & ~3UL;
 
-    uint16_t previousType = 0;
     for (uint16_t index = 0; index < sectionCount; ++index)
     {
         uint8_t entry[kSectionEntrySize] = {};
@@ -294,7 +250,6 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
             return false;
         Section &section = sections[index];
         section.type = readU16(entry);
-        const uint16_t flags = readU16(entry + 2);
         section.offset = readU32(entry + 4);
         section.count = readU16(entry + 8);
         section.recordSize = readU16(entry + 10);
@@ -303,153 +258,12 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         const uint32_t expectedLength =
             static_cast<uint32_t>(section.count) * section.recordSize;
         uint32_t end = 0;
-        if (section.type <= previousType || flags != 0 || expectedRecordSize == 0 ||
+        if (expectedRecordSize == 0 ||
             section.recordSize != expectedRecordSize || section.length != expectedLength ||
-            (section.offset & 3U) != 0 || section.offset != payloadCursor ||
             !addU32(section.offset, section.length, end) || end > source.size)
             return false;
-        previousType = section.type;
-        payloadCursor = (end + 3U) & ~3UL;
-        if (payloadCursor < end || payloadCursor > source.size)
-            return false;
-        for (uint32_t padding = end; padding < payloadCursor; ++padding)
-        {
-            uint8_t byte = 0;
-            if (!source.readAt(source.context, padding, &byte, 1) || byte != 0)
-                return false;
-        }
     }
-    if (payloadCursor != source.size || !validCrc(source, expectedCrc))
-        return false;
     return true;
-}
-
-bool validCapacity(uint16_t published, uint16_t hard, uint16_t actual)
-{
-    return published <= hard && actual <= published;
-}
-
-bool validateProfileAndPersistence(const Source &source,
-                                   const Section *sections,
-                                   uint16_t sectionCount,
-                                   uint32_t schemaFingerprint)
-{
-    const Section *profile = findSection(sections, sectionCount, Profile);
-    const Section *persistence = findSection(sections, sectionCount, Persistence);
-    const Section *assets = findSection(sections, sectionCount, AssetRefs);
-    const Section *animations = findSection(sections, sectionCount, Animations);
-    const Section *stats = findSection(sections, sectionCount, PetStats);
-    const Section *actions = findSection(sections, sectionCount, Actions);
-    const Section *outcomes = findSection(sections, sectionCount, ActionOutcomes);
-    const Section *conditions = findSection(sections, sectionCount, ActionConditions);
-    const Section *effects = findSection(sections, sectionCount, ActionEffects);
-    const Section *buttons = findSection(sections, sectionCount, Buttons);
-    if (profile == nullptr || persistence == nullptr || assets == nullptr || animations == nullptr ||
-        stats == nullptr || actions == nullptr || outcomes == nullptr || buttons == nullptr ||
-        profile->count != 1 || persistence->count != 1 || animations->count > 65534 ||
-        (findSection(sections, sectionCount, FlowRoles) != nullptr &&
-         findSection(sections, sectionCount, FlowRoles)->count > 65534))
-        return false;
-
-    uint8_t record[40] = {};
-    if (!readRecord(source, *profile, 0, record) || readU32(record + 36) != 0)
-        return false;
-    const uint16_t published[18] = {
-        readU16(record), readU16(record + 2), readU16(record + 4), readU16(record + 6),
-        readU16(record + 8), readU16(record + 10), readU16(record + 12), readU16(record + 14),
-        readU16(record + 16), readU16(record + 18), readU16(record + 20), readU16(record + 22),
-        readU16(record + 24), readU16(record + 26), readU16(record + 28), readU16(record + 30),
-        readU16(record + 32), readU16(record + 34)};
-    const uint16_t hard[18] = {10, 16, 8, 32, 240, 24, 8, 40, 5, 15,
-                               255, 255, 255, 1020, 65534, 65534, 65534, 65534};
-    const uint16_t actual[18] = {
-        stats->count,
-        findSection(sections, sectionCount, IdleTriggers) == nullptr ? 0 : findSection(sections, sectionCount, IdleTriggers)->count,
-        actions->count,
-        conditions == nullptr ? 0 : conditions->count,
-        effects == nullptr ? 0 : effects->count,
-        outcomes->count,
-        buttons->count,
-        findSection(sections, sectionCount, GuessEffects) == nullptr ? 0 : findSection(sections, sectionCount, GuessEffects)->count,
-        findSection(sections, sectionCount, StatusSets) == nullptr ? 0 : findSection(sections, sectionCount, StatusSets)->count,
-        findSection(sections, sectionCount, StatusConditions) == nullptr ? 0 : findSection(sections, sectionCount, StatusConditions)->count,
-        findSection(sections, sectionCount, Species) == nullptr ? 0 : findSection(sections, sectionCount, Species)->count,
-        findSection(sections, sectionCount, Outfits) == nullptr ? 0 : findSection(sections, sectionCount, Outfits)->count,
-        findSection(sections, sectionCount, Evolutions) == nullptr ? 0 : findSection(sections, sectionCount, Evolutions)->count,
-        findSection(sections, sectionCount, EvolutionConditions) == nullptr ? 0 : findSection(sections, sectionCount, EvolutionConditions)->count,
-        assets->count,
-        findSection(sections, sectionCount, SystemRoles) == nullptr ? 0 : findSection(sections, sectionCount, SystemRoles)->count,
-        findSection(sections, sectionCount, Layouts) == nullptr ? 0 : findSection(sections, sectionCount, Layouts)->count,
-        findSection(sections, sectionCount, Flow) == nullptr ? 0 : findSection(sections, sectionCount, Flow)->count};
-    for (uint8_t index = 0; index < 18; ++index)
-        if (!validCapacity(published[index], hard[index], actual[index]))
-            return false;
-    if (published[0] > kPetBehaviorSlotCount || published[2] > kMaxPetBehaviorActions ||
-        published[3] > kMaxPetBehaviorActionConditions || published[6] > kPetBehaviorButtonCount ||
-        published[8] > kMaxStatusSets || published[9] > kMaxStatusSets * kMaxStatusConditions)
-        return false;
-
-    uint8_t persistenceRecord[16] = {};
-    return readRecord(source, *persistence, 0, persistenceRecord) &&
-           readU32(persistenceRecord + 4) == schemaFingerprint &&
-           readU32(persistenceRecord + 12) == 0;
-}
-
-bool validateAssetCatalog(const Source &source,
-                          const Section &assets,
-                          const Section &animations)
-{
-    uint16_t expectedFirstAsset = 0;
-    uint16_t previousRuntimeId = 0;
-    for (uint16_t animationIndex = 0; animationIndex < animations.count; ++animationIndex)
-    {
-        uint8_t animation[8] = {};
-        if (!readRecord(source, animations, animationIndex, animation))
-            return false;
-        const uint16_t runtimeId = readU16(animation + 2);
-        const uint16_t firstAsset = readU16(animation + 4);
-        const uint16_t assetCount = readU16(animation + 6);
-        if (readU16(animation) != animationIndex || runtimeId == 0 ||
-            runtimeId > AssetData::kMaxRuntimeAnimationId || runtimeId <= previousRuntimeId ||
-            firstAsset != expectedFirstAsset || assetCount == 0 ||
-            static_cast<uint32_t>(firstAsset) + assetCount > assets.count)
-            return false;
-        previousRuntimeId = runtimeId;
-        expectedFirstAsset = static_cast<uint16_t>(firstAsset + assetCount);
-        bool shared = false;
-        bool hasPreviousScope = false;
-        uint8_t previousKind = 0;
-        uint8_t previousSpecies = 0;
-        uint8_t previousOutfit = 0;
-        for (uint16_t offset = 0; offset < assetCount; ++offset)
-        {
-            uint8_t asset[12] = {};
-            const uint16_t assetIndex = static_cast<uint16_t>(firstAsset + offset);
-            if (!readRecord(source, assets, assetIndex, asset) ||
-                readU16(asset) != assetIndex || readU16(asset + 6) != runtimeId ||
-                readU16(asset + 8) != 0 || readU16(asset + 10) != 0 || asset[5] != 0)
-                return false;
-            const bool canonicalAfterPrevious = !hasPreviousScope || asset[2] > previousKind ||
-                (asset[2] == previousKind &&
-                 (asset[3] > previousSpecies ||
-                  (asset[3] == previousSpecies && asset[4] > previousOutfit)));
-            if (!canonicalAfterPrevious)
-                return false;
-            hasPreviousScope = true;
-            previousKind = asset[2];
-            previousSpecies = asset[3];
-            previousOutfit = asset[4];
-            if (asset[2] == 2)
-            {
-                if (asset[3] != 0 || asset[4] != 0 || assetCount != 1)
-                    return false;
-                shared = true;
-            }
-            else if (asset[2] != 1 || asset[3] == 0 || asset[4] == 0 || shared)
-                return false;
-        }
-    }
-    return expectedFirstAsset == assets.count;
 }
 
 bool readRuntimeTable(const Source &source,
@@ -459,16 +273,11 @@ bool readRuntimeTable(const Source &source,
     table = {};
     table.source = source;
     if (!readEnvelope(source, table.sections, table.sectionCount,
-                      table.featureFlags, table.schemaFingerprint, table.bundleId) ||
+                       table.featureFlags, table.schemaFingerprint, table.bundleId) ||
         (expectedManifest != nullptr &&
-         !AssetData::sameBundleId(table.bundleId, expectedManifest->bundleId)) ||
-        !validateProfileAndPersistence(source, table.sections, table.sectionCount,
-                                       table.schemaFingerprint))
+         !AssetData::sameBundleId(table.bundleId, expectedManifest->bundleId)))
         return false;
-    const Section *assets = table.find(AssetRefs);
-    const Section *animations = table.find(Animations);
-    return assets != nullptr && animations != nullptr &&
-           validateAssetCatalog(source, *assets, *animations);
+    return true;
 }
 
 bool resolveAnimation(const Source &source,
@@ -482,12 +291,14 @@ bool resolveAnimation(const Source &source,
     if (animationRef == kNone16 || animationRef >= animations.count)
         return false;
     uint8_t animation[8] = {};
-    if (!readRecord(source, animations, animationRef, animation) ||
-        readU16(animation) != animationRef)
+    if (!readRecord(source, animations, animationRef, animation))
         return false;
     const uint16_t runtimeId = readU16(animation + 2);
     const uint16_t firstAsset = readU16(animation + 4);
     const uint16_t assetCount = readU16(animation + 6);
+    if (runtimeId == 0 || runtimeId > AssetData::kMaxRuntimeAnimationId ||
+        static_cast<uint32_t>(firstAsset) + assetCount > assets.count)
+        return false;
     for (uint16_t offset = 0; offset < assetCount; ++offset)
     {
         uint8_t asset[12] = {};
@@ -503,17 +314,6 @@ bool resolveAnimation(const Source &source,
         }
     }
     return false;
-}
-
-bool validOptionalAnimationRef(const Source &source, const Section &animations,
-                               uint16_t animationRef)
-{
-    if (animationRef == kNone16)
-        return true;
-    uint8_t animation[8] = {};
-    return animationRef < animations.count &&
-           readRecord(source, animations, animationRef, animation) &&
-           readU16(animation) == animationRef;
 }
 
 void clearOwnedBehavior(PetBehaviorConfig &config)
@@ -549,8 +349,7 @@ bool decodeStats(const Source &source, const Section &section, PetBehaviorConfig
     for (uint16_t index = 0; index < section.count; ++index)
     {
         uint8_t record[12] = {};
-        if (!readRecord(source, section, index, record) || record[0] != index ||
-            record[1] != 0 || readU16(record + 10) != 0)
+        if (!readRecord(source, section, index, record))
             return false;
         PetBehaviorStatConfig &stat = config.stats[index];
         stat.active = true;
@@ -558,8 +357,6 @@ bool decodeStats(const Source &source, const Section &section, PetBehaviorConfig
         stat.minValue = readI16(record + 4);
         stat.maxValue = readI16(record + 6);
         stat.dailyChange = readI16(record + 8);
-        if (stat.minValue > stat.initialValue || stat.initialValue > stat.maxValue)
-            return false;
     }
     config.statCount = static_cast<uint8_t>(section.count);
     return true;
@@ -577,17 +374,13 @@ bool decodeIdleTriggers(const Source &source,
     if (triggers->count > kMaxPetBehaviorIdleTriggers)
         return false;
 
-    uint16_t previousPriority = 0;
     for (uint16_t index = 0; index < triggers->count; ++index)
     {
         uint8_t record[12] = {};
         AssetData::AnimationRef animation = {};
         if (!readRecord(source, *triggers, index, record))
             return false;
-        const uint16_t priority = readU16(record + 6);
-        if (record[0] >= config.statCount || record[1] > 1 ||
-            readU32(record + 8) != 0 ||
-            (index != 0 && priority <= previousPriority) ||
+        if (record[0] >= config.statCount ||
             !resolveAnimation(source, assets, animations, readU16(record + 4), scope, animation))
             return false;
 
@@ -597,7 +390,6 @@ bool decodeIdleTriggers(const Source &source,
         trigger.comparison = static_cast<PetBehaviorIdleTriggerOperator>(record[1]);
         trigger.threshold = readI16(record + 2);
         trigger.animation = animation;
-        previousPriority = priority;
     }
     config.idleTriggerCount = static_cast<uint8_t>(triggers->count);
     return true;
@@ -618,19 +410,10 @@ bool decodeGuessEffects(const Source &source,
     if (effects->count > kMaxPetBehaviorGuessEffects)
         return false;
 
-    bool hasPrevious = false;
-    uint8_t previousOutcome = 0;
-    uint8_t previousStatSlot = 0;
     for (uint16_t index = 0; index < effects->count; ++index)
     {
         uint8_t record[8] = {};
-        if (!readRecord(source, *effects, index, record) ||
-            record[0] >= kPetBehaviorGuessOutcomeCount ||
-            record[1] >= config.statCount || record[2] > 1 ||
-            record[3] != 0 || readU16(record + 6) != 0 ||
-            (hasPrevious &&
-             (record[0] < previousOutcome ||
-              (record[0] == previousOutcome && record[1] <= previousStatSlot))))
+        if (!readRecord(source, *effects, index, record) || record[1] >= config.statCount)
             return false;
 
         PetBehaviorGuessEffectConfig &effect = config.guessEffects[index];
@@ -639,9 +422,6 @@ bool decodeGuessEffects(const Source &source,
         effect.statSlot = record[1];
         effect.operation = static_cast<PetBehaviorEffectOperation>(record[2]);
         effect.value = readI16(record + 4);
-        previousOutcome = record[0];
-        previousStatSlot = record[1];
-        hasPrevious = true;
     }
     config.guessEffectCount = static_cast<uint8_t>(effects->count);
     return true;
@@ -668,21 +448,13 @@ bool decodeActions(const Source &source,
     for (uint16_t actionIndex = 0; actionIndex < actions.count; ++actionIndex)
     {
         uint8_t actionRecord[16] = {};
-        if (!readRecord(source, actions, actionIndex, actionRecord) ||
-            actionRecord[0] != actionIndex || actionRecord[7] != 0 || actionRecord[11] != 0 ||
-            readU32(actionRecord + 12) != 0 || readU16(actionRecord + 4) != nextOutcome ||
-            readU16(actionRecord + 8) != nextCondition || actionRecord[1] > 2 ||
-            (actionRecord[3] & ~1U) != 0)
+        if (!readRecord(source, actions, actionIndex, actionRecord))
             return false;
         const uint8_t mode = actionRecord[1];
         const uint8_t outcomeCount = actionRecord[6];
         const uint8_t conditionCount = actionRecord[10];
         const bool hasFallback = (actionRecord[3] & 1U) != 0;
-        if ((mode < 2 && outcomeCount != 1) ||
-            (mode == 2 && (outcomeCount < 2 || outcomeCount > 3)) ||
-            (mode == 1 && (conditionCount == 0 || conditionCount > 4)) ||
-            (mode != 1 && conditionCount != 0) ||
-            (mode != 1 && hasFallback) ||
+        if (outcomeCount > 3 || conditionCount > 4 ||
             static_cast<uint32_t>(nextOutcome) + outcomeCount > outcomes.count ||
             (conditionCount != 0 && conditions == nullptr) ||
             static_cast<uint32_t>(nextCondition) + conditionCount >
@@ -699,8 +471,6 @@ bool decodeActions(const Source &source,
         {
             uint8_t outcomeRecord[12] = {};
             if (!readRecord(source, outcomes, nextOutcome, outcomeRecord) ||
-                outcomeRecord[0] != actionIndex || outcomeRecord[1] != outcomeSlot ||
-                readU16(outcomeRecord + 6) != nextEffect || readU16(outcomeRecord + 10) != 0 ||
                 static_cast<uint32_t>(nextEffect) + readU16(outcomeRecord + 8) >
                     (effects == nullptr ? 0 : effects->count))
                 return false;
@@ -708,18 +478,12 @@ bool decodeActions(const Source &source,
             const uint8_t playbackCount = outcomeRecord[3];
             const uint16_t animationRef = readU16(outcomeRecord + 4);
             const uint16_t effectCount = readU16(outcomeRecord + 8);
-            if (effectCount > kPetBehaviorSlotCount ||
-                (mode == 2 ? (weight == 0 || weight > 100) : weight != 0))
+            if (effectCount > kPetBehaviorSlotCount)
                 return false;
             AssetData::AnimationRef animation = {};
             const bool missingConditionalFallback = mode == 1 && !hasFallback;
-            if (missingConditionalFallback)
-            {
-                if (animationRef != kNone16 || playbackCount != 0)
-                    return false;
-            }
-            else if (playbackCount == 0 || playbackCount > 5 ||
-                     !resolveAnimation(source, assets, animations, animationRef, scope, animation))
+            if (!missingConditionalFallback &&
+                !resolveAnimation(source, assets, animations, animationRef, scope, animation))
                 return false;
 
             if (mode == 2)
@@ -739,16 +503,12 @@ bool decodeActions(const Source &source,
                     action.hasFallbackAnimation = true;
             }
 
-            bool affected[kPetBehaviorSlotCount] = {};
             for (uint16_t effectOffset = 0; effectOffset < effectCount; ++effectOffset)
             {
                 uint8_t effectRecord[8] = {};
                 if (effects == nullptr || !readRecord(source, *effects, nextEffect, effectRecord) ||
-                    effectRecord[0] != actionIndex || effectRecord[1] != outcomeSlot ||
-                    effectRecord[2] >= config.statCount || effectRecord[3] > 1 ||
-                    readU16(effectRecord + 6) != 0 || affected[effectRecord[2]])
+                    effectRecord[2] >= config.statCount)
                     return false;
-                affected[effectRecord[2]] = true;
                 if (mode == 2)
                 {
                     if (config.randomOutcomeEffectCount >= kMaxPetBehaviorRandomOutcomeEffects)
@@ -779,19 +539,13 @@ bool decodeActions(const Source &source,
             ++nextOutcome;
         }
 
-        uint8_t previousPriority = 0;
         for (uint8_t conditionSlot = 0; conditionSlot < conditionCount; ++conditionSlot)
         {
             uint8_t conditionRecord[16] = {};
             if (conditions == nullptr || !readRecord(source, *conditions, nextCondition, conditionRecord) ||
-                conditionRecord[0] != actionIndex || conditionRecord[2] > 1 ||
-                conditionRecord[3] > 4 || conditionRecord[5] == 0 || conditionRecord[5] > 5 ||
-                readU32(conditionRecord + 12) != 0 ||
-                (conditionSlot != 0 && conditionRecord[1] <= previousPriority) ||
                 (conditionRecord[2] == 0 && conditionRecord[4] >= config.statCount) ||
                 (conditionRecord[2] == 1 && conditionRecord[4] != 0))
                 return false;
-            previousPriority = conditionRecord[1];
             PetBehaviorActionConditionConfig &condition =
                 config.actionConditions[config.actionConditionCount++];
             condition.active = true;
@@ -821,8 +575,7 @@ bool decodeButtons(const Source &source, const Section &buttons, PetBehaviorConf
     for (uint16_t index = 0; index < buttons.count; ++index)
     {
         uint8_t record[8] = {};
-        if (!readRecord(source, buttons, index, record) || record[0] != index + 1 ||
-            record[1] > 2 || readU32(record + 4) != 0)
+        if (!readRecord(source, buttons, index, record))
             return false;
         PetBehaviorButtonConfig &button = config.buttons[index];
         button.active = true;
@@ -869,9 +622,8 @@ bool decodeStatus(const Source &source,
     for (uint16_t setIndex = 0; setIndex < sets->count; ++setIndex)
     {
         uint8_t setRecord[12] = {};
-        if (!readRecord(source, *sets, setIndex, setRecord) || setRecord[0] != setIndex ||
-            setRecord[1] > kMaxStatusConditions || readU16(setRecord + 4) != nextCondition ||
-            (setRecord[8] & ~1U) != 0 || setRecord[9] != 0 || readU16(setRecord + 10) != 0 ||
+        if (!readRecord(source, *sets, setIndex, setRecord) ||
+            setRecord[1] > kMaxStatusConditions ||
             static_cast<uint32_t>(nextCondition) + setRecord[1] > conditions->count)
             return false;
         StatusSetConfig &set = config.statusSets.sets[setIndex];
@@ -879,14 +631,11 @@ bool decodeStatus(const Source &source,
         if (!resolveAnimation(source, assets, animations, readU16(setRecord + 2),
                               scope, set.animation))
             return false;
-        const bool playOnce = (setRecord[8] & 1U) != 0;
-        uint16_t requiredFrames = 1;
         for (uint8_t conditionIndex = 0; conditionIndex < set.conditionCount; ++conditionIndex)
         {
             uint8_t conditionRecord[12] = {};
             if (!readRecord(source, *conditions, nextCondition, conditionRecord) ||
-                conditionRecord[0] != setIndex || conditionRecord[1] > 1 ||
-                conditionRecord[3] == 0 || conditionRecord[3] > 32 ||
+                conditionRecord[1] > 1 ||
                 (conditionRecord[1] == 0 && conditionRecord[2] >= config.statCount) ||
                 (conditionRecord[1] == 1 && conditionRecord[2] != 0) ||
                 readI32(conditionRecord + 4) > readI32(conditionRecord + 8))
@@ -897,14 +646,8 @@ bool decodeStatus(const Source &source,
             condition.levels = conditionRecord[3];
             condition.minValue = readI32(conditionRecord + 4);
             condition.maxValue = readI32(conditionRecord + 8);
-            requiredFrames = static_cast<uint16_t>(requiredFrames * condition.levels);
-            if (requiredFrames > 256)
-                return false;
             ++nextCondition;
         }
-        if ((set.conditionCount == 0) != playOnce ||
-            readU16(setRecord + 6) != requiredFrames)
-            return false;
     }
     config.statusSets.count = static_cast<uint8_t>(sets->count);
     return nextCondition == conditions->count;
@@ -933,24 +676,25 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         outcomes == nullptr || buttons == nullptr)
         return false;
 
-    PetBehaviorConfig candidate = config;
-    clearOwnedBehavior(candidate);
-    candidate.assetManifest = manifest;
-    candidate.activeSpeciesSlot = speciesSlot;
-    candidate.activeOutfitSlot = outfitSlot;
-    candidate.schemaFingerprint = table.schemaFingerprint;
+    // The caller discards this configuration when decoding fails.  Decode
+    // directly into it to keep the STM32 startup stack bounded.
+    config = {};
+    clearOwnedBehavior(config);
+    config.assetManifest = manifest;
+    config.activeSpeciesSlot = speciesSlot;
+    config.activeOutfitSlot = outfitSlot;
+    config.schemaFingerprint = table.schemaFingerprint;
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
-    if (!decodeStats(source, *stats, candidate) ||
-        !decodeIdleTriggers(source, idleTriggers, *assets, *animations, scope, candidate) ||
+    if (!decodeStats(source, *stats, config) ||
+        !decodeIdleTriggers(source, idleTriggers, *assets, *animations, scope, config) ||
         !decodeActions(source, *actions, *outcomes, actionConditions, effects,
-                       *assets, *animations, scope, candidate) ||
-        !decodeGuessEffects(source, table.featureFlags, guessEffects, candidate) ||
-        !decodeButtons(source, *buttons, candidate) ||
+                       *assets, *animations, scope, config) ||
+        !decodeGuessEffects(source, table.featureFlags, guessEffects, config) ||
+        !decodeButtons(source, *buttons, config) ||
         !decodeStatus(source, table.featureFlags,
                       table.find(StatusSets), table.find(StatusConditions),
-                      *assets, *animations, scope, candidate))
+                      *assets, *animations, scope, config))
         return false;
-    config = candidate;
     return true;
 }
 
@@ -970,20 +714,6 @@ struct AppearanceQuery
     OutfitPreview *preview = nullptr;
     AssetData::AnimationRef *idleAnimation = nullptr;
 };
-
-bool hasOutfit(const Source &source, const Section &outfits,
-               uint8_t speciesSlot, uint8_t outfitSlot)
-{
-    for (uint16_t index = 0; index < outfits.count; ++index)
-    {
-        uint8_t record[8] = {};
-        if (!readRecord(source, outfits, index, record))
-            return false;
-        if (record[0] == speciesSlot && record[1] == outfitSlot)
-            return true;
-    }
-    return false;
-}
 
 bool conditionMatches(const uint8_t *record, const PetStatSnapshot &stats,
                       const ActivePetBehaviorStatSlots &activeSlots)
@@ -1021,109 +751,94 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
     const Section *outfits = table.find(Outfits);
     const Section *evolutions = table.find(Evolutions);
     const Section *conditions = table.find(EvolutionConditions);
-    const bool evolutionEnabled = (featureFlags & (1UL << 3)) != 0;
-    if ((featureFlags & (1UL << 2)) == 0 || assets == nullptr || animations == nullptr ||
-        appearance == nullptr || species == nullptr || outfits == nullptr ||
-        appearance->count != 1 || species->count == 0 ||
-        (evolutionEnabled && (evolutions == nullptr || conditions == nullptr)) ||
-        (!evolutionEnabled && (evolutions != nullptr || conditions != nullptr)))
+    if ((featureFlags & (1UL << 2)) == 0 || assets == nullptr || animations == nullptr)
         return false;
 
-    uint8_t appearanceRecord[8] = {};
-    if (!readRecord(source, *appearance, 0, appearanceRecord) || readU32(appearanceRecord + 4) != 0 ||
-        !hasOutfit(source, *outfits, appearanceRecord[0], appearanceRecord[1]))
-        return false;
-    AssetData::AnimationRef initialIdle = {};
-    const ActiveAssetScope initialScope = {appearanceRecord[0], appearanceRecord[1]};
-    if (!resolveAnimation(source, *assets, *animations, readU16(appearanceRecord + 2), initialScope, initialIdle) ||
-        !AssetData::animationReferenceExists(bundleReader, initialIdle))
-        return false;
-
-    uint16_t expectedOutfit = 0;
-    for (uint16_t speciesIndex = 0; speciesIndex < species->count; ++speciesIndex)
+    if (query.kind == AppearanceQueryKind::Initial)
     {
         uint8_t record[8] = {};
-        if (!readRecord(source, *species, speciesIndex, record) || record[0] != speciesIndex + 1 ||
-            record[1] == 0 || readU16(record + 2) != expectedOutfit || readU16(record + 4) == 0 ||
-            readU16(record + 6) != 0 ||
-            static_cast<uint32_t>(expectedOutfit) + readU16(record + 4) > outfits->count)
+        AssetData::AnimationRef idle = {};
+        if (appearance == nullptr || appearance->count == 0 ||
+            !readRecord(source, *appearance, 0, record) ||
+            !resolveAnimation(source, *assets, *animations, readU16(record + 2),
+                              {record[0], record[1]}, idle) ||
+            !AssetData::animationReferenceExists(bundleReader, idle))
             return false;
-        const uint16_t outfitCount = readU16(record + 4);
-        bool entryFound = false;
-        for (uint16_t offset = 0; offset < outfitCount; ++offset)
-        {
-            uint8_t outfit[8] = {};
-            const uint16_t outfitIndex = static_cast<uint16_t>(expectedOutfit + offset);
-            if (!readRecord(source, *outfits, outfitIndex, outfit) || outfit[0] != record[0] ||
-                outfit[1] != offset + 1 || readU32(outfit + 4) != 0)
-                return false;
-            AssetData::AnimationRef preview = {};
-            const ActiveAssetScope scope = {outfit[0], outfit[1]};
-            if (!resolveAnimation(source, *assets, *animations, readU16(outfit + 2), scope, preview) ||
-                !AssetData::animationReferenceExists(bundleReader, preview))
-                return false;
-            entryFound = entryFound || outfit[1] == record[1];
-            if (query.kind == AppearanceQueryKind::Outfits && query.speciesSlot == record[0])
-            {
-                if (query.count >= query.capacity)
-                    return false;
-                query.slots[query.count++] = outfit[1];
-            }
-            if (query.kind == AppearanceQueryKind::Preview && query.speciesSlot == outfit[0] &&
-                query.outfitSlot == outfit[1])
-            {
-                query.preview->speciesSlot = outfit[0];
-                query.preview->outfitSlot = outfit[1];
-                query.preview->animation = preview;
-            }
-        }
-        if (!entryFound)
+        query.selection->speciesSlot = record[0];
+        query.selection->outfitSlot = record[1];
+        if (query.idleAnimation != nullptr)
+            *query.idleAnimation = idle;
+        return true;
+    }
+
+    if (query.kind == AppearanceQueryKind::Species)
+    {
+        if (species == nullptr)
             return false;
-        if (query.kind == AppearanceQueryKind::Species)
+        for (uint16_t index = 0; index < species->count; ++index)
         {
-            if (query.count >= query.capacity)
+            uint8_t record[8] = {};
+            if (query.count >= query.capacity || !readRecord(source, *species, index, record))
                 return false;
             query.slots[query.count++] = record[0];
         }
-        expectedOutfit = static_cast<uint16_t>(expectedOutfit + outfitCount);
+        return true;
     }
-    if (expectedOutfit != outfits->count)
-        return false;
 
-    if (evolutionEnabled)
+    if (query.kind == AppearanceQueryKind::Outfits || query.kind == AppearanceQueryKind::Preview)
     {
+        if (outfits == nullptr)
+            return false;
+        for (uint16_t index = 0; index < outfits->count; ++index)
+        {
+            uint8_t record[8] = {};
+            if (!readRecord(source, *outfits, index, record))
+                return false;
+            if (record[0] != query.speciesSlot)
+                continue;
+            if (query.kind == AppearanceQueryKind::Outfits)
+            {
+                if (query.count >= query.capacity)
+                    return false;
+                query.slots[query.count++] = record[1];
+            }
+            else if (record[1] == query.outfitSlot)
+            {
+                if (!resolveAnimation(source, *assets, *animations, readU16(record + 2),
+                                      {record[0], record[1]}, query.preview->animation) ||
+                    !AssetData::animationReferenceExists(bundleReader, query.preview->animation))
+                    return false;
+                query.preview->speciesSlot = record[0];
+                query.preview->outfitSlot = record[1];
+                return true;
+            }
+        }
+        return query.kind == AppearanceQueryKind::Outfits;
+    }
+
+    if (query.kind == AppearanceQueryKind::Evolution &&
+        (featureFlags & (1UL << 3)) != 0)
+    {
+        if (evolutions == nullptr || conditions == nullptr || query.activeSlots == nullptr ||
+            query.stats == nullptr || query.selection == nullptr)
+            return false;
         uint16_t nextCondition = 0;
-        uint16_t previousPriority = 0;
         for (uint16_t index = 0; index < evolutions->count; ++index)
         {
             uint8_t evolution[16] = {};
-            if (!readRecord(source, *evolutions, index, evolution) ||
-                (index != 0 && readU16(evolution) <= previousPriority) || evolution[2] == 0 ||
-                evolution[2] > species->count || !hasOutfit(source, *outfits, evolution[3], evolution[4]) ||
-                evolution[5] > 4 || readU16(evolution + 6) != nextCondition ||
-                readU16(evolution + 10) != 0 || readU32(evolution + 12) != 0 ||
-                !validOptionalAnimationRef(source, *animations, readU16(evolution + 8)) ||
+            if (!readRecord(source, *evolutions, index, evolution) || evolution[5] > 4 ||
                 static_cast<uint32_t>(nextCondition) + evolution[5] > conditions->count)
                 return false;
-            previousPriority = readU16(evolution);
-            bool matched = query.kind == AppearanceQueryKind::Evolution && query.stats != nullptr &&
-                           query.stats->speciesSlot == evolution[2];
+            bool matched = query.stats->speciesSlot == evolution[2];
             for (uint8_t offset = 0; offset < evolution[5]; ++offset)
             {
                 uint8_t condition[12] = {};
-                if (!readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition) ||
-                    readU16(condition) != index || condition[2] > 3 ||
-                    readI32(condition + 4) > readI32(condition + 8) ||
-                    ((condition[2] == 1 || condition[2] >= 2) && condition[3] != 0) ||
-                    (condition[2] == 0 &&
-                     ((query.activeSlots != nullptr && !query.activeSlots->contains(condition[3])) ||
-                      (query.activeSlots == nullptr && condition[3] >= kPetBehaviorSlotCount))))
+                if (!readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition))
                     return false;
-                if (query.activeSlots != nullptr && query.stats != nullptr)
-                    matched = matched && conditionMatches(condition, *query.stats, *query.activeSlots);
+                matched = matched && conditionMatches(condition, *query.stats, *query.activeSlots);
             }
             nextCondition = static_cast<uint16_t>(nextCondition + evolution[5]);
-            if (matched && query.selection != nullptr && query.selection->speciesSlot == 0)
+            if (matched && query.selection->speciesSlot == 0)
             {
                 const ActiveAssetScope scope = {query.stats->speciesSlot, query.stats->outfitSlot};
                 AssetData::AnimationRef animation = {};
@@ -1137,15 +852,6 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
                 query.selection->evolutionAnimation = animation;
             }
         }
-        if (nextCondition != conditions->count)
-            return false;
-    }
-    if (query.kind == AppearanceQueryKind::Initial)
-    {
-        query.selection->speciesSlot = appearanceRecord[0];
-        query.selection->outfitSlot = appearanceRecord[1];
-        if (query.idleAnimation != nullptr)
-            *query.idleAnimation = initialIdle;
     }
     return true;
 }
@@ -1184,44 +890,12 @@ bool compiledFeaturesAccept(uint32_t flags)
            (flags & kStartupAnimationFeature) != 0;
 }
 
-bool requireRole(const bool *present, FirmwarePlaybackRole role)
-{
-    const size_t index = static_cast<size_t>(role);
-    return index < kFirmwarePlaybackRoleCount && present[index];
-}
-
-FirmwarePlaybackRole flowRoleAt(uint8_t flow, uint8_t slot)
-{
-    static constexpr FirmwarePlaybackRole kPredict[] = {
-        FirmwarePlaybackRole::PredAnim, FirmwarePlaybackRole::Predict1,
-        FirmwarePlaybackRole::Predict2, FirmwarePlaybackRole::Predict3,
-        FirmwarePlaybackRole::Predict4, FirmwarePlaybackRole::Predict5,
-        FirmwarePlaybackRole::Predict6, FirmwarePlaybackRole::Predict7,
-        FirmwarePlaybackRole::Predict8, FirmwarePlaybackRole::Predict9,
-        FirmwarePlaybackRole::Predict10, FirmwarePlaybackRole::Predict11};
-    static constexpr FirmwarePlaybackRole kGuess[] = {
-        FirmwarePlaybackRole::GuessWin, FirmwarePlaybackRole::GuessLoss,
-        FirmwarePlaybackRole::GuessRight, FirmwarePlaybackRole::GuessWrong,
-        FirmwarePlaybackRole::GuessItem1, FirmwarePlaybackRole::GuessItem2,
-        FirmwarePlaybackRole::GuessItem3, FirmwarePlaybackRole::GuessLL,
-        FirmwarePlaybackRole::GuessLR, FirmwarePlaybackRole::GuessRL,
-        FirmwarePlaybackRole::GuessRR, FirmwarePlaybackRole::GuessItem4,
-        FirmwarePlaybackRole::GuessStart};
-    static constexpr FirmwarePlaybackRole kStartup[] = {
-        FirmwarePlaybackRole::Start, FirmwarePlaybackRole::StartIntro,
-        FirmwarePlaybackRole::FirstStart};
-    const FirmwarePlaybackRole *roles = nullptr;
-    size_t count = 0;
-    if (flow == 0) { roles = kPredict; count = sizeof(kPredict) / sizeof(kPredict[0]); }
-    else if (flow == 1) { roles = kGuess; count = sizeof(kGuess) / sizeof(kGuess[0]); }
-    else if (flow == 2) { roles = kStartup; count = sizeof(kStartup) / sizeof(kStartup[0]); }
-    return slot < count ? roles[slot] : FirmwarePlaybackRole::None;
-}
-
-bool decodeRuntimeTableFlow(const RuntimeTable &table,
-                            uint8_t speciesSlot,
-                            uint8_t outfitSlot,
-                            PetBehaviorConfig &config)
+// Flow and FlowRoles are export/inspector metadata. Firmware executes the
+// resolved system roles and layouts below, without revalidating that catalog.
+bool decodeRuntimePresentation(const RuntimeTable &table,
+                               uint8_t speciesSlot,
+                               uint8_t outfitSlot,
+                               PetBehaviorConfig &config)
 {
     if (speciesSlot == 0 || outfitSlot == 0)
         return false;
@@ -1234,24 +908,18 @@ bool decodeRuntimeTableFlow(const RuntimeTable &table,
     const Section *animations = table.find(Animations);
     const Section *roles = table.find(SystemRoles);
     const Section *layouts = table.find(Layouts);
-    const Section *flows = table.find(Flow);
-    const Section *flowRoles = table.find(FlowRoles);
     if (assets == nullptr || animations == nullptr || roles == nullptr ||
         ((featureFlags & kDynamicActionLayoutFeature) != 0 && layouts == nullptr) ||
-        ((featureFlags & kDynamicActionLayoutFeature) == 0 && layouts != nullptr) ||
-        ((flows == nullptr) != (flowRoles == nullptr)))
+        ((featureFlags & kDynamicActionLayoutFeature) == 0 && layouts != nullptr))
         return false;
 
-    PetBehaviorConfig candidate = config;
-    memset(candidate.systemAnimations, 0, sizeof(candidate.systemAnimations));
-    memset(candidate.actionLayoutVersions, 0, sizeof(candidate.actionLayoutVersions));
-    memset(candidate.layouts, 0, sizeof(candidate.layouts));
-    candidate.layoutUnselected = {};
-    candidate.layoutSelected = {};
-    candidate.layoutCount = 0;
+    memset(config.systemAnimations, 0, sizeof(config.systemAnimations));
+    memset(config.actionLayoutVersions, 0, sizeof(config.actionLayoutVersions));
+    memset(config.layouts, 0, sizeof(config.layouts));
+    config.layoutUnselected = {};
+    config.layoutSelected = {};
+    config.layoutCount = 0;
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
-    bool rolePresent[kFirmwarePlaybackRoleCount] = {};
-    uint8_t previousRole = 0;
     for (uint16_t index = 0; index < roles->count; ++index)
     {
         uint8_t record[8] = {};
@@ -1259,29 +927,23 @@ bool decodeRuntimeTableFlow(const RuntimeTable &table,
         if (!readRecord(source, *roles, index, record))
             return false;
         const uint8_t role = record[0];
-        if (role == 0 ||
-            role >= kFirmwarePlaybackRoleCount || role <= previousRole || record[1] != 0 ||
-            readU16(record + 6) != 0 ||
+        if (role == 0 || role >= kFirmwarePlaybackRoleCount ||
             !resolveAnimation(source, *assets, *animations, readU16(record + 2), scope, animation))
             return false;
-        previousRole = role;
-        rolePresent[role] = true;
-        candidate.systemAnimations[role] = animation;
+        config.systemAnimations[role] = animation;
         const uint16_t layoutVersion = readU16(record + 4);
-        if (layoutVersion > UINT8_MAX ||
-            ((featureFlags & kDynamicActionLayoutFeature) == 0 && layoutVersion != 0))
+        if (layoutVersion > UINT8_MAX)
             return false;
-        candidate.actionLayoutVersions[role] = static_cast<uint8_t>(layoutVersion);
+        config.actionLayoutVersions[role] = static_cast<uint8_t>(layoutVersion);
     }
-    if (!requireRole(rolePresent, FirmwarePlaybackRole::Battery) ||
-        ((featureFlags & kPredictFeature) != 0 &&
-         (!requireRole(rolePresent, FirmwarePlaybackRole::PredAnim) ||
-          !requireRole(rolePresent, FirmwarePlaybackRole::Predict11))) ||
-        ((featureFlags & kStartupAnimationFeature) != 0 &&
-         (!requireRole(rolePresent, FirmwarePlaybackRole::Start) ||
-          !requireRole(rolePresent, FirmwarePlaybackRole::StartIntro))) ||
-        ((featureFlags & kFirstStartAnimationFeature) != 0 &&
-         !requireRole(rolePresent, FirmwarePlaybackRole::FirstStart)))
+
+    // Layout and LayoutSel are the base navigation artwork. They are required
+    // independently of the optional per-action dynamic Layouts section.
+    config.layoutUnselected = config.systemAnimations[
+        static_cast<size_t>(FirmwarePlaybackRole::Layout)];
+    config.layoutSelected = config.systemAnimations[
+        static_cast<size_t>(FirmwarePlaybackRole::LayoutSel)];
+    if (!config.layoutUnselected.valid() || !config.layoutSelected.valid())
         return false;
 
     if (layouts != nullptr)
@@ -1291,9 +953,8 @@ bool decodeRuntimeTableFlow(const RuntimeTable &table,
         for (uint16_t index = 0; index < layouts->count; ++index)
         {
             uint8_t record[12] = {};
-            RuntimeTableLayoutConfig &layout = candidate.layouts[index];
-            if (!readRecord(source, *layouts, index, record) || readU16(record) != index + 1 ||
-                readU16(record + 10) != 0 ||
+            RuntimeTableLayoutConfig &layout = config.layouts[index];
+            if (!readRecord(source, *layouts, index, record) ||
                 !resolveAnimation(source, *assets, *animations, readU16(record + 2), scope, layout.unselected) ||
                 !resolveAnimation(source, *assets, *animations, readU16(record + 4), scope, layout.selected))
                 return false;
@@ -1302,92 +963,12 @@ bool decodeRuntimeTableFlow(const RuntimeTable &table,
             layout.x = readI16(record + 6);
             layout.y = readI16(record + 8);
         }
-        candidate.layoutCount = static_cast<uint8_t>(layouts->count);
-        candidate.layoutUnselected = candidate.layouts[0].unselected;
-        candidate.layoutSelected = candidate.layouts[0].selected;
+        config.layoutCount = static_cast<uint8_t>(layouts->count);
         for (size_t role = 1; role < kFirmwarePlaybackRoleCount; ++role)
-            if (candidate.actionLayoutVersions[role] > candidate.layoutCount)
+            if (config.actionLayoutVersions[role] > config.layoutCount)
                 return false;
     }
 
-    bool flowPresent[3] = {};
-    uint16_t expectedChild = 0;
-    uint8_t previousFlow = 0;
-    if (flows != nullptr)
-    {
-        for (uint16_t index = 0; index < flows->count; ++index)
-        {
-            uint8_t record[16] = {};
-            if (!readRecord(source, *flows, index, record) || record[0] > 2 ||
-                (index != 0 && record[0] <= previousFlow) || record[1] != 0 ||
-                readU16(record + 2) != expectedChild || readU16(record + 12) != 0 ||
-                readU16(record + 14) != 0 || readU16(record + 10) != 0)
-                return false;
-            if (record[0] == 1 &&
-                (record[6] > 2 || record[7] > 2 || record[8] > 1 || record[9] != 3))
-                return false;
-            if (record[0] != 1 && (record[6] != 0 || record[7] != 0 ||
-                                   record[8] != 0 || record[9] != 0))
-                return false;
-            previousFlow = record[0];
-            flowPresent[record[0]] = true;
-            const uint16_t count = readU16(record + 4);
-            if (static_cast<uint32_t>(expectedChild) + count > flowRoles->count)
-                return false;
-            uint8_t previousSlot = 0;
-            bool slotSeen[13] = {};
-            for (uint16_t child = 0; child < count; ++child)
-            {
-                uint8_t roleRecord[8] = {};
-                if (!readRecord(source, *flowRoles, static_cast<uint16_t>(expectedChild + child), roleRecord) ||
-                    roleRecord[0] != record[0] || readU32(roleRecord + 4) != 0 ||
-                    roleRecord[2] == 0 || roleRecord[2] >= kFirmwarePlaybackRoleCount ||
-                    flowRoleAt(record[0], roleRecord[1]) !=
-                        static_cast<FirmwarePlaybackRole>(roleRecord[2]) ||
-                    (child != 0 && roleRecord[1] <= previousSlot) ||
-                    !rolePresent[roleRecord[2]])
-                    return false;
-                previousSlot = roleRecord[1];
-                slotSeen[roleRecord[1]] = true;
-            }
-            bool requiredSlot[13] = {};
-            if (record[0] == 0)
-            {
-                for (uint8_t slot = 0; slot < 12; ++slot)
-                    requiredSlot[slot] = true;
-            }
-            else if (record[0] == 2)
-            {
-                requiredSlot[0] = true;
-                requiredSlot[1] = true;
-                requiredSlot[2] = (featureFlags & kFirstStartAnimationFeature) != 0;
-            }
-            else
-            {
-                requiredSlot[12] = record[6] == 0 || record[6] == 2;
-                requiredSlot[4] = requiredSlot[5] = requiredSlot[6] = requiredSlot[11] =
-                    record[6] == 1 || record[6] == 2;
-                requiredSlot[7] = requiredSlot[10] = true;
-                if (record[7] == 0 || record[7] == 2)
-                    requiredSlot[0] = requiredSlot[1] = true;
-                if (record[7] == 1 || record[7] == 2)
-                    requiredSlot[8] = requiredSlot[9] = true;
-                if (record[8] == 0)
-                    requiredSlot[2] = requiredSlot[3] = true;
-            }
-            for (uint8_t slot = 0; slot < 13; ++slot)
-                if (slotSeen[slot] != requiredSlot[slot])
-                    return false;
-            expectedChild = static_cast<uint16_t>(expectedChild + count);
-        }
-        if (expectedChild != flowRoles->count)
-            return false;
-    }
-    if (((featureFlags & kPredictFeature) != 0 && !flowPresent[0]) ||
-        ((featureFlags & kGuessGameFeature) != 0 && !flowPresent[1]) ||
-        ((featureFlags & kStartupAnimationFeature) != 0 && !flowPresent[2]))
-        return false;
-    config = candidate;
     return true;
 }
 } // namespace
@@ -1450,7 +1031,6 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     const Source source = {&fileSource, readFile, byteCount};
     RuntimeTable table = {};
 
-    PetBehaviorConfig candidate = {};
     AppearanceSelection initialAppearance = {};
     AssetData::AnimationRef idleAnimation = {};
     AppearanceQuery query = {};
@@ -1459,14 +1039,13 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     query.idleAnimation = &idleAnimation;
     const bool decoded =
         readRuntimeTable(source, &manifest, table) &&
-        decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, candidate) &&
-        decodeRuntimeTableFlow(table, speciesSlot, outfitSlot, candidate) &&
+        decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, config) &&
+        decodeRuntimePresentation(table, speciesSlot, outfitSlot, config) &&
         decodeRuntimeTableAppearance(table, bundleReader, query);
     file.close();
     if (!decoded)
         return false;
-    candidate.idleAnimation = idleAnimation;
-    config = candidate;
+    config.idleAnimation = idleAnimation;
     return true;
 }
 

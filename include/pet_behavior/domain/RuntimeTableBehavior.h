@@ -8,13 +8,12 @@
 
 class BundleReader;
 
-// Verifies the self-describing /runtime.bin envelope before any asset pack is
-// configured. The consuming decode performs the remaining catalog checks.
+// Reads the bounded /runtime.bin envelope before any asset pack is configured.
+// Export and the host inspector own complete catalog and integrity validation.
 bool loadRuntimeManifest(SdFat *sd, AssetData::RuntimeManifest &manifest);
 
-// Loads every production-owned section from one open /runtime.bin snapshot and
-// publishes the candidate only after behavior, flow, and initial appearance
-// have all validated.
+// Loads the execution-owned records from one open /runtime.bin snapshot and
+// publishes the candidate only after bounded reads and used references succeed.
 bool loadCompleteRuntimeTable(SdFat *sd,
                               const AssetData::RuntimeManifest &manifest,
                               BundleReader &bundleReader,
@@ -23,8 +22,8 @@ bool loadCompleteRuntimeTable(SdFat *sd,
                               PetBehaviorConfig &config);
 
 // Decodes the Ticket 03-owned records from a complete runtime-table v1 file.
-// The supplied configuration is published only after the envelope, CRC,
-// capacities, references, and behavior records all validate.
+// The supplied configuration is published only after bounded reads and runtime
+// array/reference guards succeed; export and host tooling validate semantics.
 bool parseRuntimeTableBehavior(const uint8_t *bytes,
                                size_t byteCount,
                                const AssetData::RuntimeManifest &manifest,

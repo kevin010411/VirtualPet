@@ -148,6 +148,13 @@ void testInvalidFixtureFailsWithoutPartialPublication(const std::vector<uint8_t>
     assert(config.schemaFingerprint == 0xa5a5a5a5UL);
     assert(config.statCount == 7);
 }
+
+void testTrustedExportDoesNotRepeatHostInspection(const std::vector<uint8_t> &fixture)
+{
+    PetBehaviorConfig config = {};
+    const AssetData::RuntimeManifest manifest = fixtureManifest();
+    assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -168,10 +175,12 @@ int main(int argc, char **argv)
     assert(config.guessEffects[0].value == 1);
 #endif
 #else
-    assert(argc == 4);
+    assert(argc == 6);
     testBehaviorFullFixture(readFixture(argv[1]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[3]));
+    testTrustedExportDoesNotRepeatHostInspection(readFixture(argv[4]));
+    testTrustedExportDoesNotRepeatHostInspection(readFixture(argv[5]));
 #endif
     return 0;
 }

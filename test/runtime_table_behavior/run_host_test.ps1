@@ -10,6 +10,8 @@ $outputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_host.exe'
 $fullFeatureOutputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_full_host.exe'
 $fixturePaths = @(
     (Join-Path $fixtureRoot 'behavior_full\runtime.bin'),
+    (Join-Path $fixtureRoot 'bad_magic\runtime.bin'),
+    (Join-Path $fixtureRoot 'wrong_record_size\runtime.bin'),
     (Join-Path $fixtureRoot 'stat_bounds\runtime.bin'),
     (Join-Path $fixtureRoot 'bad_crc\runtime.bin')
 )

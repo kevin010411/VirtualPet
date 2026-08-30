@@ -4,17 +4,6 @@
 
 namespace FrameDecoder
 {
-void showResourceError(Adafruit_ST7735 *tft)
-{
-    if (tft == nullptr)
-        return;
-
-    tft->fillRect(0, 32, kDefaultAnimWidth, kDefaultAnimHeight, ST77XX_BLACK);
-    tft->setTextColor(ST77XX_RED, ST77XX_BLACK);
-    tft->setCursor(8, 72);
-    tft->print("resource error");
-}
-
 void showAssetDataError(Adafruit_ST7735 *tft, const char *resource)
 {
     if (tft == nullptr)

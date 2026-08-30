@@ -7,6 +7,10 @@
 
 將 exporter 產生的完整 SD bundle 複製到 SD 卡根目錄。
 
+Release firmware 將 `runtime.bin` 視為可信的 exporter 輸出：它只保護讀取範圍、
+編譯容量與實際使用的引用，不重跑跨紀錄與產品語意驗證。請在寫入 SD 卡前使用
+Web exporter 的 read-back 與 host inspector 診斷完整性問題。
+
 - `runtime.bin`：Pet Stats、Actions、Status、Appearance、Evolution、Flow 與 Layout。
 - `species_<slot>.data`、`shared.data`：動畫 asset packs。
 - `index/`：動畫資源 manifest。
