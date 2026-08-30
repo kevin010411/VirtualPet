@@ -819,6 +819,37 @@ bool decodeStatus(const Source &source,
     return nextCondition == conditions->count;
 }
 
+bool validComposedRecords(const PetBehaviorConfig &config)
+{
+    uint8_t idleTriggerCount = 0;
+    for (uint8_t index = 0; index < kMaxPetBehaviorIdleTriggers; ++index)
+    {
+        const PetBehaviorIdleTriggerConfig &trigger = config.idleTriggers[index];
+        if (!trigger.active)
+            continue;
+        if (trigger.statSlot >= config.statCount || !config.stats[trigger.statSlot].active ||
+            !trigger.animation.valid())
+            return false;
+        ++idleTriggerCount;
+    }
+    if (idleTriggerCount != config.idleTriggerCount)
+        return false;
+#if ENABLE_GUESS_GAME
+    bool affected[kPetBehaviorGuessOutcomeCount][kPetBehaviorSlotCount] = {};
+    for (uint8_t index = 0; index < config.guessEffectCount; ++index)
+    {
+        const PetBehaviorGuessEffectConfig &effect = config.guessEffects[index];
+        const uint8_t outcome = static_cast<uint8_t>(effect.outcome);
+        if (!effect.active || outcome >= kPetBehaviorGuessOutcomeCount ||
+            effect.statSlot >= config.statCount || !config.stats[effect.statSlot].active ||
+            affected[outcome][effect.statSlot])
+            return false;
+        affected[outcome][effect.statSlot] = true;
+    }
+#endif
+    return true;
+}
+
 bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                                 const AssetData::RuntimeManifest &manifest,
                                 uint8_t speciesSlot,
@@ -853,7 +884,8 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         !decodeButtons(source, *buttons, candidate) ||
         !decodeStatus(source, table.featureFlags,
                       table.find(StatusSets), table.find(StatusConditions),
-                      *assets, *animations, scope, candidate))
+                      *assets, *animations, scope, candidate) ||
+        !validComposedRecords(candidate))
         return false;
     config = candidate;
     return true;
