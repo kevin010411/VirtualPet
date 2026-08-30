@@ -82,6 +82,17 @@ struct Source
     uint32_t size;
 };
 
+struct RuntimeTable
+{
+    Source source;
+    Section sections[kMaxSections];
+    uint16_t sectionCount;
+    uint32_t featureFlags;
+    uint32_t schemaFingerprint;
+
+    const Section *find(SectionType type) const;
+};
+
 struct MemorySource
 {
     const uint8_t *bytes;
@@ -177,6 +188,11 @@ const Section *findSection(const Section *sections, uint16_t count, uint16_t typ
         if (sections[index].type == type)
             return &sections[index];
     return nullptr;
+}
+
+const Section *RuntimeTable::find(SectionType type) const
+{
+    return findSection(sections, sectionCount, type);
 }
 
 bool readRecord(const Source &source, const Section &section,
@@ -432,6 +448,25 @@ bool validateAssetCatalog(const Source &source,
         }
     }
     return expectedFirstAsset == assets.count;
+}
+
+bool readRuntimeTable(const Source &source,
+                      const AssetData::RuntimeManifest &manifest,
+                      RuntimeTable &table)
+{
+    table = {};
+    table.source = source;
+    AssetData::BundleId bundleId = {};
+    if (!readEnvelope(source, table.sections, table.sectionCount,
+                      table.featureFlags, table.schemaFingerprint, bundleId) ||
+        memcmp(bundleId.bytes, manifest.bundleId.bytes, sizeof(bundleId.bytes)) != 0 ||
+        !validateProfileAndPersistence(source, table.sections, table.sectionCount,
+                                       table.schemaFingerprint))
+        return false;
+    const Section *assets = table.find(AssetRefs);
+    const Section *animations = table.find(Animations);
+    return assets != nullptr && animations != nullptr &&
+           validateAssetCatalog(source, *assets, *animations);
 }
 
 bool resolveAnimation(const Source &source,
@@ -813,7 +848,7 @@ bool validComposedRecords(const PetBehaviorConfig &config)
     return true;
 }
 
-bool decodeRuntimeTableBehavior(const Source &source,
+bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                                 const AssetData::RuntimeManifest &manifest,
                                 uint8_t speciesSlot,
                                 uint8_t outfitSlot,
@@ -821,28 +856,17 @@ bool decodeRuntimeTableBehavior(const Source &source,
 {
     if (speciesSlot == 0 || outfitSlot == 0)
         return false;
-    Section sections[kMaxSections] = {};
-    uint16_t sectionCount = 0;
-    uint32_t featureFlags = 0;
-    uint32_t schemaFingerprint = 0;
-    AssetData::BundleId bundleId = {};
-    if (!readEnvelope(source, sections, sectionCount, featureFlags,
-                      schemaFingerprint, bundleId) ||
-        memcmp(bundleId.bytes, manifest.bundleId.bytes, sizeof(bundleId.bytes)) != 0 ||
-        !validateProfileAndPersistence(source, sections, sectionCount, schemaFingerprint))
-        return false;
-
-    const Section *assets = findSection(sections, sectionCount, AssetRefs);
-    const Section *animations = findSection(sections, sectionCount, Animations);
-    const Section *stats = findSection(sections, sectionCount, PetStats);
-    const Section *actions = findSection(sections, sectionCount, Actions);
-    const Section *outcomes = findSection(sections, sectionCount, ActionOutcomes);
-    const Section *actionConditions = findSection(sections, sectionCount, ActionConditions);
-    const Section *effects = findSection(sections, sectionCount, ActionEffects);
-    const Section *buttons = findSection(sections, sectionCount, Buttons);
+    const Source &source = table.source;
+    const Section *assets = table.find(AssetRefs);
+    const Section *animations = table.find(Animations);
+    const Section *stats = table.find(PetStats);
+    const Section *actions = table.find(Actions);
+    const Section *outcomes = table.find(ActionOutcomes);
+    const Section *actionConditions = table.find(ActionConditions);
+    const Section *effects = table.find(ActionEffects);
+    const Section *buttons = table.find(Buttons);
     if (assets == nullptr || animations == nullptr || stats == nullptr || actions == nullptr ||
-        outcomes == nullptr || buttons == nullptr ||
-        !validateAssetCatalog(source, *assets, *animations))
+        outcomes == nullptr || buttons == nullptr)
         return false;
 
     PetBehaviorConfig candidate = config;
@@ -850,15 +874,14 @@ bool decodeRuntimeTableBehavior(const Source &source,
     candidate.assetManifest = manifest;
     candidate.activeSpeciesSlot = speciesSlot;
     candidate.activeOutfitSlot = outfitSlot;
-    candidate.schemaFingerprint = schemaFingerprint;
+    candidate.schemaFingerprint = table.schemaFingerprint;
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
     if (!decodeStats(source, *stats, candidate) ||
         !decodeActions(source, *actions, *outcomes, actionConditions, effects,
                        *assets, *animations, scope, candidate) ||
         !decodeButtons(source, *buttons, candidate) ||
-        !decodeStatus(source, featureFlags,
-                      findSection(sections, sectionCount, StatusSets),
-                      findSection(sections, sectionCount, StatusConditions),
+        !decodeStatus(source, table.featureFlags,
+                      table.find(StatusSets), table.find(StatusConditions),
                       *assets, *animations, scope, candidate) ||
         !validComposedRecords(candidate))
         return false;
@@ -920,32 +943,23 @@ bool conditionMatches(const uint8_t *record, const PetStatSnapshot &stats,
     return value >= minimum && value <= maximum;
 }
 
-bool decodeRuntimeTableAppearance(const Source &source,
-                                  const AssetData::RuntimeManifest &manifest,
+bool decodeRuntimeTableAppearance(const RuntimeTable &table,
                                   BundleReader &bundleReader,
                                   AppearanceQuery &query)
 {
-    Section sections[kMaxSections] = {};
-    uint16_t sectionCount = 0;
-    uint32_t featureFlags = 0;
-    uint32_t schemaFingerprint = 0;
-    AssetData::BundleId bundleId = {};
-    if (!readEnvelope(source, sections, sectionCount, featureFlags, schemaFingerprint, bundleId) ||
-        memcmp(bundleId.bytes, manifest.bundleId.bytes, sizeof(bundleId.bytes)) != 0 ||
-        !validateProfileAndPersistence(source, sections, sectionCount, schemaFingerprint))
-        return false;
-    const Section *assets = findSection(sections, sectionCount, AssetRefs);
-    const Section *animations = findSection(sections, sectionCount, Animations);
-    const Section *appearance = findSection(sections, sectionCount, Appearance);
-    const Section *species = findSection(sections, sectionCount, Species);
-    const Section *outfits = findSection(sections, sectionCount, Outfits);
-    const Section *evolutions = findSection(sections, sectionCount, Evolutions);
-    const Section *conditions = findSection(sections, sectionCount, EvolutionConditions);
+    const Source &source = table.source;
+    const uint32_t featureFlags = table.featureFlags;
+    const Section *assets = table.find(AssetRefs);
+    const Section *animations = table.find(Animations);
+    const Section *appearance = table.find(Appearance);
+    const Section *species = table.find(Species);
+    const Section *outfits = table.find(Outfits);
+    const Section *evolutions = table.find(Evolutions);
+    const Section *conditions = table.find(EvolutionConditions);
     const bool evolutionEnabled = (featureFlags & (1UL << 3)) != 0;
     if ((featureFlags & (1UL << 2)) == 0 || assets == nullptr || animations == nullptr ||
         appearance == nullptr || species == nullptr || outfits == nullptr ||
         appearance->count != 1 || species->count == 0 ||
-        !validateAssetCatalog(source, *assets, *animations) ||
         (evolutionEnabled && (evolutions == nullptr || conditions == nullptr)) ||
         (!evolutionEnabled && (evolutions != nullptr || conditions != nullptr)))
         return false;
@@ -1139,33 +1153,25 @@ FirmwarePlaybackRole flowRoleAt(uint8_t flow, uint8_t slot)
     return slot < count ? roles[slot] : FirmwarePlaybackRole::None;
 }
 
-bool decodeRuntimeTableFlow(const Source &source,
-                            const AssetData::RuntimeManifest &manifest,
+bool decodeRuntimeTableFlow(const RuntimeTable &table,
                             uint8_t speciesSlot,
                             uint8_t outfitSlot,
                             PetBehaviorConfig &config)
 {
     if (speciesSlot == 0 || outfitSlot == 0)
         return false;
-    Section sections[kMaxSections] = {};
-    uint16_t sectionCount = 0;
-    uint32_t featureFlags = 0;
-    uint32_t schemaFingerprint = 0;
-    AssetData::BundleId bundleId = {};
-    if (!readEnvelope(source, sections, sectionCount, featureFlags, schemaFingerprint, bundleId) ||
-        !compiledFeaturesAccept(featureFlags) ||
-        memcmp(bundleId.bytes, manifest.bundleId.bytes, sizeof(bundleId.bytes)) != 0 ||
-        !validateProfileAndPersistence(source, sections, sectionCount, schemaFingerprint))
+    const Source &source = table.source;
+    const uint32_t featureFlags = table.featureFlags;
+    if (!compiledFeaturesAccept(featureFlags))
         return false;
 
-    const Section *assets = findSection(sections, sectionCount, AssetRefs);
-    const Section *animations = findSection(sections, sectionCount, Animations);
-    const Section *roles = findSection(sections, sectionCount, SystemRoles);
-    const Section *layouts = findSection(sections, sectionCount, Layouts);
-    const Section *flows = findSection(sections, sectionCount, Flow);
-    const Section *flowRoles = findSection(sections, sectionCount, FlowRoles);
+    const Section *assets = table.find(AssetRefs);
+    const Section *animations = table.find(Animations);
+    const Section *roles = table.find(SystemRoles);
+    const Section *layouts = table.find(Layouts);
+    const Section *flows = table.find(Flow);
+    const Section *flowRoles = table.find(FlowRoles);
     if (assets == nullptr || animations == nullptr || roles == nullptr ||
-        !validateAssetCatalog(source, *assets, *animations) ||
         ((featureFlags & kDynamicActionLayoutFeature) != 0 && layouts == nullptr) ||
         ((featureFlags & kDynamicActionLayoutFeature) == 0 && layouts != nullptr) ||
         ((flows == nullptr) != (flowRoles == nullptr)))
@@ -1332,7 +1338,9 @@ bool parseRuntimeTableBehavior(const uint8_t *bytes,
         return false;
     MemorySource memory = {bytes, static_cast<uint32_t>(byteCount)};
     const Source source = {&memory, readMemory, memory.size};
-    return decodeRuntimeTableBehavior(source, manifest, speciesSlot, outfitSlot, config);
+    RuntimeTable table = {};
+    return readRuntimeTable(source, manifest, table) &&
+           decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, config);
 }
 
 bool loadCompleteRuntimeTable(SdFat *sd,
@@ -1350,6 +1358,7 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     const uint32_t byteCount = file.size();
     FileSource fileSource = {&file};
     const Source source = {&fileSource, readFile, byteCount};
+    RuntimeTable table = {};
 
     PetBehaviorConfig candidate = {};
     AppearanceSelection initialAppearance = {};
@@ -1359,54 +1368,16 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     query.selection = &initialAppearance;
     query.idleAnimation = &idleAnimation;
     const bool decoded =
-        decodeRuntimeTableBehavior(source, manifest, speciesSlot, outfitSlot, candidate) &&
-        decodeRuntimeTableFlow(source, manifest, speciesSlot, outfitSlot, candidate) &&
-        decodeRuntimeTableAppearance(source, manifest, bundleReader, query);
+        readRuntimeTable(source, manifest, table) &&
+        decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, candidate) &&
+        decodeRuntimeTableFlow(table, speciesSlot, outfitSlot, candidate) &&
+        decodeRuntimeTableAppearance(table, bundleReader, query);
     file.close();
     if (!decoded)
         return false;
     candidate.idleAnimation = idleAnimation;
     config = candidate;
     return true;
-}
-
-bool loadRuntimeTableBehavior(SdFat *sd,
-                              const AssetData::RuntimeManifest &manifest,
-                              uint8_t speciesSlot,
-                              uint8_t outfitSlot,
-                              PetBehaviorConfig &config)
-{
-    if (sd == nullptr)
-        return false;
-    File file = sd->open(kRuntimeTablePath, FILE_READ);
-    if (!file)
-        return false;
-    const uint32_t byteCount = file.size();
-    FileSource fileSource = {&file};
-    const Source source = {&fileSource, readFile, byteCount};
-    const bool decoded = decodeRuntimeTableBehavior(
-        source, manifest, speciesSlot, outfitSlot, config);
-    file.close();
-    return decoded;
-}
-
-bool loadRuntimeTableFlow(SdFat *sd,
-                          const AssetData::RuntimeManifest &manifest,
-                          uint8_t speciesSlot,
-                          uint8_t outfitSlot,
-                          PetBehaviorConfig &config)
-{
-    if (sd == nullptr)
-        return false;
-    File file = sd->open(kRuntimeTablePath, FILE_READ);
-    if (!file)
-        return false;
-    const uint32_t byteCount = file.size();
-    FileSource fileSource = {&file};
-    const Source source = {&fileSource, readFile, byteCount};
-    const bool decoded = decodeRuntimeTableFlow(source, manifest, speciesSlot, outfitSlot, config);
-    file.close();
-    return decoded;
 }
 
 namespace
@@ -1424,7 +1395,9 @@ bool loadRuntimeTableAppearanceQuery(SdFat *sd,
     const uint32_t byteCount = file.size();
     FileSource fileSource = {&file};
     const Source source = {&fileSource, readFile, byteCount};
-    const bool decoded = decodeRuntimeTableAppearance(source, manifest, bundleReader, query);
+    RuntimeTable table = {};
+    const bool decoded = readRuntimeTable(source, manifest, table) &&
+                         decodeRuntimeTableAppearance(table, bundleReader, query);
     file.close();
     return decoded;
 }

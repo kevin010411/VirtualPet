@@ -28,18 +28,4 @@ bool parseRuntimeTableBehavior(const uint8_t *bytes,
                                uint8_t outfitSlot,
                                PetBehaviorConfig &config);
 
-// Production SD entry point for behavior records in /runtime.bin.
-bool loadRuntimeTableBehavior(SdFat *sd,
-                              const AssetData::RuntimeManifest &manifest,
-                              uint8_t speciesSlot,
-                              uint8_t outfitSlot,
-                              PetBehaviorConfig &config);
-
-// Production SD entry point for flow, role, and layout records in /runtime.bin.
-bool loadRuntimeTableFlow(SdFat *sd,
-                          const AssetData::RuntimeManifest &manifest,
-                          uint8_t speciesSlot,
-                          uint8_t outfitSlot,
-                          PetBehaviorConfig &config);
-
 #endif // RUNTIME_TABLE_BEHAVIOR_H
