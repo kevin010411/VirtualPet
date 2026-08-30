@@ -61,7 +61,7 @@ struct FrameDescriptor
 
 struct OpenFrame
 {
-    File file;
+    SdBaseFile file;
     FrameDescriptor descriptor;
     uint16_t animationFrameCount = 0;
     uint16_t frameMs = 0;
@@ -109,23 +109,23 @@ private:
 
     bool validateAddress(const AssetData::AssetFrameAddress &address);
     bool buildPackPath(uint8_t speciesSlot, char *path, size_t pathSize) const;
-    bool openVerifiedPack(uint8_t speciesSlot, File &file, PackHeader &header);
-    bool verifyPack(File &file, uint8_t speciesSlot, PackHeader &header);
-    bool readHeader(File &file, PackHeader &header);
+    bool openVerifiedPack(uint8_t speciesSlot, SdBaseFile &file, PackHeader &header);
+    bool verifyPack(SdBaseFile &file, uint8_t speciesSlot, PackHeader &header);
+    bool readHeader(SdBaseFile &file, PackHeader &header);
     bool validateHeader(const PackHeader &header, uint8_t speciesSlot, uint32_t physicalSize) const;
-    bool validateAnimations(File &file, const PackHeader &header);
-    bool validateAnimationRanges(File &file, const PackHeader &header);
-    bool validateDescriptors(File &file, const PackHeader &header);
-    bool validateCrc(File &file, const PackHeader &header);
-    bool findAnimation(File &file,
+    bool validateAnimations(SdBaseFile &file, const PackHeader &header);
+    bool validateAnimationRanges(SdBaseFile &file, const PackHeader &header);
+    bool validateDescriptors(SdBaseFile &file, const PackHeader &header);
+    bool validateCrc(SdBaseFile &file, const PackHeader &header);
+    bool findAnimation(SdBaseFile &file,
                        const PackHeader &header,
                        const AssetData::AssetFrameAddress &address,
                        AssetData::AnimationRecord &animation);
-    bool readAnimation(File &file,
+    bool readAnimation(SdBaseFile &file,
                        const PackHeader &header,
                        uint32_t index,
                        AssetData::AnimationRecord &animation) const;
-    bool readDescriptor(File &file,
+    bool readDescriptor(SdBaseFile &file,
                         const PackHeader &header,
                         uint32_t index,
                         AssetData::FrameDescriptor &descriptor) const;

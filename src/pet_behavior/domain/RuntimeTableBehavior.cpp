@@ -4,6 +4,7 @@
 #include <string.h>
 #include "appearance/domain/RuntimeTableAppearance.h"
 #include "commands/domain/SystemCommandCatalog.h"
+#include "shared/sd/SdBinaryRead.h"
 
 namespace
 {
@@ -89,6 +90,7 @@ struct RuntimeTable
     uint16_t sectionCount;
     uint32_t featureFlags;
     uint32_t schemaFingerprint;
+    AssetData::BundleId bundleId;
 
     const Section *find(SectionType type) const;
 };
@@ -110,14 +112,14 @@ bool readMemory(void *context, uint32_t offset, uint8_t *destination, size_t siz
 
 struct FileSource
 {
-    File *file;
+    SdBaseFile *file;
 };
 
 bool readFile(void *context, uint32_t offset, uint8_t *destination, size_t size)
 {
     FileSource &source = *static_cast<FileSource *>(context);
-    return source.file != nullptr && destination != nullptr && source.file->seek(offset) &&
-           source.file->read(destination, size) == static_cast<int>(size);
+    return source.file != nullptr && destination != nullptr && source.file->seekSet(offset) &&
+           readSdBinary(*source.file, destination, size) == static_cast<int>(size);
 }
 
 uint16_t readU16(const uint8_t *bytes)
@@ -451,15 +453,15 @@ bool validateAssetCatalog(const Source &source,
 }
 
 bool readRuntimeTable(const Source &source,
-                      const AssetData::RuntimeManifest &manifest,
+                      const AssetData::RuntimeManifest *expectedManifest,
                       RuntimeTable &table)
 {
     table = {};
     table.source = source;
-    AssetData::BundleId bundleId = {};
     if (!readEnvelope(source, table.sections, table.sectionCount,
-                      table.featureFlags, table.schemaFingerprint, bundleId) ||
-        memcmp(bundleId.bytes, manifest.bundleId.bytes, sizeof(bundleId.bytes)) != 0 ||
+                      table.featureFlags, table.schemaFingerprint, table.bundleId) ||
+        (expectedManifest != nullptr &&
+         !AssetData::sameBundleId(table.bundleId, expectedManifest->bundleId)) ||
         !validateProfileAndPersistence(source, table.sections, table.sectionCount,
                                        table.schemaFingerprint))
         return false;
@@ -1327,6 +1329,31 @@ bool decodeRuntimeTableFlow(const RuntimeTable &table,
 }
 } // namespace
 
+bool loadRuntimeManifest(SdFat *sd, AssetData::RuntimeManifest &manifest)
+{
+    manifest = {};
+    if (sd == nullptr)
+        return false;
+    SdBaseFile file;
+    if (!file.open(kRuntimeTablePath, FILE_READ))
+        return false;
+    const uint32_t byteCount = file.fileSize();
+    FileSource fileSource = {&file};
+    const Source source = {&fileSource, readFile, byteCount};
+    Section sections[kMaxSections] = {};
+    uint16_t sectionCount = 0;
+    uint32_t featureFlags = 0;
+    uint32_t schemaFingerprint = 0;
+    AssetData::BundleId bundleId = {};
+    const bool decoded = readEnvelope(source, sections, sectionCount,
+                                      featureFlags, schemaFingerprint, bundleId);
+    file.close();
+    if (!decoded)
+        return false;
+    manifest.bundleId = bundleId;
+    return true;
+}
+
 bool parseRuntimeTableBehavior(const uint8_t *bytes,
                                size_t byteCount,
                                const AssetData::RuntimeManifest &manifest,
@@ -1339,7 +1366,7 @@ bool parseRuntimeTableBehavior(const uint8_t *bytes,
     MemorySource memory = {bytes, static_cast<uint32_t>(byteCount)};
     const Source source = {&memory, readMemory, memory.size};
     RuntimeTable table = {};
-    return readRuntimeTable(source, manifest, table) &&
+    return readRuntimeTable(source, &manifest, table) &&
            decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, config);
 }
 
@@ -1352,10 +1379,10 @@ bool loadCompleteRuntimeTable(SdFat *sd,
 {
     if (sd == nullptr)
         return false;
-    File file = sd->open(kRuntimeTablePath, FILE_READ);
-    if (!file)
+    SdBaseFile file;
+    if (!file.open(kRuntimeTablePath, FILE_READ))
         return false;
-    const uint32_t byteCount = file.size();
+    const uint32_t byteCount = file.fileSize();
     FileSource fileSource = {&file};
     const Source source = {&fileSource, readFile, byteCount};
     RuntimeTable table = {};
@@ -1368,7 +1395,7 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     query.selection = &initialAppearance;
     query.idleAnimation = &idleAnimation;
     const bool decoded =
-        readRuntimeTable(source, manifest, table) &&
+        readRuntimeTable(source, &manifest, table) &&
         decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, candidate) &&
         decodeRuntimeTableFlow(table, speciesSlot, outfitSlot, candidate) &&
         decodeRuntimeTableAppearance(table, bundleReader, query);
@@ -1389,14 +1416,14 @@ bool loadRuntimeTableAppearanceQuery(SdFat *sd,
 {
     if (sd == nullptr)
         return false;
-    File file = sd->open(kRuntimeTablePath, FILE_READ);
-    if (!file)
+    SdBaseFile file;
+    if (!file.open(kRuntimeTablePath, FILE_READ))
         return false;
-    const uint32_t byteCount = file.size();
+    const uint32_t byteCount = file.fileSize();
     FileSource fileSource = {&file};
     const Source source = {&fileSource, readFile, byteCount};
     RuntimeTable table = {};
-    const bool decoded = readRuntimeTable(source, manifest, table) &&
+    const bool decoded = readRuntimeTable(source, &manifest, table) &&
                          decodeRuntimeTableAppearance(table, bundleReader, query);
     file.close();
     return decoded;

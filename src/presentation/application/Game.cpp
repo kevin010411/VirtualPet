@@ -10,6 +10,7 @@
 #endif
 #include "pet/application/PetActionController.h"
 #include "pet_behavior/application/PetBehaviorRuntime.h"
+#include "pet_behavior/domain/RuntimeTableBehavior.h"
 #include "pet/domain/Pet.h"
 #include "presentation/adapters/rendering/Renderer.h"
 #include "pet/adapters/PetStorage.h"
@@ -57,11 +58,11 @@ bool Game::prepare_game()
         return false;
     AssetData::RuntimeManifest manifest = {};
     if (petBehaviorLoadingFailed ||
-        !AssetData::loadRuntimeManifest(animations->sdCard(), manifest))
+        !loadRuntimeManifest(animations->sdCard(), manifest))
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
-        startupConfigError = "asset_manifest.txt";
+        startupConfigError = "runtime.bin";
         return false;
     }
 

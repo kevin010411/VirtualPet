@@ -9,6 +9,14 @@
 
 namespace AssetData
 {
+bool sameBundleId(const BundleId &left, const BundleId &right)
+{
+    for (uint8_t index = 0; index < sizeof(left.bytes); ++index)
+        if (left.bytes[index] != right.bytes[index])
+            return false;
+    return true;
+}
+
 // Behavior fixtures do not mount asset packs. The complete SD-loader tests own
 // physical pack resolution; this seam only makes the behavior reader linkable.
 bool animationReferenceExists(BundleReader &, const AnimationRef &, uint8_t)

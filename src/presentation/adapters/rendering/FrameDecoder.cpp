@@ -1,5 +1,7 @@
 #include "presentation/adapters/rendering/FrameDecoder.h"
 
+#include "shared/sd/SdBinaryRead.h"
+
 namespace FrameDecoder
 {
 void showResourceError(Adafruit_ST7735 *tft)
@@ -31,7 +33,7 @@ namespace
 class DataBufferedReader
 {
 public:
-    DataBufferedReader(File &source, uint8_t *buffer, size_t bufferSize, uint32_t byteCount)
+    DataBufferedReader(SdBaseFile &source, uint8_t *buffer, size_t bufferSize, uint32_t byteCount)
         : file(source), readBuffer(buffer), readBufferSize(bufferSize), remainingBytes(byteCount)
     {
     }
@@ -70,7 +72,7 @@ private:
         size_t requested = readBufferSize;
         if (requested > remainingBytes)
             requested = static_cast<size_t>(remainingBytes);
-        const int bytesRead = file.read(readBuffer, requested);
+        const int bytesRead = readSdBinary(file, readBuffer, requested);
         if (bytesRead != static_cast<int>(requested))
             return false;
         readPosition = 0;
@@ -78,7 +80,7 @@ private:
         return true;
     }
 
-    File &file;
+    SdBaseFile &file;
     uint8_t *readBuffer;
     size_t readBufferSize;
     uint32_t remainingBytes;

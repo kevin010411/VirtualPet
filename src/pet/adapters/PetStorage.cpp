@@ -1,5 +1,6 @@
 #include "pet/adapters/PetStorage.h"
 #include "pet/adapters/PetStateSchemaDecision.h"
+#include "shared/sd/SdBinaryRead.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -38,11 +39,11 @@ bool isSequenceNewer(uint32_t candidate, uint32_t current)
 
 bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
 {
-    File f = sd->open(path, FILE_READ);
-    if (!f)
+    SdBaseFile f;
+    if (!f.open(path, FILE_READ))
         return false;
 
-    const size_t stateSize = f.size();
+    const size_t stateSize = f.fileSize();
     if (stateSize != sizeof(PersistedPetState))
     {
         f.close();
@@ -50,10 +51,10 @@ bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
     }
 
     state = {};
-    const size_t readCount = f.read(reinterpret_cast<uint8_t *>(&state), stateSize);
+    const int readCount = readSdBinary(f, &state, stateSize);
     f.close();
 
-    if (readCount != stateSize)
+    if (readCount != static_cast<int>(stateSize))
         return false;
 
     if (state.magic != Pet::kPetStateMagic)
@@ -73,15 +74,15 @@ void discardSave(SdFat *sd)
 
 bool writeStateSlot(SdFat *sd, const char *path, const PersistedPetState &state)
 {
-    File f = sd->open(path, O_WRONLY | O_CREAT | O_TRUNC);
-    if (!f)
+    SdBaseFile f;
+    if (!f.open(path, O_WRONLY | O_CREAT | O_TRUNC))
         return false;
 
     const size_t n = f.write(reinterpret_cast<const uint8_t *>(&state), sizeof(state));
-    f.flush();
+    const bool synced = f.sync();
     f.close();
 
-    return n == sizeof(state);
+    return n == sizeof(state) && synced;
 }
 } // namespace
 

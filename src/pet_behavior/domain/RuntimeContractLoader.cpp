@@ -3,7 +3,6 @@
 #include <string.h>
 #include "appearance/domain/RuntimeTableAppearance.h"
 #include "pet_behavior/domain/RuntimeTableBehavior.h"
-#include "shared/assets/AssetRuntimeContract.h"
 
 namespace
 {
@@ -28,9 +27,9 @@ bool loadRuntimeContract(SdFat *sd,
         errorResource[0] = '\0';
 
     AssetData::RuntimeManifest manifest = {};
-    if (speciesSlot == 0 || outfitSlot == 0 || !AssetData::loadRuntimeManifest(sd, manifest))
+    if (speciesSlot == 0 || outfitSlot == 0 || !loadRuntimeManifest(sd, manifest))
     {
-        copyLoadError(errorResource, errorResourceCapacity, "asset_manifest");
+        copyLoadError(errorResource, errorResourceCapacity, "runtime.bin");
         return false;
     }
 

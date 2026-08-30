@@ -14,7 +14,11 @@ public:
     int read() { return -1; }
     int read(void *, size_t) { return -1; }
     bool seek(uint32_t) { return false; }
+    bool seekSet(uint32_t) { return false; }
     uint32_t size() const { return 0; }
+    uint32_t fileSize() const { return 0; }
+    bool open(const char *, uint8_t) { return false; }
+    bool sync() { return false; }
     void close() {}
 };
 
@@ -23,5 +27,7 @@ class SdFat
 public:
     File open(const char *, uint8_t) { return File(); }
 };
+
+using SdBaseFile = File;
 
 #endif // TEST_HOST_SDFAT_H

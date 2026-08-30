@@ -1,5 +1,7 @@
 #include "shared/assets/BundleReader.h"
 
+#include "shared/sd/SdBinaryRead.h"
+
 #include <string.h>
 #include "shared/utils/TextBuffer.h"
 
@@ -20,10 +22,10 @@ uint32_t readU32(const uint8_t *data)
            (static_cast<uint32_t>(data[3]) << 24);
 }
 
-bool readExact(File &file, uint32_t offset, uint8_t *destination, size_t size)
+bool readExact(SdBaseFile &file, uint32_t offset, uint8_t *destination, size_t size)
 {
-    return destination != nullptr && file.seek(offset) &&
-           file.read(destination, size) == static_cast<int>(size);
+    return destination != nullptr && file.seekSet(offset) &&
+           readSdBinary(file, destination, size) == static_cast<int>(size);
 }
 
 int compareAnimationKey(const AssetData::AnimationRecord &left,
@@ -97,7 +99,7 @@ bool BundleReader::resolveAnimation(const AssetData::AssetFrameAddress &address,
     if (!validateAddress(address))
         return false;
 
-    File file;
+    SdBaseFile file;
     PackHeader header;
     if (!openVerifiedPack(address.speciesSlot, file, header))
         return false;
@@ -116,7 +118,7 @@ bool BundleReader::tryResolveAnimation(const AssetData::AssetFrameAddress &addre
     if (!validateAddress(address))
         return false;
 
-    File file;
+    SdBaseFile file;
     PackHeader header;
     if (!openVerifiedPack(address.speciesSlot, file, header))
         return false;
@@ -154,7 +156,7 @@ bool BundleReader::openFrame(const AssetData::AssetFrameAddress &address,
 
     const uint32_t descriptorIndex = animation.firstFrame + address.frameIndex;
     if (!readDescriptor(frame.file, header, descriptorIndex, frame.descriptor) ||
-        !frame.file.seek(frame.descriptor.payloadOffset))
+        !frame.file.seekSet(frame.descriptor.payloadOffset))
     {
         frame.file.close();
         return recordError(AssetData::BundleError::InvalidFrame, address.speciesSlot);
@@ -212,7 +214,7 @@ bool BundleReader::buildPackPath(uint8_t speciesSlot, char *path, size_t pathSiz
            output.append(".data") && output.ok();
 }
 
-bool BundleReader::openVerifiedPack(uint8_t speciesSlot, File &file, PackHeader &header)
+bool BundleReader::openVerifiedPack(uint8_t speciesSlot, SdBaseFile &file, PackHeader &header)
 {
     if (firstError_ != AssetData::BundleError::None)
         return false;
@@ -225,8 +227,7 @@ bool BundleReader::openVerifiedPack(uint8_t speciesSlot, File &file, PackHeader 
     if (!buildPackPath(speciesSlot, path, sizeof(path)))
         return recordError(AssetData::BundleError::InvalidAddress, speciesSlot);
 
-    file = sd_->open(path);
-    if (!file)
+    if (!file.open(path, FILE_READ))
     {
         setVerificationState(speciesSlot, VerificationState::Failed);
         return recordError(AssetData::BundleError::MissingPack, speciesSlot);
@@ -234,7 +235,7 @@ bool BundleReader::openVerifiedPack(uint8_t speciesSlot, File &file, PackHeader 
 
     if (state == VerificationState::Verified)
     {
-        const uint32_t physicalSize = file.size();
+        const uint32_t physicalSize = file.fileSize();
         if (readHeader(file, header) &&
             validateHeader(header, speciesSlot, physicalSize) &&
             header.crc32 == verifiedCrc_[speciesSlot])
@@ -256,9 +257,9 @@ bool BundleReader::openVerifiedPack(uint8_t speciesSlot, File &file, PackHeader 
     return true;
 }
 
-bool BundleReader::verifyPack(File &file, uint8_t speciesSlot, PackHeader &header)
+bool BundleReader::verifyPack(SdBaseFile &file, uint8_t speciesSlot, PackHeader &header)
 {
-    const uint32_t physicalSize = file.size();
+    const uint32_t physicalSize = file.fileSize();
     if (physicalSize < AssetData::kHeaderSize || physicalSize > AssetData::kMaxPackBytes ||
         !readHeader(file, header))
     {
@@ -273,7 +274,7 @@ bool BundleReader::verifyPack(File &file, uint8_t speciesSlot, PackHeader &heade
            validateCrc(file, header);
 }
 
-bool BundleReader::readHeader(File &file, PackHeader &header)
+bool BundleReader::readHeader(SdBaseFile &file, PackHeader &header)
 {
     if (scratch_ == nullptr || scratchSize_ < AssetData::kHeaderSize ||
         !readExact(file, 0, scratch_, AssetData::kHeaderSize))
@@ -337,7 +338,7 @@ bool BundleReader::validateHeader(const PackHeader &header,
            header.payloadOffset < header.fileSize;
 }
 
-bool BundleReader::validateAnimations(File &file, const PackHeader &header)
+bool BundleReader::validateAnimations(SdBaseFile &file, const PackHeader &header)
 {
     AssetData::AnimationRecord previous;
     bool hasPrevious = false;
@@ -391,7 +392,7 @@ bool BundleReader::validateAnimations(File &file, const PackHeader &header)
     return validateAnimationRanges(file, header);
 }
 
-bool BundleReader::validateAnimationRanges(File &file, const PackHeader &header)
+bool BundleReader::validateAnimationRanges(SdBaseFile &file, const PackHeader &header)
 {
     constexpr uint32_t kFramesPerPass = AssetData::kVerificationScratchBytes * 8UL;
     for (uint32_t blockStart = 0; blockStart < header.frameCount; blockStart += kFramesPerPass)
@@ -453,7 +454,7 @@ bool BundleReader::validateAnimationRanges(File &file, const PackHeader &header)
     return true;
 }
 
-bool BundleReader::validateDescriptors(File &file, const PackHeader &header)
+bool BundleReader::validateDescriptors(SdBaseFile &file, const PackHeader &header)
 {
     uint32_t payloadCursor = header.payloadOffset;
     for (uint32_t index = 0; index < header.frameCount; ++index)
@@ -504,9 +505,9 @@ bool BundleReader::validateDescriptors(File &file, const PackHeader &header)
     return payloadCursor == header.fileSize;
 }
 
-bool BundleReader::validateCrc(File &file, const PackHeader &header)
+bool BundleReader::validateCrc(SdBaseFile &file, const PackHeader &header)
 {
-    if (!file.seek(0))
+    if (!file.seekSet(0))
         return false;
 
     uint32_t crc = 0xFFFFFFFFUL;
@@ -519,7 +520,7 @@ bool BundleReader::validateCrc(File &file, const PackHeader &header)
         const uint32_t remaining = header.fileSize - offset;
         if (chunkSize > remaining)
             chunkSize = static_cast<size_t>(remaining);
-        if (file.read(scratch_, chunkSize) != static_cast<int>(chunkSize))
+        if (readSdBinary(file, scratch_, chunkSize) != static_cast<int>(chunkSize))
             return false;
 
         for (size_t index = 0; index < chunkSize; ++index)
@@ -537,7 +538,7 @@ bool BundleReader::validateCrc(File &file, const PackHeader &header)
     return (crc ^ 0xFFFFFFFFUL) == header.crc32;
 }
 
-bool BundleReader::findAnimation(File &file,
+bool BundleReader::findAnimation(SdBaseFile &file,
                                  const PackHeader &header,
                                  const AssetData::AssetFrameAddress &address,
                                  AssetData::AnimationRecord &animation)
@@ -567,7 +568,7 @@ bool BundleReader::findAnimation(File &file,
     return compareAnimationKey(animation, target) == 0;
 }
 
-bool BundleReader::readAnimation(File &file,
+bool BundleReader::readAnimation(SdBaseFile &file,
                                  const PackHeader &header,
                                  uint32_t index,
                                  AssetData::AnimationRecord &animation) const
@@ -588,7 +589,7 @@ bool BundleReader::readAnimation(File &file,
     return true;
 }
 
-bool BundleReader::readDescriptor(File &file,
+bool BundleReader::readDescriptor(SdBaseFile &file,
                                   const PackHeader &header,
                                   uint32_t index,
                                   AssetData::FrameDescriptor &descriptor) const

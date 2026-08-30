@@ -1,7 +1,6 @@
 #include "pet/domain/Pet.h"
 
 #include <string.h>
-#include <stdio.h>
 #include "shared/utils/CanonicalDecimal.h"
 
 namespace
@@ -43,7 +42,21 @@ uint8_t parseAppearanceSlot(const char *text)
 
 bool writeAppearanceSlot(char *destination, size_t destinationSize, uint8_t slot)
 {
-    return slot != 0 && snprintf(destination, destinationSize, "%u", slot) > 0;
+    if (destination == nullptr || slot == 0)
+        return false;
+    char reversed[3] = {};
+    size_t digitCount = 0;
+    do
+    {
+        reversed[digitCount++] = static_cast<char>('0' + (slot % 10U));
+        slot = static_cast<uint8_t>(slot / 10U);
+    } while (slot != 0);
+    if (digitCount >= destinationSize)
+        return false;
+    for (size_t index = 0; index < digitCount; ++index)
+        destination[index] = reversed[digitCount - index - 1U];
+    destination[digitCount] = '\0';
+    return true;
 }
 } // namespace
 

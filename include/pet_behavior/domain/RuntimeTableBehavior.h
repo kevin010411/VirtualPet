@@ -8,6 +8,10 @@
 
 class BundleReader;
 
+// Verifies the self-describing /runtime.bin envelope before any asset pack is
+// configured. The consuming decode performs the remaining catalog checks.
+bool loadRuntimeManifest(SdFat *sd, AssetData::RuntimeManifest &manifest);
+
 // Loads every production-owned section from one open /runtime.bin snapshot and
 // publishes the candidate only after behavior, flow, and initial appearance
 // have all validated.
