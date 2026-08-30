@@ -38,15 +38,15 @@ constexpr CommandController::CommandSlot CommandController::emptySlot()
     return {AppCommandId::None, "NO_OP", nullptr, nullptr, false};
 }
 
-CommandController::CommandSlot CommandController::systemCommandSlot(const char *token)
+CommandController::CommandSlot CommandController::systemCommandSlot(RuntimeSystemCommandId runtimeId)
 {
-    const CompiledSystemCommand *command = findCompiledSystemCommand(token);
+    const CompiledSystemCommand *command = findCompiledSystemCommand(runtimeId);
     if (command == nullptr)
         return emptySlot();
 
     switch (command->handler)
     {
-#define SYSTEM_COMMAND(handler, token, slot) \
+#define SYSTEM_COMMAND(handler, token, runtimeId, slot) \
     case SystemCommandHandler::handler:      \
         return slot;
 #include "commands/domain/SystemCommandCatalog.def"
@@ -62,7 +62,7 @@ CommandController::CommandSlot CommandController::buttonSlot(const PetBehaviorBu
     if (button.kind == PetBehaviorButtonKind::UserAction)
         return COMMAND_SLOT(AppCommandId::UserAction, "USER_ACTION", canAlwaysExecute, executeUserAction);
     if (button.kind == PetBehaviorButtonKind::SystemCommand)
-        return systemCommandSlot(button.systemCommand);
+        return systemCommandSlot(button.systemCommandId);
     return emptySlot();
 }
 

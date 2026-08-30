@@ -39,7 +39,7 @@ bool resolveStatusSet(
     {
         const StatusSetCondition &condition = set.conditions[index];
         int32_t value = 0;
-        if (!valueSource(condition.source, valueContext, value))
+        if (!valueSource(condition, valueContext, value))
             return false;
         frame = static_cast<uint16_t>(
             frame * condition.levels +

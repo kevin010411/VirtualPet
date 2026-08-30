@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "animation/domain/Animation.h"
 #include "commands/domain/StatusSetContract.h"
+#include "commands/domain/SystemCommandCatalog.h"
 #include "shared/config/AppProfile.h"
 
 constexpr uint8_t kPetBehaviorSlotCount = APP_MAX_PET_STATS;
@@ -28,7 +29,6 @@ constexpr uint8_t kPetBehaviorGuessOutcomeCount = 4;
 constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * kMaxPetBehaviorStats;
 #endif
 constexpr uint8_t kPetBehaviorButtonCount = 8;
-constexpr size_t kPetBehaviorSystemCommandTokenSize = 16;
 constexpr size_t kMaxPetBehaviorContractBytes = 24576;
 
 enum class PetBehaviorEffectOperation : uint8_t
@@ -170,7 +170,7 @@ struct PetBehaviorButtonConfig
     bool active;
     PetBehaviorButtonKind kind;
     uint8_t actionSlot;
-    char systemCommand[kPetBehaviorSystemCommandTokenSize];
+    RuntimeSystemCommandId systemCommandId;
 };
 
 struct PetBehaviorConfig

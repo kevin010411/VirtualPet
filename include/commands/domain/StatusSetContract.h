@@ -5,13 +5,19 @@
 #include <stdint.h>
 #include "shared/assets/AssetRuntimeContract.h"
 
-constexpr size_t kStatusSourceNameSize = 17;
 constexpr uint8_t kMaxStatusSets = 5;
 constexpr uint8_t kMaxStatusConditions = 3;
 
+enum class StatusConditionSource : uint8_t
+{
+    PetStat,
+    StageDays,
+};
+
 struct StatusSetCondition
 {
-    char source[kStatusSourceNameSize];
+    StatusConditionSource source;
+    uint8_t statSlot;
     uint8_t levels;
     int32_t minValue;
     int32_t maxValue;
@@ -30,7 +36,9 @@ struct StatusSetsConfig
     uint8_t count;
 };
 
-using StatusValueSource = bool (*)(const char *source, const void *context, int32_t &value);
+using StatusValueSource = bool (*)(const StatusSetCondition &condition,
+                                  const void *context,
+                                  int32_t &value);
 
 struct StatusSetResolution
 {

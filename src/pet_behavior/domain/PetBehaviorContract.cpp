@@ -2,10 +2,12 @@
 
 #include <limits.h>
 #include <string.h>
+#include "commands/domain/SystemCommandCatalog.h"
 #include "shared/assets/AssetRuntimeContract.h"
 #include "shared/sd/SdTextRecordReader.h"
 #include "pet_behavior/domain/PetBehaviorActionConditionRules.h"
 #include "pet_behavior/domain/PetBehaviorStatSlot.h"
+#include "pet_behavior/domain/RuntimeTableBehavior.h"
 #include "shared/utils/CanonicalDecimal.h"
 
 namespace
@@ -123,9 +125,10 @@ public:
     PetBehaviorDecoder(const AssetData::RuntimeManifest &manifest,
                        uint8_t speciesSlot,
                        uint8_t outfitSlot,
-                       BundleReader *bundleReader = nullptr)
+                       BundleReader *bundleReader = nullptr,
+                       bool migrationComposition = false)
         : manifest_(manifest), speciesSlot_(speciesSlot), outfitSlot_(outfitSlot),
-          bundleReader_(bundleReader)
+          bundleReader_(bundleReader), migrationComposition_(migrationComposition)
     {
         candidate.assetManifest = manifest;
         candidate.activeSpeciesSlot = speciesSlot;
@@ -142,6 +145,8 @@ public:
             return decodeBundleId(record);
         if (!assetDataSeen || !bundleSeen)
             return false;
+        if (migrationComposition_ && binaryOwnedRecord(record.fields[0]))
+            return true;
         if (strcmp(record.fields[0], "pet_behavior") == 0)
             return decodePetBehaviorHeader(record);
         if (strcmp(record.fields[0], "stat") == 0)
@@ -181,7 +186,14 @@ public:
 
     bool complete(PetBehaviorConfig &destination) const
     {
-        if (!assetDataSeen || !bundleSeen || !identitySeen || !statusSeen || !idleSeen ||
+        if (!assetDataSeen || !bundleSeen || !idleSeen)
+            return false;
+        if (migrationComposition_)
+        {
+            destination = candidate;
+            return true;
+        }
+        if (!identitySeen || !statusSeen ||
             candidate.buttonCount != kPetBehaviorButtonCount ||
             candidate.statCount > kMaxPetBehaviorStats || !validActions() || !validStatusConditions()
 #if ENABLE_GUESS_GAME
@@ -199,11 +211,23 @@ private:
     uint8_t speciesSlot_;
     uint8_t outfitSlot_;
     BundleReader *bundleReader_;
+    bool migrationComposition_;
     bool assetDataSeen = false;
     bool bundleSeen = false;
     bool identitySeen = false;
     bool statusSeen = false;
     bool idleSeen = false;
+
+    static bool binaryOwnedRecord(const char *kind)
+    {
+        return strcmp(kind, "pet_behavior") == 0 || strcmp(kind, "stat") == 0 ||
+               strcmp(kind, "action") == 0 || strcmp(kind, "action_animation") == 0 ||
+               strcmp(kind, "action_outcome") == 0 || strcmp(kind, "action_condition") == 0 ||
+               strcmp(kind, "action_effect") == 0 ||
+               strcmp(kind, "action_outcome_effect") == 0 || strcmp(kind, "button") == 0 ||
+               strcmp(kind, "status") == 0 || strcmp(kind, "status_set") == 0 ||
+               strcmp(kind, "status_animation") == 0 || strcmp(kind, "status_condition") == 0;
+    }
 
     bool decodeAssetData(const SdTextRecord &record)
     {
@@ -436,7 +460,6 @@ private:
 
     bool validStatusConditions() const
     {
-        const ActivePetBehaviorStatSlots activeSlots(candidate);
         for (uint8_t setSlot = 0; setSlot < candidate.statusSets.count; ++setSlot)
         {
             const StatusSetConfig &set = candidate.statusSets.sets[setSlot];
@@ -444,12 +467,12 @@ private:
                 return false;
             for (uint8_t conditionSlot = 0; conditionSlot < set.conditionCount; ++conditionSlot)
             {
-                const char *source = set.conditions[conditionSlot].source;
-                if (strcmp(source, "stage_days") == 0)
+                const StatusSetCondition &condition = set.conditions[conditionSlot];
+                if (condition.source == StatusConditionSource::StageDays)
                     continue;
-
-                uint8_t statSlot = 0;
-                if (!activeSlots.resolve(source, statSlot))
+                if (condition.source != StatusConditionSource::PetStat ||
+                    condition.statSlot >= kPetBehaviorSlotCount ||
+                    !candidate.stats[condition.statSlot].active)
                 {
                     return false;
                 }
@@ -531,7 +554,17 @@ private:
             return false;
         StatusSetConfig &set = candidate.statusSets.sets[setSlot];
         StatusSetCondition &condition = set.conditions[conditionSlot];
-        if (!copyBounded(record.fields[3], condition.source, sizeof(condition.source)))
+        if (strcmp(record.fields[3], "stage_days") == 0)
+        {
+            condition.source = StatusConditionSource::StageDays;
+            condition.statSlot = 0;
+        }
+        else if (parseSlot(record.fields[3], "custom", kPetBehaviorSlotCount,
+                           condition.statSlot))
+        {
+            condition.source = StatusConditionSource::PetStat;
+        }
+        else
             return false;
         condition.levels = static_cast<uint8_t>(levels);
         condition.minValue = minValue;
@@ -881,8 +914,10 @@ private:
         }
         else if (strcmp(record.fields[2], "system_command") == 0)
         {
-            if (!copyBounded(record.fields[3], button.systemCommand, sizeof(button.systemCommand)))
+            RuntimeSystemCommandId runtimeId;
+            if (!runtimeSystemCommandIdForToken(record.fields[3], runtimeId))
                 return false;
+            button.systemCommandId = runtimeId;
             button.kind = PetBehaviorButtonKind::SystemCommand;
         }
         else
@@ -1178,7 +1213,7 @@ bool loadPetBehaviorContract(SdFat *sd,
         copyLoadError(errorResource, errorResourceCapacity, "asset data", &bundleReader);
         return false;
     }
-    PetBehaviorDecoder decoder(manifest, speciesSlot, outfitSlot, &bundleReader);
+    PetBehaviorDecoder decoder(manifest, speciesSlot, outfitSlot, &bundleReader, true);
     if (!loadSdTextRecords(sd, kRuntimeContractPath, kMaxPetBehaviorContractBytes,
                            kRuntimeContractIdentity, kRuntimeContractVersion, decodeRecord, &decoder) ||
         !decoder.complete(config))
@@ -1198,6 +1233,15 @@ bool loadPetBehaviorContract(SdFat *sd,
                                           "layout_contract", "1", decodeLayoutRecord, &layout) &&
                         layout.complete();
     if (!loaded)
+    {
         copyLoadError(errorResource, errorResourceCapacity, "layout_contract", &bundleReader);
-    return loaded;
+        return false;
+    }
+    if (!loadRuntimeTableBehavior(sd, manifest, speciesSlot, outfitSlot, config))
+    {
+        config = {};
+        copyLoadError(errorResource, errorResourceCapacity, "runtime");
+        return false;
+    }
+    return true;
 }

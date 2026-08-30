@@ -7,7 +7,8 @@
 namespace
 {
 constexpr CompiledSystemCommand kCompiledSystemCommands[] = {
-#define SYSTEM_COMMAND(handler, token, slot) {token, SystemCommandHandler::handler},
+#define SYSTEM_COMMAND(handler, token, runtimeId, slot) \
+    {token, SystemCommandHandler::handler, RuntimeSystemCommandId::runtimeId},
 #include "commands/domain/SystemCommandCatalog.def"
 #undef SYSTEM_COMMAND
 };
@@ -24,4 +25,21 @@ const CompiledSystemCommand *findCompiledSystemCommand(const char *token)
             return &command;
     }
     return nullptr;
+}
+
+const CompiledSystemCommand *findCompiledSystemCommand(RuntimeSystemCommandId id)
+{
+    for (const CompiledSystemCommand &command : kCompiledSystemCommands)
+        if (command.runtimeId == id)
+            return &command;
+    return nullptr;
+}
+
+bool runtimeSystemCommandIdForToken(const char *token, RuntimeSystemCommandId &id)
+{
+    const CompiledSystemCommand *command = findCompiledSystemCommand(token);
+    if (command == nullptr)
+        return false;
+    id = command->runtimeId;
+    return true;
 }

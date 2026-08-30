@@ -79,7 +79,7 @@ private:
     CommandSlot slots[kPetBehaviorButtonCount] = {};
 
     static constexpr CommandSlot emptySlot();
-    static CommandSlot systemCommandSlot(const char *token);
+    static CommandSlot systemCommandSlot(RuntimeSystemCommandId runtimeId);
     static CommandSlot buttonSlot(const PetBehaviorButtonConfig &button);
     const CommandSlot &slotAt(int slot) const;
 

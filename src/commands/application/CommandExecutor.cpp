@@ -1,9 +1,7 @@
 #include "commands/application/CommandExecutor.h"
 
-#include <string.h>
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/StatusSetSelection.h"
-#include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
 
 namespace
@@ -20,28 +18,23 @@ struct StatusValueContext
     const PetBehaviorConfig &config;
 };
 
-bool petStatSlotForSource(
-    const PetBehaviorConfig &config,
-    const char *source,
-    uint8_t &slot)
+bool statusValueFromSnapshot(const StatusSetCondition &condition,
+                             const void *context,
+                             int32_t &value)
 {
-    return ActivePetBehaviorStatSlots(config).resolve(source, slot);
-}
-
-bool statusValueFromSnapshot(const char *source, const void *context, int32_t &value)
-{
-    if (source == nullptr || context == nullptr)
+    if (context == nullptr)
         return false;
     const StatusValueContext &status = *static_cast<const StatusValueContext *>(context);
-    if (strcmp(source, "stage_days") == 0)
+    if (condition.source == StatusConditionSource::StageDays)
     {
         value = static_cast<int32_t>(status.stats.stage_days);
         return true;
     }
-    uint8_t slot = 0;
-    if (!petStatSlotForSource(status.config, source, slot))
+    if (condition.source != StatusConditionSource::PetStat ||
+        condition.statSlot >= kPetBehaviorSlotCount ||
+        !status.config.stats[condition.statSlot].active)
         return false;
-    value = status.stats.customStats[slot];
+    value = status.stats.customStats[condition.statSlot];
     return true;
 }
 } // namespace

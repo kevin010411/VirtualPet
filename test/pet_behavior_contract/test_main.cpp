@@ -17,13 +17,15 @@ struct FixtureStatContext
     const PetStatSnapshot *stats;
 };
 
-bool fixtureStatusValue(const char *source, const void *rawContext, int32_t &value)
+bool fixtureStatusValue(const StatusSetCondition &condition,
+                        const void *rawContext,
+                        int32_t &value)
 {
     const FixtureStatContext &context = *static_cast<const FixtureStatContext *>(rawContext);
-    uint8_t slot = 0;
-    if (!context.activeSlots->resolve(source, slot))
+    if (condition.source != StatusConditionSource::PetStat ||
+        condition.statSlot >= kPetBehaviorSlotCount)
         return false;
-    value = context.stats->customStats[slot];
+    value = context.stats->customStats[condition.statSlot];
     return true;
 }
 
@@ -93,12 +95,14 @@ void testWebExportedSlotProjectionTargetsOneRuntimeSlot()
     assert(config.guessEffects[0].statSlot == 0);
     assert(config.statusSets.count == 1);
     assert(config.statusSets.sets[0].conditionCount == 1);
-    assert(strcmp(config.statusSets.sets[0].conditions[0].source, "custom0") == 0);
+    assert(config.statusSets.sets[0].conditions[0].source ==
+           StatusConditionSource::PetStat);
+    assert(config.statusSets.sets[0].conditions[0].statSlot == 0);
 
     ActivePetBehaviorStatSlots activeSlots(config);
     uint8_t statusSlot = 0;
     uint8_t evolutionSlot = 0;
-    assert(activeSlots.resolve(config.statusSets.sets[0].conditions[0].source, statusSlot));
+    statusSlot = config.statusSets.sets[0].conditions[0].statSlot;
     assert(activeSlots.resolve(kSlotProjectionEvolutionPetStatSource, evolutionSlot));
     assert(statusSlot == 0);
     assert(evolutionSlot == 0);
