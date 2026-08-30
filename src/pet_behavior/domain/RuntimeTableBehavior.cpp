@@ -519,18 +519,26 @@ bool validOptionalAnimationRef(const Source &source, const Section &animations,
 void clearOwnedBehavior(PetBehaviorConfig &config)
 {
     memset(config.stats, 0, sizeof(config.stats));
+    memset(config.idleTriggers, 0, sizeof(config.idleTriggers));
     memset(config.actions, 0, sizeof(config.actions));
     memset(config.randomOutcomes, 0, sizeof(config.randomOutcomes));
     memset(config.actionConditions, 0, sizeof(config.actionConditions));
     memset(config.actionEffects, 0, sizeof(config.actionEffects));
     memset(config.randomOutcomeEffects, 0, sizeof(config.randomOutcomeEffects));
+#if ENABLE_GUESS_GAME
+    memset(config.guessEffects, 0, sizeof(config.guessEffects));
+#endif
     memset(config.buttons, 0, sizeof(config.buttons));
     memset(&config.statusSets, 0, sizeof(config.statusSets));
     config.statCount = 0;
+    config.idleTriggerCount = 0;
     config.actionCount = 0;
     config.actionConditionCount = 0;
     config.actionEffectCount = 0;
     config.randomOutcomeEffectCount = 0;
+#if ENABLE_GUESS_GAME
+    config.guessEffectCount = 0;
+#endif
     config.buttonCount = 0;
 }
 
@@ -555,6 +563,89 @@ bool decodeStats(const Source &source, const Section &section, PetBehaviorConfig
     }
     config.statCount = static_cast<uint8_t>(section.count);
     return true;
+}
+
+bool decodeIdleTriggers(const Source &source,
+                        const Section *triggers,
+                        const Section &assets,
+                        const Section &animations,
+                        const ActiveAssetScope &scope,
+                        PetBehaviorConfig &config)
+{
+    if (triggers == nullptr)
+        return true;
+    if (triggers->count > kMaxPetBehaviorIdleTriggers)
+        return false;
+
+    uint16_t previousPriority = 0;
+    for (uint16_t index = 0; index < triggers->count; ++index)
+    {
+        uint8_t record[12] = {};
+        AssetData::AnimationRef animation = {};
+        if (!readRecord(source, *triggers, index, record))
+            return false;
+        const uint16_t priority = readU16(record + 6);
+        if (record[0] >= config.statCount || record[1] > 1 ||
+            readU32(record + 8) != 0 ||
+            (index != 0 && priority <= previousPriority) ||
+            !resolveAnimation(source, assets, animations, readU16(record + 4), scope, animation))
+            return false;
+
+        PetBehaviorIdleTriggerConfig &trigger = config.idleTriggers[index];
+        trigger.active = true;
+        trigger.statSlot = record[0];
+        trigger.comparison = static_cast<PetBehaviorIdleTriggerOperator>(record[1]);
+        trigger.threshold = readI16(record + 2);
+        trigger.animation = animation;
+        previousPriority = priority;
+    }
+    config.idleTriggerCount = static_cast<uint8_t>(triggers->count);
+    return true;
+}
+
+bool decodeGuessEffects(const Source &source,
+                        uint32_t featureFlags,
+                        const Section *effects,
+                        PetBehaviorConfig &config)
+{
+    if ((featureFlags & kGuessGameFeature) == 0)
+        return effects == nullptr;
+#if !ENABLE_GUESS_GAME
+    return false;
+#else
+    if (effects == nullptr)
+        return false;
+    if (effects->count > kMaxPetBehaviorGuessEffects)
+        return false;
+
+    bool hasPrevious = false;
+    uint8_t previousOutcome = 0;
+    uint8_t previousStatSlot = 0;
+    for (uint16_t index = 0; index < effects->count; ++index)
+    {
+        uint8_t record[8] = {};
+        if (!readRecord(source, *effects, index, record) ||
+            record[0] >= kPetBehaviorGuessOutcomeCount ||
+            record[1] >= config.statCount || record[2] > 1 ||
+            record[3] != 0 || readU16(record + 6) != 0 ||
+            (hasPrevious &&
+             (record[0] < previousOutcome ||
+              (record[0] == previousOutcome && record[1] <= previousStatSlot))))
+            return false;
+
+        PetBehaviorGuessEffectConfig &effect = config.guessEffects[index];
+        effect.active = true;
+        effect.outcome = static_cast<PetBehaviorGuessOutcome>(record[0]);
+        effect.statSlot = record[1];
+        effect.operation = static_cast<PetBehaviorEffectOperation>(record[2]);
+        effect.value = readI16(record + 4);
+        previousOutcome = record[0];
+        previousStatSlot = record[1];
+        hasPrevious = true;
+    }
+    config.guessEffectCount = static_cast<uint8_t>(effects->count);
+    return true;
+#endif
 }
 
 bool decodeActions(const Source &source,
@@ -819,37 +910,6 @@ bool decodeStatus(const Source &source,
     return nextCondition == conditions->count;
 }
 
-bool validComposedRecords(const PetBehaviorConfig &config)
-{
-    uint8_t idleTriggerCount = 0;
-    for (uint8_t index = 0; index < kMaxPetBehaviorIdleTriggers; ++index)
-    {
-        const PetBehaviorIdleTriggerConfig &trigger = config.idleTriggers[index];
-        if (!trigger.active)
-            continue;
-        if (trigger.statSlot >= config.statCount || !config.stats[trigger.statSlot].active ||
-            !trigger.animation.valid())
-            return false;
-        ++idleTriggerCount;
-    }
-    if (idleTriggerCount != config.idleTriggerCount)
-        return false;
-#if ENABLE_GUESS_GAME
-    bool affected[kPetBehaviorGuessOutcomeCount][kPetBehaviorSlotCount] = {};
-    for (uint8_t index = 0; index < config.guessEffectCount; ++index)
-    {
-        const PetBehaviorGuessEffectConfig &effect = config.guessEffects[index];
-        const uint8_t outcome = static_cast<uint8_t>(effect.outcome);
-        if (!effect.active || outcome >= kPetBehaviorGuessOutcomeCount ||
-            effect.statSlot >= config.statCount || !config.stats[effect.statSlot].active ||
-            affected[outcome][effect.statSlot])
-            return false;
-        affected[outcome][effect.statSlot] = true;
-    }
-#endif
-    return true;
-}
-
 bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                                 const AssetData::RuntimeManifest &manifest,
                                 uint8_t speciesSlot,
@@ -862,10 +922,12 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     const Section *assets = table.find(AssetRefs);
     const Section *animations = table.find(Animations);
     const Section *stats = table.find(PetStats);
+    const Section *idleTriggers = table.find(IdleTriggers);
     const Section *actions = table.find(Actions);
     const Section *outcomes = table.find(ActionOutcomes);
     const Section *actionConditions = table.find(ActionConditions);
     const Section *effects = table.find(ActionEffects);
+    const Section *guessEffects = table.find(GuessEffects);
     const Section *buttons = table.find(Buttons);
     if (assets == nullptr || animations == nullptr || stats == nullptr || actions == nullptr ||
         outcomes == nullptr || buttons == nullptr)
@@ -879,13 +941,14 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     candidate.schemaFingerprint = table.schemaFingerprint;
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
     if (!decodeStats(source, *stats, candidate) ||
+        !decodeIdleTriggers(source, idleTriggers, *assets, *animations, scope, candidate) ||
         !decodeActions(source, *actions, *outcomes, actionConditions, effects,
                        *assets, *animations, scope, candidate) ||
+        !decodeGuessEffects(source, table.featureFlags, guessEffects, candidate) ||
         !decodeButtons(source, *buttons, candidate) ||
         !decodeStatus(source, table.featureFlags,
                       table.find(StatusSets), table.find(StatusConditions),
-                      *assets, *animations, scope, candidate) ||
-        !validComposedRecords(candidate))
+                      *assets, *animations, scope, candidate))
         return false;
     config = candidate;
     return true;

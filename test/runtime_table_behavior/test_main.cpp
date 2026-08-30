@@ -152,9 +152,26 @@ void testInvalidFixtureFailsWithoutPartialPublication(const std::vector<uint8_t>
 
 int main(int argc, char **argv)
 {
+#if RUNTIME_TABLE_FULL_FEATURE
+    assert(argc == 2);
+    PetBehaviorConfig config = {};
+    const AssetData::RuntimeManifest manifest = fixtureManifest();
+    const std::vector<uint8_t> fixture = readFixture(argv[1]);
+    assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
+    assert(config.idleTriggerCount == 0);
+#if ENABLE_GUESS_GAME
+    assert(config.guessEffectCount == 1);
+    assert(config.guessEffects[0].active);
+    assert(config.guessEffects[0].outcome == PetBehaviorGuessOutcome::RoundCorrect);
+    assert(config.guessEffects[0].statSlot == 0);
+    assert(config.guessEffects[0].operation == PetBehaviorEffectOperation::Change);
+    assert(config.guessEffects[0].value == 1);
+#endif
+#else
     assert(argc == 4);
     testBehaviorFullFixture(readFixture(argv[1]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[3]));
+#endif
     return 0;
 }
