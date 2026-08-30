@@ -23,4 +23,12 @@ bool loadRuntimeTableBehavior(SdFat *sd,
                               uint8_t outfitSlot,
                               PetBehaviorConfig &config);
 
+// Ticket 05-owned binary flow composition.  This replaces the numeric runtime
+// roles and layouts populated from temporary TXT contracts during migration.
+bool loadRuntimeTableFlow(SdFat *sd,
+                          const AssetData::RuntimeManifest &manifest,
+                          uint8_t speciesSlot,
+                          uint8_t outfitSlot,
+                          PetBehaviorConfig &config);
+
 #endif // RUNTIME_TABLE_BEHAVIOR_H

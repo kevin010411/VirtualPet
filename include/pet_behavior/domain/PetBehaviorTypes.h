@@ -30,6 +30,9 @@ constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * 
 #endif
 constexpr uint8_t kPetBehaviorButtonCount = 8;
 constexpr size_t kMaxPetBehaviorContractBytes = 24576;
+// Layout versions are also asset-data version indices.  Keep the runtime
+// table bounded by the same compiled capacity rather than by file counts.
+constexpr uint8_t kMaxRuntimeTableLayouts = AssetData::kMaxVersions - 1U;
 
 enum class PetBehaviorEffectOperation : uint8_t
 {
@@ -173,6 +176,16 @@ struct PetBehaviorButtonConfig
     RuntimeSystemCommandId systemCommandId;
 };
 
+struct RuntimeTableLayoutConfig
+{
+    bool active;
+    uint16_t version;
+    AssetData::AnimationRef unselected;
+    AssetData::AnimationRef selected;
+    int16_t x;
+    int16_t y;
+};
+
 struct PetBehaviorConfig
 {
     AssetData::RuntimeManifest assetManifest;
@@ -180,6 +193,8 @@ struct PetBehaviorConfig
     AssetData::AnimationRef layoutUnselected;
     AssetData::AnimationRef layoutSelected;
     uint8_t actionLayoutVersions[kFirmwarePlaybackRoleCount];
+    RuntimeTableLayoutConfig layouts[kMaxRuntimeTableLayouts];
+    uint8_t layoutCount;
     uint32_t schemaFingerprint;
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     PetBehaviorIdleTriggerConfig idleTriggers[kMaxPetBehaviorIdleTriggers];

@@ -17,8 +17,19 @@ constexpr uint32_t kMaxFileSize = 16777216UL;
 constexpr uint16_t kNone16 = 0xffffU;
 constexpr uint32_t kPetBehaviorFeature = 1UL << 0;
 constexpr uint32_t kStatusFeature = 1UL << 1;
+constexpr uint32_t kGuessGameFeature = 1UL << 4;
+constexpr uint32_t kPredictFeature = 1UL << 5;
+constexpr uint32_t kStartupAnimationFeature = 1UL << 6;
+constexpr uint32_t kFirstStartAnimationFeature = 1UL << 7;
+constexpr uint32_t kDynamicActionLayoutFeature = 1UL << 8;
 constexpr uint32_t kSequentialStatusFeature = 1UL << 9;
+constexpr uint32_t kFirstLaunchSelectionFeature = 1UL << 10;
+constexpr uint32_t kOutfitChooseAnimationFeature = 1UL << 11;
 constexpr uint32_t kKnownFeatures = (1UL << 12) - 1UL;
+
+#ifndef ENABLE_GUESS_GAME_SINGLE_ROUND
+#define ENABLE_GUESS_GAME_SINGLE_ROUND 0
+#endif
 
 enum SectionType : uint16_t
 {
@@ -1059,6 +1070,255 @@ bool decodeRuntimeTableAppearance(const Source &source,
     }
     return true;
 }
+
+bool compiledFeaturesAccept(uint32_t flags)
+{
+#if !ENABLE_GUESS_GAME
+    if ((flags & kGuessGameFeature) != 0)
+        return false;
+#endif
+#if !ENABLE_COMMAND_PREDICT
+    if ((flags & kPredictFeature) != 0)
+        return false;
+#endif
+#if !ENABLE_STARTUP_ANIMATION
+    if ((flags & kStartupAnimationFeature) != 0)
+        return false;
+#endif
+#if !ENABLE_FIRST_START_ANIMATION
+    if ((flags & kFirstStartAnimationFeature) != 0)
+        return false;
+#endif
+#if !ENABLE_DYNAMIC_ACTION_LAYOUT
+    if ((flags & kDynamicActionLayoutFeature) != 0)
+        return false;
+#endif
+#if !ENABLE_FIRST_LAUNCH_SELECTION
+    if ((flags & kFirstLaunchSelectionFeature) != 0)
+        return false;
+#endif
+#if !ENABLE_OUTFIT_CHOOSE_ANIMATION
+    if ((flags & kOutfitChooseAnimationFeature) != 0)
+        return false;
+#endif
+    return (flags & kFirstStartAnimationFeature) == 0 ||
+           (flags & kStartupAnimationFeature) != 0;
+}
+
+bool requireRole(const bool *present, FirmwarePlaybackRole role)
+{
+    const size_t index = static_cast<size_t>(role);
+    return index < kFirmwarePlaybackRoleCount && present[index];
+}
+
+FirmwarePlaybackRole flowRoleAt(uint8_t flow, uint8_t slot)
+{
+    static constexpr FirmwarePlaybackRole kPredict[] = {
+        FirmwarePlaybackRole::PredAnim, FirmwarePlaybackRole::Predict1,
+        FirmwarePlaybackRole::Predict2, FirmwarePlaybackRole::Predict3,
+        FirmwarePlaybackRole::Predict4, FirmwarePlaybackRole::Predict5,
+        FirmwarePlaybackRole::Predict6, FirmwarePlaybackRole::Predict7,
+        FirmwarePlaybackRole::Predict8, FirmwarePlaybackRole::Predict9,
+        FirmwarePlaybackRole::Predict10, FirmwarePlaybackRole::Predict11};
+    static constexpr FirmwarePlaybackRole kGuess[] = {
+        FirmwarePlaybackRole::GuessWin, FirmwarePlaybackRole::GuessLoss,
+        FirmwarePlaybackRole::GuessRight, FirmwarePlaybackRole::GuessWrong,
+        FirmwarePlaybackRole::GuessItem1, FirmwarePlaybackRole::GuessItem2,
+        FirmwarePlaybackRole::GuessItem3, FirmwarePlaybackRole::GuessLL,
+        FirmwarePlaybackRole::GuessLR, FirmwarePlaybackRole::GuessRL,
+        FirmwarePlaybackRole::GuessRR, FirmwarePlaybackRole::GuessItem4,
+        FirmwarePlaybackRole::GuessStart};
+    static constexpr FirmwarePlaybackRole kStartup[] = {
+        FirmwarePlaybackRole::Start, FirmwarePlaybackRole::StartIntro,
+        FirmwarePlaybackRole::FirstStart};
+    const FirmwarePlaybackRole *roles = nullptr;
+    size_t count = 0;
+    if (flow == 0) { roles = kPredict; count = sizeof(kPredict) / sizeof(kPredict[0]); }
+    else if (flow == 1) { roles = kGuess; count = sizeof(kGuess) / sizeof(kGuess[0]); }
+    else if (flow == 2) { roles = kStartup; count = sizeof(kStartup) / sizeof(kStartup[0]); }
+    return slot < count ? roles[slot] : FirmwarePlaybackRole::None;
+}
+
+bool decodeRuntimeTableFlow(const Source &source,
+                            const AssetData::RuntimeManifest &manifest,
+                            uint8_t speciesSlot,
+                            uint8_t outfitSlot,
+                            PetBehaviorConfig &config)
+{
+    if (speciesSlot == 0 || outfitSlot == 0)
+        return false;
+    Section sections[kMaxSections] = {};
+    uint16_t sectionCount = 0;
+    uint32_t featureFlags = 0;
+    uint32_t schemaFingerprint = 0;
+    AssetData::BundleId bundleId = {};
+    if (!readEnvelope(source, sections, sectionCount, featureFlags, schemaFingerprint, bundleId) ||
+        !compiledFeaturesAccept(featureFlags) ||
+        memcmp(bundleId.bytes, manifest.bundleId.bytes, sizeof(bundleId.bytes)) != 0 ||
+        !validateProfileAndPersistence(source, sections, sectionCount, schemaFingerprint))
+        return false;
+
+    const Section *assets = findSection(sections, sectionCount, AssetRefs);
+    const Section *animations = findSection(sections, sectionCount, Animations);
+    const Section *roles = findSection(sections, sectionCount, SystemRoles);
+    const Section *layouts = findSection(sections, sectionCount, Layouts);
+    const Section *flows = findSection(sections, sectionCount, Flow);
+    const Section *flowRoles = findSection(sections, sectionCount, FlowRoles);
+    if (assets == nullptr || animations == nullptr || roles == nullptr ||
+        !validateAssetCatalog(source, *assets, *animations) ||
+        ((featureFlags & kDynamicActionLayoutFeature) != 0 && layouts == nullptr) ||
+        ((featureFlags & kDynamicActionLayoutFeature) == 0 && layouts != nullptr) ||
+        ((flows == nullptr) != (flowRoles == nullptr)))
+        return false;
+
+    PetBehaviorConfig candidate = config;
+    memset(candidate.systemAnimations, 0, sizeof(candidate.systemAnimations));
+    memset(candidate.actionLayoutVersions, 0, sizeof(candidate.actionLayoutVersions));
+    memset(candidate.layouts, 0, sizeof(candidate.layouts));
+    candidate.layoutUnselected = {};
+    candidate.layoutSelected = {};
+    candidate.layoutCount = 0;
+    const ActiveAssetScope scope = {speciesSlot, outfitSlot};
+    bool rolePresent[kFirmwarePlaybackRoleCount] = {};
+    uint8_t previousRole = 0;
+    for (uint16_t index = 0; index < roles->count; ++index)
+    {
+        uint8_t record[8] = {};
+        AssetData::AnimationRef animation = {};
+        if (!readRecord(source, *roles, index, record))
+            return false;
+        const uint8_t role = record[0];
+        if (role == 0 ||
+            role >= kFirmwarePlaybackRoleCount || role <= previousRole || record[1] != 0 ||
+            readU16(record + 6) != 0 ||
+            !resolveAnimation(source, *assets, *animations, readU16(record + 2), scope, animation))
+            return false;
+        previousRole = role;
+        rolePresent[role] = true;
+        candidate.systemAnimations[role] = animation;
+        const uint16_t layoutVersion = readU16(record + 4);
+        if (layoutVersion > UINT8_MAX ||
+            ((featureFlags & kDynamicActionLayoutFeature) == 0 && layoutVersion != 0))
+            return false;
+        candidate.actionLayoutVersions[role] = static_cast<uint8_t>(layoutVersion);
+    }
+    if (!requireRole(rolePresent, FirmwarePlaybackRole::Battery) ||
+        ((featureFlags & kPredictFeature) != 0 &&
+         (!requireRole(rolePresent, FirmwarePlaybackRole::PredAnim) ||
+          !requireRole(rolePresent, FirmwarePlaybackRole::Predict11))) ||
+        ((featureFlags & kStartupAnimationFeature) != 0 &&
+         (!requireRole(rolePresent, FirmwarePlaybackRole::Start) ||
+          !requireRole(rolePresent, FirmwarePlaybackRole::StartIntro))) ||
+        ((featureFlags & kFirstStartAnimationFeature) != 0 &&
+         !requireRole(rolePresent, FirmwarePlaybackRole::FirstStart)))
+        return false;
+
+    if (layouts != nullptr)
+    {
+        if (layouts->count == 0 || layouts->count > kMaxRuntimeTableLayouts)
+            return false;
+        for (uint16_t index = 0; index < layouts->count; ++index)
+        {
+            uint8_t record[12] = {};
+            RuntimeTableLayoutConfig &layout = candidate.layouts[index];
+            if (!readRecord(source, *layouts, index, record) || readU16(record) != index + 1 ||
+                readU16(record + 10) != 0 ||
+                !resolveAnimation(source, *assets, *animations, readU16(record + 2), scope, layout.unselected) ||
+                !resolveAnimation(source, *assets, *animations, readU16(record + 4), scope, layout.selected))
+                return false;
+            layout.active = true;
+            layout.version = readU16(record);
+            layout.x = readI16(record + 6);
+            layout.y = readI16(record + 8);
+        }
+        candidate.layoutCount = static_cast<uint8_t>(layouts->count);
+        candidate.layoutUnselected = candidate.layouts[0].unselected;
+        candidate.layoutSelected = candidate.layouts[0].selected;
+        for (size_t role = 1; role < kFirmwarePlaybackRoleCount; ++role)
+            if (candidate.actionLayoutVersions[role] > candidate.layoutCount)
+                return false;
+    }
+
+    bool flowPresent[3] = {};
+    uint16_t expectedChild = 0;
+    uint8_t previousFlow = 0;
+    if (flows != nullptr)
+    {
+        for (uint16_t index = 0; index < flows->count; ++index)
+        {
+            uint8_t record[16] = {};
+            if (!readRecord(source, *flows, index, record) || record[0] > 2 ||
+                (index != 0 && record[0] <= previousFlow) || record[1] != 0 ||
+                readU16(record + 2) != expectedChild || readU16(record + 12) != 0 ||
+                readU16(record + 14) != 0 || readU16(record + 10) != 0)
+                return false;
+            if (record[0] == 1 &&
+                (record[6] > 2 || record[7] > 2 || record[8] > 1 || record[9] != 3))
+                return false;
+            if (record[0] != 1 && (record[6] != 0 || record[7] != 0 ||
+                                   record[8] != 0 || record[9] != 0))
+                return false;
+            previousFlow = record[0];
+            flowPresent[record[0]] = true;
+            const uint16_t count = readU16(record + 4);
+            if (static_cast<uint32_t>(expectedChild) + count > flowRoles->count)
+                return false;
+            uint8_t previousSlot = 0;
+            bool slotSeen[13] = {};
+            for (uint16_t child = 0; child < count; ++child)
+            {
+                uint8_t roleRecord[8] = {};
+                if (!readRecord(source, *flowRoles, static_cast<uint16_t>(expectedChild + child), roleRecord) ||
+                    roleRecord[0] != record[0] || readU32(roleRecord + 4) != 0 ||
+                    roleRecord[2] == 0 || roleRecord[2] >= kFirmwarePlaybackRoleCount ||
+                    flowRoleAt(record[0], roleRecord[1]) !=
+                        static_cast<FirmwarePlaybackRole>(roleRecord[2]) ||
+                    (child != 0 && roleRecord[1] <= previousSlot) ||
+                    !rolePresent[roleRecord[2]])
+                    return false;
+                previousSlot = roleRecord[1];
+                slotSeen[roleRecord[1]] = true;
+            }
+            bool requiredSlot[13] = {};
+            if (record[0] == 0)
+            {
+                for (uint8_t slot = 0; slot < 12; ++slot)
+                    requiredSlot[slot] = true;
+            }
+            else if (record[0] == 2)
+            {
+                requiredSlot[0] = true;
+                requiredSlot[1] = true;
+                requiredSlot[2] = (featureFlags & kFirstStartAnimationFeature) != 0;
+            }
+            else
+            {
+                requiredSlot[12] = record[6] == 0 || record[6] == 2;
+                requiredSlot[4] = requiredSlot[5] = requiredSlot[6] = requiredSlot[11] =
+                    record[6] == 1 || record[6] == 2;
+                requiredSlot[7] = requiredSlot[10] = true;
+                if (record[7] == 0 || record[7] == 2)
+                    requiredSlot[0] = requiredSlot[1] = true;
+                if (record[7] == 1 || record[7] == 2)
+                    requiredSlot[8] = requiredSlot[9] = true;
+                if (record[8] == 0)
+                    requiredSlot[2] = requiredSlot[3] = true;
+            }
+            for (uint8_t slot = 0; slot < 13; ++slot)
+                if (slotSeen[slot] != requiredSlot[slot])
+                    return false;
+            expectedChild = static_cast<uint16_t>(expectedChild + count);
+        }
+        if (expectedChild != flowRoles->count)
+            return false;
+    }
+    if (((featureFlags & kPredictFeature) != 0 && !flowPresent[0]) ||
+        ((featureFlags & kGuessGameFeature) != 0 && !flowPresent[1]) ||
+        ((featureFlags & kStartupAnimationFeature) != 0 && !flowPresent[2]))
+        return false;
+    config = candidate;
+    return true;
+}
 } // namespace
 
 bool parseRuntimeTableBehavior(const uint8_t *bytes,
@@ -1091,6 +1351,25 @@ bool loadRuntimeTableBehavior(SdFat *sd,
     const Source source = {&fileSource, readFile, byteCount};
     const bool decoded = decodeRuntimeTableBehavior(
         source, manifest, speciesSlot, outfitSlot, config);
+    file.close();
+    return decoded;
+}
+
+bool loadRuntimeTableFlow(SdFat *sd,
+                          const AssetData::RuntimeManifest &manifest,
+                          uint8_t speciesSlot,
+                          uint8_t outfitSlot,
+                          PetBehaviorConfig &config)
+{
+    if (sd == nullptr)
+        return false;
+    File file = sd->open(kRuntimeTablePath, FILE_READ);
+    if (!file)
+        return false;
+    const uint32_t byteCount = file.size();
+    FileSource fileSource = {&file};
+    const Source source = {&fileSource, readFile, byteCount};
+    const bool decoded = decodeRuntimeTableFlow(source, manifest, speciesSlot, outfitSlot, config);
     file.close();
     return decoded;
 }

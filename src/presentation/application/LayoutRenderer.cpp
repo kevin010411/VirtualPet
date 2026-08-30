@@ -107,15 +107,17 @@ bool LayoutRenderer::drawSlot(int slot, bool selected)
 {
     if (runtimeContract == nullptr)
         return false;
-    const AssetData::AnimationRef &layout = selected
-                                                ? runtimeContract->layoutSelected
-                                                : runtimeContract->layoutUnselected;
+    const RuntimeTableLayoutConfig *layoutConfig = layoutFor(activeAction);
+    const AssetData::AnimationRef &layout = layoutConfig != nullptr
+                                                ? (selected ? layoutConfig->selected : layoutConfig->unselected)
+                                                : (selected ? runtimeContract->layoutSelected
+                                                            : runtimeContract->layoutUnselected);
     return renderer.ShowAnimationFrame(
         layout,
         layoutVersion(activeAction),
         static_cast<uint16_t>(slot + 1),
-        slotX(slot),
-        slotY(slot));
+        (layoutConfig != nullptr ? layoutConfig->x : 0) + slotX(slot),
+        (layoutConfig != nullptr ? layoutConfig->y : 0) + slotY(slot));
 }
 
 bool LayoutRenderer::hasActionLayout(FirmwarePlaybackRole id) const
@@ -131,6 +133,22 @@ uint8_t LayoutRenderer::layoutVersion(FirmwarePlaybackRole id) const
     if (index >= kFirmwarePlaybackRoleCount)
         return 0;
     return runtimeContract->actionLayoutVersions[index];
+}
+
+const RuntimeTableLayoutConfig *LayoutRenderer::layoutFor(FirmwarePlaybackRole id) const
+{
+    if (runtimeContract == nullptr)
+        return nullptr;
+    const uint8_t version = layoutVersion(id);
+    if (version == 0)
+        return nullptr;
+    for (uint8_t index = 0; index < runtimeContract->layoutCount; ++index)
+    {
+        const RuntimeTableLayoutConfig &layout = runtimeContract->layouts[index];
+        if (layout.active && layout.version == version)
+            return &layout;
+    }
+    return nullptr;
 }
 
 int LayoutRenderer::slotX(int slot)

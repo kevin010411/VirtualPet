@@ -1222,23 +1222,16 @@ bool loadPetBehaviorContract(SdFat *sd,
         copyLoadError(errorResource, errorResourceCapacity, "runtime_contract", &bundleReader);
         return false;
     }
-    FlowDecoder flow(config, bundleReader);
-    if (!loadSdTextRecords(sd, kFlowContractPath, kMaxAuxiliaryContractBytes,
-                           "flow_contract", "1", decodeFlowRecord, &flow) || !flow.complete())
-    {
-        copyLoadError(errorResource, errorResourceCapacity, "flow_contract", &bundleReader);
-        return false;
-    }
-    LayoutDecoder layout(config, bundleReader);
-    const bool loaded = loadSdTextRecords(sd, kLayoutContractPath, kMaxAuxiliaryContractBytes,
-                                          "layout_contract", "1", decodeLayoutRecord, &layout) &&
-                        layout.complete();
-    if (!loaded)
-    {
-        copyLoadError(errorResource, errorResourceCapacity, "layout_contract", &bundleReader);
-        return false;
-    }
+    // flow_contract.txt and layout_contract.txt remain in migration bundles for
+    // host-side composition, but runtime roles and layouts now come only from
+    // the validated numeric records in /runtime.bin.
     if (!loadRuntimeTableBehavior(sd, manifest, speciesSlot, outfitSlot, config))
+    {
+        config = {};
+        copyLoadError(errorResource, errorResourceCapacity, "runtime");
+        return false;
+    }
+    if (!loadRuntimeTableFlow(sd, manifest, speciesSlot, outfitSlot, config))
     {
         config = {};
         copyLoadError(errorResource, errorResourceCapacity, "runtime");

@@ -7,6 +7,7 @@
 class CommandController;
 class Renderer;
 struct PetBehaviorConfig;
+struct RuntimeTableLayoutConfig;
 
 class LayoutRenderer
 {
@@ -37,6 +38,7 @@ private:
     bool drawSlot(int slot, bool selected);
     bool hasActionLayout(FirmwarePlaybackRole id) const;
     uint8_t layoutVersion(FirmwarePlaybackRole id) const;
+    const RuntimeTableLayoutConfig *layoutFor(FirmwarePlaybackRole id) const;
     static int slotX(int slot);
     static int slotY(int slot);
 };
