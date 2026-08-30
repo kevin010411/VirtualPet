@@ -7,6 +7,16 @@
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
 #include "pet_behavior/domain/RuntimeTableBehavior.h"
 
+namespace AssetData
+{
+// Behavior fixtures do not mount asset packs. The complete SD-loader tests own
+// physical pack resolution; this seam only makes the behavior reader linkable.
+bool animationReferenceExists(BundleReader &, const AnimationRef &, uint8_t)
+{
+    return false;
+}
+} // namespace AssetData
+
 namespace
 {
 std::vector<uint8_t> readFixture(const char *path)
