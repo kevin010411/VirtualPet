@@ -2,6 +2,7 @@
 
 #include <limits.h>
 #include <string.h>
+#include "appearance/domain/RuntimeTableAppearance.h"
 #include "commands/domain/SystemCommandCatalog.h"
 #include "shared/assets/AssetRuntimeContract.h"
 #include "shared/sd/SdTextRecordReader.h"
@@ -1243,5 +1244,15 @@ bool loadPetBehaviorContract(SdFat *sd,
         copyLoadError(errorResource, errorResourceCapacity, "runtime");
         return false;
     }
+    AppearanceSelection initialAppearance = {};
+    AssetData::AnimationRef idleAnimation = {};
+    if (!loadRuntimeTableInitialAppearance(sd, manifest, bundleReader,
+                                           initialAppearance, &idleAnimation))
+    {
+        config = {};
+        copyLoadError(errorResource, errorResourceCapacity, "runtime", &bundleReader);
+        return false;
+    }
+    config.idleAnimation = idleAnimation;
     return true;
 }

@@ -43,6 +43,11 @@ public:
         return parsePetBehaviorStatSlot(token, slot) && active[slot];
     }
 
+    bool contains(uint8_t slot) const
+    {
+        return slot < kPetBehaviorSlotCount && active[slot];
+    }
+
 private:
     bool active[kPetBehaviorSlotCount] = {};
 };
