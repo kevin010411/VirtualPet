@@ -6,7 +6,7 @@
 #include "presentation/application/AppFlowController.h"
 #include "animation/domain/Animation.h"
 #include "appearance/ports/AppearanceLoader.h"
-#include "pet_behavior/domain/PetBehaviorContract.h"
+#include "pet_behavior/domain/RuntimeContractLoader.h"
 
 class AnimationController;
 class CommandController;

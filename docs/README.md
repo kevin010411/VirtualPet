@@ -10,13 +10,13 @@
 
 ## SD 卡設定與資源
 
-Pet Stat、Status 與 Evolution runtime contract 請由 Web exporter 產生；權威規格位於
+Pet Stat、Status 與 Evolution runtime table 請由 Web exporter 產生；權威規格位於
 `E:\C++\virtualPet\web\.scratch\sd-driven-pet-stats\spec.md`。本 repository 不再
 提供 `state_schema.txt`、Pet Stat alias 或手寫 Status contract 範例。
 
 [sd_card_example](sd_card_example/README.md) 只保留韌體資源布局提示。
 
-- `evolution_rules.txt`：演化規則。
+- `runtime.bin`：完整的 versioned runtime table，不接受 TXT fallback。
 - `index/`：動畫 manifest 範例。
 
 相關格式說明：

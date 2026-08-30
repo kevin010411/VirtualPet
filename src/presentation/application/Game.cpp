@@ -74,7 +74,7 @@ bool Game::prepare_game()
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
-        startupConfigError = "runtime_contract.txt";
+        startupConfigError = "runtime.bin";
         return false;
     }
     commands->resetSelection();
@@ -103,7 +103,7 @@ bool Game::prepare_game()
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
-        startupConfigError = "runtime_contract.txt";
+        startupConfigError = "runtime.bin";
         return false;
     }
 
@@ -286,8 +286,8 @@ void Game::setRendererAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
     char errorResource[20] = {};
-    if (!loadPetBehaviorContract(animations->sdCard(), speciesSlot, outfitSlot,
-                                 petBehaviorConfig, errorResource, sizeof(errorResource)))
+    if (!loadRuntimeContract(animations->sdCard(), speciesSlot, outfitSlot,
+                             petBehaviorConfig, errorResource, sizeof(errorResource)))
     {
         renderer.recordAssetDataErrorResource(errorResource);
         petBehaviorLoaded = false;

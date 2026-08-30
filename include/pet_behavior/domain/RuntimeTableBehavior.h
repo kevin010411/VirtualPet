@@ -6,6 +6,18 @@
 #include <stdint.h>
 #include "pet_behavior/domain/PetBehaviorTypes.h"
 
+class BundleReader;
+
+// Loads every production-owned section from one open /runtime.bin snapshot and
+// publishes the candidate only after behavior, flow, and initial appearance
+// have all validated.
+bool loadCompleteRuntimeTable(SdFat *sd,
+                              const AssetData::RuntimeManifest &manifest,
+                              BundleReader &bundleReader,
+                              uint8_t speciesSlot,
+                              uint8_t outfitSlot,
+                              PetBehaviorConfig &config);
+
 // Decodes the Ticket 03-owned records from a complete runtime-table v1 file.
 // The supplied configuration is published only after the envelope, CRC,
 // capacities, references, and behavior records all validate.
@@ -16,15 +28,14 @@ bool parseRuntimeTableBehavior(const uint8_t *bytes,
                                uint8_t outfitSlot,
                                PetBehaviorConfig &config);
 
-// SD composition entry point used during the expand-contract migration.
+// Production SD entry point for behavior records in /runtime.bin.
 bool loadRuntimeTableBehavior(SdFat *sd,
                               const AssetData::RuntimeManifest &manifest,
                               uint8_t speciesSlot,
                               uint8_t outfitSlot,
                               PetBehaviorConfig &config);
 
-// Ticket 05-owned binary flow composition.  This replaces the numeric runtime
-// roles and layouts populated from temporary TXT contracts during migration.
+// Production SD entry point for flow, role, and layout records in /runtime.bin.
 bool loadRuntimeTableFlow(SdFat *sd,
                           const AssetData::RuntimeManifest &manifest,
                           uint8_t speciesSlot,

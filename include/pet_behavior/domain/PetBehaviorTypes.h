@@ -29,7 +29,6 @@ constexpr uint8_t kPetBehaviorGuessOutcomeCount = 4;
 constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * kMaxPetBehaviorStats;
 #endif
 constexpr uint8_t kPetBehaviorButtonCount = 8;
-constexpr size_t kMaxPetBehaviorContractBytes = 24576;
 // Layout versions are also asset-data version indices.  Keep the runtime
 // table bounded by the same compiled capacity rather than by file counts.
 constexpr uint8_t kMaxRuntimeTableLayouts = AssetData::kMaxVersions - 1U;

@@ -782,7 +782,7 @@ bool decodeStatus(const Source &source,
     return nextCondition == conditions->count;
 }
 
-bool validComposedTxtRecords(const PetBehaviorConfig &config)
+bool validComposedRecords(const PetBehaviorConfig &config)
 {
     uint8_t idleTriggerCount = 0;
     for (uint8_t index = 0; index < kMaxPetBehaviorIdleTriggers; ++index)
@@ -860,7 +860,7 @@ bool decodeRuntimeTableBehavior(const Source &source,
                       findSection(sections, sectionCount, StatusSets),
                       findSection(sections, sectionCount, StatusConditions),
                       *assets, *animations, scope, candidate) ||
-        !validComposedTxtRecords(candidate))
+        !validComposedRecords(candidate))
         return false;
     config = candidate;
     return true;
@@ -1333,6 +1333,41 @@ bool parseRuntimeTableBehavior(const uint8_t *bytes,
     MemorySource memory = {bytes, static_cast<uint32_t>(byteCount)};
     const Source source = {&memory, readMemory, memory.size};
     return decodeRuntimeTableBehavior(source, manifest, speciesSlot, outfitSlot, config);
+}
+
+bool loadCompleteRuntimeTable(SdFat *sd,
+                              const AssetData::RuntimeManifest &manifest,
+                              BundleReader &bundleReader,
+                              uint8_t speciesSlot,
+                              uint8_t outfitSlot,
+                              PetBehaviorConfig &config)
+{
+    if (sd == nullptr)
+        return false;
+    File file = sd->open(kRuntimeTablePath, FILE_READ);
+    if (!file)
+        return false;
+    const uint32_t byteCount = file.size();
+    FileSource fileSource = {&file};
+    const Source source = {&fileSource, readFile, byteCount};
+
+    PetBehaviorConfig candidate = {};
+    AppearanceSelection initialAppearance = {};
+    AssetData::AnimationRef idleAnimation = {};
+    AppearanceQuery query = {};
+    query.kind = AppearanceQueryKind::Initial;
+    query.selection = &initialAppearance;
+    query.idleAnimation = &idleAnimation;
+    const bool decoded =
+        decodeRuntimeTableBehavior(source, manifest, speciesSlot, outfitSlot, candidate) &&
+        decodeRuntimeTableFlow(source, manifest, speciesSlot, outfitSlot, candidate) &&
+        decodeRuntimeTableAppearance(source, manifest, bundleReader, query);
+    file.close();
+    if (!decoded)
+        return false;
+    candidate.idleAnimation = idleAnimation;
+    config = candidate;
+    return true;
 }
 
 bool loadRuntimeTableBehavior(SdFat *sd,
