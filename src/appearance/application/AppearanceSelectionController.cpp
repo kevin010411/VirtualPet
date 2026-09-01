@@ -58,9 +58,11 @@ bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot, uin
         size_t defaultOutfitCount = 0;
         uint8_t resolvedMask = 0;
         speciesDefaultOutfits[i] = 0;
+        const uint32_t targetStageDays =
+            speciesOptions[i] == currentSpeciesSlot ? stageDays : 0;
         uint8_t choices[maxOutfitOptions] = {};
         if (appearanceLoader.resolveOutfitUnlockMask(
-                speciesOptions[i], stageDays, 0, true, resolvedMask) &&
+                speciesOptions[i], targetStageDays, 0, true, resolvedMask) &&
             appearanceLoader.loadOutfits(speciesOptions[i], resolvedMask,
                                          choices, maxOutfitOptions, defaultOutfitCount))
         {

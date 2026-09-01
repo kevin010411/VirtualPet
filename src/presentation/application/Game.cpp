@@ -570,6 +570,8 @@ bool Game::resetPet()
     {
         return false;
     }
+    if (!refreshOutfitUnlockMask(true))
+        return false;
     animations->cancelAll();
 #if ENABLE_GUESS_GAME
     minigame->reset();
@@ -813,7 +815,11 @@ void Game::handleEvolution()
     if (!beginEvolutionAnimation(selection))
     {
         if (configureActiveAppearance(selection.speciesSlot, selection.outfitSlot))
+        {
             petActions->applyAppearance(selection.speciesSlot, selection.outfitSlot);
+            if (!refreshOutfitUnlockMask(true))
+                renderer.showResourceError();
+        }
         else
             renderer.showResourceError();
     }
