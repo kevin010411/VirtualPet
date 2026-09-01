@@ -50,6 +50,13 @@ public:
     bool resetPet();
 
 private:
+    enum class InitialPetStateResult : uint8_t
+    {
+        Failed,
+        Fresh,
+        Restored,
+    };
+
     static constexpr unsigned long gameTick = 2000;
 
     Pet &pet;
@@ -85,12 +92,15 @@ private:
     uint8_t pendingEvolutionOutfitSlot = 0;
 
     bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
+    bool resolveOutfitUnlockMask(bool initialize);
     bool refreshOutfitUnlockMask(bool initialize);
+    bool enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot);
     void refreshBaseAnimation();
     void syncActionLayoutWithPlayback();
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
-    bool loadInitialPetState(bool allowSavedState, bool showError = true);
+    InitialPetStateResult loadInitialPetState(bool allowSavedState,
+                                               bool showError = true);
     void maybeTickPet();
     bool completePendingEvolutionIfReady();
     void handleEvolution();

@@ -94,7 +94,8 @@ bool Game::prepare_game()
     minigame->reset();
 #endif
 
-    if (!loadInitialPetState(true, false))
+    const InitialPetStateResult initialState = loadInitialPetState(true, false);
+    if (initialState == InitialPetStateResult::Failed)
     {
         initialStateLoadingFailed = true;
         return false;
@@ -109,7 +110,7 @@ bool Game::prepare_game()
     const bool appearanceChanged =
         restoredSpeciesSlot != petBehaviorConfig.activeSpeciesSlot ||
         restoredOutfitSlot != petBehaviorConfig.activeOutfitSlot;
-    if (appearanceChanged &&
+    if (initialState == InitialPetStateResult::Restored && appearanceChanged &&
         !configureActiveAppearance(restoredSpeciesSlot, restoredOutfitSlot))
     {
         petBehaviorLoadingFailed = true;
@@ -117,7 +118,10 @@ bool Game::prepare_game()
         startupConfigError = "runtime.bin";
         return false;
     }
-    if (!refreshOutfitUnlockMask(!pet.isFirstLaunchComplete()))
+    const bool unlockStateReady = initialState == InitialPetStateResult::Restored
+                                      ? refreshOutfitUnlockMask(false)
+                                      : enterSpecies(restoredSpeciesSlot, restoredOutfitSlot);
+    if (!unlockStateReady)
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
@@ -344,15 +348,30 @@ bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     return true;
 }
 
-bool Game::refreshOutfitUnlockMask(bool initialize)
+bool Game::resolveOutfitUnlockMask(bool initialize)
 {
-    const uint8_t previousMask = pet.outfitUnlockMask();
     uint8_t mask = 0;
     if (!appearanceLoader.resolveOutfitUnlockMask(
             pet.speciesSlot(), pet.statSnapshot(), pet.outfitUnlockMask(), initialize, mask))
         return false;
     pet.initializeOutfitUnlockMask(mask);
-    return mask == previousMask || petActions->saveNow();
+    return true;
+}
+
+bool Game::refreshOutfitUnlockMask(bool initialize)
+{
+    const uint8_t previousMask = pet.outfitUnlockMask();
+    return resolveOutfitUnlockMask(initialize) &&
+           (pet.outfitUnlockMask() == previousMask || petActions->saveNow());
+}
+
+bool Game::enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot)
+{
+    if (!configureActiveAppearance(speciesSlot, entryOutfitSlot) ||
+        !petActions->stageAppearance(speciesSlot, entryOutfitSlot) ||
+        !resolveOutfitUnlockMask(true))
+        return false;
+    return petActions->saveNow();
 }
 
 bool Game::saveNow()
@@ -480,11 +499,8 @@ void Game::OnConfirmKey()
                 selectedSpecies, selectedOutfit);
             if (confirmed)
             {
-                if (configureActiveAppearance(selectedSpecies, selectedOutfit))
+                if (enterSpecies(selectedSpecies, selectedOutfit))
                 {
-                    petActions->applyAppearance(selectedSpecies, selectedOutfit);
-                    if (!refreshOutfitUnlockMask(true))
-                        renderer.showResourceError();
                     refreshBaseAnimation();
                 }
                 else
@@ -557,7 +573,7 @@ bool Game::resetPet()
     if (!petBehaviorLoaded || flow.isFatalError())
         return false;
     initialized = false;
-    if (!loadInitialPetState(false))
+    if (loadInitialPetState(false) == InitialPetStateResult::Failed)
         return false;
 
     pendingEvolution = false;
@@ -565,18 +581,7 @@ bool Game::resetPet()
     pendingEvolutionSpeciesSlot = 0;
     pendingEvolutionOutfitSlot = 0;
     petActions->resetFirstStartCompleted();
-    AppearanceSelection evolution = {};
-    if (petActions->findEvolutionTarget(evolution))
-    {
-        if (!configureActiveAppearance(evolution.speciesSlot, evolution.outfitSlot))
-            return false;
-        petActions->applyAppearance(evolution.speciesSlot, evolution.outfitSlot);
-    }
-    else if (!configureActiveAppearance(petActions->speciesSlot(), petActions->outfitSlot()))
-    {
-        return false;
-    }
-    if (!refreshOutfitUnlockMask(true))
+    if (!enterSpecies(petActions->speciesSlot(), petActions->outfitSlot()))
         return false;
     animations->cancelAll();
 #if ENABLE_GUESS_GAME
@@ -584,7 +589,6 @@ bool Game::resetPet()
 #endif
     refreshBaseAnimation();
     animations->requestFullRedraw();
-    petActions->saveNow();
     // startStartupAnimation() deliberately rejects calls before the game is
     // ready.  A left+right reset must therefore re-enable the game before it
     // queues FirstStart.
@@ -678,7 +682,8 @@ bool Game::isFirstLaunchSelectionPending() const
     return ENABLE_APPEARANCE_SELECTION && ENABLE_FIRST_LAUNCH_SELECTION && !petActions->isFirstLaunchComplete();
 }
 
-bool Game::loadInitialPetState(bool allowSavedState, bool showError)
+Game::InitialPetStateResult Game::loadInitialPetState(bool allowSavedState,
+                                                       bool showError)
 {
     if (allowSavedState && petStorage.load(pet, petBehaviorConfig.schemaFingerprint))
     {
@@ -686,7 +691,10 @@ bool Game::loadInitialPetState(bool allowSavedState, bool showError)
         if (pet.speciesSlot() != 0 && pet.outfitSlot() != 0 &&
             appearanceLoader.findOutfitPreview(
                 pet.speciesSlot(), pet.outfitSlot(), false, preview))
-            return true;
+        {
+            return InitialPetStateResult::Restored;
+        }
+        petStorage.discard();
     }
 
     AppearanceSelection initialAppearance = {};
@@ -694,7 +702,7 @@ bool Game::loadInitialPetState(bool allowSavedState, bool showError)
     {
         if (showError)
             renderer.showResourceError();
-        return false;
+        return InitialPetStateResult::Failed;
     }
 
     pet.setDefaultState();
@@ -704,7 +712,7 @@ bool Game::loadInitialPetState(bool allowSavedState, bool showError)
                          pet.setOutfitSlot(initialAppearance.outfitSlot);
     if (!applied && showError)
         renderer.showResourceError();
-    return applied;
+    return applied ? InitialPetStateResult::Fresh : InitialPetStateResult::Failed;
 }
 
 bool Game::startFirstLaunchRequiredCommand()
@@ -780,13 +788,7 @@ bool Game::completePendingEvolutionIfReady()
     if (animations->isBusy())
         return false;
 
-    if (!configureActiveAppearance(pendingEvolutionSpeciesSlot, pendingEvolutionOutfitSlot))
-    {
-        renderer.showResourceError();
-        return false;
-    }
-    petActions->applyAppearance(pendingEvolutionSpeciesSlot, pendingEvolutionOutfitSlot);
-    if (!refreshOutfitUnlockMask(true))
+    if (!enterSpecies(pendingEvolutionSpeciesSlot, pendingEvolutionOutfitSlot))
     {
         renderer.showResourceError();
         return false;
@@ -794,10 +796,9 @@ bool Game::completePendingEvolutionIfReady()
     pendingEvolution = false;
     pendingEvolutionSpeciesSlot = 0;
     pendingEvolutionOutfitSlot = 0;
-    // applyAppearance() can report persistence failure after it has already
-    // changed the in-memory appearance and reloaded its manifest.  Always
-    // hand rendering back to the current base animation so that the display
-    // cannot remain on the completed Evolution frame.
+    // Species entry changes the in-memory appearance before its single
+    // persistence write. Always hand rendering back to the current base
+    // animation so the display cannot remain on the completed Evolution frame.
     refreshBaseAnimation();
     animations->requestFullRedraw();
     return true;
@@ -820,11 +821,10 @@ void Game::handleEvolution()
 
     if (!beginEvolutionAnimation(selection))
     {
-        if (configureActiveAppearance(selection.speciesSlot, selection.outfitSlot))
+        if (enterSpecies(selection.speciesSlot, selection.outfitSlot))
         {
-            petActions->applyAppearance(selection.speciesSlot, selection.outfitSlot);
-            if (!refreshOutfitUnlockMask(true))
-                renderer.showResourceError();
+            refreshBaseAnimation();
+            animations->requestFullRedraw();
         }
         else
             renderer.showResourceError();

@@ -23,6 +23,7 @@ public:
     bool commitPetDay(const int16_t *customStats, size_t customStatCount);
     bool findEvolutionTarget(AppearanceSelection &selection) const;
     bool applyEvolutionTarget();
+    bool stageAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     bool applyAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
 
     int16_t customStat(uint8_t index) const;

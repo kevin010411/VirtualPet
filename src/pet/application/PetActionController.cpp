@@ -91,11 +91,15 @@ bool PetActionController::applyEvolutionTarget()
     return applyAppearance(selection.speciesSlot, selection.outfitSlot);
 }
 
+bool PetActionController::stageAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
+{
+    return pet.setSpeciesSlot(speciesSlot) && pet.setOutfitSlot(outfitSlot);
+}
+
 bool PetActionController::applyAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
-    if (!pet.setSpeciesSlot(speciesSlot) || !pet.setOutfitSlot(outfitSlot))
+    if (!stageAppearance(speciesSlot, outfitSlot))
         return false;
-
     renderer.setAssetAppearance(pet.speciesSlot(), pet.outfitSlot());
     return saveNow();
 }

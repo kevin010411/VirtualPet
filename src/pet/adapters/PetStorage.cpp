@@ -155,3 +155,11 @@ bool PetStorage::load(Pet &pet, uint32_t schemaFingerprint)
     writeSlotA = !selectedSlotA;
     return true;
 }
+
+void PetStorage::discard()
+{
+    if (sd != nullptr)
+        discardSave(sd);
+    nextSequence = 1;
+    writeSlotA = true;
+}
