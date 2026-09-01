@@ -70,7 +70,15 @@
 #endif
 
 #ifndef ENABLE_COMMAND_SPECIES
-#define ENABLE_COMMAND_SPECIES 1
+#define ENABLE_COMMAND_SPECIES 0
+#endif
+
+#if ENABLE_COMMAND_SPECIES != 0 && ENABLE_COMMAND_SPECIES != 1
+#error "ENABLE_COMMAND_SPECIES must be 0 or 1."
+#endif
+
+#if ENABLE_COMMAND_SPECIES
+#warning "ENABLE_COMMAND_SPECIES enables retired direct Species switching and bypasses the Evolution model."
 #endif
 
 #ifndef ENABLE_DEBUG
@@ -105,6 +113,10 @@
 
 #ifndef APP_FIRST_LAUNCH_REQUIRED_COMMAND
 #define APP_FIRST_LAUNCH_REQUIRED_COMMAND APP_COMMAND_CHANGE_OUTFIT
+#endif
+
+#if APP_FIRST_LAUNCH_REQUIRED_COMMAND == APP_COMMAND_CHANGE_SPECIES
+#error "First Launch cannot use retired direct Species switching; select an Outfit on the Initial Species."
 #endif
 
 #if (ENABLE_COMMAND_OUTFIT || ENABLE_COMMAND_SPECIES || ENABLE_FIRST_LAUNCH_SELECTION) && !ENABLE_APPEARANCE_SELECTION

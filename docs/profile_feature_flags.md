@@ -15,7 +15,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `APP_PROFILE` | `APP_PROFILE_DEFAULT` | 指定 profile id，影響 command slot 排列與初始外觀。 | 對應 profile 的 command slot 與初始 species/outfit。 | 不直接省容量；真正省容量要靠其他 `ENABLE_*` 與 `APP_MAX_*`。 | 所有 env 都會設定。 | 新增 profile 時要同步更新 `AppProfile.h` 與 `platformio.ini`。 |
 | `APP_STATUS_MODE` | `STATUS_MODE_SINGLE_METER` | 指定 Status 指令的顯示策略。 | `STATUS_MODE_DIRECT`、`SINGLE_METER`、`RANDOM_METERS`、`COMPOSITE_HEALTH`、`TRIPLE_METER` 其中一種。 | 選 `DIRECT` 或 `COMPOSITE_HEALTH` 可避開 SD status config parser。 | `default`、`kuromu`、`small`、`new_taipei_childrens_day`、`dipsyho`。 | `small` 不是小容量樣本，因為它仍開 guess game、appearance、species。 |
-| `APP_FIRST_LAUNCH_REQUIRED_COMMAND` | `APP_COMMAND_CHANGE_OUTFIT` | 第一次啟動流程要求完成的 command。 | first-launch flow 會等待指定 command。 | 不直接省容量。 | 目前使用預設值。 | 若指定 outfit/species，必須啟用 `ENABLE_APPEARANCE_SELECTION`。 |
+| `APP_FIRST_LAUNCH_REQUIRED_COMMAND` | `APP_COMMAND_CHANGE_OUTFIT` | 第一次啟動流程要求完成的 Outfit command。 | first-launch flow 只會在 Initial Species 上等待 Outfit Selection。 | 不直接省容量。 | 目前使用預設值。 | 必須啟用 `ENABLE_APPEARANCE_SELECTION`；指定已退役的 Species command 會編譯失敗。 |
 
 ## Command 與功能模組
 
@@ -23,7 +23,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `ENABLE_COMMAND_PREDICT` | `1` | 是否啟用占卜指令。 | Predict slot、`canPredict()`、`commandPredict()`、fortune helper、Predict animation 檢查。 | 主要省 Flash。 | `default=1`，其他驗收 profile 多為 `0`。 | 若關閉後 Flash 沒降，用 symbol 檢查 `commandPredict` / `fortuneToAnimationId`。 |
 | `ENABLE_COMMAND_OUTFIT` | `1` | 是否啟用換 outfit 指令。 | ChangeOutfit slot、result handler、appearance selection 入口。 | 主要省 Flash。 | `kuromu=1`。 | 開啟時必須啟用 `ENABLE_APPEARANCE_SELECTION`。 |
-| `ENABLE_COMMAND_SPECIES` | `1` | 是否啟用換 species 指令。 | ChangeSpecies slot、result handler、species selection 入口。 | 主要省 Flash。 | `small=1`、`small_multi_status=1`、`small_status_anime=1`。 | 開啟時必須啟用 `ENABLE_APPEARANCE_SELECTION`。 |
+| `ENABLE_COMMAND_SPECIES` | `0` | 僅供舊版相容的直接換 Species 指令；此路徑會繞過 Evolution。 | ChangeSpecies slot、result handler、species selection 入口。 | 主要省 Flash。 | 預設與正式產品設定皆為 `0`；手動開啟會產生編譯警告。 | 開啟時必須啟用 `ENABLE_APPEARANCE_SELECTION`，且不屬於支援的產品功能。 |
 | `ENABLE_GUESS_GAME` | `1` | 是否啟用猜物品小遊戲。 | `GuessItemGame`、`MinigameController`、minigame input/update flow、HaveFun slot。 | 主要省 Flash；也會讓 `Game` 少一個 minigame member。 | `default`、`small`、`dipsyho`。 | `new_taipei_childrens_day` 與 `kuromu` 目前關閉。 |
 ## Appearance、啟動與 layout
 

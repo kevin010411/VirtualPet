@@ -42,7 +42,8 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -e small_start
 ## Command Registry 與 Menu Profile
 
 韌體透過 `SystemCommandCatalog.def` 編譯固定的 System Commands：`predict`、
-`guess_game`、`status`、`change_outfit` 與 `change_species`。實際八個按鍵 slot
+`guess_game`、`status` 與 `change_outfit`。已退役的 `change_species` 只保留在
+預設關閉且會產生警告的韌體相容路徑。實際八個按鍵 slot
 由 `/runtime.bin` 的 Command Layout records 配置為空白、User Action 或可用的
 System Command；Feed、Medicine、Shower、Clean 與 Gift 不再是固定 command。
 

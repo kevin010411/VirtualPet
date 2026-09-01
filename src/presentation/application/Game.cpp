@@ -729,14 +729,6 @@ bool Game::startFirstLaunchRequiredCommand()
             return true;
         }
         break;
-    case AppCommandId::ChangeSpecies:
-        if (appearanceSelection->startSpecies(petActions->speciesSlot(), pet.statSnapshot()))
-        {
-            animations->cancelAll();
-            animations->requestFullRedraw();
-            return true;
-        }
-        break;
     default:
         break;
     }
