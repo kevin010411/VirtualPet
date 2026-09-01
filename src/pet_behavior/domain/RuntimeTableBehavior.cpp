@@ -10,7 +10,9 @@ namespace
 {
 constexpr char kRuntimeTablePath[] = "/runtime.bin";
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-constexpr uint16_t kVersion = 1;
+// Outfit preview ordering is an incompatible runtime contract: v1 must fail
+// closed so slot-based persisted selections are never interpreted as v2.
+constexpr uint16_t kVersion = 2;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint16_t kMaxSections = 32;
@@ -715,6 +717,47 @@ struct AppearanceQuery
     AssetData::AnimationRef *idleAnimation = nullptr;
 };
 
+bool validateAppearanceProjection(const RuntimeTable &table, BundleReader &bundleReader,
+                                  const Section &assets, const Section &animations,
+                                  const Section &appearance, const Section &species,
+                                  const Section &outfits)
+{
+    const Source &source = table.source;
+    if (appearance.count != 1 || species.count == 0 || outfits.count == 0)
+        return false;
+    uint8_t initial[8] = {};
+    if (!readRecord(source, appearance, 0, initial) || initial[0] == 0 || initial[1] == 0)
+        return false;
+    bool initialFound = false;
+    for (uint16_t speciesIndex = 0; speciesIndex < species.count; ++speciesIndex)
+    {
+        uint8_t speciesRecord[8] = {};
+        if (!readRecord(source, species, speciesIndex, speciesRecord) ||
+            speciesRecord[0] != speciesIndex + 1 || speciesRecord[1] == 0 ||
+            static_cast<uint32_t>(readU16(speciesRecord + 2)) + readU16(speciesRecord + 4) > outfits.count)
+            return false;
+        if (speciesRecord[0] == initial[0] && speciesRecord[1] == initial[1])
+            initialFound = true;
+        bool entryFound = false;
+        for (uint16_t offset = 0; offset < readU16(speciesRecord + 4); ++offset)
+        {
+            uint8_t outfitRecord[8] = {};
+            const uint16_t outfitIndex = static_cast<uint16_t>(readU16(speciesRecord + 2) + offset);
+            AssetData::AnimationRef preview = {};
+            if (!readRecord(source, outfits, outfitIndex, outfitRecord) ||
+                outfitRecord[0] != speciesRecord[0] || outfitRecord[1] != offset + 1 ||
+                !resolveAnimation(source, assets, animations, readU16(outfitRecord + 2),
+                                  {outfitRecord[0], outfitRecord[1]}, preview) ||
+                !AssetData::animationReferenceExists(bundleReader, preview))
+                return false;
+            entryFound = entryFound || outfitRecord[1] == speciesRecord[1];
+        }
+        if (!entryFound)
+            return false;
+    }
+    return initialFound;
+}
+
 bool conditionMatches(const uint8_t *record, const PetStatSnapshot &stats,
                       const ActivePetBehaviorStatSlots &activeSlots)
 {
@@ -753,6 +796,14 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
     const Section *conditions = table.find(EvolutionConditions);
     if ((featureFlags & (1UL << 2)) == 0 || assets == nullptr || animations == nullptr)
         return false;
+
+    if (query.kind == AppearanceQueryKind::Validate)
+    {
+        if (appearance == nullptr || species == nullptr || outfits == nullptr)
+            return false;
+        return validateAppearanceProjection(table, bundleReader, *assets, *animations,
+                                            *appearance, *species, *outfits);
+    }
 
     if (query.kind == AppearanceQueryKind::Initial)
     {

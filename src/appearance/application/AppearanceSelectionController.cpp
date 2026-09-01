@@ -100,7 +100,6 @@ bool AppearanceSelectionController::onConfirm(uint8_t &selectedOutfitSlot)
     }
 
     selectedOutfitSlot = outfitOptions[selectedOutfitIndex];
-    playSelectedChooseAnimation();
     exit();
     return true;
 }
