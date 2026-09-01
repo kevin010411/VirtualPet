@@ -35,8 +35,11 @@ public:
     virtual bool findInitialAppearance(AppearanceSelection &selection) = 0;
     virtual bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) = 0;
     virtual bool loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount) = 0;
-    virtual bool loadOutfits(uint8_t speciesSlot, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount) = 0;
-    virtual bool findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, OutfitPreview &preview) = 0;
+    virtual bool loadOutfits(uint8_t speciesSlot, uint8_t unlockMask, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount) = 0;
+    virtual bool findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, bool locked, OutfitPreview &preview) = 0;
+    virtual bool resolveOutfitUnlockMask(uint8_t speciesSlot, uint32_t stageDays,
+                                         uint8_t currentMask, bool initialize,
+                                         uint8_t &resolvedMask) = 0;
 };
 
 #endif // APPEARANCE_LOADER_H

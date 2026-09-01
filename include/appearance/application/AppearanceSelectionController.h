@@ -11,7 +11,7 @@ class AppearanceSelectionController
 public:
     AppearanceSelectionController(Renderer &renderer, AppearanceLoader &appearanceLoader);
 
-    bool start(uint8_t speciesSlot, uint8_t currentOutfitSlot);
+    bool start(uint8_t speciesSlot, uint8_t currentOutfitSlot, uint8_t unlockMask);
     bool startSpecies(uint8_t currentSpeciesSlot);
     bool isActive() const;
     bool isSelectingSpecies() const;
@@ -33,6 +33,7 @@ private:
     bool selectingOutfit = false;
     bool selectingSpecies = false;
     uint8_t speciesSlot = 1;
+    uint8_t unlockMask = 0;
     uint8_t speciesOptions[maxSpeciesOptions] = {};
     uint8_t outfitOptions[maxOutfitOptions] = {};
     uint8_t speciesDefaultOutfits[maxSpeciesOptions] = {};

@@ -10,15 +10,17 @@ AppearanceSelectionController::AppearanceSelectionController(Renderer &rendererR
 {
 }
 
-bool AppearanceSelectionController::start(uint8_t sourceSpeciesSlot, uint8_t currentOutfitSlot)
+bool AppearanceSelectionController::start(uint8_t sourceSpeciesSlot, uint8_t currentOutfitSlot,
+                                          uint8_t sourceUnlockMask)
 {
     selectingSpecies = false;
     speciesSlot = sourceSpeciesSlot;
+    unlockMask = sourceUnlockMask;
     outfitOptionCount = 0;
     selectedOutfitIndex = 0;
     hasSelectedOutfitPreview = false;
 
-    if (!appearanceLoader.loadOutfits(speciesSlot, outfitOptions, maxOutfitOptions, outfitOptionCount))
+    if (!appearanceLoader.loadOutfits(speciesSlot, unlockMask, outfitOptions, maxOutfitOptions, outfitOptionCount))
         return false;
 
     for (size_t i = 0; i < outfitOptionCount; ++i)
@@ -55,7 +57,7 @@ bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot)
     {
         size_t defaultOutfitCount = 0;
         speciesDefaultOutfits[i] = 0;
-        appearanceLoader.loadOutfits(speciesOptions[i], &speciesDefaultOutfits[i], 1, defaultOutfitCount);
+        appearanceLoader.loadOutfits(speciesOptions[i], 0xff, &speciesDefaultOutfits[i], 1, defaultOutfitCount);
         if (speciesOptions[i] == currentSpeciesSlot)
             selectedSpeciesIndex = i;
     }
@@ -100,6 +102,8 @@ bool AppearanceSelectionController::onConfirm(uint8_t &selectedOutfitSlot)
     }
 
     selectedOutfitSlot = outfitOptions[selectedOutfitIndex];
+    if ((unlockMask & (1U << (selectedOutfitSlot - 1U))) == 0)
+        return false;
     exit();
     return true;
 }
@@ -169,8 +173,10 @@ bool AppearanceSelectionController::loadSelectedOutfitPreview()
     if (selectedOutfitIndex >= outfitOptionCount)
         return false;
 
+    const uint8_t selectedSlot = outfitOptions[selectedOutfitIndex];
     hasSelectedOutfitPreview = appearanceLoader.findOutfitPreview(
-        speciesSlot, outfitOptions[selectedOutfitIndex], selectedOutfitPreview);
+        speciesSlot, selectedSlot,
+        (unlockMask & (1U << (selectedSlot - 1U))) == 0, selectedOutfitPreview);
     if (hasSelectedOutfitPreview)
     {
         selectedOutfitPreview.frameCount = renderer.frameCountFor(selectedOutfitPreview.animation);
@@ -196,7 +202,7 @@ bool AppearanceSelectionController::loadSelectedSpeciesPreview()
 
     hasSelectedOutfitPreview = appearanceLoader.findOutfitPreview(
         speciesOptions[selectedSpeciesIndex],
-        speciesDefaultOutfits[selectedSpeciesIndex],
+        speciesDefaultOutfits[selectedSpeciesIndex], false,
         selectedOutfitPreview);
     if (hasSelectedOutfitPreview)
     {

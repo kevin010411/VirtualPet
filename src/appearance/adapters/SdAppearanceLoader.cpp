@@ -82,21 +82,32 @@ bool SdAppearanceLoader::loadSpecies(uint8_t *species, size_t maxSpecies, size_t
     return loaded;
 }
 
-bool SdAppearanceLoader::loadOutfits(uint8_t speciesSlot, uint8_t *outfits,
+bool SdAppearanceLoader::loadOutfits(uint8_t speciesSlot, uint8_t unlockMask, uint8_t *outfits,
                                      size_t maxOutfits, size_t &outfitCount)
 {
     const bool loaded = loadRuntimeTableOutfits(
-        sd, assetManifest, bundleReader, speciesSlot, outfits, maxOutfits, outfitCount);
+        sd, assetManifest, bundleReader, speciesSlot, unlockMask, outfits, maxOutfits, outfitCount);
     recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
                         contractErrorResource, sizeof(contractErrorResource));
     return loaded;
 }
 
-bool SdAppearanceLoader::findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot,
+bool SdAppearanceLoader::findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, bool locked,
                                            OutfitPreview &preview)
 {
     const bool loaded = findRuntimeTableOutfitPreview(
-        sd, assetManifest, bundleReader, speciesSlot, outfitSlot, preview);
+        sd, assetManifest, bundleReader, speciesSlot, outfitSlot, locked, preview);
+    recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
+                        contractErrorResource, sizeof(contractErrorResource));
+    return loaded;
+}
+
+bool SdAppearanceLoader::resolveOutfitUnlockMask(uint8_t speciesSlot, uint32_t stageDays,
+                                                  uint8_t currentMask, bool initialize,
+                                                  uint8_t &resolvedMask)
+{
+    const bool loaded = resolveRuntimeTableOutfitUnlockMask(
+        sd, assetManifest, bundleReader, speciesSlot, stageDays, currentMask, initialize, resolvedMask);
     recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
                         contractErrorResource, sizeof(contractErrorResource));
     return loaded;

@@ -117,6 +117,13 @@ bool Game::prepare_game()
         startupConfigError = "runtime.bin";
         return false;
     }
+    if (!refreshOutfitUnlockMask(!pet.isFirstLaunchComplete()))
+    {
+        petBehaviorLoadingFailed = true;
+        petBehaviorLoaded = false;
+        startupConfigError = "runtime.bin";
+        return false;
+    }
 
     // A successfully restored appearance is authoritative. Re-evaluating the
     // evolution table here can immediately replace a saved later-stage species
@@ -330,6 +337,16 @@ bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     commands->configure(petBehaviorConfig);
     layout->configureRuntimeContract(petBehaviorConfig);
     petBehaviorLoaded = true;
+    return true;
+}
+
+bool Game::refreshOutfitUnlockMask(bool initialize)
+{
+    uint8_t mask = 0;
+    if (!appearanceLoader.resolveOutfitUnlockMask(
+            pet.speciesSlot(), pet.stageDays(), pet.outfitUnlockMask(), initialize, mask))
+        return false;
+    pet.initializeOutfitUnlockMask(mask);
     return true;
 }
 
@@ -593,7 +610,8 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
 #if ENABLE_COMMAND_OUTFIT
     if (result.requestedOutfit)
     {
-        if (appearanceSelection->start(petActions->speciesSlot(), petActions->outfitSlot()))
+        if (appearanceSelection->start(petActions->speciesSlot(), petActions->outfitSlot(),
+                                       pet.outfitUnlockMask()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
@@ -656,7 +674,7 @@ bool Game::loadInitialPetState(bool allowSavedState, bool showError)
         OutfitPreview preview = {};
         if (pet.speciesSlot() != 0 && pet.outfitSlot() != 0 &&
             appearanceLoader.findOutfitPreview(
-                pet.speciesSlot(), pet.outfitSlot(), preview))
+                pet.speciesSlot(), pet.outfitSlot(), false, preview))
             return true;
     }
 
@@ -684,7 +702,8 @@ bool Game::startFirstLaunchRequiredCommand()
     switch (flow.firstLaunchRequiredCommand())
     {
     case AppCommandId::ChangeOutfit:
-        if (appearanceSelection->start(petActions->speciesSlot(), petActions->outfitSlot()))
+        if (appearanceSelection->start(petActions->speciesSlot(), petActions->outfitSlot(),
+                                       pet.outfitUnlockMask()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
@@ -727,6 +746,11 @@ void Game::maybeTickPet()
     {
         if (!petBehaviorRuntime->advancePetDay())
             return;
+        if (!refreshOutfitUnlockMask(false))
+        {
+            renderer.showResourceError();
+            return;
+        }
         handleEvolution();
         if (pendingEvolution)
             return;

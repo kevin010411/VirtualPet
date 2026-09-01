@@ -16,6 +16,7 @@ struct PersistedPetState
     uint32_t schemaFingerprint;
     uint32_t stage_days;
     uint32_t flowFlags;
+    uint8_t outfitUnlockMask;
     int16_t customStats[kPetCustomStatCount];
     char speciesSlotText[9];
     char outfitSlotText[9];
@@ -36,7 +37,7 @@ class Pet
 {
 public:
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 12;
+    static constexpr uint16_t kPetStateVersion = 13;
 
     Pet();
 
@@ -55,6 +56,10 @@ public:
     bool changeCustomStatClamped(uint8_t index, int16_t delta, int16_t minValue, int16_t maxValue);
     bool setSpeciesSlot(uint8_t slot);
     bool setOutfitSlot(uint8_t slot);
+    uint8_t outfitUnlockMask() const;
+    bool isOutfitUnlocked(uint8_t slot) const;
+    void unlockOutfit(uint8_t slot);
+    void initializeOutfitUnlockMask(uint8_t mask);
     bool isFirstLaunchComplete() const;
     void markFirstLaunchComplete();
     void resetFirstLaunch();

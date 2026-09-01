@@ -29,9 +29,13 @@ bool loadRuntimeTableSpecies(SdFat *sd, const AssetData::RuntimeManifest &manife
                              size_t maxSpecies, size_t &speciesCount);
 bool loadRuntimeTableOutfits(SdFat *sd, const AssetData::RuntimeManifest &manifest,
                              BundleReader &bundleReader, uint8_t speciesSlot,
-                             uint8_t *outfits, size_t maxOutfits, size_t &outfitCount);
+                             uint8_t unlockMask, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount);
 bool findRuntimeTableOutfitPreview(SdFat *sd, const AssetData::RuntimeManifest &manifest,
                                    BundleReader &bundleReader, uint8_t speciesSlot,
-                                   uint8_t outfitSlot, OutfitPreview &preview);
+                                   uint8_t outfitSlot, bool locked, OutfitPreview &preview);
+bool resolveRuntimeTableOutfitUnlockMask(SdFat *sd, const AssetData::RuntimeManifest &manifest,
+                                         BundleReader &bundleReader, uint8_t speciesSlot,
+                                         uint32_t stageDays, uint8_t currentMask, bool initialize,
+                                         uint8_t &resolvedMask);
 
 #endif // RUNTIME_TABLE_APPEARANCE_H

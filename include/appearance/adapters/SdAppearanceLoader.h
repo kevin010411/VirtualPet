@@ -17,8 +17,11 @@ public:
     bool findInitialAppearance(AppearanceSelection &selection) override;
     bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) override;
     bool loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount) override;
-    bool loadOutfits(uint8_t speciesSlot, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount) override;
-    bool findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, OutfitPreview &preview) override;
+    bool loadOutfits(uint8_t speciesSlot, uint8_t unlockMask, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount) override;
+    bool findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, bool locked, OutfitPreview &preview) override;
+    bool resolveOutfitUnlockMask(uint8_t speciesSlot, uint32_t stageDays,
+                                 uint8_t currentMask, bool initialize,
+                                 uint8_t &resolvedMask) override;
 private:
     SdFat *sd;
     uint8_t verificationScratch[AssetData::kVerificationScratchBytes] = {};

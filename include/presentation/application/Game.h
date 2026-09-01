@@ -85,6 +85,7 @@ private:
     uint8_t pendingEvolutionOutfitSlot = 0;
 
     bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
+    bool refreshOutfitUnlockMask(bool initialize);
     void refreshBaseAnimation();
     void syncActionLayoutWithPlayback();
     void handleCommandResult(const CommandResult &result, int selectedSlot);

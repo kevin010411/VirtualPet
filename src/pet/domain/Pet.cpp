@@ -98,6 +98,7 @@ void Pet::setDefaultState()
     for (size_t i = 0; i < PetStatSnapshot::kCustomStatCount; ++i)
         st.customStats[i] = 0;
     st.flowFlags = 0;
+    st.outfitUnlockMask = 0;
     st.crc32 = 0;
 }
 
@@ -182,6 +183,7 @@ bool Pet::setSpeciesSlot(uint8_t slot)
     {
         strcpy(st.speciesSlotText, text);
         st.stage_days = 0;
+        st.outfitUnlockMask = 0;
     }
     return true;
 }
@@ -193,6 +195,24 @@ bool Pet::setOutfitSlot(uint8_t slot)
         return false;
     strcpy(st.outfitSlotText, text);
     return true;
+}
+
+uint8_t Pet::outfitUnlockMask() const { return st.outfitUnlockMask; }
+
+bool Pet::isOutfitUnlocked(uint8_t slot) const
+{
+    return slot >= 1 && slot <= 8 && (st.outfitUnlockMask & (1U << (slot - 1U))) != 0;
+}
+
+void Pet::unlockOutfit(uint8_t slot)
+{
+    if (slot >= 1 && slot <= 8)
+        st.outfitUnlockMask |= static_cast<uint8_t>(1U << (slot - 1U));
+}
+
+void Pet::initializeOutfitUnlockMask(uint8_t mask)
+{
+    st.outfitUnlockMask = mask;
 }
 
 bool Pet::isFirstLaunchComplete() const
