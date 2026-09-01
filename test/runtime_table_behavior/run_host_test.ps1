@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v1'))
+$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v2'))
 $outputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_host.exe'
 $fullFeatureOutputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_full_host.exe'
 $fixturePaths = @(
