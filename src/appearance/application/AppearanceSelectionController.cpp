@@ -43,7 +43,7 @@ bool AppearanceSelectionController::start(uint8_t sourceSpeciesSlot, uint8_t cur
     return true;
 }
 
-bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot, uint32_t stageDays)
+bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot, const PetStatSnapshot &stats)
 {
     selectingOutfit = false;
     speciesOptionCount = 0;
@@ -58,11 +58,12 @@ bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot, uin
         size_t defaultOutfitCount = 0;
         uint8_t resolvedMask = 0;
         speciesDefaultOutfits[i] = 0;
-        const uint32_t targetStageDays =
-            speciesOptions[i] == currentSpeciesSlot ? stageDays : 0;
+        PetStatSnapshot targetStats = stats;
+        if (speciesOptions[i] != currentSpeciesSlot)
+            targetStats.stage_days = 0;
         uint8_t choices[maxOutfitOptions] = {};
         if (appearanceLoader.resolveOutfitUnlockMask(
-                speciesOptions[i], targetStageDays, 0, true, resolvedMask) &&
+                speciesOptions[i], targetStats, 0, true, resolvedMask) &&
             appearanceLoader.loadOutfits(speciesOptions[i], resolvedMask,
                                          choices, maxOutfitOptions, defaultOutfitCount))
         {

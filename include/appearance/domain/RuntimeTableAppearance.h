@@ -35,7 +35,8 @@ bool findRuntimeTableOutfitPreview(SdFat *sd, const AssetData::RuntimeManifest &
                                    uint8_t outfitSlot, bool locked, OutfitPreview &preview);
 bool resolveRuntimeTableOutfitUnlockMask(SdFat *sd, const AssetData::RuntimeManifest &manifest,
                                          BundleReader &bundleReader, uint8_t speciesSlot,
-                                         uint32_t stageDays, uint8_t currentMask, bool initialize,
+                                         const ActivePetBehaviorStatSlots &activeSlots,
+                                         const PetStatSnapshot &stats, uint8_t currentMask, bool initialize,
                                          uint8_t &resolvedMask);
 
 #endif // RUNTIME_TABLE_APPEARANCE_H

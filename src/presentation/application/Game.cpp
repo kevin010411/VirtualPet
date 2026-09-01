@@ -198,7 +198,11 @@ void Game::loop_game()
     {
         minigame->update();
         if (!minigame->isActive())
+        {
+            if (!refreshOutfitUnlockMask(false))
+                renderer.showResourceError();
             flow.onMinigameEnded();
+        }
     }
 #endif
 
@@ -345,7 +349,7 @@ bool Game::refreshOutfitUnlockMask(bool initialize)
     const uint8_t previousMask = pet.outfitUnlockMask();
     uint8_t mask = 0;
     if (!appearanceLoader.resolveOutfitUnlockMask(
-            pet.speciesSlot(), pet.stageDays(), pet.outfitUnlockMask(), initialize, mask))
+            pet.speciesSlot(), pet.statSnapshot(), pet.outfitUnlockMask(), initialize, mask))
         return false;
     pet.initializeOutfitUnlockMask(mask);
     return mask == previousMask || petActions->saveNow();
@@ -536,6 +540,8 @@ void Game::OnConfirmKey()
         {
             if (actionResult == PetBehaviorActionResult::AppliedAnimationMissing)
                 renderer.showResourceError();
+            if (!refreshOutfitUnlockMask(false))
+                renderer.showResourceError();
             refreshBaseAnimation();
             layout->enterAction(animations->currentPlaybackRole(), selectedSlot);
         }
@@ -628,7 +634,7 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
 #if ENABLE_COMMAND_SPECIES
     if (result.requestedSpecies)
     {
-        if (appearanceSelection->startSpecies(petActions->speciesSlot(), pet.stageDays()))
+        if (appearanceSelection->startSpecies(petActions->speciesSlot(), pet.statSnapshot()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
@@ -716,7 +722,7 @@ bool Game::startFirstLaunchRequiredCommand()
         }
         break;
     case AppCommandId::ChangeSpecies:
-        if (appearanceSelection->startSpecies(petActions->speciesSlot(), pet.stageDays()))
+        if (appearanceSelection->startSpecies(petActions->speciesSlot(), pet.statSnapshot()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
