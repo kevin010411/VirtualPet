@@ -12,7 +12,7 @@ public:
     AppearanceSelectionController(Renderer &renderer, AppearanceLoader &appearanceLoader);
 
     bool start(uint8_t speciesSlot, uint8_t currentOutfitSlot, uint8_t unlockMask);
-    bool startSpecies(uint8_t currentSpeciesSlot);
+    bool startSpecies(uint8_t currentSpeciesSlot, uint32_t stageDays);
     bool isActive() const;
     bool isSelectingSpecies() const;
     void onLeft();

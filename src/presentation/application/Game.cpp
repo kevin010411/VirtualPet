@@ -342,12 +342,13 @@ bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 
 bool Game::refreshOutfitUnlockMask(bool initialize)
 {
+    const uint8_t previousMask = pet.outfitUnlockMask();
     uint8_t mask = 0;
     if (!appearanceLoader.resolveOutfitUnlockMask(
             pet.speciesSlot(), pet.stageDays(), pet.outfitUnlockMask(), initialize, mask))
         return false;
     pet.initializeOutfitUnlockMask(mask);
-    return true;
+    return mask == previousMask || petActions->saveNow();
 }
 
 bool Game::saveNow()
@@ -478,6 +479,8 @@ void Game::OnConfirmKey()
                 if (configureActiveAppearance(selectedSpecies, selectedOutfit))
                 {
                     petActions->applyAppearance(selectedSpecies, selectedOutfit);
+                    if (!refreshOutfitUnlockMask(true))
+                        renderer.showResourceError();
                     refreshBaseAnimation();
                 }
                 else
@@ -623,7 +626,7 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
 #if ENABLE_COMMAND_SPECIES
     if (result.requestedSpecies)
     {
-        if (appearanceSelection->startSpecies(petActions->speciesSlot()))
+        if (appearanceSelection->startSpecies(petActions->speciesSlot(), pet.stageDays()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
@@ -711,7 +714,7 @@ bool Game::startFirstLaunchRequiredCommand()
         }
         break;
     case AppCommandId::ChangeSpecies:
-        if (appearanceSelection->startSpecies(petActions->speciesSlot()))
+        if (appearanceSelection->startSpecies(petActions->speciesSlot(), pet.stageDays()))
         {
             animations->cancelAll();
             animations->requestFullRedraw();
@@ -775,6 +778,11 @@ bool Game::completePendingEvolutionIfReady()
         return false;
     }
     petActions->applyAppearance(pendingEvolutionSpeciesSlot, pendingEvolutionOutfitSlot);
+    if (!refreshOutfitUnlockMask(true))
+    {
+        renderer.showResourceError();
+        return false;
+    }
     pendingEvolution = false;
     pendingEvolutionSpeciesSlot = 0;
     pendingEvolutionOutfitSlot = 0;

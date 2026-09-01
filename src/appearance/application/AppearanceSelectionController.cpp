@@ -43,7 +43,7 @@ bool AppearanceSelectionController::start(uint8_t sourceSpeciesSlot, uint8_t cur
     return true;
 }
 
-bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot)
+bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot, uint32_t stageDays)
 {
     selectingOutfit = false;
     speciesOptionCount = 0;
@@ -56,8 +56,21 @@ bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot)
     for (size_t i = 0; i < speciesOptionCount; ++i)
     {
         size_t defaultOutfitCount = 0;
+        uint8_t resolvedMask = 0;
         speciesDefaultOutfits[i] = 0;
-        appearanceLoader.loadOutfits(speciesOptions[i], 0xff, &speciesDefaultOutfits[i], 1, defaultOutfitCount);
+        uint8_t choices[maxOutfitOptions] = {};
+        if (appearanceLoader.resolveOutfitUnlockMask(
+                speciesOptions[i], stageDays, 0, true, resolvedMask) &&
+            appearanceLoader.loadOutfits(speciesOptions[i], resolvedMask,
+                                         choices, maxOutfitOptions, defaultOutfitCount))
+        {
+            for (size_t choice = 0; choice < defaultOutfitCount; ++choice)
+                if ((resolvedMask & (1U << (choices[choice] - 1U))) != 0)
+                {
+                    speciesDefaultOutfits[i] = choices[choice];
+                    break;
+                }
+        }
         if (speciesOptions[i] == currentSpeciesSlot)
             selectedSpeciesIndex = i;
     }
