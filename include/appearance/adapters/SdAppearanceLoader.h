@@ -24,7 +24,7 @@ public:
                                  uint8_t &resolvedMask) override;
 private:
     SdFat *sd;
-    uint8_t verificationScratch[AssetData::kVerificationScratchBytes] = {};
+    uint8_t ioScratch[AssetData::kIoScratchBytes] = {};
     BundleReader bundleReader;
     ActivePetBehaviorStatSlots evolutionStatSlots;
     AssetData::RuntimeManifest assetManifest;

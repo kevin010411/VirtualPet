@@ -23,7 +23,7 @@ constexpr uint16_t kMaxWidth = 128;
 constexpr uint16_t kMaxHeight = 96;
 constexpr uint32_t kMaxDecodedBytes = 24576;
 constexpr uint32_t kMaxPackBytes = 20UL * 1024UL * 1024UL;
-constexpr size_t kVerificationScratchBytes = 512;
+constexpr size_t kIoScratchBytes = 512;
 
 struct BundleId
 {

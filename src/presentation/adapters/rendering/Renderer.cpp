@@ -11,7 +11,7 @@
 struct Renderer::AnimationState
 {
     explicit AnimationState(SdFat *sd)
-        : bundleReader(sd, readBuffer, AssetData::kVerificationScratchBytes)
+        : bundleReader(sd, readBuffer, AssetData::kIoScratchBytes)
     {
     }
 

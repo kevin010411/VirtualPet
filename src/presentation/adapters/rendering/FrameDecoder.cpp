@@ -155,7 +155,7 @@ bool showDataFrame(BundleReader &bundleReader,
         descriptor.encodedSize == 0 || lineCapacity > lineBufferPixels)
         return rejectDataFrame(bundleReader, address, frame);
 
-    constexpr size_t kEncodedReadBytes = AssetData::kVerificationScratchBytes;
+    constexpr size_t kEncodedReadBytes = AssetData::kIoScratchBytes;
     uint16_t *palette = reinterpret_cast<uint16_t *>(readBuffer + kEncodedReadBytes);
     DataBufferedReader reader(frame.file, readBuffer, kEncodedReadBytes, descriptor.encodedSize);
     uint16_t paletteCount = 0;

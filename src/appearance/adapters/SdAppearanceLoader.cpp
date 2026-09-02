@@ -22,7 +22,7 @@ void recordRuntimeResult(bool succeeded, BundleReader &reader, bool &lastSucceed
 } // namespace
 
 SdAppearanceLoader::SdAppearanceLoader(SdFat *refSd)
-    : sd(refSd), bundleReader(refSd, verificationScratch, sizeof(verificationScratch))
+    : sd(refSd), bundleReader(refSd, ioScratch, sizeof(ioScratch))
 {
 }
 

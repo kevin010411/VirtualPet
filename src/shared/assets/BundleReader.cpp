@@ -75,7 +75,7 @@ BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t scratchSize)
 bool BundleReader::configureBundle(const AssetData::BundleId &bundleId)
 {
     if (sd_ == nullptr || scratch_ == nullptr ||
-        scratchSize_ < AssetData::kVerificationScratchBytes)
+        scratchSize_ < AssetData::kIoScratchBytes)
     {
         return recordError(AssetData::BundleError::NotConfigured, 0);
     }

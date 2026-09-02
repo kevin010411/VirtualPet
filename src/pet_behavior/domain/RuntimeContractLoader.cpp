@@ -34,8 +34,8 @@ bool loadRuntimeContract(SdFat *sd,
         return false;
     }
 
-    uint8_t verificationScratch[AssetData::kVerificationScratchBytes] = {};
-    BundleReader bundleReader(sd, verificationScratch, sizeof(verificationScratch));
+    uint8_t ioScratch[AssetData::kIoScratchBytes] = {};
+    BundleReader bundleReader(sd, ioScratch, sizeof(ioScratch));
     if (!bundleReader.configureBundle(manifest.bundleId))
     {
         const char *resource = bundleReader.firstErrorResource();

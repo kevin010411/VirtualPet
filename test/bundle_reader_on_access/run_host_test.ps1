@@ -12,6 +12,7 @@ try {
     & g++ -std=c++17 -Itest/bundle_reader_on_access -Itest/host_stubs -Iinclude `
         test/bundle_reader_on_access/test_main.cpp `
         src/shared/assets/BundleReader.cpp `
+        src/presentation/adapters/rendering/FrameDecoder.cpp `
         -o $outputPath
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
