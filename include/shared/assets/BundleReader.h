@@ -100,23 +100,11 @@ public:
 private:
     struct PackHeader;
 
-    enum class VerificationState : uint8_t
-    {
-        Unknown = 0,
-        Verified = 1,
-        Failed = 2,
-    };
-
     bool validateAddress(const AssetData::AssetFrameAddress &address);
     bool buildPackPath(uint8_t speciesSlot, char *path, size_t pathSize) const;
-    bool openVerifiedPack(uint8_t speciesSlot, SdBaseFile &file, PackHeader &header);
-    bool verifyPack(SdBaseFile &file, uint8_t speciesSlot, PackHeader &header);
+    bool openPack(uint8_t speciesSlot, SdBaseFile &file, PackHeader &header);
     bool readHeader(SdBaseFile &file, PackHeader &header);
     bool validateHeader(const PackHeader &header, uint8_t speciesSlot, uint32_t physicalSize) const;
-    bool validateAnimations(SdBaseFile &file, const PackHeader &header);
-    bool validateAnimationRanges(SdBaseFile &file, const PackHeader &header);
-    bool validateDescriptors(SdBaseFile &file, const PackHeader &header);
-    bool validateCrc(SdBaseFile &file, const PackHeader &header);
     bool findAnimation(SdBaseFile &file,
                        const PackHeader &header,
                        const AssetData::AssetFrameAddress &address,
@@ -130,16 +118,12 @@ private:
                         uint32_t index,
                         AssetData::FrameDescriptor &descriptor) const;
     bool recordError(AssetData::BundleError error, uint8_t speciesSlot);
-    VerificationState verificationState(uint8_t speciesSlot) const;
-    void setVerificationState(uint8_t speciesSlot, VerificationState state);
 
     SdFat *sd_;
     uint8_t *scratch_;
     size_t scratchSize_;
     AssetData::BundleId bundleId_;
     bool bundleConfigured_ = false;
-    uint8_t verificationStates_[64] = {};
-    uint32_t verifiedCrc_[256] = {};
     AssetData::BundleError firstError_ = AssetData::BundleError::None;
     char firstErrorResource_[20] = {};
 };
