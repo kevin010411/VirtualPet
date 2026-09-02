@@ -9,7 +9,7 @@ $outputPath = Join-Path $repoRoot '.pio\bundle_reader_on_access_host.exe'
 
 Push-Location $repoRoot
 try {
-    & g++ -std=c++17 -Itest/host_stubs -Iinclude `
+    & g++ -std=c++17 -Itest/bundle_reader_on_access -Itest/host_stubs -Iinclude `
         test/bundle_reader_on_access/test_main.cpp `
         src/shared/assets/BundleReader.cpp `
         -o $outputPath
