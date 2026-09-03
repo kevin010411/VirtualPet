@@ -40,17 +40,6 @@ int compareAnimationKey(const AssetData::AnimationRecord &left,
     return 0;
 }
 
-bool descriptorsMatch(const AssetData::FrameDescriptor &left,
-                      const AssetData::FrameDescriptor &right)
-{
-    return left.codec == right.codec &&
-           left.width == right.width &&
-           left.height == right.height &&
-           left.payloadOffset == right.payloadOffset &&
-           left.encodedSize == right.encodedSize &&
-           left.decodedSize == right.decodedSize;
-}
-
 } // namespace
 
 struct BundleReader::PackHeader
@@ -95,20 +84,9 @@ bool BundleReader::configureBundle(const AssetData::BundleId &bundleId)
 bool BundleReader::resolveAnimation(const AssetData::AssetFrameAddress &address,
                                     AssetData::AnimationRecord &animation)
 {
-    animation = AssetData::AnimationRecord{};
-    if (!validateAddress(address))
-        return false;
-
-    SdBaseFile file;
-    PackHeader header;
-    if (!openPack(address.speciesSlot, file, header))
-        return false;
-
-    const bool found = findAnimation(file, header, address, animation);
-    file.close();
-    if (!found)
-        return recordError(AssetData::BundleError::MissingAnimation, address.speciesSlot);
-    return true;
+    if (tryResolveAnimation(address, animation))
+        return true;
+    return recordError(AssetData::BundleError::MissingAnimation, address.speciesSlot);
 }
 
 bool BundleReader::tryResolveAnimation(const AssetData::AssetFrameAddress &address,
@@ -189,12 +167,7 @@ bool BundleReader::validateAddress(const AssetData::AssetFrameAddress &address)
     if (!bundleConfigured_)
         return recordError(AssetData::BundleError::NotConfigured, address.speciesSlot);
 
-    const bool sharedAddress = address.speciesSlot == 0 && address.outfitSlot == 0;
-    const bool speciesAddress = address.speciesSlot != 0 && address.outfitSlot != 0;
-    if ((!sharedAddress && !speciesAddress) ||
-        address.animationId == 0 ||
-        address.animationId > AssetData::kMaxRuntimeAnimationId ||
-        address.versionIndex >= AssetData::kMaxVersions)
+    if (!AssetData::isValidFrameAddress(address))
     {
         return recordError(AssetData::BundleError::InvalidAddress, address.speciesSlot);
     }
@@ -203,9 +176,6 @@ bool BundleReader::validateAddress(const AssetData::AssetFrameAddress &address)
 
 bool BundleReader::buildPackPath(uint8_t speciesSlot, char *path, size_t pathSize) const
 {
-    if (path == nullptr || pathSize == 0)
-        return false;
-
     TextBuffer output(path, pathSize);
     if (speciesSlot == 0)
         return output.append("/assets/shared.data") && output.ok();
@@ -237,8 +207,7 @@ bool BundleReader::openPack(uint8_t speciesSlot, SdBaseFile &file, PackHeader &h
 
 bool BundleReader::readHeader(SdBaseFile &file, PackHeader &header)
 {
-    if (scratch_ == nullptr || scratchSize_ < AssetData::kHeaderSize ||
-        !readExact(file, 0, scratch_, AssetData::kHeaderSize))
+    if (!readExact(file, 0, scratch_, AssetData::kHeaderSize))
     {
         return false;
     }
@@ -304,6 +273,16 @@ bool BundleReader::findAnimation(SdBaseFile &file,
                                  const AssetData::AssetFrameAddress &address,
                                  AssetData::AnimationRecord &animation)
 {
+    if (hasResolvedAnimation_ &&
+        resolvedAddress_.speciesSlot == address.speciesSlot &&
+        resolvedAddress_.outfitSlot == address.outfitSlot &&
+        resolvedAddress_.animationId == address.animationId &&
+        resolvedAddress_.versionIndex == address.versionIndex)
+    {
+        animation = resolvedAnimation_;
+        return true;
+    }
+
     AssetData::AnimationRecord target;
     target.outfitSlot = address.outfitSlot;
     target.animationId = address.animationId;
@@ -324,9 +303,13 @@ bool BundleReader::findAnimation(SdBaseFile &file,
             high = middle;
     }
 
-    if (low >= header.animationCount || !readAnimation(file, header, low, animation))
+    if (low >= header.animationCount || !readAnimation(file, header, low, animation) ||
+        compareAnimationKey(animation, target) != 0)
         return false;
-    return compareAnimationKey(animation, target) == 0;
+    resolvedAddress_ = address;
+    resolvedAnimation_ = animation;
+    hasResolvedAnimation_ = true;
+    return true;
 }
 
 bool BundleReader::readAnimation(SdBaseFile &file,
@@ -403,29 +386,16 @@ bool BundleReader::recordError(AssetData::BundleError error, uint8_t speciesSlot
         return false;
 
     firstError_ = error;
-    const char *resource = nullptr;
+    const char *resource = "asset data";
     if (error == AssetData::BundleError::NotConfigured)
         resource = "asset bundle";
     else if (error == AssetData::BundleError::InvalidAddress)
         resource = "asset reference";
-
-    if (resource != nullptr)
-    {
-        strncpy(firstErrorResource_, resource, sizeof(firstErrorResource_) - 1);
-        firstErrorResource_[sizeof(firstErrorResource_) - 1] = '\0';
-        return false;
-    }
-
-    char path[32];
-    if (!buildPackPath(speciesSlot, path, sizeof(path)))
-    {
-        strncpy(firstErrorResource_, "asset data", sizeof(firstErrorResource_) - 1);
-        firstErrorResource_[sizeof(firstErrorResource_) - 1] = '\0';
-        return false;
-    }
-    const char *name = strrchr(path, '/');
-    name = name == nullptr ? path : name + 1;
-    strncpy(firstErrorResource_, name, sizeof(firstErrorResource_) - 1);
+    else if (speciesSlot == 0)
+        resource = "shared.data";
+    else
+        resource = "species.data";
+    strncpy(firstErrorResource_, resource, sizeof(firstErrorResource_) - 1);
     firstErrorResource_[sizeof(firstErrorResource_) - 1] = '\0';
     return false;
 }

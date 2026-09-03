@@ -19,6 +19,8 @@ constexpr uint16_t kMaxAnimationRecords = 4096;
 constexpr uint16_t kMaxFrameDescriptors = 65535;
 constexpr uint16_t kMaxFramesPerAnimation = 256;
 constexpr uint8_t kMaxVersions = 4;
+constexpr uint8_t kMaxOutfitsPerSpecies = 8;
+constexpr uint16_t kSpeciesSlotCount = 256;
 constexpr uint16_t kMaxWidth = 128;
 constexpr uint16_t kMaxHeight = 96;
 constexpr uint32_t kMaxDecodedBytes = 24576;
@@ -38,6 +40,16 @@ struct AssetFrameAddress
     uint8_t versionIndex = 0;
     uint16_t frameIndex = 0;
 };
+
+constexpr bool isValidFrameAddress(const AssetFrameAddress &address)
+{
+    return ((address.speciesSlot == 0 && address.outfitSlot == 0) ||
+            (address.speciesSlot > 0 && address.outfitSlot > 0 &&
+             address.outfitSlot <= kMaxOutfitsPerSpecies)) &&
+           address.animationId > 0 &&
+           address.animationId <= kMaxRuntimeAnimationId &&
+           address.versionIndex < kMaxVersions;
+}
 
 struct AnimationRecord
 {
@@ -124,6 +136,9 @@ private:
     size_t scratchSize_;
     AssetData::BundleId bundleId_;
     bool bundleConfigured_ = false;
+    AssetData::AssetFrameAddress resolvedAddress_ = {};
+    AssetData::AnimationRecord resolvedAnimation_ = {};
+    bool hasResolvedAnimation_ = false;
     AssetData::BundleError firstError_ = AssetData::BundleError::None;
     char firstErrorResource_[20] = {};
 };
