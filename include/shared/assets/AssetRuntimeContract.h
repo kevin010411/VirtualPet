@@ -26,6 +26,9 @@ struct AnimationRef
 struct RuntimeManifest
 {
     BundleId bundleId = {};
+    uint32_t schemaFingerprint = 0;
+    uint32_t fileSize = 0;
+    uint32_t fileCrc32 = 0;
 };
 
 bool sameBundleId(const BundleId &left, const BundleId &right);

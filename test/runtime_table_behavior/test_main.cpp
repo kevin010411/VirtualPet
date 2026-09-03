@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "commands/domain/StatusSetContract.h"
+#include "commands/domain/SystemCommandCatalog.h"
+#include "appearance/domain/RuntimeTableAppearance.h"
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
 #include "pet_behavior/domain/RuntimeTableBehavior.h"
 
@@ -21,9 +23,14 @@ bool sameBundleId(const BundleId &left, const BundleId &right)
 // physical pack resolution; this seam only makes the behavior reader linkable.
 bool animationReferenceExists(BundleReader &, const AnimationRef &, uint8_t)
 {
-    return false;
+    return true;
 }
 } // namespace AssetData
+
+BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t scratchSize)
+    : sd_(sd), scratch_(scratch), scratchSize_(scratchSize)
+{
+}
 
 namespace
 {
@@ -43,6 +50,13 @@ AssetData::RuntimeManifest fixtureManifest()
         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
     for (uint8_t index = 0; index < sizeof(bundleId); ++index)
         manifest.bundleId.bytes[index] = bundleId[index];
+    return manifest;
+}
+
+AssetData::RuntimeManifest releaseFixtureManifest()
+{
+    AssetData::RuntimeManifest manifest = fixtureManifest();
+    manifest.bundleId.bytes[6] = 0x46;
     return manifest;
 }
 
@@ -149,18 +163,113 @@ void testInvalidFixtureFailsWithoutPartialPublication(const std::vector<uint8_t>
     assert(config.statCount == 7);
 }
 
-void testTrustedExportDoesNotRepeatHostInspection(const std::vector<uint8_t> &fixture)
+void testValidFixtureLoads(const std::vector<uint8_t> &fixture)
 {
     PetBehaviorConfig config = {};
-    const AssetData::RuntimeManifest manifest = fixtureManifest();
+    assert(parseRuntimeTableBehavior(
+        fixture.data(), fixture.size(), fixtureManifest(), 1, 1, config));
+}
+
+void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
+{
+    assert(findCompiledSystemCommand(RuntimeSystemCommandId::ChangeSpecies) == nullptr);
+    SdFat sd(fixture.data(), fixture.size());
+    uint8_t scratch[AssetData::kIoScratchBytes] = {};
+    BundleReader reader(&sd, scratch, sizeof(scratch));
+    const AssetData::RuntimeManifest manifest = releaseFixtureManifest();
+
+    PetBehaviorConfig config = {};
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
+
+    uint8_t species[8] = {};
+    size_t speciesCount = 0;
+    assert(loadRuntimeTableSpecies(&sd, manifest, reader, species, 8, speciesCount));
+    assert(speciesCount == 2 && species[0] == 1 && species[1] == 2);
+
+    AppearanceSelection initial = {};
+    assert(loadRuntimeTableInitialAppearance(&sd, manifest, reader, initial));
+    assert(initial.speciesSlot == 1 && initial.outfitSlot == 1);
+
+    ActivePetBehaviorStatSlots activeSlots(config);
+    PetStatSnapshot stats = {};
+    stats.speciesSlot = 1;
+    stats.outfitSlot = 7;
+    stats.customStats[0] = 50;
+
+    uint8_t unlockMask = 0;
+    assert(resolveRuntimeTableOutfitUnlockMask(
+        &sd, manifest, reader, 1, activeSlots, stats, 0, true, unlockMask));
+    assert(unlockMask == 0xE3U);
+
+    uint8_t outfits[8] = {};
+    size_t outfitCount = 0;
+    assert(loadRuntimeTableOutfits(
+        &sd, manifest, reader, 1, unlockMask, outfits, 8, outfitCount));
+    const uint8_t expectedVisible[] = {1, 2, 4, 5, 6, 7, 8};
+    assert(outfitCount == sizeof(expectedVisible));
+    for (size_t index = 0; index < outfitCount; ++index)
+        assert(outfits[index] == expectedVisible[index]);
+
+    OutfitPreview locked = {};
+    assert(findRuntimeTableOutfitPreview(&sd, manifest, reader, 1, 4, true, locked));
+    assert(locked.speciesSlot == 1 && locked.outfitSlot == 4 && locked.animation.valid());
+
+    stats.stage_days = 10;
+    assert(resolveRuntimeTableOutfitUnlockMask(
+        &sd, manifest, reader, 1, activeSlots, stats, unlockMask, false, unlockMask));
+    assert(unlockMask == 0xFBU);
+    stats.stage_days = 0;
+    stats.customStats[0] = 0;
+    assert(resolveRuntimeTableOutfitUnlockMask(
+        &sd, manifest, reader, 1, activeSlots, stats, unlockMask, false, unlockMask));
+    assert(unlockMask == 0xFBU);
+
+    uint8_t resetMask = 0;
+    assert(resolveRuntimeTableOutfitUnlockMask(
+        &sd, manifest, reader, 1, activeSlots, stats, 0, true, resetMask));
+    assert(resetMask == 0xC3U);
+}
+
+void testInvalidAppearanceFixture(const std::vector<uint8_t> &fixture)
+{
+    SdFat sd(fixture.data(), fixture.size());
+    uint8_t scratch[AssetData::kIoScratchBytes] = {};
+    BundleReader reader(&sd, scratch, sizeof(scratch));
+    PetBehaviorConfig published = {};
+    published.schemaFingerprint = 0xA5A5A5A5UL;
+    published.statCount = 7;
+    PetBehaviorConfig candidate = published;
+    const AssetData::RuntimeManifest manifest = releaseFixtureManifest();
+    bool accepted = parseRuntimeTableBehavior(
+        fixture.data(), fixture.size(), manifest, 1, 1, candidate);
+    if (accepted)
+    {
+        ActivePetBehaviorStatSlots activeSlots(candidate);
+        PetStatSnapshot stats = {};
+        stats.speciesSlot = 1;
+        stats.outfitSlot = 1;
+        accepted = validateRuntimeTableAppearance(
+            &sd, manifest, reader, activeSlots, stats);
+    }
+    if (accepted)
+        published = candidate;
+    assert(!accepted);
+    assert(published.schemaFingerprint == 0xA5A5A5A5UL);
+    assert(published.statCount == 7);
 }
 } // namespace
 
 int main(int argc, char **argv)
 {
+    AssetData::AssetFrameAddress ninthSpecies = {};
+    ninthSpecies.speciesSlot = 9;
+    ninthSpecies.outfitSlot = 1;
+    ninthSpecies.animationId = 1;
+    assert(AssetData::isValidFrameAddress(ninthSpecies));
+    ninthSpecies.outfitSlot = 9;
+    assert(!AssetData::isValidFrameAddress(ninthSpecies));
 #if RUNTIME_TABLE_FULL_FEATURE
-    assert(argc == 2);
+    assert(argc == 10);
     PetBehaviorConfig config = {};
     const AssetData::RuntimeManifest manifest = fixtureManifest();
     const std::vector<uint8_t> fixture = readFixture(argv[1]);
@@ -174,13 +283,16 @@ int main(int argc, char **argv)
     assert(config.guessEffects[0].operation == PetBehaviorEffectOperation::Change);
     assert(config.guessEffects[0].value == 1);
 #endif
+    testOutfitSelectionReleaseFixture(readFixture(argv[2]));
+    for (int index = 3; index < argc; ++index)
+        testInvalidAppearanceFixture(readFixture(argv[index]));
 #else
     assert(argc == 6);
     testBehaviorFullFixture(readFixture(argv[1]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[3]));
-    testTrustedExportDoesNotRepeatHostInspection(readFixture(argv[4]));
-    testTrustedExportDoesNotRepeatHostInspection(readFixture(argv[5]));
+    testValidFixtureLoads(readFixture(argv[4]));
+    testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[5]));
 #endif
     return 0;
 }

@@ -4,6 +4,7 @@
 #include <string.h>
 #include "appearance/domain/RuntimeTableAppearance.h"
 #include "commands/domain/SystemCommandCatalog.h"
+#include "shared/integrity/Crc32.h"
 #include "shared/sd/SdBinaryRead.h"
 
 namespace
@@ -213,9 +214,27 @@ bool readRecord(const Source &source, const Section &section,
     return source.readAt(source.context, offset, record, section.recordSize);
 }
 
+bool validateSourceCrc(const Source &source, uint32_t expected)
+{
+    uint8_t bytes[64] = {};
+    uint32_t crc = 0xFFFFFFFFUL;
+    for (uint32_t offset = 0; offset < source.size; offset += sizeof(bytes))
+    {
+        size_t count = sizeof(bytes);
+        if (count > source.size - offset)
+            count = static_cast<size_t>(source.size - offset);
+        if (!source.readAt(source.context, offset, bytes, count))
+            return false;
+        if (offset == 0)
+            memset(bytes + 48, 0, sizeof(uint32_t));
+        crc = Integrity::crc32Update(crc, bytes, count);
+    }
+    return ~crc == expected;
+}
+
 bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCount,
                   uint32_t &featureFlags, uint32_t &schemaFingerprint,
-                  AssetData::BundleId &bundleId)
+                  AssetData::BundleId &bundleId, uint32_t &fileCrc32)
 {
     uint8_t header[kHeaderSize] = {};
     if (source.size < kHeaderSize || source.size > kMaxFileSize ||
@@ -225,6 +244,9 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         readU32(header + 8) != 0x01020304UL || readU32(header + 16) != source.size ||
         readU16(header + 26) != kSectionEntrySize)
         return false;
+    for (size_t index = 52; index < sizeof(header); ++index)
+        if (header[index] != 0)
+            return false;
 
     featureFlags = readU32(header + 12);
     if ((featureFlags & kPetBehaviorFeature) == 0)
@@ -239,6 +261,7 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
     if (!nonzeroBundle)
         return false;
     schemaFingerprint = readU32(header + 44);
+    fileCrc32 = readU32(header + 48);
     sectionCount = readU16(header + 24);
     if (sectionCount == 0 || sectionCount > kMaxSections)
         return false;
@@ -278,12 +301,18 @@ bool readRuntimeTable(const Source &source,
 {
     table = {};
     table.source = source;
+    uint32_t fileCrc32 = 0;
     if (!readEnvelope(source, table.sections, table.sectionCount,
-                       table.featureFlags, table.schemaFingerprint, table.bundleId) ||
+                       table.featureFlags, table.schemaFingerprint, table.bundleId, fileCrc32) ||
         (expectedManifest != nullptr &&
          !AssetData::sameBundleId(table.bundleId, expectedManifest->bundleId)))
         return false;
-    return true;
+    const bool trustedManifest = expectedManifest != nullptr && expectedManifest->fileSize != 0;
+    if (trustedManifest)
+        return expectedManifest->fileSize == source.size &&
+               expectedManifest->schemaFingerprint == table.schemaFingerprint &&
+               expectedManifest->fileCrc32 == fileCrc32;
+    return validateSourceCrc(source, fileCrc32);
 }
 
 bool resolveAnimation(const Source &source,
@@ -1147,13 +1176,18 @@ bool loadRuntimeManifest(SdFat *sd, AssetData::RuntimeManifest &manifest)
     uint16_t sectionCount = 0;
     uint32_t featureFlags = 0;
     uint32_t schemaFingerprint = 0;
+    uint32_t fileCrc32 = 0;
     AssetData::BundleId bundleId = {};
     const bool decoded = readEnvelope(source, sections, sectionCount,
-                                      featureFlags, schemaFingerprint, bundleId);
+                                      featureFlags, schemaFingerprint, bundleId, fileCrc32) &&
+                         validateSourceCrc(source, fileCrc32);
     file.close();
     if (!decoded)
         return false;
     manifest.bundleId = bundleId;
+    manifest.schemaFingerprint = schemaFingerprint;
+    manifest.fileSize = byteCount;
+    manifest.fileCrc32 = fileCrc32;
     return true;
 }
 

@@ -1,5 +1,6 @@
 #include "pet/adapters/PetStorage.h"
 #include "pet/adapters/PetStateSchemaDecision.h"
+#include "shared/integrity/Crc32.h"
 #include "shared/sd/SdBinaryRead.h"
 
 #include <stddef.h>
@@ -12,24 +13,11 @@ constexpr const char *kStateSlotAPath = "/state_a.bin";
 constexpr const char *kStateSlotBPath = "/state_b.bin";
 static_assert(sizeof(PersistedPetState) == 64, "Unexpected v12 pet state layout");
 
-uint32_t crc32Bitwise(const uint8_t *data, size_t length)
-{
-    uint32_t crc = 0xFFFFFFFFUL;
-    for (size_t i = 0; i < length; ++i)
-    {
-        crc ^= data[i];
-        for (uint8_t bit = 0; bit < 8; ++bit)
-        {
-            const uint32_t mask = (crc & 1UL) ? 0xEDB88320UL : 0;
-            crc = (crc >> 1) ^ mask;
-        }
-    }
-    return ~crc;
-}
-
 uint32_t calculateStateCrc(const PersistedPetState &state)
 {
-    return crc32Bitwise(reinterpret_cast<const uint8_t *>(&state), offsetof(PersistedPetState, crc32));
+    return Integrity::crc32(
+        reinterpret_cast<const uint8_t *>(&state),
+        offsetof(PersistedPetState, crc32));
 }
 
 bool isSequenceNewer(uint32_t candidate, uint32_t current)
