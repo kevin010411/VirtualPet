@@ -733,7 +733,10 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     return true;
 }
 
-enum class AppearanceQueryKind : uint8_t { Validate, Initial, Evolution, Species, Outfits, Preview, Unlocks };
+enum class AppearanceQueryKind : uint8_t
+{
+    Validate, Initial, Evolution, Species, Outfits, Preview, Unlocks, ConsumableUnlock
+};
 
 struct AppearanceQuery
 {
@@ -752,6 +755,7 @@ struct AppearanceQuery
     OutfitPreview *preview = nullptr;
     AssetData::AnimationRef *idleAnimation = nullptr;
     uint8_t *resolvedUnlockMask = nullptr;
+    PetStatSnapshot *consumedStats = nullptr;
 };
 
 bool validateAppearanceProjection(const RuntimeTable &table, BundleReader &bundleReader,
@@ -789,8 +793,8 @@ bool validateAppearanceProjection(const RuntimeTable &table, BundleReader &bundl
                 !readRecord(source, unlocks, outfitIndex, unlockRecord) ||
                 outfitRecord[0] != speciesRecord[0] || outfitRecord[1] != offset + 1 ||
                 unlockRecord[0] != outfitRecord[0] || unlockRecord[1] != outfitRecord[1] ||
-                unlockRecord[2] > 1 || unlockRecord[7] > 4 ||
-                unlockRecord[2] != (unlockRecord[7] > 0) ||
+                unlockRecord[2] > 2 || unlockRecord[7] > 4 ||
+                ((unlockRecord[2] == 0) != (unlockRecord[7] == 0)) ||
                 static_cast<uint32_t>(readU16(unlockRecord + 5)) + unlockRecord[7] > unlockConditions.count ||
                 (outfitRecord[1] == speciesRecord[1] &&
                  (unlockRecord[2] != 0 || readU16(unlockRecord + 3) != kNone16)) ||
@@ -810,10 +814,12 @@ bool validateAppearanceProjection(const RuntimeTable &table, BundleReader &bundl
                     return false;
                 const int32_t minimum = readI32(condition + 4);
                 const int32_t maximum = readI32(condition + 8);
+                int32_t domainMaximum = 0;
                 if (condition[2] == 1)
                 {
                     if (minimum < 0 || maximum > 3650)
                         return false;
+                    domainMaximum = 3650;
                 }
                 else
                 {
@@ -822,7 +828,11 @@ bool validateAppearanceProjection(const RuntimeTable &table, BundleReader &bundl
                         statRecord[0] != condition[3] ||
                         minimum < readI16(statRecord + 4) || maximum > readI16(statRecord + 6))
                         return false;
+                    domainMaximum = readI16(statRecord + 6);
                 }
+                if (unlockRecord[2] == 2 &&
+                    (minimum < 0 || maximum != domainMaximum))
+                    return false;
                 const uint16_t normalizedSource = condition[2] == 1
                     ? 1 : static_cast<uint16_t>(2 + condition[3]);
                 if (normalizedSource <= previousSource)
@@ -874,6 +884,7 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
     const uint32_t featureFlags = table.featureFlags;
     const Section *assets = table.find(AssetRefs);
     const Section *animations = table.find(Animations);
+    const Section *statRecords = table.find(PetStats);
     const Section *appearance = table.find(Appearance);
     const Section *species = table.find(Species);
     const Section *outfits = table.find(Outfits);
@@ -943,11 +954,11 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
             const uint16_t index = static_cast<uint16_t>(first + offset);
             uint8_t unlock[8] = {};
             if (!readRecord(source, *unlocks, index, unlock) || unlock[0] != query.speciesSlot ||
-                unlock[1] != offset + 1 || unlock[2] > 1 || unlock[7] > 4 ||
-                unlock[2] != (unlock[7] > 0))
+                unlock[1] != offset + 1 || unlock[2] > 2 || unlock[7] > 4 ||
+                ((unlock[2] == 0) != (unlock[7] == 0)))
                 return false;
             const bool unconditional = unlock[2] == 0;
-            bool matching = !unconditional;
+            bool matching = unlock[2] == 1;
             for (uint8_t conditionIndex = 0; conditionIndex < unlock[7]; ++conditionIndex)
             {
                 uint8_t condition[12] = {};
@@ -962,6 +973,59 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
         }
         *query.resolvedUnlockMask = mask;
         return true;
+    }
+
+    if (query.kind == AppearanceQueryKind::ConsumableUnlock)
+    {
+        if (outfits == nullptr || unlocks == nullptr || unlockConditions == nullptr ||
+            query.stats == nullptr || query.activeSlots == nullptr ||
+            query.consumedStats == nullptr || query.speciesSlot == 0 || query.outfitSlot == 0)
+            return false;
+        for (uint16_t index = 0; index < outfits->count; ++index)
+        {
+            uint8_t outfit[8] = {};
+            uint8_t unlock[8] = {};
+            if (!readRecord(source, *outfits, index, outfit) ||
+                !readRecord(source, *unlocks, index, unlock))
+                return false;
+            if (outfit[0] != query.speciesSlot || outfit[1] != query.outfitSlot)
+                continue;
+            if (unlock[0] != outfit[0] || unlock[1] != outfit[1] ||
+                unlock[2] != 2 || unlock[7] == 0 || unlock[7] > 4)
+                return false;
+            PetStatSnapshot result = *query.stats;
+            for (uint8_t offset = 0; offset < unlock[7]; ++offset)
+            {
+                uint8_t condition[12] = {};
+                if (!readRecord(source, *unlockConditions,
+                                static_cast<uint16_t>(readU16(unlock + 5) + offset), condition) ||
+                    readU16(condition) != index ||
+                    !conditionMatches(condition, *query.stats, *query.activeSlots))
+                    return false;
+                const int32_t cost = readI32(condition + 4);
+                if (cost < 0)
+                    return false;
+                if (condition[2] == 1)
+                {
+                    if (static_cast<uint32_t>(cost) > result.stage_days)
+                        return false;
+                    result.stage_days -= static_cast<uint32_t>(cost);
+                }
+                else
+                {
+                    const uint8_t slot = condition[3];
+                    uint8_t stat[12] = {};
+                    const int32_t next = static_cast<int32_t>(result.customStats[slot]) - cost;
+                    if (statRecords == nullptr || !readRecord(source, *statRecords, slot, stat) ||
+                        next < readI16(stat + 4) || next > readI16(stat + 6))
+                        return false;
+                    result.customStats[slot] = static_cast<int16_t>(next);
+                }
+            }
+            *query.consumedStats = result;
+            return true;
+        }
+        return false;
     }
 
     if (query.kind == AppearanceQueryKind::Outfits || query.kind == AppearanceQueryKind::Preview)
@@ -1376,5 +1440,22 @@ bool resolveRuntimeTableOutfitUnlockMask(SdFat *sd,
     query.unlockMask = currentMask;
     query.initializeUnlockMask = initialize;
     query.resolvedUnlockMask = &resolvedMask;
+    return loadRuntimeTableAppearanceQuery(sd, manifest, bundleReader, query);
+}
+
+bool resolveRuntimeTableConsumableOutfitUnlock(
+    SdFat *sd, const AssetData::RuntimeManifest &manifest,
+    BundleReader &bundleReader, uint8_t speciesSlot, uint8_t outfitSlot,
+    const ActivePetBehaviorStatSlots &activeSlots, const PetStatSnapshot &stats,
+    PetStatSnapshot &consumedStats)
+{
+    consumedStats = {};
+    AppearanceQuery query = {};
+    query.kind = AppearanceQueryKind::ConsumableUnlock;
+    query.speciesSlot = speciesSlot;
+    query.outfitSlot = outfitSlot;
+    query.activeSlots = &activeSlots;
+    query.stats = &stats;
+    query.consumedStats = &consumedStats;
     return loadRuntimeTableAppearanceQuery(sd, manifest, bundleReader, query);
 }

@@ -38,5 +38,12 @@ bool resolveRuntimeTableOutfitUnlockMask(SdFat *sd, const AssetData::RuntimeMani
                                          const ActivePetBehaviorStatSlots &activeSlots,
                                          const PetStatSnapshot &stats, uint8_t currentMask, bool initialize,
                                          uint8_t &resolvedMask);
+bool resolveRuntimeTableConsumableOutfitUnlock(SdFat *sd,
+                                               const AssetData::RuntimeManifest &manifest,
+                                               BundleReader &bundleReader,
+                                               uint8_t speciesSlot, uint8_t outfitSlot,
+                                               const ActivePetBehaviorStatSlots &activeSlots,
+                                               const PetStatSnapshot &stats,
+                                               PetStatSnapshot &consumedStats);
 
 #endif // RUNTIME_TABLE_APPEARANCE_H

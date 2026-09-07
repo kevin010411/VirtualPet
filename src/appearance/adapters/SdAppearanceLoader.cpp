@@ -113,3 +113,15 @@ bool SdAppearanceLoader::resolveOutfitUnlockMask(uint8_t speciesSlot, const PetS
                         contractErrorResource, sizeof(contractErrorResource));
     return loaded;
 }
+
+bool SdAppearanceLoader::resolveConsumableOutfitUnlock(uint8_t speciesSlot, uint8_t outfitSlot,
+                                                        const PetStatSnapshot &stats,
+                                                        PetStatSnapshot &consumedStats)
+{
+    const bool loaded = resolveRuntimeTableConsumableOutfitUnlock(
+        sd, assetManifest, bundleReader, speciesSlot, outfitSlot,
+        evolutionStatSlots, stats, consumedStats);
+    recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
+                        contractErrorResource, sizeof(contractErrorResource));
+    return loaded;
+}

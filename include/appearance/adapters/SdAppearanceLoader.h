@@ -22,6 +22,9 @@ public:
     bool resolveOutfitUnlockMask(uint8_t speciesSlot, const PetStatSnapshot &stats,
                                  uint8_t currentMask, bool initialize,
                                  uint8_t &resolvedMask) override;
+    bool resolveConsumableOutfitUnlock(uint8_t speciesSlot, uint8_t outfitSlot,
+                                        const PetStatSnapshot &stats,
+                                        PetStatSnapshot &consumedStats) override;
 private:
     SdFat *sd;
     uint8_t ioScratch[AssetData::kIoScratchBytes] = {};
