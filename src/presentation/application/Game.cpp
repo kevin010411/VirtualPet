@@ -512,13 +512,30 @@ void Game::OnConfirmKey()
         }
 
         uint8_t selectedOutfit = 0;
-        const bool confirmed = appearanceSelection->onConfirm(selectedOutfit);
+        bool requiresUnlock = false;
+        const bool confirmed = appearanceSelection->onConfirm(selectedOutfit, requiresUnlock);
         if (confirmed)
         {
             if (configureActiveAppearance(petActions->speciesSlot(), selectedOutfit))
             {
-                petActions->applyAppearance(petActions->speciesSlot(), selectedOutfit);
-                refreshBaseAnimation();
+                bool applied = false;
+                if (requiresUnlock)
+                {
+                    PetStatSnapshot consumedStats = {};
+                    if (appearanceLoader.resolveConsumableOutfitUnlock(
+                            petActions->speciesSlot(), selectedOutfit,
+                            petActions->statSnapshot(), consumedStats))
+                        applied = petActions->applyConsumableOutfitUnlock(
+                            selectedOutfit, consumedStats);
+                }
+                else
+                    applied = petActions->applyAppearance(
+                        petActions->speciesSlot(), selectedOutfit);
+                if (applied)
+                {
+                    appearanceSelection->exit();
+                    refreshBaseAnimation();
+                }
             }
             else
                 renderer.showResourceError();

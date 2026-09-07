@@ -104,6 +104,15 @@ bool PetActionController::applyAppearance(uint8_t speciesSlot, uint8_t outfitSlo
     return saveNow();
 }
 
+bool PetActionController::applyConsumableOutfitUnlock(
+    uint8_t outfitSlot, const PetStatSnapshot &consumedStats)
+{
+    if (!pet.commitConsumableOutfitUnlock(outfitSlot, consumedStats))
+        return false;
+    renderer.setAssetAppearance(pet.speciesSlot(), pet.outfitSlot());
+    return saveNow();
+}
+
 int16_t PetActionController::customStat(uint8_t index) const
 {
     return pet.customStat(index);

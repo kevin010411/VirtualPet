@@ -25,6 +25,8 @@ public:
     bool applyEvolutionTarget();
     bool stageAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     bool applyAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
+    bool applyConsumableOutfitUnlock(uint8_t outfitSlot,
+                                     const PetStatSnapshot &consumedStats);
 
     int16_t customStat(uint8_t index) const;
     bool setCustomStat(uint8_t index, int16_t value);

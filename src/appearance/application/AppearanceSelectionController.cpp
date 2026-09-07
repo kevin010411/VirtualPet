@@ -109,8 +109,9 @@ void AppearanceSelectionController::onRight()
     changeSelection(1);
 }
 
-bool AppearanceSelectionController::onConfirm(uint8_t &selectedOutfitSlot)
+bool AppearanceSelectionController::onConfirm(uint8_t &selectedOutfitSlot, bool &requiresUnlock)
 {
+    requiresUnlock = false;
     if (outfitOptionCount == 0 || selectedOutfitIndex >= outfitOptionCount)
     {
         exit();
@@ -118,8 +119,9 @@ bool AppearanceSelectionController::onConfirm(uint8_t &selectedOutfitSlot)
     }
 
     selectedOutfitSlot = outfitOptions[selectedOutfitIndex];
-    if ((unlockMask & (1U << (selectedOutfitSlot - 1U))) == 0)
-        return false;
+    requiresUnlock = (unlockMask & (1U << (selectedOutfitSlot - 1U))) == 0;
+    if (requiresUnlock)
+        return true;
     exit();
     return true;
 }

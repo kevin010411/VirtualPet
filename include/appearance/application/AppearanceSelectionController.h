@@ -17,7 +17,7 @@ public:
     bool isSelectingSpecies() const;
     void onLeft();
     void onRight();
-    bool onConfirm(uint8_t &selectedOutfitSlot);
+    bool onConfirm(uint8_t &selectedOutfitSlot, bool &requiresUnlock);
     bool onConfirmSpecies(uint8_t &selectedSpeciesSlot, uint8_t &selectedOutfitSlot);
     void exit();
     void requestFullRedraw();

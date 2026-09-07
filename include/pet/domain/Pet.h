@@ -60,6 +60,8 @@ public:
     bool isOutfitUnlocked(uint8_t slot) const;
     void unlockOutfit(uint8_t slot);
     void initializeOutfitUnlockMask(uint8_t mask);
+    bool commitConsumableOutfitUnlock(uint8_t outfitSlot,
+                                      const PetStatSnapshot &consumedStats);
     bool isFirstLaunchComplete() const;
     void markFirstLaunchComplete();
     void resetFirstLaunch();
