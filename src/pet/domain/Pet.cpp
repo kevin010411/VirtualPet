@@ -219,8 +219,8 @@ bool Pet::commitConsumableOutfitUnlock(uint8_t outfitSlot,
                                        const PetStatSnapshot &consumedStats)
 {
     if (outfitSlot == 0 || outfitSlot > 8 ||
-        consumedStats.speciesSlot != st.speciesSlot ||
-        consumedStats.outfitSlot != st.outfitSlot ||
+        consumedStats.speciesSlot != speciesSlot() ||
+        consumedStats.outfitSlot != this->outfitSlot() ||
         consumedStats.stage_days > st.stage_days)
         return false;
     for (size_t index = 0; index < kPetCustomStatCount; ++index)
@@ -229,7 +229,7 @@ bool Pet::commitConsumableOutfitUnlock(uint8_t outfitSlot,
     st.stage_days = consumedStats.stage_days;
     memcpy(st.customStats, consumedStats.customStats, sizeof(st.customStats));
     st.outfitUnlockMask |= static_cast<uint8_t>(1U << (outfitSlot - 1U));
-    st.outfitSlot = outfitSlot;
+    setOutfitSlot(outfitSlot);
     return true;
 }
 
