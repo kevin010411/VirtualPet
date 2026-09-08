@@ -27,8 +27,10 @@ bool isSequenceNewer(uint32_t candidate, uint32_t current)
 
 bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
 {
+    if (sd == nullptr)
+        return false;
     SdBaseFile f;
-    if (!f.open(path, FILE_READ))
+    if (!f.open(sd, path, FILE_READ))
         return false;
 
     const size_t stateSize = f.fileSize();
@@ -54,23 +56,65 @@ bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
     return state.version == Pet::kPetStateVersion;
 }
 
+#if ENABLE_DEBUG
+bool removeStateSlot(SdFat *sd, const char *path)
+{
+    if (sd == nullptr || !sd->exists(path))
+        return true;
+    if (sd->remove(path))
+        return true;
+
+    // A corrupt save copied from another host can retain the FAT read-only
+    // attribute. It is app-owned state, so clear that attribute before the
+    // retry instead of permanently preventing a fresh pet from starting.
+    SdBaseFile stale;
+    if (!stale.open(sd, path, O_RDONLY))
+        return false;
+    const int attributes = stale.attrib();
+    const bool madeWritable = attributes >= 0 &&
+                              stale.attrib(static_cast<uint8_t>(
+                                  attributes & ~FS_ATTRIB_READ_ONLY));
+    stale.close();
+    return madeWritable && sd->remove(path);
+}
+#endif
+
 void discardSave(SdFat *sd)
 {
+#if ENABLE_DEBUG
+    removeStateSlot(sd, kStateSlotAPath);
+    removeStateSlot(sd, kStateSlotBPath);
+#else
     sd->remove(kStateSlotAPath);
     sd->remove(kStateSlotBPath);
+#endif
 }
 
 bool writeStateSlot(SdFat *sd, const char *path, const PersistedPetState &state)
 {
-    SdBaseFile f;
-    if (!f.open(path, O_WRONLY | O_CREAT | O_TRUNC))
+    if (sd == nullptr)
         return false;
+    SdBaseFile f;
+    if (!f.open(sd, path, O_WRONLY | O_CREAT | O_TRUNC))
+    {
+#if ENABLE_DEBUG
+        if (!sd->exists(path) || !removeStateSlot(sd, path) ||
+            !f.open(sd, path, O_WRONLY | O_CREAT | O_TRUNC))
+            return false;
+#else
+        return false;
+#endif
+    }
 
-    const size_t n = f.write(reinterpret_cast<const uint8_t *>(&state), sizeof(state));
+    const size_t written = f.write(reinterpret_cast<const uint8_t *>(&state), sizeof(state));
+    if (written != sizeof(state))
+    {
+        f.close();
+        return false;
+    }
     const bool synced = f.sync();
     f.close();
-
-    return n == sizeof(state) && synced;
+    return synced;
 }
 } // namespace
 

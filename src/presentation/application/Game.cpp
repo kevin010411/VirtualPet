@@ -56,6 +56,9 @@ bool Game::prepare_game()
     initialStateLoadingFailed = false;
     if (startupConfigError != nullptr)
         return false;
+#if ENABLE_DEBUG
+    startupDebugStage = nullptr;
+#endif
     AssetData::RuntimeManifest manifest = {};
     if (petBehaviorLoadingFailed ||
         !loadRuntimeManifest(animations->sdCard(), manifest))
@@ -63,6 +66,9 @@ bool Game::prepare_game()
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
         startupConfigError = "runtime.bin";
+#if ENABLE_DEBUG
+        startupDebugStage = "runtime manifest";
+#endif
         return false;
     }
 
@@ -70,12 +76,24 @@ bool Game::prepare_game()
     petBehaviorConfig.assetManifest = manifest;
     appearanceLoader.configureRuntimeContract(petBehaviorConfig);
     AppearanceSelection initialAppearance = {};
-    if (!appearanceLoader.findInitialAppearance(initialAppearance) ||
-        !configureActiveAppearance(initialAppearance.speciesSlot, initialAppearance.outfitSlot))
+    if (!appearanceLoader.findInitialAppearance(initialAppearance))
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
         startupConfigError = "runtime.bin";
+#if ENABLE_DEBUG
+        startupDebugStage = "initial appearance";
+#endif
+        return false;
+    }
+    if (!configureActiveAppearance(initialAppearance.speciesSlot, initialAppearance.outfitSlot))
+    {
+        petBehaviorLoadingFailed = true;
+        petBehaviorLoaded = false;
+        startupConfigError = "runtime.bin";
+#if ENABLE_DEBUG
+        startupDebugStage = "active appearance";
+#endif
         return false;
     }
     commands->resetSelection();
@@ -98,6 +116,9 @@ bool Game::prepare_game()
     if (initialState == InitialPetStateResult::Failed)
     {
         initialStateLoadingFailed = true;
+#if ENABLE_DEBUG
+        startupDebugStage = "pet state restore";
+#endif
         return false;
     }
 
@@ -116,6 +137,9 @@ bool Game::prepare_game()
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
         startupConfigError = "runtime.bin";
+#if ENABLE_DEBUG
+        startupDebugStage = "restored appearance";
+#endif
         return false;
     }
     const bool unlockStateReady = initialState == InitialPetStateResult::Restored
@@ -145,9 +169,21 @@ bool Game::finish_setup_game()
     {
         flow.enterFatalError();
         if (startupConfigError != nullptr)
-            renderer.showResourceError();
+        {
+#if ENABLE_DEBUG
+            renderer.showStartupResourceError(startupConfigError, startupDebugStage);
+#else
+            renderer.showResourceError(startupConfigError);
+#endif
+        }
         else if (initialStateLoadingFailed)
-            renderer.showResourceError();
+        {
+#if ENABLE_DEBUG
+            renderer.showStartupResourceError("pet state", startupDebugStage);
+#else
+            renderer.showResourceError("pet state");
+#endif
+        }
         return false;
     }
 
@@ -367,11 +403,39 @@ bool Game::refreshOutfitUnlockMask(bool initialize)
 
 bool Game::enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot)
 {
-    if (!configureActiveAppearance(speciesSlot, entryOutfitSlot) ||
-        !petActions->stageAppearance(speciesSlot, entryOutfitSlot) ||
-        !resolveOutfitUnlockMask(true))
+    if (!configureActiveAppearance(speciesSlot, entryOutfitSlot))
+    {
+#if ENABLE_DEBUG
+        startupDebugStage = "enter configure";
+#endif
         return false;
-    return petActions->saveNow();
+    }
+    if (!petActions->stageAppearance(speciesSlot, entryOutfitSlot))
+    {
+        renderer.recordAssetDataErrorResource("pet appearance");
+#if ENABLE_DEBUG
+        startupDebugStage = "stage appearance";
+#endif
+        return false;
+    }
+    if (!resolveOutfitUnlockMask(true))
+    {
+        renderer.recordAssetDataErrorResource(appearanceLoader.firstAssetDataErrorResource());
+#if ENABLE_DEBUG
+        startupDebugStage = "outfit unlock";
+#endif
+        return false;
+    }
+    if (!petActions->saveNow())
+    {
+        renderer.recordAssetDataErrorResource(
+            petStorage.lastSaveSlot() == 'B' ? "state_b.bin" : "state_a.bin");
+#if ENABLE_DEBUG
+        startupDebugStage = "pet state save";
+#endif
+        return false;
+    }
+    return true;
 }
 
 bool Game::saveNow()

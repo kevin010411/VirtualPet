@@ -88,6 +88,9 @@ private:
     bool setupPrepared = false;
     bool initialStateLoadingFailed = false;
     const char *startupConfigError = nullptr;
+#if ENABLE_DEBUG
+    const char *startupDebugStage = nullptr;
+#endif
     uint8_t pendingEvolutionSpeciesSlot = 0;
     uint8_t pendingEvolutionOutfitSlot = 0;
 

@@ -108,6 +108,10 @@ public:
 
     AssetData::BundleError firstError() const;
     const char *firstErrorResource() const;
+#if ENABLE_DEBUG
+    const char *firstErrorName() const;
+    AssetData::AssetFrameAddress firstErrorAddress() const;
+#endif
 
 private:
     struct PackHeader;
@@ -141,6 +145,10 @@ private:
     bool hasResolvedAnimation_ = false;
     AssetData::BundleError firstError_ = AssetData::BundleError::None;
     char firstErrorResource_[20] = {};
+#if ENABLE_DEBUG
+    AssetData::AssetFrameAddress debugAttemptAddress_ = {};
+    AssetData::AssetFrameAddress debugFirstErrorAddress_ = {};
+#endif
 };
 
 #endif

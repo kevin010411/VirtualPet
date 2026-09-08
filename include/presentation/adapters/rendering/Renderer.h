@@ -37,6 +37,10 @@ public:
     bool animationFrameFailed() const;
     void showResourceError();
     void showResourceError(const char *resource);
+#if ENABLE_DEBUG
+    void showStartupResourceError(const char *fallbackResource,
+                                  const char *debugStage);
+#endif
     void recordAssetDataErrorResource(const char *resource);
 #if ENABLE_DEBUG
     DebugDisplay &debugDisplay();
@@ -55,6 +59,10 @@ public:
 
 private:
     struct AnimationState;
+#if ENABLE_DEBUG
+    void showAssetDataDebug(const char *fallbackResource = nullptr,
+                            const char *debugStage = nullptr);
+#endif
 
     Adafruit_ST7735 *display() const;
     uint8_t *readBuffer();

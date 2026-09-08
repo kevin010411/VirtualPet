@@ -145,6 +145,15 @@ int main()
     AssetData::AssetFrameAddress invalidSelectedDescriptor{0, 0, 1, 0, 0};
     assert(!selectedFailureReader.openFrame(invalidSelectedDescriptor, frame));
     assert(selectedFailureReader.firstError() == AssetData::BundleError::InvalidFrame);
+#if ENABLE_DEBUG
+    assert(strcmp(selectedFailureReader.firstErrorName(), "invalid frame") == 0);
+    const AssetData::AssetFrameAddress failedAddress = selectedFailureReader.firstErrorAddress();
+    assert(failedAddress.speciesSlot == 0);
+    assert(failedAddress.outfitSlot == 0);
+    assert(failedAddress.animationId == 1);
+    assert(failedAddress.versionIndex == 0);
+    assert(failedAddress.frameIndex == 0);
+#endif
 
     std::vector<uint8_t> validPayload;
     for (size_t packet = 0; packet < 8; ++packet)

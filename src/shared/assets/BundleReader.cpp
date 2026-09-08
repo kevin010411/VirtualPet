@@ -92,6 +92,9 @@ bool BundleReader::resolveAnimation(const AssetData::AssetFrameAddress &address,
 bool BundleReader::tryResolveAnimation(const AssetData::AssetFrameAddress &address,
                                        AssetData::AnimationRecord &animation)
 {
+#if ENABLE_DEBUG
+    debugAttemptAddress_ = address;
+#endif
     animation = AssetData::AnimationRecord{};
     if (!validateAddress(address))
         return false;
@@ -109,6 +112,9 @@ bool BundleReader::tryResolveAnimation(const AssetData::AssetFrameAddress &addre
 bool BundleReader::openFrame(const AssetData::AssetFrameAddress &address,
                              AssetData::OpenFrame &frame)
 {
+#if ENABLE_DEBUG
+    debugAttemptAddress_ = address;
+#endif
     frame.file.close();
     frame.descriptor = AssetData::FrameDescriptor{};
     frame.animationFrameCount = 0;
@@ -147,6 +153,9 @@ bool BundleReader::openFrame(const AssetData::AssetFrameAddress &address,
 
 void BundleReader::rejectDecodedFrame(const AssetData::AssetFrameAddress &address)
 {
+#if ENABLE_DEBUG
+    debugAttemptAddress_ = address;
+#endif
     recordError(AssetData::BundleError::DecodeFailed, address.speciesSlot);
 }
 
@@ -159,6 +168,29 @@ const char *BundleReader::firstErrorResource() const
 {
     return firstErrorResource_;
 }
+
+#if ENABLE_DEBUG
+const char *BundleReader::firstErrorName() const
+{
+    switch (firstError_)
+    {
+    case AssetData::BundleError::None: return "none";
+    case AssetData::BundleError::NotConfigured: return "not configured";
+    case AssetData::BundleError::InvalidAddress: return "invalid address";
+    case AssetData::BundleError::MissingPack: return "missing pack";
+    case AssetData::BundleError::InvalidPack: return "invalid pack";
+    case AssetData::BundleError::MissingAnimation: return "missing animation";
+    case AssetData::BundleError::InvalidFrame: return "invalid frame";
+    case AssetData::BundleError::DecodeFailed: return "decode failed";
+    }
+    return "unknown asset error";
+}
+
+AssetData::AssetFrameAddress BundleReader::firstErrorAddress() const
+{
+    return debugFirstErrorAddress_;
+}
+#endif
 
 bool BundleReader::validateAddress(const AssetData::AssetFrameAddress &address)
 {
@@ -386,6 +418,9 @@ bool BundleReader::recordError(AssetData::BundleError error, uint8_t speciesSlot
         return false;
 
     firstError_ = error;
+#if ENABLE_DEBUG
+    debugFirstErrorAddress_ = debugAttemptAddress_;
+#endif
     const char *resource = "asset data";
     if (error == AssetData::BundleError::NotConfigured)
         resource = "asset bundle";

@@ -8,30 +8,6 @@ namespace
 constexpr uint32_t kFirstLaunchCompleteFlag = 0x1UL;
 constexpr uint32_t kFirstStartCompletedFlag = 0x2UL;
 
-bool copyPersistedAppearanceText(char *dest, size_t destSize, const char *source)
-{
-    if (dest == nullptr || destSize == 0 || source == nullptr || source[0] == '\0')
-        return false;
-
-    const size_t len = strlen(source);
-    if (len >= destSize)
-        return false;
-
-    for (size_t i = 0; i < len; ++i)
-    {
-        const char c = source[i];
-        const bool valid = (c >= 'a' && c <= 'z') ||
-                           (c >= 'A' && c <= 'Z') ||
-                           (c >= '0' && c <= '9') ||
-                           c == '_' || c == '-';
-        if (!valid)
-            return false;
-    }
-
-    strcpy(dest, source);
-    return true;
-}
-
 uint8_t parseAppearanceSlot(const char *text)
 {
     uint32_t value = 0;
@@ -265,16 +241,12 @@ void Pet::resetFirstStartCompleted()
 
 bool Pet::restoreState(const PersistedPetState &state)
 {
-    if (state.magic != kPetStateMagic || state.version != kPetStateVersion)
+    if (state.magic != kPetStateMagic || state.version != kPetStateVersion ||
+        parseAppearanceSlot(state.speciesSlotText) == 0 ||
+        parseAppearanceSlot(state.outfitSlotText) == 0)
         return false;
 
     st = state;
     st.version = kPetStateVersion;
-    char appearanceCode[9] = {};
-    if (!copyPersistedAppearanceText(appearanceCode, sizeof(appearanceCode), st.speciesSlotText))
-        strcpy(st.speciesSlotText, "dino");
-    if (!copyPersistedAppearanceText(appearanceCode, sizeof(appearanceCode), st.outfitSlotText))
-        strcpy(st.outfitSlotText, "base");
-
     return true;
 }

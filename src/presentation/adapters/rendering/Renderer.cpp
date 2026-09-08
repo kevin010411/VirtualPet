@@ -4,6 +4,9 @@
 #include <Adafruit_ST7735.h>
 #include <SdFat.h>
 #include <string.h>
+#if ENABLE_DEBUG
+#include <stdio.h>
+#endif
 #include "presentation/adapters/rendering/FrameDecoder.h"
 #include "presentation/adapters/rendering/RenderStatsReporter.h"
 
@@ -106,7 +109,12 @@ bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
         state->bundleReader, address, display(), readBuffer(), readBufferSize(),
         lineBuffer(), lineBufferPixels(), xmin, ymin, batch_lines);
     if (!ok)
+    {
         FrameDecoder::showAssetDataError(tft, state->bundleReader.firstErrorResource());
+#if ENABLE_DEBUG
+        showAssetDataDebug();
+#endif
+    }
 #if ENABLE_DEBUG
     state->hasRenderedFrame |= ok;
 #endif
@@ -123,6 +131,9 @@ bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation,
     if (!animation.valid() || frameIndex == 0)
     {
         FrameDecoder::showAssetDataError(tft, "asset reference");
+#if ENABLE_DEBUG
+        showAssetDataDebug("asset reference", "invalid asset ref");
+#endif
         return false;
     }
     return ShowDataFrame(frameAddress(animation, versionIndex,
@@ -184,12 +195,31 @@ void Renderer::showResourceError()
     const char *pack = state->bundleReader.firstErrorResource();
     FrameDecoder::showAssetDataError(
         tft, pack != nullptr && pack[0] != '\0' ? pack : state->externalErrorResource);
+#if ENABLE_DEBUG
+    showAssetDataDebug(state->externalErrorResource);
+#endif
 }
 
 void Renderer::showResourceError(const char *resource)
 {
     FrameDecoder::showAssetDataError(tft, resource);
+#if ENABLE_DEBUG
+    showAssetDataDebug(resource);
+#endif
 }
+
+#if ENABLE_DEBUG
+void Renderer::showStartupResourceError(const char *fallbackResource,
+                                        const char *debugStage)
+{
+    const char *recordedResource = firstAssetDataErrorResource();
+    const char *resource = recordedResource != nullptr && recordedResource[0] != '\0'
+                               ? recordedResource
+                               : fallbackResource;
+    FrameDecoder::showAssetDataError(tft, resource);
+    showAssetDataDebug(resource, debugStage);
+}
+#endif
 
 void Renderer::recordAssetDataErrorResource(const char *resource)
 {
@@ -201,6 +231,29 @@ void Renderer::recordAssetDataErrorResource(const char *resource)
 
 #if ENABLE_DEBUG
 DebugDisplay &Renderer::debugDisplay() { return debug; }
+
+void Renderer::showAssetDataDebug(const char *fallbackResource,
+                                  const char *debugStage)
+{
+    if (state->bundleReader.firstError() == AssetData::BundleError::None)
+    {
+        debug.showMessage(debugStage != nullptr && debugStage[0] != '\0'
+                              ? debugStage
+                              : "asset data error",
+                          fallbackResource != nullptr && fallbackResource[0] != '\0'
+                              ? fallbackResource
+                              : "no reader detail");
+        return;
+    }
+
+    const AssetData::AssetFrameAddress address = state->bundleReader.firstErrorAddress();
+    char detail[21] = {};
+    snprintf(detail, sizeof(detail), "s%u o%u a%u v%u f%u",
+             address.speciesSlot, address.outfitSlot, address.animationId,
+             address.versionIndex, address.frameIndex);
+    debug.showMessage(state->bundleReader.firstErrorName(), detail);
+}
+
 void Renderer::renderDebugOverlay() { debug.render(); }
 bool Renderer::hasRenderedFrame() const { return state->hasRenderedFrame; }
 #endif

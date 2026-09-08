@@ -37,7 +37,7 @@ class Pet
 {
 public:
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 13;
+    static constexpr uint16_t kPetStateVersion = 14;
 
     Pet();
 
