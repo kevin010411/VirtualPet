@@ -18,6 +18,17 @@ struct StatusValueContext
     const PetBehaviorConfig &config;
 };
 
+uint8_t selectedStatusRank(uint8_t selectionMask, uint8_t triggerIndex)
+{
+    uint8_t rank = 0;
+    for (uint8_t index = 0; index < triggerIndex; ++index)
+    {
+        if ((selectionMask & static_cast<uint8_t>(1U << index)) != 0)
+            ++rank;
+    }
+    return rank;
+}
+
 bool statusValueFromSnapshot(const StatusSetCondition &condition,
                              const void *context,
                              int32_t &value)
@@ -28,6 +39,29 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
     if (condition.source == StatusConditionSource::StageDays)
     {
         value = static_cast<int32_t>(status.stats.stage_days);
+        return true;
+    }
+    if (condition.source == StatusConditionSource::PetStatus)
+    {
+        for (uint8_t index = 0; index < status.config.idleTriggerCount; ++index)
+        {
+            const PetBehaviorIdleTriggerConfig &trigger = status.config.idleTriggers[index];
+            if (!trigger.active || trigger.statSlot >= kPetBehaviorSlotCount)
+                continue;
+            const int16_t current = status.stats.customStats[trigger.statSlot];
+            const bool active = trigger.comparison == PetBehaviorIdleTriggerOperator::LessThan
+                                    ? current < trigger.threshold
+                                    : current > trigger.threshold;
+            if (active)
+            {
+                const uint8_t bit = static_cast<uint8_t>(1U << index);
+                value = (condition.statSlot & bit) != 0
+                            ? selectedStatusRank(condition.statSlot, index)
+                            : static_cast<int32_t>(condition.levels - 1);
+                return true;
+            }
+        }
+        value = static_cast<int32_t>(condition.levels - 1);
         return true;
     }
     if (condition.source != StatusConditionSource::PetStat ||
@@ -172,29 +206,12 @@ bool CommandExecutor::queueStatusSetsAnimation()
     if (!resolveStatusSet(set, statusValueFromSnapshot, &valueContext, resolution))
         return false;
 
-    if (resolution.playOnce)
-    {
-        if (!animations.hasAnimation(resolution.animation))
-            return false;
-        const Animation animation(
-            resolution.animation,
-            gameTick * 10,
-            true,
-            0,
-            FirmwarePlaybackRole::Status);
-        return animations.replace(AnimationSequence(&animation, 1)) ==
-               PlaybackResult::Accepted;
-    }
-
-    if (animations.frameCountFor(resolution.animation) != resolution.requiredFrames)
+    if (!resolution.playOnce ||
+        animations.versionCountFor(resolution.animation) != resolution.requiredVersions)
         return false;
-
-    const Animation animation(
-        resolution.animation,
-        gameTick * 4,
-        false,
-        resolution.frame,
-        FirmwarePlaybackRole::Status);
+    Animation animation = Animation::complete(
+        resolution.animation, 1, FirmwarePlaybackRole::Status);
+    animation.versionIndex = resolution.versionIndex;
     return animations.replace(AnimationSequence(&animation, 1)) ==
            PlaybackResult::Accepted;
 }

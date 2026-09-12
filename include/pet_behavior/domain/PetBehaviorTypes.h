@@ -31,7 +31,7 @@ constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * 
 constexpr uint8_t kPetBehaviorButtonCount = 8;
 // Layout versions are also asset-data version indices.  Keep the runtime
 // table bounded by the same compiled capacity rather than by file counts.
-constexpr uint8_t kMaxRuntimeTableLayouts = AssetData::kMaxVersions - 1U;
+constexpr uint8_t kMaxRuntimeTableLayouts = 3;
 
 enum class PetBehaviorEffectOperation : uint8_t
 {

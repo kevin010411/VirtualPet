@@ -49,7 +49,7 @@ public:
 #endif
     uint16_t frameCountFor(const AssetData::AnimationRef &animation,
                            uint8_t versionIndex = 0);
-    uint8_t versionCountFor(const AssetData::AnimationRef &animation);
+    uint16_t versionCountFor(const AssetData::AnimationRef &animation);
     unsigned long frameIntervalFor(const AssetData::AnimationRef &animation,
                                    uint8_t versionIndex,
                                    unsigned long defaultIntervalMs);

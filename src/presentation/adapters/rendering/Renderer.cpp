@@ -268,14 +268,15 @@ uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &animation,
                : 0;
 }
 
-uint8_t Renderer::versionCountFor(const AssetData::AnimationRef &animation)
+uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &animation)
 {
-    uint8_t count = 0;
-    for (uint8_t version = 0; version < AssetData::kMaxVersions; ++version)
+    uint16_t count = 0;
+    for (uint16_t version = 0; version < AssetData::kMaxVersions; ++version)
     {
         AssetData::AnimationRecord record = {};
         if (!animation.valid() ||
-            !state->bundleReader.tryResolveAnimation(frameAddress(animation, version, 0), record))
+            !state->bundleReader.tryResolveAnimation(
+                frameAddress(animation, static_cast<uint8_t>(version), 0), record))
             break;
         ++count;
     }

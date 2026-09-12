@@ -21,11 +21,13 @@ void testRuntimeContractStatusResolution()
     set.conditions[0].minValue = 0;
     set.conditions[0].maxValue = 100;
     set.conditionCount = 1;
+    set.versionCount = 2;
 
     StatusSetResolution resolution = {};
     assert(resolveStatusSet(set, readValue, nullptr, resolution));
-    assert(resolution.frame == 2);
-    assert(resolution.requiredFrames == 2);
+    assert(resolution.versionIndex == 1);
+    assert(resolution.requiredVersions == 2);
+    assert(resolution.playOnce);
 }
 } // namespace
 

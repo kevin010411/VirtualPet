@@ -12,6 +12,7 @@ enum class StatusConditionSource : uint8_t
 {
     PetStat,
     StageDays,
+    PetStatus,
 };
 
 struct StatusSetCondition
@@ -28,6 +29,7 @@ struct StatusSetConfig
     AssetData::AnimationRef animation;
     StatusSetCondition conditions[kMaxStatusConditions];
     uint8_t conditionCount;
+    uint16_t versionCount;
 };
 
 struct StatusSetsConfig
@@ -43,8 +45,8 @@ using StatusValueSource = bool (*)(const StatusSetCondition &condition,
 struct StatusSetResolution
 {
     AssetData::AnimationRef animation;
-    uint16_t frame;
-    uint16_t requiredFrames;
+    uint8_t versionIndex;
+    uint16_t requiredVersions;
     bool playOnce;
 };
 

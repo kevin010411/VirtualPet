@@ -44,7 +44,7 @@ replace(sequence)
 - `Animation(id, durationMs, playOnce)` 表示固定持續時間或 looping playback。
 - `Animation::complete(id)`／`Animation::complete(name)` 表示完整播放一次；實際 safety duration 由播放模組依 manifest frame count 與 interval 計算。
 - `repeatCount` 表示同一完整動畫的 bounded 重複次數。
-- fixed-frame Status 仍由 owning flow 指定 frame index 與 hold duration。
+- 條件式 Status 由 owning flow 指定零起算 Animation Version，並以 `Animation::complete` 完整播放該 Version 一次；不再指定或停留於固定 frame。
 
 ## 結果與失敗
 

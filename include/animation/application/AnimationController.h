@@ -34,6 +34,7 @@ public:
     unsigned long frameIntervalFor(FirmwarePlaybackRole id) const;
     uint16_t frameCountFor(FirmwarePlaybackRole id) const;
     uint16_t frameCountFor(const AssetData::AnimationRef &animation) const;
+    uint16_t versionCountFor(const AssetData::AnimationRef &animation) const;
     SdFat *sdCard() const;
 
 private:

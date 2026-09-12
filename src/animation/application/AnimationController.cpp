@@ -375,6 +375,12 @@ uint16_t AnimationController::frameCountFor(
     return renderer.frameCountFor(animation);
 }
 
+uint16_t AnimationController::versionCountFor(
+    const AssetData::AnimationRef &animation) const
+{
+    return renderer.versionCountFor(animation);
+}
+
 SdFat *AnimationController::sdCard() const
 {
     return renderer.sdCard();

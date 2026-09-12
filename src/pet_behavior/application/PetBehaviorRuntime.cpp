@@ -35,7 +35,7 @@ PlaybackResult resolveActionAnimation(const PetBehaviorActionPlayback &playback,
 {
     if (!playback.animation.valid() || playback.playbackCount == 0)
         return PlaybackResult::PlaybackFailed;
-    const uint8_t versionCount = renderer.versionCountFor(playback.animation);
+    const uint16_t versionCount = renderer.versionCountFor(playback.animation);
     if (versionCount == 0)
         return PlaybackResult::AnimationMissing;
     animation = Animation::complete(playback.animation, playback.playbackCount);

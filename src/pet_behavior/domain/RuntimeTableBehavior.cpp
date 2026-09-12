@@ -11,9 +11,9 @@ namespace
 {
 constexpr char kRuntimeTablePath[] = "/runtime.bin";
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// Outfit preview ordering is an incompatible runtime contract: v1 must fail
-// closed so slot-based persisted selections are never interpreted as v2.
-constexpr uint16_t kVersion = 2;
+// Conditional Status results are Animation Versions in v3. Older fixed-frame
+// readers must fail closed instead of treating a version index as a frame.
+constexpr uint16_t kVersion = 3;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint16_t kMaxSections = 32;
@@ -658,19 +658,29 @@ bool decodeStatus(const Source &source,
     {
         uint8_t setRecord[12] = {};
         if (!readRecord(source, *sets, setIndex, setRecord) ||
+            setRecord[0] != setIndex ||
             setRecord[1] > kMaxStatusConditions ||
+            readU16(setRecord + 4) != nextCondition ||
             static_cast<uint32_t>(nextCondition) + setRecord[1] > conditions->count)
             return false;
         StatusSetConfig &set = config.statusSets.sets[setIndex];
         set.conditionCount = setRecord[1];
+        set.versionCount = readU16(setRecord + 6);
+        if (set.versionCount == 0 || set.versionCount > AssetData::kMaxVersions ||
+            setRecord[8] != 1 ||
+            setRecord[9] != 0 || readU16(setRecord + 10) != 0)
+            return false;
         if (!resolveAnimation(source, assets, animations, readU16(setRecord + 2),
                               scope, set.animation))
             return false;
+        uint16_t versionProduct = 1;
         for (uint8_t conditionIndex = 0; conditionIndex < set.conditionCount; ++conditionIndex)
         {
             uint8_t conditionRecord[12] = {};
             if (!readRecord(source, *conditions, nextCondition, conditionRecord) ||
-                conditionRecord[1] > 1 ||
+                conditionRecord[0] != setIndex || conditionRecord[3] == 0 ||
+                conditionRecord[3] > 32 ||
+                conditionRecord[1] > 2 ||
                 (conditionRecord[1] == 0 && conditionRecord[2] >= config.statCount) ||
                 (conditionRecord[1] == 1 && conditionRecord[2] != 0) ||
                 readI32(conditionRecord + 4) > readI32(conditionRecord + 8))
@@ -681,8 +691,27 @@ bool decodeStatus(const Source &source,
             condition.levels = conditionRecord[3];
             condition.minValue = readI32(conditionRecord + 4);
             condition.maxValue = readI32(conditionRecord + 8);
+            if (condition.source == StatusConditionSource::PetStatus)
+            {
+                const uint8_t allowedMask = config.idleTriggerCount >= 8
+                                                ? 0xFF
+                                                : static_cast<uint8_t>((1U << config.idleTriggerCount) - 1U);
+                const uint8_t selectedMask = condition.statSlot;
+                uint8_t selectedCount = 0;
+                for (uint8_t mask = selectedMask; mask != 0; mask >>= 1)
+                    selectedCount = static_cast<uint8_t>(selectedCount + (mask & 1U));
+                if (selectedMask == 0 || (selectedMask & ~allowedMask) != 0 ||
+                    condition.levels != static_cast<uint8_t>(selectedCount + 1))
+                    return false;
+            }
+            versionProduct = static_cast<uint16_t>(
+                versionProduct * condition.levels);
+            if (versionProduct > AssetData::kMaxVersions)
+                return false;
             ++nextCondition;
         }
+        if (versionProduct != set.versionCount)
+            return false;
     }
     config.statusSets.count = static_cast<uint8_t>(sets->count);
     return nextCondition == conditions->count;

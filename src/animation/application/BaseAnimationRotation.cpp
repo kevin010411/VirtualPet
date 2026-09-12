@@ -55,7 +55,7 @@ bool BaseAnimationRotation::selectVersion(const AssetData::AnimationRef &animati
                                           Renderer &renderer,
                                           uint8_t &versionIndex) const
 {
-    const uint8_t count = renderer.versionCountFor(animation);
+    const uint16_t count = renderer.versionCountFor(animation);
     if (count == 0)
         return false;
     versionIndex = count == 1 ? 0 : static_cast<uint8_t>(random(count));

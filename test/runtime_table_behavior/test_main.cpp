@@ -147,8 +147,9 @@ void testBehaviorFullFixture(const std::vector<uint8_t> &fixture)
     assert(resolution.playOnce);
     assert(resolution.animation.animationId == 31);
     assert(resolveStatusSet(config.statusSets.sets[1], statusValue, &context, resolution));
-    assert(!resolution.playOnce);
-    assert(resolution.requiredFrames == 24);
+    assert(resolution.playOnce);
+    assert(resolution.requiredVersions == 24);
+    assert(resolution.versionIndex < resolution.requiredVersions);
     assert(resolution.animation.animationId == 32);
 }
 
