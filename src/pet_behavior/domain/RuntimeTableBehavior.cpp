@@ -27,9 +27,8 @@ constexpr uint32_t kStartupAnimationFeature = 1UL << 6;
 constexpr uint32_t kFirstStartAnimationFeature = 1UL << 7;
 constexpr uint32_t kDynamicActionLayoutFeature = 1UL << 8;
 constexpr uint32_t kSequentialStatusFeature = 1UL << 9;
-constexpr uint32_t kFirstLaunchSelectionFeature = 1UL << 10;
 constexpr uint32_t kOutfitChooseAnimationFeature = 1UL << 11;
-constexpr uint32_t kKnownFeatures = (1UL << 12) - 1UL;
+constexpr uint32_t kKnownFeatures = ((1UL << 10) - 1UL) | kOutfitChooseAnimationFeature;
 
 #ifndef ENABLE_GUESS_GAME_SINGLE_ROUND
 #define ENABLE_GUESS_GAME_SINGLE_ROUND 0
@@ -1157,10 +1156,6 @@ bool compiledFeaturesAccept(uint32_t flags)
 #endif
 #if !ENABLE_DYNAMIC_ACTION_LAYOUT
     if ((flags & kDynamicActionLayoutFeature) != 0)
-        return false;
-#endif
-#if !ENABLE_FIRST_LAUNCH_SELECTION
-    if ((flags & kFirstLaunchSelectionFeature) != 0)
         return false;
 #endif
 #if !ENABLE_OUTFIT_CHOOSE_ANIMATION

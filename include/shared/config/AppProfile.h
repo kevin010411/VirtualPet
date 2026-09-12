@@ -45,10 +45,6 @@
 #error "FirstStart animation requires startup animation support."
 #endif
 
-#ifndef ENABLE_FIRST_LAUNCH_SELECTION
-#define ENABLE_FIRST_LAUNCH_SELECTION 0
-#endif
-
 #ifndef ENABLE_OUTFIT_CHOOSE_ANIMATION
 #define ENABLE_OUTFIT_CHOOSE_ANIMATION 0
 #endif
@@ -119,8 +115,8 @@
 #error "First Launch cannot use retired direct Species switching; select an Outfit on the Initial Species."
 #endif
 
-#if (ENABLE_COMMAND_OUTFIT || ENABLE_COMMAND_SPECIES || ENABLE_FIRST_LAUNCH_SELECTION) && !ENABLE_APPEARANCE_SELECTION
-#error "Appearance selection must be enabled when an appearance command or first-launch selection is enabled."
+#if (ENABLE_COMMAND_OUTFIT || ENABLE_COMMAND_SPECIES) && !ENABLE_APPEARANCE_SELECTION
+#error "Appearance selection must be enabled when an appearance command is enabled."
 #endif
 
 #endif // APP_PROFILE_H

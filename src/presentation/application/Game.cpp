@@ -760,7 +760,7 @@ void Game::completeFirstLaunchIfNeeded(AppCommandId commandId)
 
 bool Game::isFirstLaunchSelectionPending() const
 {
-    return ENABLE_APPEARANCE_SELECTION && ENABLE_FIRST_LAUNCH_SELECTION && !petActions->isFirstLaunchComplete();
+    return false;
 }
 
 Game::InitialPetStateResult Game::loadInitialPetState(bool allowSavedState,

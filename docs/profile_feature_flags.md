@@ -15,7 +15,6 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `APP_PROFILE` | `APP_PROFILE_DEFAULT` | 指定 profile id，影響 command slot 排列與初始外觀。 | 對應 profile 的 command slot 與初始 species/outfit。 | 不直接省容量；真正省容量要靠其他 `ENABLE_*` 與 `APP_MAX_*`。 | 所有 env 都會設定。 | 新增 profile 時要同步更新 `AppProfile.h` 與 `platformio.ini`。 |
 | `APP_STATUS_MODE` | `STATUS_MODE_SINGLE_METER` | 指定 Status 指令的顯示策略。 | `STATUS_MODE_DIRECT`、`SINGLE_METER`、`RANDOM_METERS`、`COMPOSITE_HEALTH`、`TRIPLE_METER` 其中一種。 | 選 `DIRECT` 或 `COMPOSITE_HEALTH` 可避開 SD status config parser。 | `default`、`kuromu`、`small`、`new_taipei_childrens_day`、`dipsyho`。 | `small` 不是小容量樣本，因為它仍開 guess game、appearance、species。 |
-| `APP_FIRST_LAUNCH_REQUIRED_COMMAND` | `APP_COMMAND_CHANGE_OUTFIT` | 第一次啟動流程要求完成的 Outfit command。 | first-launch flow 只會在 Initial Species 上等待 Outfit Selection。 | 不直接省容量。 | 目前使用預設值。 | 必須啟用 `ENABLE_APPEARANCE_SELECTION`；指定已退役的 Species command 會編譯失敗。 |
 
 ## Command 與功能模組
 
@@ -29,9 +28,8 @@
 
 | Flag | 預設值 | 中文說明 | 開啟時會編譯 | 關閉時預期可省 Flash/RAM | 目前使用 profile | 注意事項 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ENABLE_APPEARANCE_SELECTION` | `1` | 是否啟用外觀選擇 controller。 | `AppearanceSelectionController` 與 Game 中外觀選擇流程。 | 主要省 Flash；`Game` 也會少一個 unique_ptr member。 | `kuromu`、`small`、`new_taipei_childrens_day`。 | outfit/species command 或 first-launch selection 需要它。 |
+| `ENABLE_APPEARANCE_SELECTION` | `1` | 是否啟用外觀選擇 controller。 | `AppearanceSelectionController` 與 Game 中外觀選擇流程。 | 主要省 Flash；`Game` 也會少一個 unique_ptr member。 | `kuromu`、`small`、`new_taipei_childrens_day`。 | outfit/species command 需要它。 |
 | `ENABLE_STARTUP_ANIMATION` | `0` | 是否啟用開場動畫。 | Start animation flow。 | 主要省 Flash。 | `new_taipei_childrens_day`、`small_start`。 | 只關閉此 flag 不會移除 SD manifest 讀取。 |
-| `ENABLE_FIRST_LAUNCH_SELECTION` | `0` | 是否啟用第一次啟動必選外觀流程。 | first-launch stage 與 required command flow。 | 主要省 Flash。 | `new_taipei_childrens_day`。 | 開啟時必須啟用 `ENABLE_APPEARANCE_SELECTION`。 |
 | `ENABLE_OUTFIT_CHOOSE_ANIMATION` | `0` | 是否讓 outfit 選擇流程使用 choose animation。 | 外觀選擇中的 outfit preview/choose 行為。 | 主要省 Flash。 | `new_taipei_childrens_day`、`kuromu`。 | 需搭配外觀資源。 |
 | `ENABLE_DYNAMIC_ACTION_LAYOUT` | `0` | 是否啟用動態 action layout。 | 動態 layout path/slot 邏輯。 | 主要省 Flash。 | `kuromu`。 | 沒有動態 layout 資源的 profile 不要開。 |
 
