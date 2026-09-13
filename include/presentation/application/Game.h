@@ -50,6 +50,15 @@ public:
     bool resetPet();
 
 private:
+    enum class PendingEvolutionPhase : uint8_t
+    {
+        None,
+        SourceSegment,
+        ApplyingTarget,
+        TargetSegment,
+        Complete,
+    };
+
     enum class InitialPetStateResult : uint8_t
     {
         Failed,
@@ -80,7 +89,7 @@ private:
 
     unsigned long last_tick_time = 0;
     bool dirtySelect = true;
-    bool pendingEvolution = false;
+    PendingEvolutionPhase pendingEvolutionPhase = PendingEvolutionPhase::None;
     bool pendingFirstStartCompletion = false;
     bool initialized = false;
     bool petBehaviorLoadingFailed = false;
@@ -93,6 +102,7 @@ private:
 #endif
     uint8_t pendingEvolutionSpeciesSlot = 0;
     uint8_t pendingEvolutionOutfitSlot = 0;
+    AssetData::AnimationRef pendingEvolutionTargetAnimation = {};
 
     bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     bool resolveOutfitUnlockMask(bool initialize);
@@ -106,6 +116,7 @@ private:
                                                bool showError = true);
     void maybeTickPet();
     bool completePendingEvolutionIfReady();
+    void clearPendingEvolution();
     void handleEvolution();
     bool beginEvolutionAnimation(const AppearanceSelection &selection);
     bool isFirstLaunchSelectionPending() const;

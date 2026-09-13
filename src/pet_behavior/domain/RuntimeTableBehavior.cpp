@@ -11,9 +11,9 @@ namespace
 {
 constexpr char kRuntimeTablePath[] = "/runtime.bin";
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// Conditional Status results are Animation Versions in v3. Older fixed-frame
-// readers must fail closed instead of treating a version index as a frame.
-constexpr uint16_t kVersion = 3;
+// Evolution records gained an explicit mode and ordered source/target animation
+// references in v4. Older readers must fail closed instead of guessing playback.
+constexpr uint16_t kVersion = 4;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint16_t kMaxSections = 32;
@@ -786,6 +786,120 @@ struct AppearanceQuery
     PetStatSnapshot *consumedStats = nullptr;
 };
 
+struct EvolutionRecord
+{
+    uint8_t sourceSpecies = 0;
+    uint8_t targetSpecies = 0;
+    uint8_t targetOutfit = 0;
+    uint8_t conditionCount = 0;
+    uint16_t sourceAnimationRef = kNone16;
+    uint16_t targetAnimationRef = kNone16;
+    EvolutionAnimationMode mode = EvolutionAnimationMode::Disabled;
+};
+
+bool readEvolutionRecord(const Source &source, const Section &evolutions,
+                         const Section *conditions, const Section &animations,
+                         uint16_t index, uint16_t expectedFirstCondition,
+                         EvolutionRecord &decoded)
+{
+    uint8_t record[16] = {};
+    if (!readRecord(source, evolutions, index, record))
+        return false;
+    decoded.sourceSpecies = record[2];
+    decoded.targetSpecies = record[3];
+    decoded.targetOutfit = record[4];
+    decoded.conditionCount = record[5];
+    decoded.sourceAnimationRef = readU16(record + 8);
+    decoded.targetAnimationRef = readU16(record + 10);
+    decoded.mode = static_cast<EvolutionAnimationMode>(record[12]);
+    const bool referencesMatchMode =
+        (decoded.mode == EvolutionAnimationMode::Disabled &&
+         decoded.sourceAnimationRef == kNone16 && decoded.targetAnimationRef == kNone16) ||
+        (decoded.mode == EvolutionAnimationMode::Single &&
+         decoded.sourceAnimationRef != kNone16 && decoded.targetAnimationRef == kNone16) ||
+        (decoded.mode == EvolutionAnimationMode::TwoPhase &&
+         decoded.sourceAnimationRef != kNone16 && decoded.targetAnimationRef != kNone16);
+    return decoded.conditionCount <= 4 && readU16(record + 6) == expectedFirstCondition &&
+           static_cast<uint32_t>(expectedFirstCondition) + decoded.conditionCount <=
+               (conditions == nullptr ? 0 : conditions->count) &&
+           (decoded.sourceAnimationRef == kNone16 || decoded.sourceAnimationRef < animations.count) &&
+           (decoded.targetAnimationRef == kNone16 || decoded.targetAnimationRef < animations.count) &&
+           referencesMatchMode && record[13] == 0 && record[14] == 0 && record[15] == 0;
+}
+
+bool validateEvolutionProjection(const RuntimeTable &table, BundleReader &bundleReader,
+                                 const Section &assets, const Section &animations,
+                                 const Section &species, const Section &outfits)
+{
+    const Source &source = table.source;
+    const Section *evolutions = table.find(Evolutions);
+    const Section *conditions = table.find(EvolutionConditions);
+    const bool enabled = (table.featureFlags & (1UL << 3)) != 0;
+    if (!enabled)
+        return evolutions == nullptr && conditions == nullptr;
+    if (evolutions == nullptr || evolutions->count == 0)
+        return false;
+
+    uint16_t nextCondition = 0;
+    for (uint16_t index = 0; index < evolutions->count; ++index)
+    {
+        EvolutionRecord evolution = {};
+        if (!readEvolutionRecord(source, *evolutions, conditions, animations,
+                                 index, nextCondition, evolution) ||
+            evolution.sourceSpecies == 0 || evolution.sourceSpecies > species.count ||
+            evolution.targetSpecies == 0 || evolution.targetSpecies > species.count ||
+            evolution.targetOutfit == 0)
+            return false;
+
+        uint8_t sourceSpeciesRecord[8] = {};
+        uint8_t targetSpeciesRecord[8] = {};
+        if (!readRecord(source, species, evolution.sourceSpecies - 1, sourceSpeciesRecord) ||
+            !readRecord(source, species, evolution.targetSpecies - 1, targetSpeciesRecord) ||
+            sourceSpeciesRecord[0] != evolution.sourceSpecies ||
+            targetSpeciesRecord[0] != evolution.targetSpecies ||
+            targetSpeciesRecord[1] != evolution.targetOutfit)
+            return false;
+
+        if (evolution.sourceAnimationRef != kNone16)
+        {
+            const uint16_t firstOutfit = readU16(sourceSpeciesRecord + 2);
+            const uint16_t outfitCount = readU16(sourceSpeciesRecord + 4);
+            for (uint16_t offset = 0; offset < outfitCount; ++offset)
+            {
+                uint8_t outfit[8] = {};
+                AssetData::AnimationRef animation = {};
+                if (!readRecord(source, outfits, static_cast<uint16_t>(firstOutfit + offset), outfit) ||
+                    outfit[0] != evolution.sourceSpecies ||
+                    !resolveAnimation(source, assets, animations, evolution.sourceAnimationRef,
+                                      {evolution.sourceSpecies, outfit[1]}, animation) ||
+                    !AssetData::animationReferenceExists(bundleReader, animation))
+                    return false;
+            }
+        }
+        if (evolution.targetAnimationRef != kNone16)
+        {
+            AssetData::AnimationRef animation = {};
+            if (!resolveAnimation(source, assets, animations, evolution.targetAnimationRef,
+                                  {evolution.targetSpecies, evolution.targetOutfit}, animation) ||
+                !AssetData::animationReferenceExists(bundleReader, animation))
+                return false;
+        }
+
+        for (uint8_t offset = 0; offset < evolution.conditionCount; ++offset)
+        {
+            uint8_t condition[12] = {};
+            if (conditions == nullptr ||
+                !readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition) ||
+                readU16(condition) != index || condition[2] > 3 ||
+                (condition[2] != 0 && condition[3] != 0) ||
+                readI32(condition + 4) > readI32(condition + 8))
+                return false;
+        }
+        nextCondition = static_cast<uint16_t>(nextCondition + evolution.conditionCount);
+    }
+    return nextCondition == (conditions == nullptr ? 0 : conditions->count);
+}
+
 bool validateAppearanceProjection(const RuntimeTable &table, BundleReader &bundleReader,
                                   const Section &assets, const Section &animations,
                                   const Section &appearance, const Section &species,
@@ -929,7 +1043,9 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
             unlocks == nullptr || unlockConditions == nullptr)
             return false;
         return validateAppearanceProjection(table, bundleReader, *assets, *animations,
-                                            *appearance, *species, *outfits, *unlocks, *unlockConditions);
+                                            *appearance, *species, *outfits, *unlocks, *unlockConditions) &&
+               validateEvolutionProjection(table, bundleReader, *assets, *animations,
+                                           *species, *outfits);
     }
 
     if (query.kind == AppearanceQueryKind::Initial)
@@ -1099,37 +1215,46 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
     if (query.kind == AppearanceQueryKind::Evolution &&
         (featureFlags & (1UL << 3)) != 0)
     {
-        if (evolutions == nullptr || conditions == nullptr || query.activeSlots == nullptr ||
+        if (evolutions == nullptr || query.activeSlots == nullptr ||
             query.stats == nullptr || query.selection == nullptr)
             return false;
         uint16_t nextCondition = 0;
         for (uint16_t index = 0; index < evolutions->count; ++index)
         {
-            uint8_t evolution[16] = {};
-            if (!readRecord(source, *evolutions, index, evolution) || evolution[5] > 4 ||
-                static_cast<uint32_t>(nextCondition) + evolution[5] > conditions->count)
+            EvolutionRecord evolution = {};
+            if (!readEvolutionRecord(source, *evolutions, conditions, *animations,
+                                     index, nextCondition, evolution))
                 return false;
-            bool matched = query.stats->speciesSlot == evolution[2];
-            for (uint8_t offset = 0; offset < evolution[5]; ++offset)
+            bool matched = query.stats->speciesSlot == evolution.sourceSpecies;
+            for (uint8_t offset = 0; offset < evolution.conditionCount; ++offset)
             {
                 uint8_t condition[12] = {};
-                if (!readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition))
+                if (conditions == nullptr ||
+                    !readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition) ||
+                    readU16(condition) != index)
                     return false;
                 matched = matched && conditionMatches(condition, *query.stats, *query.activeSlots);
             }
-            nextCondition = static_cast<uint16_t>(nextCondition + evolution[5]);
+            nextCondition = static_cast<uint16_t>(nextCondition + evolution.conditionCount);
             if (matched && query.selection->speciesSlot == 0)
             {
                 const ActiveAssetScope scope = {query.stats->speciesSlot, query.stats->outfitSlot};
-                AssetData::AnimationRef animation = {};
-                const uint16_t animationRef = readU16(evolution + 8);
-                if (animationRef != kNone16 &&
-                    (!resolveAnimation(source, *assets, *animations, animationRef, scope, animation) ||
-                     !AssetData::animationReferenceExists(bundleReader, animation)))
+                AssetData::AnimationRef sourceAnimation = {};
+                AssetData::AnimationRef targetAnimation = {};
+                if (evolution.sourceAnimationRef != kNone16 &&
+                    (!resolveAnimation(source, *assets, *animations, evolution.sourceAnimationRef, scope, sourceAnimation) ||
+                     !AssetData::animationReferenceExists(bundleReader, sourceAnimation)))
                     return false;
-                query.selection->speciesSlot = evolution[3];
-                query.selection->outfitSlot = evolution[4];
-                query.selection->evolutionAnimation = animation;
+                if (evolution.targetAnimationRef != kNone16 &&
+                    (!resolveAnimation(source, *assets, *animations, evolution.targetAnimationRef,
+                                       {evolution.targetSpecies, evolution.targetOutfit}, targetAnimation) ||
+                     !AssetData::animationReferenceExists(bundleReader, targetAnimation)))
+                    return false;
+                query.selection->speciesSlot = evolution.targetSpecies;
+                query.selection->outfitSlot = evolution.targetOutfit;
+                query.selection->evolutionMode = evolution.mode;
+                query.selection->sourceEvolutionAnimation = sourceAnimation;
+                query.selection->targetEvolutionAnimation = targetAnimation;
             }
         }
     }

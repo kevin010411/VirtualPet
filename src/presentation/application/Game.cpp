@@ -100,10 +100,8 @@ bool Game::prepare_game()
     layout->begin();
 
     dirtySelect = true;
-    pendingEvolution = false;
+    clearPendingEvolution();
     pendingFirstStartCompletion = false;
-    pendingEvolutionSpeciesSlot = 0;
-    pendingEvolutionOutfitSlot = 0;
     last_tick_time = millis();
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
@@ -462,6 +460,7 @@ void Game::startBatteryAnimation()
 {
     if (!initialized)
         return;
+    clearPendingEvolution();
     flow.enterBattery();
     animations->startBatteryAnimation();
 }
@@ -487,6 +486,8 @@ void Game::updateBatteryAnimation(unsigned long now)
 void Game::OnLeftKey()
 {
     if (!initialized)
+        return;
+    if (pendingEvolutionPhase != PendingEvolutionPhase::None)
         return;
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
@@ -520,6 +521,8 @@ void Game::OnRightKey()
 {
     if (!initialized)
         return;
+    if (pendingEvolutionPhase != PendingEvolutionPhase::None)
+        return;
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
@@ -551,6 +554,8 @@ void Game::OnRightKey()
 void Game::OnConfirmKey()
 {
     if (!initialized)
+        return;
+    if (pendingEvolutionPhase != PendingEvolutionPhase::None)
         return;
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
@@ -657,10 +662,8 @@ bool Game::resetPet()
     if (loadInitialPetState(false) == InitialPetStateResult::Failed)
         return false;
 
-    pendingEvolution = false;
+    clearPendingEvolution();
     pendingFirstStartCompletion = false;
-    pendingEvolutionSpeciesSlot = 0;
-    pendingEvolutionOutfitSlot = 0;
     petActions->resetFirstStartCompleted();
     if (!enterSpecies(petActions->speciesSlot(), petActions->outfitSlot()))
         return false;
@@ -824,13 +827,13 @@ void Game::maybeTickPet()
     if (completePendingEvolutionIfReady())
         return;
 
-    if (pendingEvolution)
+    if (pendingEvolutionPhase != PendingEvolutionPhase::None)
         return;
 
     if (!animations->isBusy())
     {
         handleEvolution();
-        if (pendingEvolution)
+        if (pendingEvolutionPhase != PendingEvolutionPhase::None)
             return;
     }
 
@@ -844,7 +847,7 @@ void Game::maybeTickPet()
             return;
         }
         handleEvolution();
-        if (pendingEvolution)
+        if (pendingEvolutionPhase != PendingEvolutionPhase::None)
             return;
 
     }
@@ -855,26 +858,52 @@ void Game::maybeTickPet()
 
 bool Game::completePendingEvolutionIfReady()
 {
-    if (!pendingEvolution)
+    if (pendingEvolutionPhase == PendingEvolutionPhase::None)
         return false;
 
     if (animations->isBusy())
         return false;
 
-    if (!enterSpecies(pendingEvolutionSpeciesSlot, pendingEvolutionOutfitSlot))
+    if (pendingEvolutionPhase == PendingEvolutionPhase::SourceSegment)
+        pendingEvolutionPhase = PendingEvolutionPhase::ApplyingTarget;
+
+    if (pendingEvolutionPhase == PendingEvolutionPhase::ApplyingTarget &&
+        !enterSpecies(pendingEvolutionSpeciesSlot, pendingEvolutionOutfitSlot))
     {
         renderer.showResourceError();
+        clearPendingEvolution();
         return false;
     }
-    pendingEvolution = false;
-    pendingEvolutionSpeciesSlot = 0;
-    pendingEvolutionOutfitSlot = 0;
+
+    if (pendingEvolutionPhase == PendingEvolutionPhase::ApplyingTarget &&
+        pendingEvolutionTargetAnimation.valid())
+    {
+        const Animation targetAnimation = Animation::complete(
+            pendingEvolutionTargetAnimation, 1, FirmwarePlaybackRole::Evolution);
+        if (animations->replace(AnimationSequence(&targetAnimation, 1)) == PlaybackResult::Accepted)
+        {
+            pendingEvolutionPhase = PendingEvolutionPhase::TargetSegment;
+            return true;
+        }
+        renderer.showResourceError();
+    }
+
+    pendingEvolutionPhase = PendingEvolutionPhase::Complete;
     // Species entry changes the in-memory appearance before its single
     // persistence write. Always hand rendering back to the current base
     // animation so the display cannot remain on the completed Evolution frame.
     refreshBaseAnimation();
     animations->requestFullRedraw();
+    clearPendingEvolution();
     return true;
+}
+
+void Game::clearPendingEvolution()
+{
+    pendingEvolutionPhase = PendingEvolutionPhase::None;
+    pendingEvolutionSpeciesSlot = 0;
+    pendingEvolutionOutfitSlot = 0;
+    pendingEvolutionTargetAnimation = {};
 }
 
 void Game::handleEvolution()
@@ -892,7 +921,7 @@ void Game::handleEvolution()
         return;
     }
 
-    if (!beginEvolutionAnimation(selection))
+    if (selection.evolutionMode == EvolutionAnimationMode::Disabled)
     {
         if (enterSpecies(selection.speciesSlot, selection.outfitSlot))
         {
@@ -901,26 +930,31 @@ void Game::handleEvolution()
         }
         else
             renderer.showResourceError();
+        return;
     }
+
+    if (!beginEvolutionAnimation(selection))
+        renderer.showResourceError();
 }
 
 bool Game::beginEvolutionAnimation(const AppearanceSelection &selection)
 {
-    if (!animations->hasAnimation(selection.evolutionAnimation))
+    if (!animations->hasAnimation(selection.sourceEvolutionAnimation))
         return false;
 
     pendingEvolutionSpeciesSlot = selection.speciesSlot;
     pendingEvolutionOutfitSlot = selection.outfitSlot;
-    pendingEvolution = true;
+    pendingEvolutionTargetAnimation = selection.targetEvolutionAnimation;
+    pendingEvolutionPhase = PendingEvolutionPhase::SourceSegment;
 
     const Animation animation = Animation::complete(
-        selection.evolutionAnimation, 2, FirmwarePlaybackRole::Evolution);
+        selection.sourceEvolutionAnimation,
+        selection.evolutionMode == EvolutionAnimationMode::Single ? 2 : 1,
+        FirmwarePlaybackRole::Evolution);
     const PlaybackResult replaceResult = animations->replace(AnimationSequence(&animation, 1));
     if (replaceResult != PlaybackResult::Accepted)
     {
-        pendingEvolution = false;
-        pendingEvolutionSpeciesSlot = 0;
-        pendingEvolutionOutfitSlot = 0;
+        clearPendingEvolution();
         return false;
     }
     return true;
@@ -1039,15 +1073,26 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
     if (renderer.firstAssetDataError() != AssetData::BundleError::None)
     {
         animations->cancelAll();
+        clearPendingEvolution();
         flow.enterFatalError();
         renderer.showResourceError();
         return;
     }
 
-    if (pendingEvolution)
+    if (pendingEvolutionPhase != PendingEvolutionPhase::None)
     {
         animations->cancelAll();
-        completePendingEvolutionIfReady();
+        if (pendingEvolutionPhase == PendingEvolutionPhase::SourceSegment ||
+            pendingEvolutionPhase == PendingEvolutionPhase::ApplyingTarget)
+        {
+            clearPendingEvolution();
+            renderer.showResourceError();
+        }
+        else
+        {
+            pendingEvolutionPhase = PendingEvolutionPhase::Complete;
+            completePendingEvolutionIfReady();
+        }
         return;
     }
 

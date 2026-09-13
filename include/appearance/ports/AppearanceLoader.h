@@ -8,11 +8,20 @@
 
 struct PetBehaviorConfig;
 
+enum class EvolutionAnimationMode : uint8_t
+{
+    Disabled = 0,
+    Single = 1,
+    TwoPhase = 2,
+};
+
 struct AppearanceSelection
 {
     uint8_t speciesSlot;
     uint8_t outfitSlot;
-    AssetData::AnimationRef evolutionAnimation;
+    EvolutionAnimationMode evolutionMode;
+    AssetData::AnimationRef sourceEvolutionAnimation;
+    AssetData::AnimationRef targetEvolutionAnimation;
 };
 
 struct OutfitPreview
