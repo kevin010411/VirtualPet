@@ -128,6 +128,48 @@ int main(int argc, char **argv)
         return 8;
     }
 
+    uint8_t outfitOptions[AssetData::kMaxOutfitsPerSpecies] = {};
+    size_t outfitCount = 0;
+    if (!loadRuntimeTableOutfits(
+            &sd, manifest, reader, initialAppearance.speciesSlot, unlockMask,
+            outfitOptions, AssetData::kMaxOutfitsPerSpecies, outfitCount))
+    {
+        printf("outfit options failed: species=%u resource=%s\n",
+               initialAppearance.speciesSlot, reader.firstErrorResource());
+        return 9;
+    }
+    for (size_t index = 0; index < outfitCount; ++index)
+    {
+        const uint8_t outfitSlot = outfitOptions[index];
+        const bool locked = (unlockMask & (1U << (outfitSlot - 1U))) == 0;
+        OutfitPreview preview = {};
+        if (!findRuntimeTableOutfitPreview(
+                &sd, manifest, reader, initialAppearance.speciesSlot,
+                outfitSlot, locked, preview))
+        {
+            printf("outfit preview failed: species=%u outfit=%u locked=%u resource=%s\n",
+                   initialAppearance.speciesSlot, outfitSlot, locked,
+                   reader.firstErrorResource());
+            return 10;
+        }
+        uint8_t readBuffer[FrameDecoder::kDataReadBufferBytes] = {};
+        uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
+        Adafruit_ST7735 display;
+        const AssetData::AssetFrameAddress address{
+            preview.animation.speciesSlot, preview.animation.outfitSlot,
+            preview.animation.animationId, 0, 0};
+        if (!FrameDecoder::showDataFrame(
+                reader, address, &display, readBuffer, sizeof(readBuffer),
+                lineBuffer, FrameDecoder::kLineBufferPixels, 0, 32,
+                FrameDecoder::kWorkingBatchLines))
+        {
+            printf("outfit preview frame failed: species=%u outfit=%u locked=%u resource=%s\n",
+                   initialAppearance.speciesSlot, outfitSlot, locked,
+                   reader.firstErrorResource());
+            return 11;
+        }
+    }
+
     const std::filesystem::path root(argv[1]);
     if (!decodePack(reader, (root / "assets/shared.data").string().c_str(), 0) ||
         !decodePack(reader, (root / "assets/species_1.data").string().c_str(), 1))

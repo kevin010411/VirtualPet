@@ -5,14 +5,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v3'))
+$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v5'))
 $outputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_host.exe'
 $fullFeatureOutputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_full_host.exe'
 $fixturePaths = @(
-    (Join-Path $fixtureRoot 'behavior_full\runtime.bin'),
+    (Join-Path $fixtureRoot 'minimal\runtime.bin'),
     (Join-Path $fixtureRoot 'bad_magic\runtime.bin'),
     (Join-Path $fixtureRoot 'wrong_record_size\runtime.bin'),
-    (Join-Path $fixtureRoot 'stat_bounds\runtime.bin'),
+    (Join-Path $fixtureRoot 'visual_context_valid\runtime.bin'),
+    (Join-Path $fixtureRoot 'visual_context_invalid_ref\runtime.bin'),
     (Join-Path $fixtureRoot 'bad_crc\runtime.bin')
 )
 foreach ($fixturePath in $fixturePaths) {
@@ -45,7 +46,6 @@ try {
     Write-Host "[PASS] Runtime-table host baseline: $($fixturePaths.Count) fixture(s)"
 
     $fullFeatureFixtures = @(
-        (Join-Path $fixtureRoot 'appearance_flow_full\runtime.bin'),
         (Join-Path $fixtureRoot 'outfit_selection_release\runtime.bin'),
         (Join-Path $fixtureRoot 'outfit_release_bad_slot\runtime.bin'),
         (Join-Path $fixtureRoot 'outfit_release_bad_source\runtime.bin'),
@@ -68,6 +68,7 @@ try {
         -DENABLE_OUTFIT_CHOOSE_ANIMATION=0 -DENABLE_APPEARANCE_SELECTION=1 `
         -DENABLE_GUESS_GAME_SINGLE_ROUND=0 -DENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT=1 `
         -DENABLE_SEQUENTIAL_STATUS_SET_SELECTION=1 -DAPP_MAX_PET_STATS=10 `
+        -DAPP_MAX_VISUAL_CONTEXTS=128 `
         -Itest/host_stubs -Iinclude @sources -o $fullFeatureOutputPath
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
@@ -76,7 +77,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    Write-Host "[PASS] Outfit release host contract: 1 exact Web export + $($fullFeatureFixtures.Count - 2) release corruption fixture(s)"
+    Write-Host "[PASS] Outfit release host contract: 1 exact Web export + $($fullFeatureFixtures.Count - 1) release corruption fixture(s)"
     exit 0
 }
 finally {

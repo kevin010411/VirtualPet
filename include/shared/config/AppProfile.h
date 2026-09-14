@@ -103,6 +103,10 @@
 #define APP_MAX_ANIMATION_VARIANTS 16
 #endif
 
+#ifndef APP_MAX_VISUAL_CONTEXTS
+#define APP_MAX_VISUAL_CONTEXTS 48
+#endif
+
 #ifndef APP_MAX_PET_STATS
 #define APP_MAX_PET_STATS 6
 #endif

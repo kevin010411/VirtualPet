@@ -11,9 +11,9 @@ namespace
 {
 constexpr char kRuntimeTablePath[] = "/runtime.bin";
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// Evolution records gained an explicit mode and ordered source/target animation
-// references in v4. Older readers must fail closed instead of guessing playback.
-constexpr uint16_t kVersion = 4;
+// Visual contexts replace action-owned layouts in v5. Older readers must fail
+// closed instead of interpreting the shared section type with v4 semantics.
+constexpr uint16_t kVersion = 5;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint16_t kMaxSections = 32;
@@ -25,7 +25,7 @@ constexpr uint32_t kGuessGameFeature = 1UL << 4;
 constexpr uint32_t kPredictFeature = 1UL << 5;
 constexpr uint32_t kStartupAnimationFeature = 1UL << 6;
 constexpr uint32_t kFirstStartAnimationFeature = 1UL << 7;
-constexpr uint32_t kDynamicActionLayoutFeature = 1UL << 8;
+constexpr uint32_t kAnimationVisualContextFeature = 1UL << 8;
 constexpr uint32_t kSequentialStatusFeature = 1UL << 9;
 constexpr uint32_t kOutfitChooseAnimationFeature = 1UL << 11;
 constexpr uint32_t kKnownFeatures = ((1UL << 10) - 1UL) | kOutfitChooseAnimationFeature;
@@ -58,7 +58,7 @@ enum SectionType : uint16_t
     OutfitUnlocks = 35,
     OutfitUnlockConditions = 36,
     SystemRoles = 40,
-    Layouts = 41,
+    VisualContexts = 41,
     Flow = 42,
     FlowRoles = 43,
 };
@@ -183,7 +183,7 @@ uint16_t recordSizeFor(uint16_t type)
     case OutfitUnlocks: return 8;
     case OutfitUnlockConditions: return 12;
     case SystemRoles: return 8;
-    case Layouts: return 12;
+    case VisualContexts: return 12;
     case Flow: return 16;
     case FlowRoles: return 8;
     default: return 0;
@@ -348,6 +348,27 @@ bool resolveAnimation(const Source &source,
         }
     }
     return false;
+}
+
+bool resolveAssetReference(const Source &source, const Section &assets,
+                           uint16_t reference, AssetData::AnimationRef &resolved)
+{
+    resolved = {};
+    if (reference >= assets.count)
+        return false;
+    uint8_t asset[12] = {};
+    if (!readRecord(source, assets, reference, asset) || readU16(asset) != reference)
+        return false;
+    const uint8_t scope = asset[2];
+    if (scope != 1 && scope != 2)
+        return false;
+    if ((scope == 2 && (asset[3] != 0 || asset[4] != 0)) ||
+        (scope == 1 && (asset[3] == 0 || asset[4] == 0)))
+        return false;
+    resolved.speciesSlot = scope == 2 ? 0 : asset[3];
+    resolved.outfitSlot = scope == 2 ? 0 : asset[4];
+    resolved.animationId = readU16(asset + 6);
+    return resolved.valid();
 }
 
 void clearOwnedBehavior(PetBehaviorConfig &config)
@@ -1199,7 +1220,7 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
             else if (record[1] == query.outfitSlot)
             {
                 const uint16_t animationRef = query.lockedPreview ? readU16(unlock + 3) : readU16(record + 2);
-                if ((!unlocked && !query.lockedPreview) || animationRef == kNone16 ||
+                if (animationRef == kNone16 ||
                     !resolveAnimation(source, *assets, *animations, animationRef,
                                       {record[0], record[1]}, query.preview->animation) ||
                     !AssetData::animationReferenceExists(bundleReader, query.preview->animation))
@@ -1279,10 +1300,6 @@ bool compiledFeaturesAccept(uint32_t flags)
     if ((flags & kFirstStartAnimationFeature) != 0)
         return false;
 #endif
-#if !ENABLE_DYNAMIC_ACTION_LAYOUT
-    if ((flags & kDynamicActionLayoutFeature) != 0)
-        return false;
-#endif
 #if !ENABLE_OUTFIT_CHOOSE_ANIMATION
     if ((flags & kOutfitChooseAnimationFeature) != 0)
         return false;
@@ -1292,7 +1309,7 @@ bool compiledFeaturesAccept(uint32_t flags)
 }
 
 // Flow and FlowRoles are export/inspector metadata. Firmware executes the
-// resolved system roles and layouts below, without revalidating that catalog.
+// resolved system roles and validates the visual-context projection below.
 bool decodeRuntimePresentation(const RuntimeTable &table,
                                uint8_t speciesSlot,
                                uint8_t outfitSlot,
@@ -1308,10 +1325,12 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
     const Section *assets = table.find(AssetRefs);
     const Section *animations = table.find(Animations);
     const Section *roles = table.find(SystemRoles);
-    const Section *layouts = table.find(Layouts);
-    if (assets == nullptr || animations == nullptr || roles == nullptr ||
-        ((featureFlags & kDynamicActionLayoutFeature) != 0 && layouts == nullptr) ||
-        ((featureFlags & kDynamicActionLayoutFeature) == 0 && layouts != nullptr))
+    const Section *visualContexts = table.find(VisualContexts);
+    const bool hasVisualContexts =
+        (featureFlags & kAnimationVisualContextFeature) != 0;
+    if (assets == nullptr || animations == nullptr ||
+        (hasVisualContexts && visualContexts == nullptr) ||
+        (!hasVisualContexts && visualContexts != nullptr))
         return false;
 
     memset(config.systemAnimations, 0, sizeof(config.systemAnimations));
@@ -1321,56 +1340,60 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
     config.layoutSelected = {};
     config.layoutCount = 0;
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
-    for (uint16_t index = 0; index < roles->count; ++index)
+    if (roles != nullptr)
     {
-        uint8_t record[8] = {};
-        AssetData::AnimationRef animation = {};
-        if (!readRecord(source, *roles, index, record))
-            return false;
-        const uint8_t role = record[0];
-        if (role == 0 || role >= kFirmwarePlaybackRoleCount ||
-            !resolveAnimation(source, *assets, *animations, readU16(record + 2), scope, animation))
-            return false;
-        config.systemAnimations[role] = animation;
-        const uint16_t layoutVersion = readU16(record + 4);
-        if (layoutVersion > UINT8_MAX)
-            return false;
-        config.actionLayoutVersions[role] = static_cast<uint8_t>(layoutVersion);
+        for (uint16_t index = 0; index < roles->count; ++index)
+        {
+            uint8_t record[8] = {};
+            AssetData::AnimationRef animation = {};
+            if (!readRecord(source, *roles, index, record))
+                return false;
+            const uint8_t role = record[0];
+            if (role == 0 || role >= kFirmwarePlaybackRoleCount ||
+                readU16(record + 4) != 0 ||
+                !resolveAnimation(source, *assets, *animations, readU16(record + 2), scope, animation))
+                return false;
+            config.systemAnimations[role] = animation;
+        }
     }
 
-    // Layout and LayoutSel are the base navigation artwork. They are required
-    // independently of the optional per-action dynamic Layouts section.
-    config.layoutUnselected = config.systemAnimations[
-        static_cast<size_t>(FirmwarePlaybackRole::Layout)];
-    config.layoutSelected = config.systemAnimations[
-        static_cast<size_t>(FirmwarePlaybackRole::LayoutSel)];
-    if (!config.layoutUnselected.valid() || !config.layoutSelected.valid())
-        return false;
-
-    if (layouts != nullptr)
+    if (visualContexts != nullptr)
     {
-        if (layouts->count == 0 || layouts->count > kMaxRuntimeTableLayouts)
+        if (visualContexts->count == 0 ||
+            visualContexts->count > APP_MAX_VISUAL_CONTEXTS)
             return false;
-        for (uint16_t index = 0; index < layouts->count; ++index)
+        for (uint16_t index = 0; index < visualContexts->count; ++index)
         {
             uint8_t record[12] = {};
-            RuntimeTableLayoutConfig &layout = config.layouts[index];
-            if (!readRecord(source, *layouts, index, record) ||
-                !resolveAnimation(source, *assets, *animations, readU16(record + 2), scope, layout.unselected) ||
-                !resolveAnimation(source, *assets, *animations, readU16(record + 4), scope, layout.selected))
+            uint8_t animation[8] = {};
+            AssetData::AnimationRef center = {};
+            AssetData::AnimationRef unselected = {};
+            AssetData::AnimationRef selected = {};
+            if (!readRecord(source, *visualContexts, index, record))
                 return false;
-            layout.active = true;
-            layout.version = readU16(record);
-            layout.x = readI16(record + 6);
-            layout.y = readI16(record + 8);
+            const uint16_t animationRef = readU16(record);
+            const uint16_t centerRef = readU16(record + 4);
+            if (animationRef >= animations->count || record[3] != 0 ||
+                readU16(record + 10) != index ||
+                !readRecord(source, *animations, animationRef, animation) ||
+                centerRef < readU16(animation + 4) ||
+                centerRef >= static_cast<uint32_t>(readU16(animation + 4)) + readU16(animation + 6) ||
+                !resolveAssetReference(source, *assets, centerRef, center) ||
+                !resolveAssetReference(source, *assets, readU16(record + 6), unselected) ||
+                !resolveAssetReference(source, *assets, readU16(record + 8), selected) ||
+                unselected.speciesSlot != 0 || unselected.outfitSlot != 0 ||
+                selected.speciesSlot != 0 || selected.outfitSlot != 0)
+                return false;
+            if (index == 0)
+            {
+                config.layoutUnselected = unselected;
+                config.layoutSelected = selected;
+            }
         }
-        config.layoutCount = static_cast<uint8_t>(layouts->count);
-        for (size_t role = 1; role < kFirmwarePlaybackRoleCount; ++role)
-            if (config.actionLayoutVersions[role] > config.layoutCount)
-                return false;
     }
 
-    return true;
+    return !hasVisualContexts ||
+           (config.layoutUnselected.valid() && config.layoutSelected.valid());
 }
 } // namespace
 
@@ -1416,8 +1439,13 @@ bool parseRuntimeTableBehavior(const uint8_t *bytes,
     MemorySource memory = {bytes, static_cast<uint32_t>(byteCount)};
     const Source source = {&memory, readMemory, memory.size};
     RuntimeTable table = {};
-    return readRuntimeTable(source, &manifest, table) &&
-           decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, config);
+    PetBehaviorConfig candidate = {};
+    if (!readRuntimeTable(source, &manifest, table) ||
+        !decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, candidate) ||
+        !decodeRuntimePresentation(table, speciesSlot, outfitSlot, candidate))
+        return false;
+    config = candidate;
+    return true;
 }
 
 bool loadCompleteRuntimeTable(SdFat *sd,
@@ -1443,15 +1471,17 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     query.kind = AppearanceQueryKind::Initial;
     query.selection = &initialAppearance;
     query.idleAnimation = &idleAnimation;
+    PetBehaviorConfig candidate = {};
     const bool decoded =
         readRuntimeTable(source, &manifest, table) &&
-        decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, config) &&
-        decodeRuntimePresentation(table, speciesSlot, outfitSlot, config) &&
+        decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, candidate) &&
+        decodeRuntimePresentation(table, speciesSlot, outfitSlot, candidate) &&
         decodeRuntimeTableAppearance(table, bundleReader, query);
     file.close();
     if (!decoded)
         return false;
-    config.idleAnimation = idleAnimation;
+    candidate.idleAnimation = idleAnimation;
+    config = candidate;
     return true;
 }
 

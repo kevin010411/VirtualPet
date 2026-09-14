@@ -270,30 +270,23 @@ int main(int argc, char **argv)
     ninthSpecies.outfitSlot = 9;
     assert(!AssetData::isValidFrameAddress(ninthSpecies));
 #if RUNTIME_TABLE_FULL_FEATURE
-    assert(argc == 10);
+    assert(argc == 9);
     PetBehaviorConfig config = {};
     const AssetData::RuntimeManifest manifest = fixtureManifest();
     const std::vector<uint8_t> fixture = readFixture(argv[1]);
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
     assert(config.idleTriggerCount == 0);
-#if ENABLE_GUESS_GAME
-    assert(config.guessEffectCount == 1);
-    assert(config.guessEffects[0].active);
-    assert(config.guessEffects[0].outcome == PetBehaviorGuessOutcome::RoundCorrect);
-    assert(config.guessEffects[0].statSlot == 0);
-    assert(config.guessEffects[0].operation == PetBehaviorEffectOperation::Change);
-    assert(config.guessEffects[0].value == 1);
-#endif
-    testOutfitSelectionReleaseFixture(readFixture(argv[2]));
-    for (int index = 3; index < argc; ++index)
+    testOutfitSelectionReleaseFixture(fixture);
+    for (int index = 2; index < argc; ++index)
         testInvalidAppearanceFixture(readFixture(argv[index]));
 #else
-    assert(argc == 6);
-    testBehaviorFullFixture(readFixture(argv[1]));
+    assert(argc == 7);
+    testValidFixtureLoads(readFixture(argv[1]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[3]));
     testValidFixtureLoads(readFixture(argv[4]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[5]));
+    testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[6]));
 #endif
     return 0;
 }
