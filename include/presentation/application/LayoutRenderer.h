@@ -18,11 +18,8 @@ public:
     void begin();
     void drawAll();
     void drawSelection();
-    bool enterAction(FirmwarePlaybackRole id, int activeSlot);
     bool updatePlayback(const AssetData::AnimationRef &animation,
                         uint8_t versionIndex);
-    bool endAction();
-    bool isActionActive() const;
 
 private:
     static constexpr uint8_t maxSlots = 8;
@@ -32,7 +29,6 @@ private:
     Renderer &renderer;
     CommandController &commands;
     const PetBehaviorConfig *runtimeContract = nullptr;
-    bool actionMode = false;
     const RuntimeAnimationSceneConfig *activeScene = nullptr;
 
     bool drawSlot(int slot, bool selected);

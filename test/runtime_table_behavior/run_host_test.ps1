@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v5'))
 $outputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_host.exe'
+$visualOutputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_visual_host.exe'
 $fullFeatureOutputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_full_host.exe'
 $fixturePaths = @(
     (Join-Path $fixtureRoot 'minimal\runtime.bin'),
@@ -39,11 +40,24 @@ try {
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    & $outputPath @fixturePaths
+    & $outputPath $fixturePaths[0] $fixturePaths[1] $fixturePaths[2] $fixturePaths[5]
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    Write-Host "[PASS] Runtime-table host baseline: $($fixturePaths.Count) fixture(s)"
+    Write-Host '[PASS] Runtime-table host baseline: 4 fixture(s)'
+
+    & g++ -std=c++17 -DRUNTIME_TABLE_VISUAL_CONTEXT=1 `
+        -DENABLE_GUESS_GAME=1 -DENABLE_DYNAMIC_ACTION_LAYOUT=1 `
+        -DAPP_MAX_PET_STATS=10 -DAPP_MAX_VISUAL_CONTEXTS=128 `
+        -Itest/host_stubs -Iinclude @sources -o $visualOutputPath
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+    & $visualOutputPath $fixturePaths[3] $fixturePaths[4]
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+    Write-Host '[PASS] Runtime-table Animation Scene contract: valid and invalid fixture'
 
     $fullFeatureFixtures = @(
         (Join-Path $fixtureRoot 'outfit_selection_release\runtime.bin'),

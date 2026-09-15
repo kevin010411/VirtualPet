@@ -17,7 +17,6 @@ void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
 
 void LayoutRenderer::begin()
 {
-    actionMode = false;
     activeScene = nullptr;
 }
 
@@ -34,14 +33,6 @@ void LayoutRenderer::drawAll()
 
 void LayoutRenderer::drawSelection()
 {
-#if ENABLE_DYNAMIC_ACTION_LAYOUT
-    if (actionMode)
-    {
-        drawAll();
-        return;
-    }
-#endif
-
     const int prevIdx = commands.previousSlot();
     if (commands.isSlotVisible(prevIdx))
         drawSlot(prevIdx, false);
@@ -49,21 +40,6 @@ void LayoutRenderer::drawSelection()
     const int curIdx = commands.selectedSlot();
     if (commands.isSlotVisible(curIdx))
         drawSlot(curIdx, true);
-}
-
-bool LayoutRenderer::enterAction(FirmwarePlaybackRole id, int activeSlot)
-{
-#if ENABLE_DYNAMIC_ACTION_LAYOUT
-    (void)id;
-    (void)activeSlot;
-    actionMode = true;
-    drawAll();
-    return true;
-#else
-    (void)id;
-    (void)activeSlot;
-    return false;
-#endif
 }
 
 bool LayoutRenderer::updatePlayback(const AssetData::AnimationRef &animation,
@@ -75,21 +51,6 @@ bool LayoutRenderer::updatePlayback(const AssetData::AnimationRef &animation,
     activeScene = nextScene;
     drawAll();
     return true;
-}
-
-bool LayoutRenderer::endAction()
-{
-    if (!actionMode)
-        return false;
-
-    actionMode = false;
-    drawAll();
-    return true;
-}
-
-bool LayoutRenderer::isActionActive() const
-{
-    return actionMode;
 }
 
 bool LayoutRenderer::drawSlot(int slot, bool selected)

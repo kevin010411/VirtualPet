@@ -1,0 +1,6 @@
+#ifndef ANIMATION_SCENE_PLAYBACK_ST7735_H
+#define ANIMATION_SCENE_PLAYBACK_ST7735_H
+
+class Adafruit_ST7735 {};
+
+#endif

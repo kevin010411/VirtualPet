@@ -270,11 +270,6 @@ void Game::loop_game()
         return;
     }
 
-    if (layout->isActionActive() && (!flow.isCommand() || !animations->isBusy()))
-    {
-        refreshBaseAnimation();
-        layout->endAction();
-    }
     if (dirtySelect)
     {
         layout->drawSelection();
@@ -644,7 +639,6 @@ void Game::OnConfirmKey()
             if (!refreshOutfitUnlockMask(false))
                 renderer.showResourceError();
             refreshBaseAnimation();
-            layout->enterAction(animations->currentPlaybackRole(), selectedSlot);
         }
         return;
     }
@@ -709,7 +703,6 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
     if (!result.executed)
         return;
 
-    layout->enterAction(result.layoutPlaybackRole, selectedSlot);
     if (result.resourceError)
         renderer.showResourceError();
 

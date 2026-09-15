@@ -164,11 +164,14 @@ void testInvalidFixtureFailsWithoutPartialPublication(const std::vector<uint8_t>
     assert(config.statCount == 7);
 }
 
-void testValidFixtureLoads(const std::vector<uint8_t> &fixture)
+void testValidFixtureLoads(const std::vector<uint8_t> &fixture, const char *label)
 {
     PetBehaviorConfig config = {};
-    assert(parseRuntimeTableBehavior(
-        fixture.data(), fixture.size(), fixtureManifest(), 1, 1, config));
+    const bool accepted = parseRuntimeTableBehavior(
+        fixture.data(), fixture.size(), fixtureManifest(), 1, 1, config);
+    if (!accepted)
+        printf("valid fixture rejected: %s\n", label);
+    assert(accepted);
 }
 
 void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
@@ -272,21 +275,24 @@ int main(int argc, char **argv)
 #if RUNTIME_TABLE_FULL_FEATURE
     assert(argc == 9);
     PetBehaviorConfig config = {};
-    const AssetData::RuntimeManifest manifest = fixtureManifest();
+    const AssetData::RuntimeManifest manifest = releaseFixtureManifest();
     const std::vector<uint8_t> fixture = readFixture(argv[1]);
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
-    assert(config.idleTriggerCount == 0);
+    assert(config.idleTriggerCount == 5);
+    assert(config.animationSceneCount > 0);
     testOutfitSelectionReleaseFixture(fixture);
     for (int index = 2; index < argc; ++index)
         testInvalidAppearanceFixture(readFixture(argv[index]));
+#elif RUNTIME_TABLE_VISUAL_CONTEXT
+    assert(argc == 3);
+    testValidFixtureLoads(readFixture(argv[1]), argv[1]);
+    testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
 #else
-    assert(argc == 7);
-    testValidFixtureLoads(readFixture(argv[1]));
+    assert(argc == 5);
+    testValidFixtureLoads(readFixture(argv[1]), argv[1]);
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[3]));
-    testValidFixtureLoads(readFixture(argv[4]));
-    testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[5]));
-    testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[6]));
+    testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[4]));
 #endif
     return 0;
 }
