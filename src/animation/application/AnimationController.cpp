@@ -58,6 +58,9 @@ void AnimationController::resetPlaybackState()
     showVersionIndex = 0;
     playbackFailedThisTick = false;
     playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
+    playbackPrepared = false;
+    preparedTargetChanged = false;
+    preparedFrameDue = false;
     renderer.initAnimations();
 }
 
@@ -67,6 +70,7 @@ void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAn
     {
         baseAnimationRef = baseAnimation;
         dirtyAnimation = true;
+        playbackPrepared = false;
     }
 }
 
@@ -132,6 +136,7 @@ PlaybackResult AnimationController::replace(const AnimationSequence &sequence)
     activeRepeatsRemaining = 0;
     dirtyAnimation = true;
     animateDone = false;
+    playbackPrepared = false;
     return PlaybackResult::Accepted;
 }
 
@@ -142,6 +147,7 @@ void AnimationController::cancelAll()
     activeRepeatsRemaining = 0;
     dirtyAnimation = true;
     animateDone = false;
+    playbackPrepared = false;
 }
 
 bool AnimationController::isBusy() const
@@ -154,6 +160,16 @@ FirmwarePlaybackRole AnimationController::currentPlaybackRole() const
     return hasActiveAnimation ? activeAnimation.playbackRole : showPlaybackRole;
 }
 
+AssetData::AnimationRef AnimationController::currentAnimation() const
+{
+    return showAnimation;
+}
+
+uint8_t AnimationController::currentVersionIndex() const
+{
+    return showVersionIndex;
+}
+
 void AnimationController::requestFullRedraw()
 {
     dirtyAnimation = true;
@@ -161,6 +177,7 @@ void AnimationController::requestFullRedraw()
     showAnimation = {};
     animateDone = true;
     lastFrameTime = 0;
+    playbackPrepared = false;
 }
 
 bool AnimationController::hasAnimationPending(FirmwarePlaybackRole id) const
@@ -204,6 +221,7 @@ void AnimationController::completeActiveAnimation()
     activeRepeatsRemaining = 0;
     dirtyAnimation = true;
     animateDone = false;
+    playbackPrepared = false;
 }
 
 void AnimationController::tryStartNextAnimation()
@@ -240,8 +258,10 @@ unsigned long AnimationController::completePlaybackDuration(
     return frameIntervalMs * transitions + kCompletePlaybackSafetyMs;
 }
 
-PlaybackTickResult AnimationController::tick(unsigned long now)
+void AnimationController::preparePlayback(unsigned long now)
 {
+    if (playbackPrepared)
+        return;
     playbackFailedThisTick = false;
     playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
     if (lastPlaybackUpdateTime == 0)
@@ -249,25 +269,10 @@ PlaybackTickResult AnimationController::tick(unsigned long now)
     const unsigned long elapsed = now - lastPlaybackUpdateTime;
     lastPlaybackUpdateTime = now;
     updateElapsed(elapsed);
-    render(now);
-    if (hasActiveAnimation && activeAnimation.playOnce &&
-        !activeAnimation.isFixedFrame() && animateDone)
-    {
-        completeActiveAnimation();
-        render(now);
-    }
-    return {
-        playbackFailedThisTick ? PlaybackResult::PlaybackFailed
-                               : PlaybackResult::Accepted,
-        playbackFailedRoleThisTick,
-    };
-}
-
-void AnimationController::render(unsigned long now)
-{
-    const bool frameDue = now - lastFrameTime >= frameInterval;
-    if (frameDue)
+    preparedFrameDue = now - lastFrameTime >= frameInterval;
+    if (preparedFrameDue)
         lastFrameTime = now;
+    preparedTargetChanged = false;
 
     if (dirtyAnimation || !showAnimation.valid())
     {
@@ -289,6 +294,45 @@ void AnimationController::render(unsigned long now)
 
         frameInterval = renderer.frameIntervalFor(
             showAnimation, showVersionIndex, frameIntervalSlow);
+        if (!(hasActiveAnimation && activeAnimation.isFixedFrame()))
+            animateDone = !renderer.setAnimation(
+                showAnimation, showVersionIndex, playOnce);
+        dirtyAnimation = false;
+        preparedTargetChanged = true;
+    }
+    else if (preparedFrameDue && !hasActiveAnimation &&
+             renderer.willRestartAnimationLoop() &&
+             baseRotation.onLoopCompletedAndRotateIfDue(renderer))
+    {
+        showAnimation = baseRotation.selectedAnimation();
+        showVersionIndex = baseRotation.selectedVersion();
+        animateDone = !renderer.setAnimation(
+            showAnimation, showVersionIndex, false);
+        preparedTargetChanged = true;
+    }
+    playbackPrepared = true;
+}
+
+PlaybackTickResult AnimationController::tick(unsigned long now)
+{
+    if (!playbackPrepared)
+        preparePlayback(now);
+    renderPrepared();
+    if (hasActiveAnimation && activeAnimation.playOnce &&
+        !activeAnimation.isFixedFrame() && animateDone)
+        completeActiveAnimation();
+    playbackPrepared = false;
+    return {
+        playbackFailedThisTick ? PlaybackResult::PlaybackFailed
+                               : PlaybackResult::Accepted,
+        playbackFailedRoleThisTick,
+    };
+}
+
+void AnimationController::renderPrepared()
+{
+    if (preparedTargetChanged)
+    {
         if (hasActiveAnimation && activeAnimation.isFixedFrame())
         {
             const bool rendered = renderer.ShowAnimationFrame(
@@ -300,33 +344,20 @@ void AnimationController::render(unsigned long now)
                 playbackFailedThisTick = true;
             }
         }
-        else
+        else if (!animateDone)
         {
-            animateDone = !renderer.setAnimation(
-                showAnimation, showVersionIndex, playOnce);
-            if (!animateDone)
+            animateDone = renderer.advanceAnimationFrame();
+            if (renderer.animationFrameFailed() && hasActiveAnimation)
             {
-                animateDone = renderer.advanceAnimationFrame();
-                if (renderer.animationFrameFailed() && hasActiveAnimation)
-                {
-                    playbackFailedRoleThisTick = activeAnimation.playbackRole;
-                    playbackFailedThisTick = true;
-                }
+                playbackFailedRoleThisTick = activeAnimation.playbackRole;
+                playbackFailedThisTick = true;
             }
         }
-        dirtyAnimation = false;
     }
-    else if (frameDue &&
+    else if (preparedFrameDue &&
              !(hasActiveAnimation && activeAnimation.isFixedFrame()) &&
              !(hasActiveAnimation && activeAnimation.playOnce && animateDone))
     {
-        if (!hasActiveAnimation && renderer.willRestartAnimationLoop() &&
-            baseRotation.onLoopCompletedAndRotateIfDue(renderer))
-        {
-            showVersionIndex = baseRotation.selectedVersion();
-            animateDone = !renderer.setAnimation(
-                showAnimation, showVersionIndex, false);
-        }
         animateDone |= renderer.advanceAnimationFrame();
         if (renderer.animationFrameFailed() && hasActiveAnimation)
         {
@@ -346,9 +377,10 @@ void AnimationController::startBatteryAnimation()
         showAnimation, showVersionIndex, frameIntervalSlow);
     lastFrameTime = 0;
     animateDone = !renderer.setAnimation(showAnimation, showVersionIndex, false);
-    if (!animateDone)
-        animateDone = renderer.advanceAnimationFrame();
     dirtyAnimation = false;
+    preparedTargetChanged = true;
+    preparedFrameDue = true;
+    playbackPrepared = true;
 }
 
 void AnimationController::updateBatteryAnimation(unsigned long now)

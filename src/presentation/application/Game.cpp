@@ -260,7 +260,7 @@ void Game::loop_game()
     }
 #endif
 
-    const PlaybackTickResult playbackResult = animations->tick(now);
+    const PlaybackTickResult playbackResult = tickPlayback(now);
     handlePlaybackResult(playbackResult.result);
     completeFirstStartIfReady(playbackResult);
 
@@ -275,8 +275,6 @@ void Game::loop_game()
         refreshBaseAnimation();
         layout->endAction();
     }
-    syncActionLayoutWithPlayback();
-
     if (dirtySelect)
     {
         layout->drawSelection();
@@ -303,7 +301,7 @@ void Game::redrawAllNow()
     // Repaint the entire center area even when an animation frame was already
     // considered current before STOP mode.
     animations->requestFullRedraw();
-    const PlaybackTickResult playbackResult = animations->tick(now);
+    const PlaybackTickResult playbackResult = tickPlayback(now);
     handlePlaybackResult(playbackResult.result);
     completeFirstStartIfReady(playbackResult);
 
@@ -463,6 +461,7 @@ void Game::startBatteryAnimation()
     clearPendingEvolution();
     flow.enterBattery();
     animations->startBatteryAnimation();
+    handlePlaybackResult(tickPlayback(millis()).result);
 }
 
 void Game::endBatteryAnimation()
@@ -691,10 +690,18 @@ void Game::refreshBaseAnimation()
     animations->setBaseAnimation(petBehaviorRuntime->baseAnimation());
 }
 
-void Game::syncActionLayoutWithPlayback()
+PlaybackTickResult Game::tickPlayback(unsigned long now)
 {
-    if (flow.isCommand())
-        layout->updateAction(animations->currentPlaybackRole());
+    animations->preparePlayback(now);
+    syncSceneLayoutWithPlayback();
+    return animations->tick(now);
+}
+
+void Game::syncSceneLayoutWithPlayback()
+{
+    layout->updatePlayback(
+        animations->currentAnimation(),
+        animations->currentVersionIndex());
 }
 
 void Game::handleCommandResult(const CommandResult &result, int selectedSlot)

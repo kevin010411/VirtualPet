@@ -27,7 +27,10 @@ public:
     bool isBusy() const;
     bool hasAnimationPending(FirmwarePlaybackRole id) const;
     FirmwarePlaybackRole currentPlaybackRole() const;
+    AssetData::AnimationRef currentAnimation() const;
+    uint8_t currentVersionIndex() const;
     void requestFullRedraw();
+    void preparePlayback(unsigned long now);
     PlaybackTickResult tick(unsigned long now);
     void startBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
@@ -61,12 +64,15 @@ private:
     uint8_t showVersionIndex = 0;
     bool playbackFailedThisTick = false;
     FirmwarePlaybackRole playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
+    bool playbackPrepared = false;
+    bool preparedTargetChanged = false;
+    bool preparedFrameDue = false;
 
     void resetPlaybackState();
     unsigned long completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const;
     void updateElapsed(unsigned long elapsed);
     void completeActiveAnimation();
-    void render(unsigned long now);
+    void renderPrepared();
     void tryStartNextAnimation();
     unsigned long resolvedDuration(const Animation &animation) const;
     PlaybackResult validate(const Animation &animation) const;

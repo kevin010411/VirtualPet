@@ -109,7 +109,8 @@ private:
     bool refreshOutfitUnlockMask(bool initialize);
     bool enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot);
     void refreshBaseAnimation();
-    void syncActionLayoutWithPlayback();
+    PlaybackTickResult tickPlayback(unsigned long now);
+    void syncSceneLayoutWithPlayback();
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
     InitialPetStateResult loadInitialPetState(bool allowSavedState,

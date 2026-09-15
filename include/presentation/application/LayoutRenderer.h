@@ -7,7 +7,7 @@
 class CommandController;
 class Renderer;
 struct PetBehaviorConfig;
-struct RuntimeTableLayoutConfig;
+struct RuntimeAnimationSceneConfig;
 
 class LayoutRenderer
 {
@@ -19,7 +19,8 @@ public:
     void drawAll();
     void drawSelection();
     bool enterAction(FirmwarePlaybackRole id, int activeSlot);
-    bool updateAction(FirmwarePlaybackRole id);
+    bool updatePlayback(const AssetData::AnimationRef &animation,
+                        uint8_t versionIndex);
     bool endAction();
     bool isActionActive() const;
 
@@ -32,13 +33,12 @@ private:
     CommandController &commands;
     const PetBehaviorConfig *runtimeContract = nullptr;
     bool actionMode = false;
-    FirmwarePlaybackRole activeAction = FirmwarePlaybackRole::None;
-    int activeActionSlot = -1;
+    const RuntimeAnimationSceneConfig *activeScene = nullptr;
 
     bool drawSlot(int slot, bool selected);
-    bool hasActionLayout(FirmwarePlaybackRole id) const;
-    uint8_t layoutVersion(FirmwarePlaybackRole id) const;
-    const RuntimeTableLayoutConfig *layoutFor(FirmwarePlaybackRole id) const;
+    const RuntimeAnimationSceneConfig *sceneFor(
+        const AssetData::AnimationRef &animation,
+        uint8_t versionIndex) const;
     static int slotX(int slot);
     static int slotY(int slot);
 };

@@ -12,14 +12,13 @@ LayoutRenderer::LayoutRenderer(Renderer &rendererRef, CommandController &command
 void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
 {
     runtimeContract = &config;
+    activeScene = nullptr;
 }
 
 void LayoutRenderer::begin()
 {
     actionMode = false;
-    activeAction = FirmwarePlaybackRole::None;
-    activeActionSlot = -1;
-
+    activeScene = nullptr;
 }
 
 void LayoutRenderer::drawAll()
@@ -55,9 +54,9 @@ void LayoutRenderer::drawSelection()
 bool LayoutRenderer::enterAction(FirmwarePlaybackRole id, int activeSlot)
 {
 #if ENABLE_DYNAMIC_ACTION_LAYOUT
+    (void)id;
+    (void)activeSlot;
     actionMode = true;
-    activeAction = hasActionLayout(id) ? id : FirmwarePlaybackRole::None;
-    activeActionSlot = activeSlot;
     drawAll();
     return true;
 #else
@@ -67,23 +66,15 @@ bool LayoutRenderer::enterAction(FirmwarePlaybackRole id, int activeSlot)
 #endif
 }
 
-bool LayoutRenderer::updateAction(FirmwarePlaybackRole id)
+bool LayoutRenderer::updatePlayback(const AssetData::AnimationRef &animation,
+                                    uint8_t versionIndex)
 {
-#if ENABLE_DYNAMIC_ACTION_LAYOUT
-    if (!actionMode)
+    const RuntimeAnimationSceneConfig *nextScene = sceneFor(animation, versionIndex);
+    if (activeScene == nextScene)
         return false;
-
-    const FirmwarePlaybackRole nextAction = hasActionLayout(id) ? id : FirmwarePlaybackRole::None;
-    if (activeAction == nextAction)
-        return false;
-
-    activeAction = nextAction;
+    activeScene = nextScene;
     drawAll();
     return true;
-#else
-    (void)id;
-    return false;
-#endif
 }
 
 bool LayoutRenderer::endAction()
@@ -92,8 +83,6 @@ bool LayoutRenderer::endAction()
         return false;
 
     actionMode = false;
-    activeAction = FirmwarePlaybackRole::None;
-    activeActionSlot = -1;
     drawAll();
     return true;
 }
@@ -107,46 +96,34 @@ bool LayoutRenderer::drawSlot(int slot, bool selected)
 {
     if (runtimeContract == nullptr)
         return false;
-    const RuntimeTableLayoutConfig *layoutConfig = layoutFor(activeAction);
-    const AssetData::AnimationRef &layout = layoutConfig != nullptr
-                                                ? (selected ? layoutConfig->selected : layoutConfig->unselected)
-                                                : (selected ? runtimeContract->layoutSelected
-                                                            : runtimeContract->layoutUnselected);
+    if (activeScene == nullptr)
+        return false;
+    const AssetData::AnimationRef &layout = selected
+                                                ? activeScene->selected
+                                                : activeScene->unselected;
     return renderer.ShowAnimationFrame(
         layout,
-        layoutVersion(activeAction),
+        activeScene->layoutVersion,
         static_cast<uint16_t>(slot + 1),
-        (layoutConfig != nullptr ? layoutConfig->x : 0) + slotX(slot),
-        (layoutConfig != nullptr ? layoutConfig->y : 0) + slotY(slot));
+        slotX(slot),
+        slotY(slot));
 }
 
-bool LayoutRenderer::hasActionLayout(FirmwarePlaybackRole id) const
+const RuntimeAnimationSceneConfig *LayoutRenderer::sceneFor(
+    const AssetData::AnimationRef &animation,
+    uint8_t versionIndex) const
 {
-    return layoutVersion(id) != 0;
-}
-
-uint8_t LayoutRenderer::layoutVersion(FirmwarePlaybackRole id) const
-{
-    if (runtimeContract == nullptr)
-        return 0;
-    const size_t index = static_cast<size_t>(id);
-    if (index >= kFirmwarePlaybackRoleCount)
-        return 0;
-    return runtimeContract->actionLayoutVersions[index];
-}
-
-const RuntimeTableLayoutConfig *LayoutRenderer::layoutFor(FirmwarePlaybackRole id) const
-{
-    if (runtimeContract == nullptr)
+    if (runtimeContract == nullptr || !animation.valid())
         return nullptr;
-    const uint8_t version = layoutVersion(id);
-    if (version == 0)
-        return nullptr;
-    for (uint8_t index = 0; index < runtimeContract->layoutCount; ++index)
+    for (uint16_t index = 0; index < runtimeContract->animationSceneCount; ++index)
     {
-        const RuntimeTableLayoutConfig &layout = runtimeContract->layouts[index];
-        if (layout.active && layout.version == version)
-            return &layout;
+        const RuntimeAnimationSceneConfig &scene =
+            runtimeContract->animationScenes[index];
+        if (scene.active && scene.animationVersion == versionIndex &&
+            scene.animation.speciesSlot == animation.speciesSlot &&
+            scene.animation.outfitSlot == animation.outfitSlot &&
+            scene.animation.animationId == animation.animationId)
+            return &scene;
     }
     return nullptr;
 }

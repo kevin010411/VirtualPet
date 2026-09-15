@@ -1328,17 +1328,13 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
     const Section *visualContexts = table.find(VisualContexts);
     const bool hasVisualContexts =
         (featureFlags & kAnimationVisualContextFeature) != 0;
-    if (assets == nullptr || animations == nullptr ||
-        (hasVisualContexts && visualContexts == nullptr) ||
-        (!hasVisualContexts && visualContexts != nullptr))
+    if (assets == nullptr || animations == nullptr || !hasVisualContexts ||
+        visualContexts == nullptr)
         return false;
 
     memset(config.systemAnimations, 0, sizeof(config.systemAnimations));
-    memset(config.actionLayoutVersions, 0, sizeof(config.actionLayoutVersions));
-    memset(config.layouts, 0, sizeof(config.layouts));
-    config.layoutUnselected = {};
-    config.layoutSelected = {};
-    config.layoutCount = 0;
+    memset(config.animationScenes, 0, sizeof(config.animationScenes));
+    config.animationSceneCount = 0;
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
     if (roles != nullptr)
     {
@@ -1374,7 +1370,7 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
             const uint16_t animationRef = readU16(record);
             const uint16_t centerRef = readU16(record + 4);
             if (animationRef >= animations->count || record[3] != 0 ||
-                readU16(record + 10) != index ||
+                readU16(record + 10) >= visualContexts->count ||
                 !readRecord(source, *animations, animationRef, animation) ||
                 centerRef < readU16(animation + 4) ||
                 centerRef >= static_cast<uint32_t>(readU16(animation + 4)) + readU16(animation + 6) ||
@@ -1384,16 +1380,25 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
                 unselected.speciesSlot != 0 || unselected.outfitSlot != 0 ||
                 selected.speciesSlot != 0 || selected.outfitSlot != 0)
                 return false;
-            if (index == 0)
+            const bool activeScope = center.shared() ||
+                (center.speciesSlot == speciesSlot && center.outfitSlot == outfitSlot);
+            if (activeScope)
             {
-                config.layoutUnselected = unselected;
-                config.layoutSelected = selected;
+                if (config.animationSceneCount >= APP_MAX_VISUAL_CONTEXTS)
+                    return false;
+                RuntimeAnimationSceneConfig &scene =
+                    config.animationScenes[config.animationSceneCount++];
+                scene.active = true;
+                scene.animation = center;
+                scene.animationVersion = record[2];
+                scene.unselected = unselected;
+                scene.selected = selected;
+                scene.layoutVersion = static_cast<uint8_t>(readU16(record + 10));
             }
         }
     }
 
-    return !hasVisualContexts ||
-           (config.layoutUnselected.valid() && config.layoutSelected.valid());
+    return config.animationSceneCount > 0;
 }
 } // namespace
 
