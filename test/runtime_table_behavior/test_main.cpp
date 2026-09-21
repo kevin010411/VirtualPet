@@ -76,15 +76,14 @@ bool statusValue(const StatusSetCondition &condition,
                  int32_t &value)
 {
     const StatusContext &context = *static_cast<const StatusContext *>(rawContext);
-    if (condition.source == StatusConditionSource::StageDays)
+    if (condition.kind != StatusConditionKind::RuntimeValue)
+        return false;
+    if (condition.valueId == kRuntimeValueStageDays)
     {
-        if (condition.valueId != kRuntimeValueStageDays)
-            return false;
         value = static_cast<int32_t>(context.stageDays);
         return true;
     }
-    if (condition.source != StatusConditionSource::PetStat ||
-        !isRuntimeValueIdPetStat(condition.valueId) ||
+    if (!isRuntimeValueIdPetStat(condition.valueId) ||
         runtimePetStatSlot(condition.valueId) >= 10)
         return false;
     value = context.stats->values[runtimePetStatSlot(condition.valueId)];
@@ -298,11 +297,12 @@ int main(int argc, char **argv)
     testValidFixtureLoads(readFixture(argv[1]), argv[1]);
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
 #else
-    assert(argc == 5);
+    assert(argc == 6);
     testValidFixtureLoads(readFixture(argv[1]), argv[1]);
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[3]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[4]));
+    testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[5]));
 #endif
     return 0;
 }

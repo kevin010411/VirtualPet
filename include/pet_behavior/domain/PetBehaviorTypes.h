@@ -74,18 +74,6 @@ struct PetBehaviorActionConfig
     uint8_t suspendDailyChangeDays;
 };
 
-// Kept as a source-compatibility vocabulary for host-only legacy helpers.
-// Runtime records and firmware execution use RuntimeRangePredicate instead.
-enum class PetBehaviorActionConditionOperator : uint8_t
-{
-    LessThan,
-    LessThanOrEqual,
-    Equal,
-    GreaterThanOrEqual,
-    GreaterThan,
-    Count,
-};
-
 struct PetBehaviorRandomOutcomeConfig
 {
     bool active;

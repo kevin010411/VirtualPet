@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v5'))
+$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v6'))
 $validFixture = Join-Path $fixtureRoot 'animation_scene_playback\runtime.bin'
 $invalidFixture = Join-Path $fixtureRoot 'animation_scene_playback_invalid\runtime.bin'
 $outputPath = Join-Path $repoRoot '.pio\animation_scene_playback_host.exe'
@@ -22,7 +22,6 @@ $sources = @(
     'src/commands/application/CommandController.cpp',
     'src/commands/domain/SystemCommandCatalog.cpp',
     'src/commands/domain/StatusSetContract.cpp',
-    'src/pet_behavior/domain/PetBehaviorActionConditionRules.cpp',
     'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
     'src/pet_behavior/domain/RuntimeValueResolver.cpp',
     'src/pet_behavior/domain/RuntimeTableBehavior.cpp',

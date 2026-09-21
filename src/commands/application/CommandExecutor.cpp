@@ -27,10 +27,9 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
     if (context == nullptr)
         return false;
     const StatusValueContext &status = *static_cast<const StatusValueContext *>(context);
-    if (condition.source == StatusConditionSource::PetStatus)
+    if (condition.kind == StatusConditionKind::PetStatusAxis)
         return resolvePetStateStatusLevel(condition, status.activePetState, value);
-    if (condition.source != StatusConditionSource::PetStat &&
-        condition.source != StatusConditionSource::StageDays)
+    if (condition.kind != StatusConditionKind::RuntimeValue)
         return false;
     RuntimeValueContext context = {};
     context.petStats = status.stats.customStats;

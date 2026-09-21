@@ -11,16 +11,15 @@ struct ActivePetState;
 constexpr uint8_t kMaxStatusSets = 5;
 constexpr uint8_t kMaxStatusConditions = 3;
 
-enum class StatusConditionSource : uint8_t
+enum class StatusConditionKind : uint8_t
 {
-    PetStat,
-    StageDays,
-    PetStatus,
+    RuntimeValue,
+    PetStatusAxis,
 };
 
 struct StatusSetCondition
 {
-    StatusConditionSource source;
+    StatusConditionKind kind;
     RuntimeValueId valueId;
     uint16_t petStateMask;
     uint8_t levels;

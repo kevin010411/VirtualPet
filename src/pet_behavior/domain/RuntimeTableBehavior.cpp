@@ -12,9 +12,9 @@ namespace
 {
 constexpr char kRuntimeTablePath[] = "/runtime.bin";
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// Visual contexts replace action-owned layouts in v5. Older readers must fail
-// closed instead of interpreting the shared section type with v4 semantics.
-constexpr uint16_t kVersion = 5;
+// Runtime Value predicates and the Pet Status Axis are the only v6 condition
+// vocabulary. Older binaries are rejected without a compatibility parser.
+constexpr uint16_t kVersion = 6;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint16_t kMaxSections = 32;
@@ -170,9 +170,9 @@ uint16_t recordSizeFor(uint16_t type)
     case PetStats: return 12;
     case PetStates: return 16;
     case Actions: return 16;
-    case ActionOutcomes: return 12;
+    case ActionOutcomes: return 10;
     case ActionConditions: return 16;
-    case ActionEffects: return 8;
+    case ActionEffects: return 6;
     case Buttons: return 8;
     case GuessEffects: return 8;
     case DefaultPetState: return 4;
@@ -536,15 +536,17 @@ bool decodeActions(const Source &source,
 
         for (uint8_t outcomeSlot = 0; outcomeSlot < outcomeCount; ++outcomeSlot)
         {
-            uint8_t outcomeRecord[12] = {};
+            uint8_t outcomeRecord[10] = {};
             if (!readRecord(source, outcomes, nextOutcome, outcomeRecord) ||
-                static_cast<uint32_t>(nextEffect) + readU16(outcomeRecord + 8) >
-                    (effects == nullptr ? 0 : effects->count))
+                readU16(outcomeRecord + 4) != nextEffect ||
+                static_cast<uint32_t>(nextEffect) + readU16(outcomeRecord + 6) >
+                    (effects == nullptr ? 0 : effects->count) ||
+                readU16(outcomeRecord + 8) != 0)
                 return false;
-            const uint8_t weight = outcomeRecord[2];
-            const uint8_t playbackCount = outcomeRecord[3];
-            const uint16_t animationRef = readU16(outcomeRecord + 4);
-            const uint16_t effectCount = readU16(outcomeRecord + 8);
+            const uint8_t weight = outcomeRecord[0];
+            const uint8_t playbackCount = outcomeRecord[1];
+            const uint16_t animationRef = readU16(outcomeRecord + 2);
+            const uint16_t effectCount = readU16(outcomeRecord + 6);
             if (effectCount > kPetBehaviorSlotCount)
                 return false;
             AssetData::AnimationRef animation = {};
@@ -572,9 +574,10 @@ bool decodeActions(const Source &source,
 
             for (uint16_t effectOffset = 0; effectOffset < effectCount; ++effectOffset)
             {
-                uint8_t effectRecord[8] = {};
+                uint8_t effectRecord[6] = {};
                 if (effects == nullptr || !readRecord(source, *effects, nextEffect, effectRecord) ||
-                    effectRecord[2] >= config.statCount)
+                    effectRecord[0] >= config.statCount || effectRecord[1] > 1 ||
+                    readU16(effectRecord + 4) != 0)
                     return false;
                 if (mode == 2)
                 {
@@ -585,9 +588,9 @@ bool decodeActions(const Source &source,
                     effect.active = true;
                     effect.actionSlot = static_cast<uint8_t>(actionIndex);
                     effect.outcomeSlot = outcomeSlot;
-                    effect.statSlot = effectRecord[2];
-                    effect.operation = static_cast<PetBehaviorEffectOperation>(effectRecord[3]);
-                    effect.value = readI16(effectRecord + 4);
+                    effect.statSlot = effectRecord[0];
+                    effect.operation = static_cast<PetBehaviorEffectOperation>(effectRecord[1]);
+                    effect.value = readI16(effectRecord + 2);
                 }
                 else
                 {
@@ -597,9 +600,9 @@ bool decodeActions(const Source &source,
                         config.actionEffects[config.actionEffectCount++];
                     effect.active = true;
                     effect.actionSlot = static_cast<uint8_t>(actionIndex);
-                    effect.statSlot = effectRecord[2];
-                    effect.operation = static_cast<PetBehaviorEffectOperation>(effectRecord[3]);
-                    effect.value = readI16(effectRecord + 4);
+                    effect.statSlot = effectRecord[0];
+                    effect.operation = static_cast<PetBehaviorEffectOperation>(effectRecord[1]);
+                    effect.value = readI16(effectRecord + 2);
                 }
                 ++nextEffect;
             }
@@ -716,22 +719,22 @@ bool decodeStatus(const Source &source,
             uint8_t conditionRecord[12] = {};
             if (!readRecord(source, *conditions, nextCondition, conditionRecord) ||
                 conditionRecord[3] == 0 || conditionRecord[3] > 32 ||
-                conditionRecord[0] > 2 ||
+                conditionRecord[0] > 1 ||
                 readI32(conditionRecord + 4) > readI32(conditionRecord + 8))
                 return false;
             StatusSetCondition &condition = set.conditions[conditionIndex];
-            condition.source = static_cast<StatusConditionSource>(conditionRecord[0]);
+            condition.kind = static_cast<StatusConditionKind>(conditionRecord[0]);
             const uint16_t sourceValue = readU16(conditionRecord + 1);
-            condition.valueId = condition.source == StatusConditionSource::PetStatus
+            condition.valueId = condition.kind == StatusConditionKind::PetStatusAxis
                                     ? 0
                                     : sourceValue;
-            condition.petStateMask = condition.source == StatusConditionSource::PetStatus
+            condition.petStateMask = condition.kind == StatusConditionKind::PetStatusAxis
                                          ? sourceValue
                                          : 0;
             condition.levels = conditionRecord[3];
             condition.minValue = readI32(conditionRecord + 4);
             condition.maxValue = readI32(conditionRecord + 8);
-            if (condition.source == StatusConditionSource::PetStatus)
+            if (condition.kind == StatusConditionKind::PetStatusAxis)
             {
                 const uint16_t allowedMask = config.petStateCount >= 16
                                                    ? 0xFFFFU
@@ -746,12 +749,8 @@ bool decodeStatus(const Source &source,
             }
             else
             {
-                const bool sourceMatchesValue =
-                    (condition.source == StatusConditionSource::StageDays &&
-                     condition.valueId == kRuntimeValueStageDays) ||
-                    (condition.source == StatusConditionSource::PetStat &&
-                     isRuntimeValueIdPetStat(condition.valueId));
-                if (!sourceMatchesValue ||
+                if ((condition.valueId != kRuntimeValueStageDays &&
+                     !isRuntimeValueIdPetStat(condition.valueId)) ||
                     !runtimeRangeWithinCompiledDomain(
                         {condition.valueId, condition.minValue, condition.maxValue}, config))
                     return false;

@@ -6,7 +6,7 @@ namespace
 {
 bool readValue(const StatusSetCondition &condition, const void *, int32_t &value)
 {
-    if (condition.source != StatusConditionSource::PetStat ||
+    if (condition.kind != StatusConditionKind::RuntimeValue ||
         condition.valueId != runtimeValueIdForPetStat(0))
         return false;
     value = 100;
@@ -17,7 +17,7 @@ void testRuntimeContractStatusResolution()
 {
     StatusSetConfig set = {};
     set.animation.animationId = 1;
-    set.conditions[0].source = StatusConditionSource::PetStat;
+    set.conditions[0].kind = StatusConditionKind::RuntimeValue;
     set.conditions[0].valueId = runtimeValueIdForPetStat(0);
     set.conditions[0].levels = 2;
     set.conditions[0].minValue = 0;

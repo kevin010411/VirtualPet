@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v5'))
+$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v6'))
 $outputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_host.exe'
 $visualOutputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_visual_host.exe'
 $fullFeatureOutputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_full_host.exe'
@@ -13,6 +13,7 @@ $fixturePaths = @(
     (Join-Path $fixtureRoot 'minimal\runtime.bin'),
     (Join-Path $fixtureRoot 'bad_magic\runtime.bin'),
     (Join-Path $fixtureRoot 'wrong_record_size\runtime.bin'),
+    (Join-Path $fixtureRoot 'bad_version_5\runtime.bin'),
     (Join-Path $fixtureRoot 'visual_context_valid\runtime.bin'),
     (Join-Path $fixtureRoot 'visual_context_invalid_ref\runtime.bin'),
     (Join-Path $fixtureRoot 'bad_crc\runtime.bin')
@@ -28,7 +29,6 @@ $sources = @(
     'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
     'src/shared/integrity/Crc32.cpp',
     'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
-    'src/pet_behavior/domain/PetBehaviorActionConditionRules.cpp',
     'src/pet_behavior/domain/RuntimeValueResolver.cpp',
     'src/commands/domain/StatusSetContract.cpp',
     'src/commands/domain/SystemCommandCatalog.cpp'
@@ -41,11 +41,11 @@ try {
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    & $outputPath $fixturePaths[0] $fixturePaths[1] $fixturePaths[2] $fixturePaths[5]
+    & $outputPath $fixturePaths[0] $fixturePaths[1] $fixturePaths[2] $fixturePaths[3] $fixturePaths[6]
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    Write-Host '[PASS] Runtime-table host baseline: 4 fixture(s)'
+    Write-Host '[PASS] Runtime-table host baseline: v6 plus 4 invalid fixtures including v5'
 
     & g++ -std=c++17 -DRUNTIME_TABLE_VISUAL_CONTEXT=1 `
         -DENABLE_GUESS_GAME=1 -DENABLE_DYNAMIC_ACTION_LAYOUT=1 `
@@ -54,7 +54,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    & $visualOutputPath $fixturePaths[3] $fixturePaths[4]
+    & $visualOutputPath $fixturePaths[4] $fixturePaths[5]
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
