@@ -6,6 +6,7 @@
 #include "animation/domain/Animation.h"
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/SystemCommandCatalog.h"
+#include "pet_behavior/domain/RuntimeValueResolver.h"
 #include "shared/config/AppProfile.h"
 
 constexpr uint8_t kPetBehaviorSlotCount = APP_MAX_PET_STATS;
@@ -67,22 +68,6 @@ enum class PetBehaviorActionMode : uint8_t
     RandomOutcome,
 };
 
-enum class PetBehaviorActionConditionSource : uint8_t
-{
-    PetStat,
-    StageDays,
-};
-
-enum class PetBehaviorActionConditionOperator : uint8_t
-{
-    LessThan,
-    LessThanOrEqual,
-    Equal,
-    GreaterThanOrEqual,
-    GreaterThan,
-    Count,
-};
-
 struct PetBehaviorAnimationPlaybackConfig
 {
     AssetData::AnimationRef animation;
@@ -98,6 +83,18 @@ struct PetBehaviorActionConfig
     uint8_t suspendDailyChangeDays;
 };
 
+// Kept as a source-compatibility vocabulary for host-only legacy helpers.
+// Runtime records and firmware execution use RuntimeRangePredicate instead.
+enum class PetBehaviorActionConditionOperator : uint8_t
+{
+    LessThan,
+    LessThanOrEqual,
+    Equal,
+    GreaterThanOrEqual,
+    GreaterThan,
+    Count,
+};
+
 struct PetBehaviorRandomOutcomeConfig
 {
     bool active;
@@ -110,10 +107,7 @@ struct PetBehaviorActionConditionConfig
     bool active;
     uint8_t actionSlot;
     uint8_t priority;
-    PetBehaviorActionConditionSource source;
-    uint8_t statSlot;
-    PetBehaviorActionConditionOperator comparison;
-    int32_t threshold;
+    RuntimeRangePredicate predicate;
     PetBehaviorAnimationPlaybackConfig animationPlayback;
 };
 

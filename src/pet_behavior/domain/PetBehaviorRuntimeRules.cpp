@@ -1,7 +1,5 @@
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
 
-#include "pet_behavior/domain/PetBehaviorActionConditionRules.h"
-
 namespace
 {
 struct PetBehaviorActionEffectSelection
@@ -72,18 +70,16 @@ bool applySelectedEffects(const PetBehaviorConfig &config,
     return true;
 }
 
-bool conditionMatches(const PetBehaviorActionConditionConfig &condition,
+bool conditionMatches(const PetBehaviorConfig &config,
+                      const PetBehaviorActionConditionConfig &condition,
                       const PetBehaviorStatValues &state)
 {
-    int64_t current = state.stageDays;
-    if (condition.source == PetBehaviorActionConditionSource::PetStat)
-    {
-        if (condition.statSlot >= kPetBehaviorSlotCount)
-            return false;
-        current = state.values[condition.statSlot];
-    }
-
-    return petBehaviorActionConditionMatches(condition.comparison, condition.threshold, current);
+    RuntimeValueContext context = {};
+    context.petStats = state.values;
+    context.petStatCapacity = kPetBehaviorSlotCount;
+    context.behaviorConfig = &config;
+    context.stageDays = state.stageDays;
+    return matchesRuntimeRange(condition.predicate, context);
 }
 
 bool selectActionPlayback(const PetBehaviorConfig &config,
@@ -150,7 +146,7 @@ bool selectActionPlayback(const PetBehaviorConfig &config,
     {
         const PetBehaviorActionConditionConfig &condition = config.actionConditions[index];
         if (!condition.active || condition.actionSlot != actionSlot ||
-            !conditionMatches(condition, state))
+            !conditionMatches(config, condition, state))
             continue;
         if (selected == nullptr || condition.priority < selected->priority)
             selected = &condition;

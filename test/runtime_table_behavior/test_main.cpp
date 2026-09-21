@@ -78,12 +78,16 @@ bool statusValue(const StatusSetCondition &condition,
     const StatusContext &context = *static_cast<const StatusContext *>(rawContext);
     if (condition.source == StatusConditionSource::StageDays)
     {
+        if (condition.valueId != kRuntimeValueStageDays)
+            return false;
         value = static_cast<int32_t>(context.stageDays);
         return true;
     }
-    if (condition.source != StatusConditionSource::PetStat || condition.statSlot >= 10)
+    if (condition.source != StatusConditionSource::PetStat ||
+        !isRuntimeValueIdPetStat(condition.valueId) ||
+        runtimePetStatSlot(condition.valueId) >= 10)
         return false;
-    value = context.stats->values[condition.statSlot];
+    value = context.stats->values[runtimePetStatSlot(condition.valueId)];
     return true;
 }
 
@@ -97,6 +101,10 @@ void testBehaviorFullFixture(const std::vector<uint8_t> &fixture)
     assert(config.actionCount == 8);
     assert(config.actionConditionCount == 8);
     assert(config.statusSets.count == 2);
+    assert(config.statusSets.sets[0].conditions[0].valueId == runtimeValueIdForPetStat(0));
+    assert(config.statusSets.sets[0].conditions[1].valueId == runtimeValueIdForPetStat(1));
+    assert(config.statusSets.sets[0].conditions[2].valueId == runtimeValueIdForPetStat(2));
+    assert(config.statusSets.sets[0].conditions[0].petStateMask == 0);
     assert(config.buttons[0].kind == PetBehaviorButtonKind::UserAction);
     assert(config.buttons[0].actionSlot == 0);
 

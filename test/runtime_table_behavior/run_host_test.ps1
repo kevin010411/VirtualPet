@@ -29,6 +29,7 @@ $sources = @(
     'src/shared/integrity/Crc32.cpp',
     'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
     'src/pet_behavior/domain/PetBehaviorActionConditionRules.cpp',
+    'src/pet_behavior/domain/RuntimeValueResolver.cpp',
     'src/commands/domain/StatusSetContract.cpp',
     'src/commands/domain/SystemCommandCatalog.cpp'
 )

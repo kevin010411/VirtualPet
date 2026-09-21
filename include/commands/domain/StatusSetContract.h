@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "shared/assets/AssetRuntimeContract.h"
+#include "pet_behavior/domain/RuntimeValueResolver.h"
 
 constexpr uint8_t kMaxStatusSets = 5;
 constexpr uint8_t kMaxStatusConditions = 3;
@@ -18,7 +19,8 @@ enum class StatusConditionSource : uint8_t
 struct StatusSetCondition
 {
     StatusConditionSource source;
-    uint8_t statSlot;
+    RuntimeValueId valueId;
+    uint16_t petStateMask;
     uint8_t levels;
     int32_t minValue;
     int32_t maxValue;

@@ -18,7 +18,7 @@ struct StatusValueContext
     const PetBehaviorConfig &config;
 };
 
-uint8_t selectedStatusRank(uint8_t selectionMask, uint8_t triggerIndex)
+uint8_t selectedStatusRank(uint16_t selectionMask, uint8_t triggerIndex)
 {
     uint8_t rank = 0;
     for (uint8_t index = 0; index < triggerIndex; ++index)
@@ -36,13 +36,11 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
     if (context == nullptr)
         return false;
     const StatusValueContext &status = *static_cast<const StatusValueContext *>(context);
-    if (condition.source == StatusConditionSource::StageDays)
-    {
-        value = static_cast<int32_t>(status.stats.stage_days);
-        return true;
-    }
     if (condition.source == StatusConditionSource::PetStatus)
     {
+        const uint16_t selectionMask = condition.petStateMask;
+        if (selectionMask == 0)
+            return false;
         for (uint8_t index = 0; index < status.config.idleTriggerCount; ++index)
         {
             const PetBehaviorIdleTriggerConfig &trigger = status.config.idleTriggers[index];
@@ -54,9 +52,9 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
                                     : current > trigger.threshold;
             if (active)
             {
-                const uint8_t bit = static_cast<uint8_t>(1U << index);
-                value = (condition.statSlot & bit) != 0
-                            ? selectedStatusRank(condition.statSlot, index)
+                const uint16_t bit = static_cast<uint16_t>(1U << index);
+                value = (selectionMask & bit) != 0
+                            ? selectedStatusRank(selectionMask, index)
                             : static_cast<int32_t>(condition.levels - 1);
                 return true;
             }
@@ -64,12 +62,15 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
         value = static_cast<int32_t>(condition.levels - 1);
         return true;
     }
-    if (condition.source != StatusConditionSource::PetStat ||
-        condition.statSlot >= kPetBehaviorSlotCount ||
-        !status.config.stats[condition.statSlot].active)
+    if (condition.source != StatusConditionSource::PetStat &&
+        condition.source != StatusConditionSource::StageDays)
         return false;
-    value = status.stats.customStats[condition.statSlot];
-    return true;
+    RuntimeValueContext context = {};
+    context.petStats = status.stats.customStats;
+    context.petStatCapacity = PetStatSnapshot::kCustomStatCount;
+    context.behaviorConfig = &status.config;
+    context.stageDays = status.stats.stage_days;
+    return resolveRuntimeValue(condition.valueId, context, value);
 }
 } // namespace
 

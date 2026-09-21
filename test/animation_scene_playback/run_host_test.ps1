@@ -24,6 +24,7 @@ $sources = @(
     'src/commands/domain/StatusSetContract.cpp',
     'src/pet_behavior/domain/PetBehaviorActionConditionRules.cpp',
     'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
+    'src/pet_behavior/domain/RuntimeValueResolver.cpp',
     'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
     'src/presentation/application/LayoutRenderer.cpp'
     'src/shared/integrity/Crc32.cpp'
