@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
+#include "pet_behavior/domain/PetStateClassifier.h"
 
 class AnimationController;
 class PetActionController;
@@ -32,6 +33,7 @@ public:
     bool applyGuessOutcome(PetBehaviorGuessOutcome outcome);
 #endif
     AssetData::AnimationRef baseAnimation() const;
+    ActivePetState activePetState() const;
 
 private:
     const PetBehaviorConfig &config;

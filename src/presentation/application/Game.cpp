@@ -155,7 +155,7 @@ bool Game::prepare_game()
     // evolution table here can immediately replace a saved later-stage species
     // with an earlier wildcard/fallback match before the startup animation.
     // Evolution is still evaluated by handleEvolution() during normal ticks.
-    animations->setup(petBehaviorConfig.idleAnimation);
+    animations->setup(petBehaviorRuntime->baseAnimation());
 
     setupPrepared = true;
     return true;

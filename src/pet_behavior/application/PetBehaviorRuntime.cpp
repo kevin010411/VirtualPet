@@ -115,6 +115,10 @@ bool PetBehaviorRuntime::applyGuessOutcome(PetBehaviorGuessOutcome outcome)
 
 AssetData::AnimationRef PetBehaviorRuntime::baseAnimation() const
 {
-    const PetBehaviorStatValues state = readStats(petActions);
-    return resolvePetBehaviorBaseAnimation(config, state);
+    return activePetState().idleAnimation;
+}
+
+ActivePetState PetBehaviorRuntime::activePetState() const
+{
+    return PetStateClassifier::classify(config, petActions.statSnapshot());
 }

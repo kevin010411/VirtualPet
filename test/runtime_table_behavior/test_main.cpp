@@ -286,7 +286,9 @@ int main(int argc, char **argv)
     const AssetData::RuntimeManifest manifest = releaseFixtureManifest();
     const std::vector<uint8_t> fixture = readFixture(argv[1]);
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
-    assert(config.idleTriggerCount == 5);
+    assert(config.petStateCount == 5);
+    assert(config.petStates[0].idleAnimation.valid());
+    assert(config.idleAnimation.valid());
     assert(config.animationSceneCount > 0);
     testOutfitSelectionReleaseFixture(fixture);
     for (int index = 2; index < argc; ++index)

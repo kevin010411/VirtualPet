@@ -13,7 +13,7 @@ constexpr uint8_t kPetBehaviorSlotCount = APP_MAX_PET_STATS;
 constexpr uint8_t kMaxPetBehaviorStats = kPetBehaviorSlotCount;
 static_assert(kPetBehaviorSlotCount > 0, "Pet Stat capacity must be positive.");
 static_assert(kPetBehaviorSlotCount <= 10, "Pet Stat Slot tokens require one decimal digit.");
-constexpr uint8_t kMaxPetBehaviorIdleTriggers = 16;
+constexpr uint8_t kMaxRuntimePetStates = 16;
 constexpr uint8_t kMaxPetBehaviorActions = 8;
 constexpr uint8_t kMaxPetBehaviorActionConditionsPerAction = 4;
 constexpr uint8_t kMaxPetBehaviorActionConditions =
@@ -46,19 +46,10 @@ struct PetBehaviorStatConfig
     int16_t dailyChange;
 };
 
-enum class PetBehaviorIdleTriggerOperator : uint8_t
+struct RuntimePetStateConfig
 {
-    LessThan,
-    GreaterThan,
-};
-
-struct PetBehaviorIdleTriggerConfig
-{
-    bool active;
-    uint8_t statSlot;
-    PetBehaviorIdleTriggerOperator comparison;
-    int16_t threshold;
-    AssetData::AnimationRef animation;
+    RuntimeRangePredicate predicate;
+    AssetData::AnimationRef idleAnimation;
 };
 
 enum class PetBehaviorActionMode : uint8_t
@@ -184,7 +175,7 @@ struct PetBehaviorConfig
     uint16_t animationSceneCount;
     uint32_t schemaFingerprint;
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
-    PetBehaviorIdleTriggerConfig idleTriggers[kMaxPetBehaviorIdleTriggers];
+    RuntimePetStateConfig petStates[kMaxRuntimePetStates];
     PetBehaviorActionConfig actions[kMaxPetBehaviorActions];
     PetBehaviorRandomOutcomeConfig
         randomOutcomes[kMaxPetBehaviorActions][kMaxPetBehaviorRandomOutcomesPerAction];
@@ -200,7 +191,7 @@ struct PetBehaviorConfig
     uint8_t activeSpeciesSlot;
     uint8_t activeOutfitSlot;
     uint8_t statCount;
-    uint8_t idleTriggerCount;
+    uint8_t petStateCount;
     uint8_t actionCount;
     uint8_t actionConditionCount;
     uint8_t actionEffectCount;

@@ -42,13 +42,14 @@ enum SectionType : uint16_t
     AssetRefs = 3,
     Animations = 4,
     PetStats = 10,
-    IdleTriggers = 11,
+    PetStates = 11,
     Actions = 12,
     ActionOutcomes = 13,
     ActionConditions = 14,
     ActionEffects = 15,
     Buttons = 16,
     GuessEffects = 17,
+    DefaultPetState = 18,
     StatusSets = 20,
     StatusConditions = 21,
     Appearance = 30,
@@ -167,13 +168,14 @@ uint16_t recordSizeFor(uint16_t type)
     case AssetRefs: return 12;
     case Animations: return 8;
     case PetStats: return 12;
-    case IdleTriggers: return 12;
+    case PetStates: return 16;
     case Actions: return 16;
     case ActionOutcomes: return 12;
     case ActionConditions: return 16;
     case ActionEffects: return 8;
     case Buttons: return 8;
     case GuessEffects: return 8;
+    case DefaultPetState: return 4;
     case StatusSets: return 12;
     case StatusConditions: return 12;
     case Appearance: return 8;
@@ -375,7 +377,7 @@ bool resolveAssetReference(const Source &source, const Section &assets,
 void clearOwnedBehavior(PetBehaviorConfig &config)
 {
     memset(config.stats, 0, sizeof(config.stats));
-    memset(config.idleTriggers, 0, sizeof(config.idleTriggers));
+    memset(config.petStates, 0, sizeof(config.petStates));
     memset(config.actions, 0, sizeof(config.actions));
     memset(config.randomOutcomes, 0, sizeof(config.randomOutcomes));
     memset(config.actionConditions, 0, sizeof(config.actionConditions));
@@ -387,7 +389,8 @@ void clearOwnedBehavior(PetBehaviorConfig &config)
     memset(config.buttons, 0, sizeof(config.buttons));
     memset(&config.statusSets, 0, sizeof(config.statusSets));
     config.statCount = 0;
-    config.idleTriggerCount = 0;
+    config.petStateCount = 0;
+    config.idleAnimation = {};
     config.actionCount = 0;
     config.actionConditionCount = 0;
     config.actionEffectCount = 0;
@@ -418,36 +421,44 @@ bool decodeStats(const Source &source, const Section &section, PetBehaviorConfig
     return true;
 }
 
-bool decodeIdleTriggers(const Source &source,
-                        const Section *triggers,
-                        const Section &assets,
-                        const Section &animations,
-                        const ActiveAssetScope &scope,
-                        PetBehaviorConfig &config)
+bool decodePetStates(const Source &source,
+                     const Section *states,
+                     const Section *defaultState,
+                     const Section &assets,
+                     const Section &animations,
+                     const ActiveAssetScope &scope,
+                     PetBehaviorConfig &config)
 {
-    if (triggers == nullptr)
-        return true;
-    if (triggers->count > kMaxPetBehaviorIdleTriggers)
+    if (states == nullptr || defaultState == nullptr ||
+        states->count > kMaxRuntimePetStates || defaultState->count != 1)
         return false;
 
-    for (uint16_t index = 0; index < triggers->count; ++index)
+    for (uint16_t index = 0; index < states->count; ++index)
     {
-        uint8_t record[12] = {};
+        uint8_t record[16] = {};
         AssetData::AnimationRef animation = {};
-        if (!readRecord(source, *triggers, index, record))
+        if (!readRecord(source, *states, index, record))
             return false;
-        if (record[0] >= config.statCount ||
-            !resolveAnimation(source, assets, animations, readU16(record + 4), scope, animation))
+        const RuntimeRangePredicate predicate = {
+            readU16(record + 2), readI32(record + 4), readI32(record + 8)};
+        if (readU16(record) != index || readU16(record + 14) != 0 ||
+            !runtimeRangeWithinCompiledDomain(predicate, config) ||
+            !resolveAnimation(source, assets, animations, readU16(record + 12), scope, animation))
             return false;
 
-        PetBehaviorIdleTriggerConfig &trigger = config.idleTriggers[index];
-        trigger.active = true;
-        trigger.statSlot = record[0];
-        trigger.comparison = static_cast<PetBehaviorIdleTriggerOperator>(record[1]);
-        trigger.threshold = readI16(record + 2);
-        trigger.animation = animation;
+        RuntimePetStateConfig &state = config.petStates[index];
+        state.predicate = predicate;
+        state.idleAnimation = animation;
     }
-    config.idleTriggerCount = static_cast<uint8_t>(triggers->count);
+
+    uint8_t record[4] = {};
+    if (!readRecord(source, *defaultState, 0, record) ||
+        readU16(record + 2) != 0 ||
+        !resolveAnimation(source, assets, animations, readU16(record), scope,
+                          config.idleAnimation))
+        return false;
+
+    config.petStateCount = static_cast<uint8_t>(states->count);
     return true;
 }
 
@@ -722,9 +733,9 @@ bool decodeStatus(const Source &source,
             condition.maxValue = readI32(conditionRecord + 8);
             if (condition.source == StatusConditionSource::PetStatus)
             {
-                const uint16_t allowedMask = config.idleTriggerCount >= 16
-                                                  ? 0xFFFFU
-                                                  : static_cast<uint16_t>((1U << config.idleTriggerCount) - 1U);
+                const uint16_t allowedMask = config.petStateCount >= 16
+                                                   ? 0xFFFFU
+                                                   : static_cast<uint16_t>((1U << config.petStateCount) - 1U);
                 const uint16_t selectedMask = condition.petStateMask;
                 uint8_t selectedCount = 0;
                 for (uint16_t mask = selectedMask; mask != 0; mask >>= 1)
@@ -770,7 +781,8 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     const Section *assets = table.find(AssetRefs);
     const Section *animations = table.find(Animations);
     const Section *stats = table.find(PetStats);
-    const Section *idleTriggers = table.find(IdleTriggers);
+    const Section *petStates = table.find(PetStates);
+    const Section *defaultPetState = table.find(DefaultPetState);
     const Section *actions = table.find(Actions);
     const Section *outcomes = table.find(ActionOutcomes);
     const Section *actionConditions = table.find(ActionConditions);
@@ -791,7 +803,8 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     config.schemaFingerprint = table.schemaFingerprint;
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
     if (!decodeStats(source, *stats, config) ||
-        !decodeIdleTriggers(source, idleTriggers, *assets, *animations, scope, config) ||
+        !decodePetStates(source, petStates, defaultPetState,
+                         *assets, *animations, scope, config) ||
         !decodeActions(source, *actions, *outcomes, actionConditions, effects,
                        *assets, *animations, scope, config) ||
         !decodeGuessEffects(source, table.featureFlags, guessEffects, config) ||
@@ -1567,11 +1580,9 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     RuntimeTable table = {};
 
     AppearanceSelection initialAppearance = {};
-    AssetData::AnimationRef idleAnimation = {};
     AppearanceQuery query = {};
     query.kind = AppearanceQueryKind::Initial;
     query.selection = &initialAppearance;
-    query.idleAnimation = &idleAnimation;
     PetBehaviorConfig candidate = {};
     const bool decoded =
         readRuntimeTable(source, &manifest, table) &&
@@ -1581,7 +1592,14 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     file.close();
     if (!decoded)
         return false;
-    candidate.idleAnimation = idleAnimation;
+    if (!AssetData::animationReferenceExists(bundleReader, candidate.idleAnimation))
+        return false;
+    for (uint8_t slot = 0; slot < candidate.petStateCount; ++slot)
+    {
+        if (!AssetData::animationReferenceExists(
+                bundleReader, candidate.petStates[slot].idleAnimation))
+            return false;
+    }
     config = candidate;
     return true;
 }

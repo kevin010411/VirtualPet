@@ -32,7 +32,4 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
                                   PetBehaviorGuessOutcome outcome,
                                   PetBehaviorStatValues &state);
 #endif
-AssetData::AnimationRef resolvePetBehaviorBaseAnimation(const PetBehaviorConfig &config,
-                                                        const PetBehaviorStatValues &state);
-
 #endif // PET_BEHAVIOR_RUNTIME_RULES_H

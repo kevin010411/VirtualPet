@@ -3,6 +3,7 @@
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/StatusSetSelection.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
+#include "pet_behavior/domain/PetStateClassifier.h"
 
 namespace
 {
@@ -18,12 +19,12 @@ struct StatusValueContext
     const PetBehaviorConfig &config;
 };
 
-uint8_t selectedStatusRank(uint16_t selectionMask, uint8_t triggerIndex)
+uint8_t selectedStatusRank(uint16_t selectionMask, uint8_t petStateSlot)
 {
     uint8_t rank = 0;
-    for (uint8_t index = 0; index < triggerIndex; ++index)
+    for (uint8_t index = 0; index < petStateSlot; ++index)
     {
-        if ((selectionMask & static_cast<uint8_t>(1U << index)) != 0)
+        if ((selectionMask & static_cast<uint16_t>(1U << index)) != 0)
             ++rank;
     }
     return rank;
@@ -41,25 +42,14 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
         const uint16_t selectionMask = condition.petStateMask;
         if (selectionMask == 0)
             return false;
-        for (uint8_t index = 0; index < status.config.idleTriggerCount; ++index)
-        {
-            const PetBehaviorIdleTriggerConfig &trigger = status.config.idleTriggers[index];
-            if (!trigger.active || trigger.statSlot >= kPetBehaviorSlotCount)
-                continue;
-            const int16_t current = status.stats.customStats[trigger.statSlot];
-            const bool active = trigger.comparison == PetBehaviorIdleTriggerOperator::LessThan
-                                    ? current < trigger.threshold
-                                    : current > trigger.threshold;
-            if (active)
-            {
-                const uint16_t bit = static_cast<uint16_t>(1U << index);
-                value = (selectionMask & bit) != 0
-                            ? selectedStatusRank(selectionMask, index)
-                            : static_cast<int32_t>(condition.levels - 1);
-                return true;
-            }
-        }
-        value = static_cast<int32_t>(condition.levels - 1);
+        const ActivePetState active =
+            PetStateClassifier::classify(status.config, status.stats);
+        const bool selected = !active.isDefault &&
+            active.slot < status.config.petStateCount &&
+            (selectionMask & static_cast<uint16_t>(1U << active.slot)) != 0;
+        value = selected
+                    ? selectedStatusRank(selectionMask, active.slot)
+                    : static_cast<int32_t>(condition.levels - 1);
         return true;
     }
     if (condition.source != StatusConditionSource::PetStat &&

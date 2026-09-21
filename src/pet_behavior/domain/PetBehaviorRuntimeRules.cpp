@@ -256,23 +256,3 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
     return true;
 }
 #endif
-
-AssetData::AnimationRef resolvePetBehaviorBaseAnimation(const PetBehaviorConfig &config,
-                                                        const PetBehaviorStatValues &state)
-{
-    for (uint8_t index = 0; index < config.idleTriggerCount; ++index)
-    {
-        const PetBehaviorIdleTriggerConfig &trigger = config.idleTriggers[index];
-        if (!trigger.active || trigger.statSlot >= kPetBehaviorSlotCount)
-            continue;
-        const int16_t value = state.values[trigger.statSlot];
-        const bool active = trigger.comparison == PetBehaviorIdleTriggerOperator::LessThan ?
-                                value < trigger.threshold :
-                                value > trigger.threshold;
-        if (active)
-        {
-            return trigger.animation;
-        }
-    }
-    return config.idleAnimation;
-}
