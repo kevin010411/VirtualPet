@@ -42,7 +42,16 @@ std::vector<uint8_t> readFixture(const char *path)
                                 std::istreambuf_iterator<char>());
 }
 
-AssetData::RuntimeManifest fixtureManifest()
+uint32_t readFixtureU32(const std::vector<uint8_t> &fixture, size_t offset)
+{
+    assert(offset + 4 <= fixture.size());
+    return static_cast<uint32_t>(fixture[offset]) |
+           (static_cast<uint32_t>(fixture[offset + 1]) << 8U) |
+           (static_cast<uint32_t>(fixture[offset + 2]) << 16U) |
+           (static_cast<uint32_t>(fixture[offset + 3]) << 24U);
+}
+
+AssetData::RuntimeManifest fixtureManifest(const std::vector<uint8_t> &fixture)
 {
     AssetData::RuntimeManifest manifest = {};
     const uint8_t bundleId[16] = {
@@ -50,12 +59,15 @@ AssetData::RuntimeManifest fixtureManifest()
         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
     for (uint8_t index = 0; index < sizeof(bundleId); ++index)
         manifest.bundleId.bytes[index] = bundleId[index];
+    manifest.fileSize = static_cast<uint32_t>(fixture.size());
+    manifest.schemaFingerprint = readFixtureU32(fixture, 44);
+    manifest.fileCrc32 = readFixtureU32(fixture, 48);
     return manifest;
 }
 
-AssetData::RuntimeManifest releaseFixtureManifest()
+AssetData::RuntimeManifest releaseFixtureManifest(const std::vector<uint8_t> &fixture)
 {
-    AssetData::RuntimeManifest manifest = fixtureManifest();
+    AssetData::RuntimeManifest manifest = fixtureManifest(fixture);
     manifest.bundleId.bytes[6] = 0x46;
     return manifest;
 }
@@ -93,7 +105,7 @@ bool statusValue(const StatusSetCondition &condition,
 void testBehaviorFullFixture(const std::vector<uint8_t> &fixture)
 {
     PetBehaviorConfig config = {};
-    const AssetData::RuntimeManifest manifest = fixtureManifest();
+    const AssetData::RuntimeManifest manifest = fixtureManifest(fixture);
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
     assert(config.schemaFingerprint == 0x12345678UL);
     assert(config.statCount == 10);
@@ -165,7 +177,7 @@ void testInvalidFixtureFailsWithoutPartialPublication(const std::vector<uint8_t>
     PetBehaviorConfig config = {};
     config.schemaFingerprint = 0xa5a5a5a5UL;
     config.statCount = 7;
-    const AssetData::RuntimeManifest manifest = fixtureManifest();
+    const AssetData::RuntimeManifest manifest = fixtureManifest(fixture);
     assert(!parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
     assert(config.schemaFingerprint == 0xa5a5a5a5UL);
     assert(config.statCount == 7);
@@ -175,7 +187,7 @@ void testValidFixtureLoads(const std::vector<uint8_t> &fixture, const char *labe
 {
     PetBehaviorConfig config = {};
     const bool accepted = parseRuntimeTableBehavior(
-        fixture.data(), fixture.size(), fixtureManifest(), 1, 1, config);
+        fixture.data(), fixture.size(), fixtureManifest(fixture), 1, 1, config);
     if (!accepted)
         printf("valid fixture rejected: %s\n", label);
     assert(accepted);
@@ -187,7 +199,7 @@ void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
     SdFat sd(fixture.data(), fixture.size());
     uint8_t scratch[AssetData::kIoScratchBytes] = {};
     BundleReader reader(&sd, scratch, sizeof(scratch));
-    const AssetData::RuntimeManifest manifest = releaseFixtureManifest();
+    const AssetData::RuntimeManifest manifest = releaseFixtureManifest(fixture);
 
     PetBehaviorConfig config = {};
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
@@ -250,18 +262,11 @@ void testInvalidAppearanceFixture(const std::vector<uint8_t> &fixture)
     published.schemaFingerprint = 0xA5A5A5A5UL;
     published.statCount = 7;
     PetBehaviorConfig candidate = published;
-    const AssetData::RuntimeManifest manifest = releaseFixtureManifest();
+    const AssetData::RuntimeManifest manifest = releaseFixtureManifest(fixture);
     bool accepted = parseRuntimeTableBehavior(
         fixture.data(), fixture.size(), manifest, 1, 1, candidate);
     if (accepted)
-    {
-        ActivePetBehaviorStatSlots activeSlots(candidate);
-        PetStatSnapshot stats = {};
-        stats.speciesSlot = 1;
-        stats.outfitSlot = 1;
-        accepted = validateRuntimeTableAppearance(
-            &sd, manifest, reader, activeSlots, stats);
-    }
+        accepted = validateRuntimeTableAppearance(&sd, manifest, reader);
     if (accepted)
         published = candidate;
     assert(!accepted);
@@ -280,10 +285,10 @@ int main(int argc, char **argv)
     ninthSpecies.outfitSlot = 9;
     assert(!AssetData::isValidFrameAddress(ninthSpecies));
 #if RUNTIME_TABLE_FULL_FEATURE
-    assert(argc == 9);
-    PetBehaviorConfig config = {};
-    const AssetData::RuntimeManifest manifest = releaseFixtureManifest();
+    assert(argc == 5);
     const std::vector<uint8_t> fixture = readFixture(argv[1]);
+    PetBehaviorConfig config = {};
+    const AssetData::RuntimeManifest manifest = releaseFixtureManifest(fixture);
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
     assert(config.petStateCount == 5);
     assert(config.petStates[0].idleAnimation.valid());
@@ -297,12 +302,11 @@ int main(int argc, char **argv)
     testValidFixtureLoads(readFixture(argv[1]), argv[1]);
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
 #else
-    assert(argc == 6);
+    assert(argc == 5);
     testValidFixtureLoads(readFixture(argv[1]), argv[1]);
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[2]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[3]));
     testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[4]));
-    testInvalidFixtureFailsWithoutPartialPublication(readFixture(argv[5]));
 #endif
     return 0;
 }

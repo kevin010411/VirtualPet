@@ -41,7 +41,16 @@ std::vector<uint8_t> readFixture(const char *path)
                                 std::istreambuf_iterator<char>());
 }
 
-AssetData::RuntimeManifest fixtureManifest()
+uint32_t readFixtureU32(const std::vector<uint8_t> &fixture, size_t offset)
+{
+    assert(offset + 4 <= fixture.size());
+    return static_cast<uint32_t>(fixture[offset]) |
+           (static_cast<uint32_t>(fixture[offset + 1]) << 8U) |
+           (static_cast<uint32_t>(fixture[offset + 2]) << 16U) |
+           (static_cast<uint32_t>(fixture[offset + 3]) << 24U);
+}
+
+AssetData::RuntimeManifest fixtureManifest(const std::vector<uint8_t> &fixture)
 {
     AssetData::RuntimeManifest manifest = {};
     const uint8_t bundleId[16] = {
@@ -49,6 +58,9 @@ AssetData::RuntimeManifest fixtureManifest()
         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
     for (uint8_t index = 0; index < sizeof(bundleId); ++index)
         manifest.bundleId.bytes[index] = bundleId[index];
+    manifest.fileSize = static_cast<uint32_t>(fixture.size());
+    manifest.schemaFingerprint = readFixtureU32(fixture, 44);
+    manifest.fileCrc32 = readFixtureU32(fixture, 48);
     return manifest;
 }
 
@@ -147,12 +159,12 @@ int main(int argc, char **argv)
     const std::vector<uint8_t> invalidFixture = readFixture(argv[2]);
     PetBehaviorConfig config = {};
     assert(parseRuntimeTableBehavior(validFixture.data(), validFixture.size(),
-                                     fixtureManifest(), 1, 1, config));
+                                     fixtureManifest(validFixture), 1, 1, config));
     assert(config.animationSceneCount == 3);
     PetBehaviorConfig unpublished = {};
     unpublished.animationSceneCount = 7;
     assert(!parseRuntimeTableBehavior(invalidFixture.data(), invalidFixture.size(),
-                                      fixtureManifest(), 1, 1, unpublished));
+                                      fixtureManifest(invalidFixture), 1, 1, unpublished));
     assert(unpublished.animationSceneCount == 7);
 
     const RuntimeAnimationSceneConfig &idleScene = config.animationScenes[0];

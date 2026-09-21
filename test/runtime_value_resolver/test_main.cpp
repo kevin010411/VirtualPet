@@ -6,23 +6,19 @@
 
 namespace
 {
-RuntimeValueContext petContext(PetBehaviorConfig &config,
-                               const int16_t *values,
-                               uint8_t capacity)
+RuntimeValueContext petContext(const int16_t *values, uint16_t activeMask)
 {
     RuntimeValueContext context = {};
     context.petStats = values;
-    context.petStatCapacity = capacity;
-    context.behaviorConfig = &config;
+    context.activePetStatMask = activeMask;
     context.stageDays = 0;
     return context;
 }
 
 void testStageBoundaries()
 {
-    PetBehaviorConfig config = {};
     int16_t values[1] = {};
-    RuntimeValueContext context = petContext(config, values, 1);
+    RuntimeValueContext context = petContext(values, 1U);
     int32_t value = -1;
 
     context.stageDays = 0;
@@ -49,35 +45,27 @@ void testInvalidReferencesFailClosed()
     config.stats[0].minValue = -10;
     config.stats[0].maxValue = 10;
     int16_t values[1] = {5};
-    RuntimeValueContext context = petContext(config, values, 1);
+    RuntimeValueContext context = petContext(values, activePetBehaviorStatMask(config));
     int32_t value = 0;
 
     assert(!resolveRuntimeValue(99, context, value));
     assert(!matchesRuntimeRange(
         {runtimeValueIdForPetStat(0), 10, -10}, context));
     config.stats[0].active = false;
+    context.activePetStatMask = activePetBehaviorStatMask(config);
     assert(!resolveRuntimeValue(runtimeValueIdForPetStat(0), context, value));
-    config.stats[0].active = true;
-    context.petStatCapacity = 0;
-    assert(!resolveRuntimeValue(runtimeValueIdForPetStat(0), context, value));
-    context.petStatCapacity = 1;
     context.petStats = nullptr;
     assert(!resolveRuntimeValue(runtimeValueIdForPetStat(0), context, value));
 }
 
-void testCompiledDomain()
+void testExecutableShape()
 {
-    PetBehaviorConfig config = {};
-    config.statCount = 1;
-    config.stats[0].active = true;
-    config.stats[0].minValue = -10;
-    config.stats[0].maxValue = 10;
-    assert(runtimeRangeWithinCompiledDomain(
-        {runtimeValueIdForPetStat(0), -10, 10}, config));
-    assert(!runtimeRangeWithinCompiledDomain(
-        {runtimeValueIdForPetStat(0), -11, 10}, config));
-    assert(!runtimeRangeWithinCompiledDomain(
-        {kRuntimeValueStageDays, 0, 3651}, config));
+    assert(isRuntimeBehaviorRange({runtimeValueIdForPetStat(0), -10, 10}));
+    assert(isRuntimeBehaviorRange({runtimeValueIdForPetStat(0), -11, 10}));
+    assert(isRuntimeBehaviorRange({kRuntimeValueStageDays, 0, 3651}));
+    assert(!isRuntimeBehaviorRange({kRuntimeValueSpeciesSlot, 1, 2}));
+    assert(isRuntimeRangeWellFormed({kRuntimeValueSpeciesSlot, 1, 2}));
+    assert(!isRuntimeRangeWellFormed({kRuntimeValueStageDays, 2, 1}));
 }
 } // namespace
 
@@ -85,6 +73,6 @@ int main()
 {
     testStageBoundaries();
     testInvalidReferencesFailClosed();
-    testCompiledDomain();
+    testExecutableShape();
     return 0;
 }

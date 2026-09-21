@@ -10,9 +10,7 @@
 // retained in STM32 RAM during the expand-contract migration.
 bool validateRuntimeTableAppearance(SdFat *sd,
                                     const AssetData::RuntimeManifest &manifest,
-                                    BundleReader &bundleReader,
-                                    const ActivePetBehaviorStatSlots &activeSlots,
-                                    const PetStatSnapshot &stats);
+                                    BundleReader &bundleReader);
 bool loadRuntimeTableInitialAppearance(SdFat *sd,
                                        const AssetData::RuntimeManifest &manifest,
                                        BundleReader &bundleReader,

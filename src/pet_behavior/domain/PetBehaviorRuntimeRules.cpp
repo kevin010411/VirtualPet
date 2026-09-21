@@ -1,5 +1,7 @@
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
 
+#include "pet_behavior/domain/PetBehaviorStatSlot.h"
+
 namespace
 {
 struct PetBehaviorActionEffectSelection
@@ -76,8 +78,7 @@ bool conditionMatches(const PetBehaviorConfig &config,
 {
     RuntimeValueContext context = {};
     context.petStats = state.values;
-    context.petStatCapacity = kPetBehaviorSlotCount;
-    context.behaviorConfig = &config;
+    context.activePetStatMask = activePetBehaviorStatMask(config);
     context.stageDays = state.stageDays;
     return matchesRuntimeRange(condition.predicate, context);
 }

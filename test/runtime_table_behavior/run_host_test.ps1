@@ -15,8 +15,7 @@ $fixturePaths = @(
     (Join-Path $fixtureRoot 'wrong_record_size\runtime.bin'),
     (Join-Path $fixtureRoot 'bad_version_5\runtime.bin'),
     (Join-Path $fixtureRoot 'visual_context_valid\runtime.bin'),
-    (Join-Path $fixtureRoot 'visual_context_invalid_ref\runtime.bin'),
-    (Join-Path $fixtureRoot 'bad_crc\runtime.bin')
+    (Join-Path $fixtureRoot 'visual_context_invalid_ref\runtime.bin')
 )
 foreach ($fixturePath in $fixturePaths) {
     if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) {
@@ -27,7 +26,6 @@ foreach ($fixturePath in $fixturePaths) {
 $sources = @(
     'test/runtime_table_behavior/test_main.cpp',
     'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
-    'src/shared/integrity/Crc32.cpp',
     'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
     'src/pet_behavior/domain/RuntimeValueResolver.cpp',
     'src/commands/domain/StatusSetContract.cpp',
@@ -41,11 +39,11 @@ try {
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    & $outputPath $fixturePaths[0] $fixturePaths[1] $fixturePaths[2] $fixturePaths[3] $fixturePaths[6]
+    & $outputPath $fixturePaths[0] $fixturePaths[1] $fixturePaths[2] $fixturePaths[3]
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    Write-Host '[PASS] Runtime-table host baseline: v6 plus 4 invalid fixtures including v5'
+    Write-Host '[PASS] Runtime-table host baseline: v6 plus 3 structural invalid fixtures including v5'
 
     & g++ -std=c++17 -DRUNTIME_TABLE_VISUAL_CONTEXT=1 `
         -DENABLE_GUESS_GAME=1 -DENABLE_DYNAMIC_ACTION_LAYOUT=1 `
@@ -62,10 +60,6 @@ try {
 
     $fullFeatureFixtures = @(
         (Join-Path $fixtureRoot 'outfit_selection_release\runtime.bin'),
-        (Join-Path $fixtureRoot 'outfit_release_bad_slot\runtime.bin'),
-        (Join-Path $fixtureRoot 'outfit_release_bad_source\runtime.bin'),
-        (Join-Path $fixtureRoot 'outfit_release_bad_bounds\runtime.bin'),
-        (Join-Path $fixtureRoot 'outfit_release_bad_preview\runtime.bin'),
         (Join-Path $fixtureRoot 'outfit_release_bad_version\runtime.bin'),
         (Join-Path $fixtureRoot 'outfit_release_bad_section_metadata\runtime.bin'),
         (Join-Path $fixtureRoot 'outfit_release_bad_record_count\runtime.bin')

@@ -96,7 +96,7 @@ int main(int argc, char **argv)
     PetStatSnapshot stats = {};
     stats.speciesSlot = 1;
     stats.outfitSlot = 1;
-    if (!validateRuntimeTableAppearance(&sd, manifest, reader, slots, stats))
+    if (!validateRuntimeTableAppearance(&sd, manifest, reader))
     {
         printf("appearance validation failed: %s\n", reader.firstErrorResource());
         return 4;

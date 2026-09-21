@@ -7,6 +7,15 @@
 
 static_assert(kPetBehaviorSlotCount <= 10, "Pet Stat Slot tokens require one decimal digit.");
 
+inline uint16_t activePetBehaviorStatMask(const PetBehaviorConfig &config)
+{
+    uint16_t mask = 0;
+    for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
+        if (config.stats[slot].active)
+            mask |= static_cast<uint16_t>(1U << slot);
+    return mask;
+}
+
 inline bool parsePetBehaviorStatSlot(const char *token, uint8_t &slot)
 {
     if (token == nullptr ||
@@ -34,22 +43,24 @@ public:
 
     void configure(const PetBehaviorConfig &config)
     {
-        for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
-            active[slot] = config.stats[slot].active;
+        activeMask = activePetBehaviorStatMask(config);
     }
 
     bool resolve(const char *token, uint8_t &slot) const
     {
-        return parsePetBehaviorStatSlot(token, slot) && active[slot];
+        return parsePetBehaviorStatSlot(token, slot) && contains(slot);
     }
 
     bool contains(uint8_t slot) const
     {
-        return slot < kPetBehaviorSlotCount && active[slot];
+        return slot < kPetBehaviorSlotCount &&
+               (activeMask & static_cast<uint16_t>(1U << slot)) != 0;
     }
 
+    uint16_t mask() const { return activeMask; }
+
 private:
-    bool active[kPetBehaviorSlotCount] = {};
+    uint16_t activeMask = 0;
 };
 
 #endif // PET_BEHAVIOR_STAT_SLOT_H

@@ -21,6 +21,16 @@ int main()
     {
         Adafruit_ST7735 tft;
         Renderer renderer(&tft, nullptr);
+        renderer.showStartupResourceError("startup", "prepare game");
+
+        assert(contains(tft, "prepare game"));
+        assert(contains(tft, "startup"));
+        assert(!contains(tft, "no reader detail"));
+    }
+
+    {
+        Adafruit_ST7735 tft;
+        Renderer renderer(&tft, nullptr);
         renderer.showStartupResourceError("runtime.bin", "runtime manifest");
 
         assert(contains(tft, "runtime manifest"));

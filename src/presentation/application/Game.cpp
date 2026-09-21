@@ -149,6 +149,9 @@ bool Game::prepare_game()
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
         startupConfigError = "runtime.bin";
+#if ENABLE_DEBUG
+        startupDebugStage = "outfit unlocks";
+#endif
         return false;
     }
 
@@ -181,6 +184,14 @@ bool Game::finish_setup_game()
             renderer.showStartupResourceError("pet state", startupDebugStage);
 #else
             renderer.showResourceError("pet state");
+#endif
+        }
+        else
+        {
+#if ENABLE_DEBUG
+            renderer.showStartupResourceError("startup", "prepare game");
+#else
+            renderer.showResourceError("startup");
 #endif
         }
         return false;

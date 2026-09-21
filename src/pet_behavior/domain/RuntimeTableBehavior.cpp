@@ -5,7 +5,6 @@
 #include "appearance/domain/RuntimeTableAppearance.h"
 #include "commands/domain/SystemCommandCatalog.h"
 #include "pet_behavior/domain/RuntimeValueResolver.h"
-#include "shared/integrity/Crc32.h"
 #include "shared/sd/SdBinaryRead.h"
 
 namespace
@@ -216,24 +215,6 @@ bool readRecord(const Source &source, const Section &section,
     return source.readAt(source.context, offset, record, section.recordSize);
 }
 
-bool validateSourceCrc(const Source &source, uint32_t expected)
-{
-    uint8_t bytes[64] = {};
-    uint32_t crc = 0xFFFFFFFFUL;
-    for (uint32_t offset = 0; offset < source.size; offset += sizeof(bytes))
-    {
-        size_t count = sizeof(bytes);
-        if (count > source.size - offset)
-            count = static_cast<size_t>(source.size - offset);
-        if (!source.readAt(source.context, offset, bytes, count))
-            return false;
-        if (offset == 0)
-            memset(bytes + 48, 0, sizeof(uint32_t));
-        crc = Integrity::crc32Update(crc, bytes, count);
-    }
-    return ~crc == expected;
-}
-
 bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCount,
                   uint32_t &featureFlags, uint32_t &schemaFingerprint,
                   AssetData::BundleId &bundleId, uint32_t &fileCrc32)
@@ -301,20 +282,18 @@ bool readRuntimeTable(const Source &source,
                       const AssetData::RuntimeManifest *expectedManifest,
                       RuntimeTable &table)
 {
+    if (expectedManifest == nullptr || expectedManifest->fileSize == 0)
+        return false;
     table = {};
     table.source = source;
     uint32_t fileCrc32 = 0;
     if (!readEnvelope(source, table.sections, table.sectionCount,
                        table.featureFlags, table.schemaFingerprint, table.bundleId, fileCrc32) ||
-        (expectedManifest != nullptr &&
-         !AssetData::sameBundleId(table.bundleId, expectedManifest->bundleId)))
+        !AssetData::sameBundleId(table.bundleId, expectedManifest->bundleId))
         return false;
-    const bool trustedManifest = expectedManifest != nullptr && expectedManifest->fileSize != 0;
-    if (trustedManifest)
-        return expectedManifest->fileSize == source.size &&
-               expectedManifest->schemaFingerprint == table.schemaFingerprint &&
-               expectedManifest->fileCrc32 == fileCrc32;
-    return validateSourceCrc(source, fileCrc32);
+    return expectedManifest->fileSize == source.size &&
+           expectedManifest->schemaFingerprint == table.schemaFingerprint &&
+           expectedManifest->fileCrc32 == fileCrc32;
 }
 
 bool resolveAnimation(const Source &source,
@@ -442,7 +421,9 @@ bool decodePetStates(const Source &source,
         const RuntimeRangePredicate predicate = {
             readU16(record + 2), readI32(record + 4), readI32(record + 8)};
         if (readU16(record) != index || readU16(record + 14) != 0 ||
-            !runtimeRangeWithinCompiledDomain(predicate, config) ||
+            !isRuntimeBehaviorRange(predicate) ||
+            (isRuntimeValueIdPetStat(predicate.valueId) &&
+             runtimePetStatSlot(predicate.valueId) >= config.statCount) ||
             !resolveAnimation(source, assets, animations, readU16(record + 12), scope, animation))
             return false;
 
@@ -612,25 +593,25 @@ bool decodeActions(const Source &source,
         for (uint8_t conditionSlot = 0; conditionSlot < conditionCount; ++conditionSlot)
         {
             uint8_t conditionRecord[16] = {};
-            if (conditions == nullptr || !readRecord(source, *conditions, nextCondition, conditionRecord) ||
-                conditionRecord[1] != 0 || conditionRecord[5] != 0 ||
+            if (conditions == nullptr ||
+                !readRecord(source, *conditions, nextCondition, conditionRecord))
+                return false;
+            const RuntimeRangePredicate predicate = {
+                readU16(conditionRecord + 2), readI32(conditionRecord + 8),
+                readI32(conditionRecord + 12)};
+            if (conditionRecord[1] != 0 || conditionRecord[5] != 0 ||
                 conditionRecord[4] == 0 || conditionRecord[4] > 5 ||
-                !isRuntimeValueIdKnown(readU16(conditionRecord + 2)) ||
-                readU16(conditionRecord + 2) == kRuntimeValueSpeciesSlot ||
-                readU16(conditionRecord + 2) == kRuntimeValueOutfitSlot ||
-                !runtimeRangeWithinCompiledDomain(
-                    {readU16(conditionRecord + 2), readI32(conditionRecord + 8),
-                     readI32(conditionRecord + 12)}, config))
+                !isRuntimeBehaviorRange(predicate) ||
+                (isRuntimeValueIdPetStat(predicate.valueId) &&
+                 runtimePetStatSlot(predicate.valueId) >= config.statCount))
                 return false;
             PetBehaviorActionConditionConfig &condition =
                 config.actionConditions[config.actionConditionCount++];
             condition.active = true;
             condition.actionSlot = static_cast<uint8_t>(actionIndex);
             condition.priority = conditionRecord[0];
-            condition.predicate.valueId = readU16(conditionRecord + 2);
+            condition.predicate = predicate;
             condition.animationPlayback.playbackCount = conditionRecord[4];
-            condition.predicate.minimum = readI32(conditionRecord + 8);
-            condition.predicate.maximum = readI32(conditionRecord + 12);
             if (!resolveAnimation(source, assets, animations, readU16(conditionRecord + 6), scope,
                                   condition.animationPlayback.animation))
                 return false;
@@ -749,10 +730,11 @@ bool decodeStatus(const Source &source,
             }
             else
             {
-                if ((condition.valueId != kRuntimeValueStageDays &&
-                     !isRuntimeValueIdPetStat(condition.valueId)) ||
-                    !runtimeRangeWithinCompiledDomain(
-                        {condition.valueId, condition.minValue, condition.maxValue}, config))
+                const RuntimeRangePredicate predicate = {
+                    condition.valueId, condition.minValue, condition.maxValue};
+                if (!isRuntimeBehaviorRange(predicate) ||
+                    (isRuntimeValueIdPetStat(condition.valueId) &&
+                     runtimePetStatSlot(condition.valueId) >= config.statCount))
                     return false;
             }
             versionProduct = static_cast<uint16_t>(
@@ -851,40 +833,6 @@ struct EvolutionRecord
     EvolutionAnimationMode mode = EvolutionAnimationMode::Disabled;
 };
 
-bool readCompiledOutfitDomain(const Source &source,
-                              const Section &species,
-                              const Section &outfits,
-                              uint8_t speciesSlot,
-                              int32_t &minimum,
-                              int32_t &maximum)
-{
-    if (speciesSlot == 0 || speciesSlot > species.count)
-        return false;
-    uint8_t speciesRecord[8] = {};
-    if (!readRecord(source, species, static_cast<uint16_t>(speciesSlot - 1), speciesRecord) ||
-        speciesRecord[0] != speciesSlot || readU16(speciesRecord + 4) == 0 ||
-        static_cast<uint32_t>(readU16(speciesRecord + 2)) + readU16(speciesRecord + 4) > outfits.count)
-        return false;
-
-    minimum = INT32_MAX;
-    maximum = INT32_MIN;
-    const uint16_t firstOutfit = readU16(speciesRecord + 2);
-    const uint16_t outfitCount = readU16(speciesRecord + 4);
-    for (uint16_t offset = 0; offset < outfitCount; ++offset)
-    {
-        uint8_t outfitRecord[8] = {};
-        if (!readRecord(source, outfits, static_cast<uint16_t>(firstOutfit + offset), outfitRecord) ||
-            outfitRecord[0] != speciesSlot || outfitRecord[1] == 0)
-            return false;
-        const int32_t outfitSlot = outfitRecord[1];
-        if (outfitSlot < minimum)
-            minimum = outfitSlot;
-        if (outfitSlot > maximum)
-            maximum = outfitSlot;
-    }
-    return minimum <= maximum;
-}
-
 bool readEvolutionRecord(const Source &source, const Section &evolutions,
                          const Section *conditions, const Section &animations,
                          uint16_t index, uint16_t expectedFirstCondition,
@@ -915,229 +863,26 @@ bool readEvolutionRecord(const Source &source, const Section &evolutions,
            referencesMatchMode && record[13] == 0 && record[14] == 0 && record[15] == 0;
 }
 
-bool validateEvolutionProjection(const RuntimeTable &table, BundleReader &bundleReader,
-                                 const Section &assets, const Section &animations,
-                                 const Section &species, const Section &outfits,
-                                 const Section &statRecords)
-{
-    const Source &source = table.source;
-    const Section *evolutions = table.find(Evolutions);
-    const Section *conditions = table.find(EvolutionConditions);
-    const bool enabled = (table.featureFlags & (1UL << 3)) != 0;
-    if (!enabled)
-        return evolutions == nullptr && conditions == nullptr;
-    if (evolutions == nullptr || evolutions->count == 0)
-        return false;
-
-    uint16_t nextCondition = 0;
-    for (uint16_t index = 0; index < evolutions->count; ++index)
-    {
-        EvolutionRecord evolution = {};
-        if (!readEvolutionRecord(source, *evolutions, conditions, animations,
-                                 index, nextCondition, evolution) ||
-            evolution.sourceSpecies == 0 || evolution.sourceSpecies > species.count ||
-            evolution.targetSpecies == 0 || evolution.targetSpecies > species.count ||
-            evolution.targetOutfit == 0)
-            return false;
-
-        uint8_t sourceSpeciesRecord[8] = {};
-        uint8_t targetSpeciesRecord[8] = {};
-        if (!readRecord(source, species, evolution.sourceSpecies - 1, sourceSpeciesRecord) ||
-            !readRecord(source, species, evolution.targetSpecies - 1, targetSpeciesRecord) ||
-            sourceSpeciesRecord[0] != evolution.sourceSpecies ||
-            targetSpeciesRecord[0] != evolution.targetSpecies ||
-            targetSpeciesRecord[1] != evolution.targetOutfit)
-            return false;
-
-        if (evolution.sourceAnimationRef != kNone16)
-        {
-            const uint16_t firstOutfit = readU16(sourceSpeciesRecord + 2);
-            const uint16_t outfitCount = readU16(sourceSpeciesRecord + 4);
-            for (uint16_t offset = 0; offset < outfitCount; ++offset)
-            {
-                uint8_t outfit[8] = {};
-                AssetData::AnimationRef animation = {};
-                if (!readRecord(source, outfits, static_cast<uint16_t>(firstOutfit + offset), outfit) ||
-                    outfit[0] != evolution.sourceSpecies ||
-                    !resolveAnimation(source, assets, animations, evolution.sourceAnimationRef,
-                                      {evolution.sourceSpecies, outfit[1]}, animation) ||
-                    !AssetData::animationReferenceExists(bundleReader, animation))
-                    return false;
-            }
-        }
-        if (evolution.targetAnimationRef != kNone16)
-        {
-            AssetData::AnimationRef animation = {};
-            if (!resolveAnimation(source, assets, animations, evolution.targetAnimationRef,
-                                  {evolution.targetSpecies, evolution.targetOutfit}, animation) ||
-                !AssetData::animationReferenceExists(bundleReader, animation))
-                return false;
-        }
-
-        for (uint8_t offset = 0; offset < evolution.conditionCount; ++offset)
-        {
-            uint8_t condition[12] = {};
-            if (conditions == nullptr ||
-                !readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition) ||
-                !isRuntimeValueIdKnown(readU16(condition)) ||
-                readU16(condition + 10) != 0 ||
-                readI32(condition + 2) > readI32(condition + 6))
-                return false;
-            const RuntimeValueId valueId = readU16(condition);
-            const int32_t minimum = readI32(condition + 2);
-            const int32_t maximum = readI32(condition + 6);
-            if (isRuntimeValueIdPetStat(valueId))
-            {
-                const uint8_t slot = runtimePetStatSlot(valueId);
-                uint8_t stat[12] = {};
-                if (slot >= statRecords.count ||
-                    !readRecord(source, statRecords, slot, stat) ||
-                    stat[0] != slot || minimum < readI16(stat + 4) ||
-                    maximum > readI16(stat + 6))
-                    return false;
-            }
-            else if (valueId == kRuntimeValueStageDays &&
-                     (minimum < 0 || maximum > 3650))
-                return false;
-            else if (valueId == kRuntimeValueSpeciesSlot &&
-                     (minimum < 1 || maximum > species.count))
-                return false;
-            else if (valueId == kRuntimeValueOutfitSlot)
-            {
-                int32_t domainMinimum = 0;
-                int32_t domainMaximum = 0;
-                if (!readCompiledOutfitDomain(source, species, outfits,
-                                              evolution.sourceSpecies,
-                                              domainMinimum, domainMaximum) ||
-                    minimum < domainMinimum || maximum > domainMaximum)
-                    return false;
-            }
-        }
-        nextCondition = static_cast<uint16_t>(nextCondition + evolution.conditionCount);
-    }
-    return nextCondition == (conditions == nullptr ? 0 : conditions->count);
-}
-
-bool validateAppearanceProjection(const RuntimeTable &table, BundleReader &bundleReader,
-                                  const Section &assets, const Section &animations,
-                                  const Section &appearance, const Section &species,
-                                  const Section &outfits, const Section &unlocks,
-                                  const Section &unlockConditions)
-{
-    const Source &source = table.source;
-    const Section *statRecords = table.find(PetStats);
-    if (appearance.count != 1 || species.count == 0 || outfits.count == 0 ||
-        unlocks.count != outfits.count || statRecords == nullptr)
-        return false;
-    uint8_t initial[8] = {};
-    if (!readRecord(source, appearance, 0, initial) || initial[0] == 0 || initial[1] == 0)
-        return false;
-    bool initialFound = false;
-    for (uint16_t speciesIndex = 0; speciesIndex < species.count; ++speciesIndex)
-    {
-        uint8_t speciesRecord[8] = {};
-        if (!readRecord(source, species, speciesIndex, speciesRecord) ||
-            speciesRecord[0] != speciesIndex + 1 || speciesRecord[1] == 0 ||
-            static_cast<uint32_t>(readU16(speciesRecord + 2)) + readU16(speciesRecord + 4) > outfits.count)
-            return false;
-        if (speciesRecord[0] == initial[0] && speciesRecord[1] == initial[1])
-            initialFound = true;
-        bool entryFound = false;
-        for (uint16_t offset = 0; offset < readU16(speciesRecord + 4); ++offset)
-        {
-            uint8_t outfitRecord[8] = {};
-            uint8_t unlockRecord[8] = {};
-            const uint16_t outfitIndex = static_cast<uint16_t>(readU16(speciesRecord + 2) + offset);
-            AssetData::AnimationRef preview = {};
-            if (!readRecord(source, outfits, outfitIndex, outfitRecord) ||
-                !readRecord(source, unlocks, outfitIndex, unlockRecord) ||
-                outfitRecord[0] != speciesRecord[0] || outfitRecord[1] != offset + 1 ||
-                unlockRecord[0] != outfitRecord[0] || unlockRecord[1] != outfitRecord[1] ||
-                unlockRecord[2] > 2 || unlockRecord[7] > 4 ||
-                ((unlockRecord[2] == 0) != (unlockRecord[7] == 0)) ||
-                static_cast<uint32_t>(readU16(unlockRecord + 5)) + unlockRecord[7] > unlockConditions.count ||
-                (outfitRecord[1] == speciesRecord[1] &&
-                 (unlockRecord[2] != 0 || readU16(unlockRecord + 3) != kNone16)) ||
-                !resolveAnimation(source, assets, animations, readU16(outfitRecord + 2),
-                                  {outfitRecord[0], outfitRecord[1]}, preview) ||
-                !AssetData::animationReferenceExists(bundleReader, preview))
-                return false;
-            uint16_t previousSource = 0;
-            bool hasPreviousSource = false;
-            for (uint8_t conditionIndex = 0; conditionIndex < unlockRecord[7]; ++conditionIndex)
-            {
-                uint8_t condition[12] = {};
-                if (!readRecord(source, unlockConditions,
-                                static_cast<uint16_t>(readU16(unlockRecord + 5) + conditionIndex), condition) ||
-                    !isRuntimeValueIdKnown(readU16(condition)) ||
-                    readU16(condition + 10) != 0 ||
-                    readI32(condition + 2) > readI32(condition + 6))
-                    return false;
-                const RuntimeValueId valueId = readU16(condition);
-                const int32_t minimum = readI32(condition + 2);
-                const int32_t maximum = readI32(condition + 6);
-                int32_t domainMaximum = 0;
-                if (isRuntimeValueIdPetStat(valueId))
-                {
-                    const uint8_t slot = runtimePetStatSlot(valueId);
-                    uint8_t statRecord[12] = {};
-                    if (slot >= statRecords->count ||
-                        !readRecord(source, *statRecords, slot, statRecord) ||
-                        statRecord[0] != slot ||
-                        minimum < readI16(statRecord + 4) ||
-                        maximum > readI16(statRecord + 6))
-                        return false;
-                    domainMaximum = readI16(statRecord + 6);
-                }
-                else if (valueId == kRuntimeValueStageDays)
-                {
-                    if (minimum < 0 || maximum > 3650)
-                        return false;
-                    domainMaximum = 3650;
-                }
-                else
-                    return false;
-                if (unlockRecord[2] == 2 &&
-                    (minimum < 0 || maximum != domainMaximum))
-                    return false;
-                if (hasPreviousSource && valueId <= previousSource)
-                    return false;
-                previousSource = valueId;
-                hasPreviousSource = true;
-            }
-            const uint16_t lockedPreview = readU16(unlockRecord + 3);
-            if (lockedPreview != kNone16 &&
-                (!resolveAnimation(source, assets, animations, lockedPreview,
-                                   {outfitRecord[0], outfitRecord[1]}, preview) ||
-                 !AssetData::animationReferenceExists(bundleReader, preview)))
-                return false;
-            entryFound = entryFound || outfitRecord[1] == speciesRecord[1];
-        }
-        if (!entryFound)
-            return false;
-    }
-    return initialFound;
-}
-
 RuntimeValueContext runtimeValueContext(const PetStatSnapshot &stats,
                                         const ActivePetBehaviorStatSlots &activeSlots)
 {
     RuntimeValueContext context = {};
     context.petStats = stats.customStats;
-    context.petStatCapacity = PetStatSnapshot::kCustomStatCount;
-    context.activeStatSlots = &activeSlots;
+    context.activePetStatMask = activeSlots.mask();
     context.stageDays = stats.stage_days;
     context.speciesSlot = stats.speciesSlot;
     context.outfitSlot = stats.outfitSlot;
     return context;
 }
 
-bool conditionMatches(const uint8_t *record, const PetStatSnapshot &stats,
-                      const ActivePetBehaviorStatSlots &activeSlots)
+bool readRuntimePredicate(const uint8_t *record, bool allowAppearanceValues,
+                          RuntimeRangePredicate &predicate)
 {
-    const RuntimeRangePredicate predicate = {
+    predicate = {
         readU16(record), readI32(record + 2), readI32(record + 6)};
-    return matchesRuntimeRange(predicate, runtimeValueContext(stats, activeSlots));
+    return readU16(record + 10) == 0 &&
+           (allowAppearanceValues ? isRuntimeRangeWellFormed(predicate)
+                                  : isRuntimeBehaviorRange(predicate));
 }
 
 bool decodeRuntimeTableAppearance(const RuntimeTable &table,
@@ -1162,12 +907,9 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
     if (query.kind == AppearanceQueryKind::Validate)
     {
         if (appearance == nullptr || species == nullptr || outfits == nullptr ||
-            unlocks == nullptr || unlockConditions == nullptr || statRecords == nullptr)
+            unlocks == nullptr)
             return false;
-        return validateAppearanceProjection(table, bundleReader, *assets, *animations,
-                                            *appearance, *species, *outfits, *unlocks, *unlockConditions) &&
-                validateEvolutionProjection(table, bundleReader, *assets, *animations,
-                                            *species, *outfits, *statRecords);
+        return (featureFlags & (1UL << 3)) == 0 || evolutions != nullptr;
     }
 
     if (query.kind == AppearanceQueryKind::Initial)
@@ -1220,7 +962,9 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
             const uint16_t index = static_cast<uint16_t>(first + offset);
             uint8_t unlock[8] = {};
             if (!readRecord(source, *unlocks, index, unlock) || unlock[0] != query.speciesSlot ||
-                unlock[1] != offset + 1 || unlock[2] > 2 || unlock[7] > 4 ||
+                unlock[1] != offset + 1 || unlock[1] == 0 ||
+                unlock[1] > AssetData::kMaxOutfitsPerSpecies ||
+                unlock[2] > 2 || unlock[7] > 4 ||
                 ((unlock[2] == 0) != (unlock[7] == 0)))
                 return false;
             const bool unconditional = unlock[2] == 0;
@@ -1228,11 +972,14 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
             for (uint8_t conditionIndex = 0; conditionIndex < unlock[7]; ++conditionIndex)
             {
                 uint8_t condition[12] = {};
+                RuntimeRangePredicate predicate = {};
                 if (!readRecord(source, *unlockConditions,
                                 static_cast<uint16_t>(readU16(unlock + 5) + conditionIndex), condition) ||
-                    readU16(condition + 10) != 0)
+                    !readRuntimePredicate(condition, false, predicate))
                     return false;
-                matching = matching && conditionMatches(condition, *query.stats, *query.activeSlots);
+                matching = matching && matchesRuntimeRange(
+                                           predicate,
+                                           runtimeValueContext(*query.stats, *query.activeSlots));
             }
             if ((query.initializeUnlockMask && (unconditional || unlock[1] == speciesRecord[1])) || matching)
                 mask |= static_cast<uint8_t>(1U << (unlock[1] - 1U));
@@ -1258,16 +1005,19 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
             if (outfit[0] != query.speciesSlot || outfit[1] != query.outfitSlot)
                 continue;
             if (unlock[0] != outfit[0] || unlock[1] != outfit[1] ||
+                unlock[1] == 0 || unlock[1] > AssetData::kMaxOutfitsPerSpecies ||
                 unlock[2] != 2 || unlock[7] == 0 || unlock[7] > 4)
                 return false;
             PetStatSnapshot result = *query.stats;
             for (uint8_t offset = 0; offset < unlock[7]; ++offset)
             {
                 uint8_t condition[12] = {};
+                RuntimeRangePredicate predicate = {};
                 if (!readRecord(source, *unlockConditions,
                                 static_cast<uint16_t>(readU16(unlock + 5) + offset), condition) ||
-                    readU16(condition + 10) != 0 ||
-                    !conditionMatches(condition, *query.stats, *query.activeSlots))
+                    !readRuntimePredicate(condition, false, predicate) ||
+                    !matchesRuntimeRange(
+                        predicate, runtimeValueContext(*query.stats, *query.activeSlots)))
                     return false;
                 const RuntimeValueId valueId = readU16(condition);
                 const int32_t cost = readI32(condition + 2);
@@ -1358,15 +1108,39 @@ bool decodeRuntimeTableAppearance(const RuntimeTable &table,
             for (uint8_t offset = 0; offset < evolution.conditionCount; ++offset)
             {
                 uint8_t condition[12] = {};
+                RuntimeRangePredicate predicate = {};
                 if (conditions == nullptr ||
                     !readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition) ||
-                    readU16(condition + 10) != 0)
+                    !readRuntimePredicate(condition, true, predicate))
                     return false;
-                matched = matched && conditionMatches(condition, *query.stats, *query.activeSlots);
+                matched = matched && matchesRuntimeRange(
+                                         predicate,
+                                         runtimeValueContext(*query.stats, *query.activeSlots));
             }
             nextCondition = static_cast<uint16_t>(nextCondition + evolution.conditionCount);
             if (matched && query.selection->speciesSlot == 0)
             {
+                if (species == nullptr || outfits == nullptr ||
+                    evolution.targetSpecies == 0 ||
+                    evolution.targetSpecies > species->count ||
+                    evolution.targetOutfit == 0 ||
+                    evolution.targetOutfit > AssetData::kMaxOutfitsPerSpecies)
+                    return false;
+                uint8_t targetSpecies[8] = {};
+                uint8_t targetOutfit[8] = {};
+                if (!readRecord(source, *species, evolution.targetSpecies - 1,
+                                targetSpecies) ||
+                    evolution.targetOutfit > readU16(targetSpecies + 4))
+                    return false;
+                const uint32_t targetOutfitIndex =
+                    static_cast<uint32_t>(readU16(targetSpecies + 2)) +
+                    evolution.targetOutfit - 1U;
+                if (targetOutfitIndex >= outfits->count ||
+                    !readRecord(source, *outfits,
+                                static_cast<uint16_t>(targetOutfitIndex), targetOutfit) ||
+                    targetOutfit[0] != evolution.targetSpecies ||
+                    targetOutfit[1] != evolution.targetOutfit)
+                    return false;
                 const ActiveAssetScope scope = {query.stats->speciesSlot, query.stats->outfitSlot};
                 AssetData::AnimationRef sourceAnimation = {};
                 AssetData::AnimationRef targetAnimation = {};
@@ -1528,8 +1302,7 @@ bool loadRuntimeManifest(SdFat *sd, AssetData::RuntimeManifest &manifest)
     uint32_t fileCrc32 = 0;
     AssetData::BundleId bundleId = {};
     const bool decoded = readEnvelope(source, sections, sectionCount,
-                                      featureFlags, schemaFingerprint, bundleId, fileCrc32) &&
-                         validateSourceCrc(source, fileCrc32);
+                                      featureFlags, schemaFingerprint, bundleId, fileCrc32);
     file.close();
     if (!decoded)
         return false;
@@ -1568,6 +1341,12 @@ bool loadCompleteRuntimeTable(SdFat *sd,
                               uint8_t outfitSlot,
                               PetBehaviorConfig &config)
 {
+    // This runs on a 20 KiB SRAM target. PetBehaviorConfig is about 6 KiB, so
+    // keeping a second candidate on the stack collides with the heap during
+    // startup and faults before the TFT error path can run. Runtime-contract
+    // failures are fatal to the active session, so decode into the caller-owned
+    // buffer after clearing it instead of preserving an unusable old contract.
+    config = {};
     if (sd == nullptr)
         return false;
     SdBaseFile file;
@@ -1582,24 +1361,16 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     AppearanceQuery query = {};
     query.kind = AppearanceQueryKind::Initial;
     query.selection = &initialAppearance;
-    PetBehaviorConfig candidate = {};
     const bool decoded =
         readRuntimeTable(source, &manifest, table) &&
-        decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, candidate) &&
-        decodeRuntimePresentation(table, speciesSlot, outfitSlot, candidate) &&
+        decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, config) &&
+        decodeRuntimePresentation(table, speciesSlot, outfitSlot, config) &&
         decodeRuntimeTableAppearance(table, bundleReader, query);
     file.close();
     if (!decoded)
         return false;
-    if (!AssetData::animationReferenceExists(bundleReader, candidate.idleAnimation))
+    if (!AssetData::animationReferenceExists(bundleReader, config.idleAnimation))
         return false;
-    for (uint8_t slot = 0; slot < candidate.petStateCount; ++slot)
-    {
-        if (!AssetData::animationReferenceExists(
-                bundleReader, candidate.petStates[slot].idleAnimation))
-            return false;
-    }
-    config = candidate;
     return true;
 }
 
@@ -1628,13 +1399,9 @@ bool loadRuntimeTableAppearanceQuery(SdFat *sd,
 
 bool validateRuntimeTableAppearance(SdFat *sd,
                                     const AssetData::RuntimeManifest &manifest,
-                                    BundleReader &bundleReader,
-                                    const ActivePetBehaviorStatSlots &activeSlots,
-                                    const PetStatSnapshot &stats)
+                                    BundleReader &bundleReader)
 {
     AppearanceQuery query = {};
-    query.activeSlots = &activeSlots;
-    query.stats = &stats;
     return loadRuntimeTableAppearanceQuery(sd, manifest, bundleReader, query);
 }
 

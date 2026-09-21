@@ -1,5 +1,6 @@
 #include "pet_behavior/domain/PetStateClassifier.h"
 
+#include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "pet_behavior/domain/RuntimeValueResolver.h"
 
 ActivePetState PetStateClassifier::classify(const PetBehaviorConfig &config,
@@ -7,8 +8,7 @@ ActivePetState PetStateClassifier::classify(const PetBehaviorConfig &config,
 {
     RuntimeValueContext context = {};
     context.petStats = snapshot.customStats;
-    context.petStatCapacity = PetStatSnapshot::kCustomStatCount;
-    context.behaviorConfig = &config;
+    context.activePetStatMask = activePetBehaviorStatMask(config);
     context.stageDays = snapshot.stage_days;
     context.speciesSlot = snapshot.speciesSlot;
     context.outfitSlot = snapshot.outfitSlot;

@@ -3,6 +3,7 @@
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/StatusSetSelection.h"
 #include "pet_behavior/application/PetBehaviorRuntime.h"
+#include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
 
 namespace
@@ -31,12 +32,11 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
         return resolvePetStateStatusLevel(condition, status.activePetState, value);
     if (condition.kind != StatusConditionKind::RuntimeValue)
         return false;
-    RuntimeValueContext context = {};
-    context.petStats = status.stats.customStats;
-    context.petStatCapacity = PetStatSnapshot::kCustomStatCount;
-    context.behaviorConfig = &status.config;
-    context.stageDays = status.stats.stage_days;
-    return resolveRuntimeValue(condition.valueId, context, value);
+    RuntimeValueContext runtimeValueContext = {};
+    runtimeValueContext.petStats = status.stats.customStats;
+    runtimeValueContext.activePetStatMask = activePetBehaviorStatMask(status.config);
+    runtimeValueContext.stageDays = status.stats.stage_days;
+    return resolveRuntimeValue(condition.valueId, runtimeValueContext, value);
 }
 } // namespace
 
