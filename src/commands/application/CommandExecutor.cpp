@@ -2,8 +2,8 @@
 
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/StatusSetSelection.h"
+#include "pet_behavior/application/PetBehaviorRuntime.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
-#include "pet_behavior/domain/PetStateClassifier.h"
 
 namespace
 {
@@ -17,18 +17,8 @@ struct StatusValueContext
 {
     const PetStatSnapshot &stats;
     const PetBehaviorConfig &config;
+    const ActivePetState &activePetState;
 };
-
-uint8_t selectedStatusRank(uint16_t selectionMask, uint8_t petStateSlot)
-{
-    uint8_t rank = 0;
-    for (uint8_t index = 0; index < petStateSlot; ++index)
-    {
-        if ((selectionMask & static_cast<uint16_t>(1U << index)) != 0)
-            ++rank;
-    }
-    return rank;
-}
 
 bool statusValueFromSnapshot(const StatusSetCondition &condition,
                              const void *context,
@@ -38,20 +28,7 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
         return false;
     const StatusValueContext &status = *static_cast<const StatusValueContext *>(context);
     if (condition.source == StatusConditionSource::PetStatus)
-    {
-        const uint16_t selectionMask = condition.petStateMask;
-        if (selectionMask == 0)
-            return false;
-        const ActivePetState active =
-            PetStateClassifier::classify(status.config, status.stats);
-        const bool selected = !active.isDefault &&
-            active.slot < status.config.petStateCount &&
-            (selectionMask & static_cast<uint16_t>(1U << active.slot)) != 0;
-        value = selected
-                    ? selectedStatusRank(selectionMask, active.slot)
-                    : static_cast<int32_t>(condition.levels - 1);
-        return true;
-    }
+        return resolvePetStateStatusLevel(condition, status.activePetState, value);
     if (condition.source != StatusConditionSource::PetStat &&
         condition.source != StatusConditionSource::StageDays)
         return false;
@@ -64,9 +41,13 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
 }
 } // namespace
 
-CommandExecutor::CommandExecutor(PetActionController &petActionsRef, AnimationController &animationsRef)
+CommandExecutor::CommandExecutor(
+    PetActionController &petActionsRef,
+    AnimationController &animationsRef,
+    const PetBehaviorRuntime &petBehaviorRuntimeRef)
     : petActions(petActionsRef),
-      animations(animationsRef)
+      animations(animationsRef),
+      petBehaviorRuntime(petBehaviorRuntimeRef)
 {
 }
 
@@ -192,7 +173,9 @@ bool CommandExecutor::queueStatusSetsAnimation()
 #endif
     const StatusSetConfig &set = petBehaviorConfig->statusSets.sets[selectedSetIndex];
     const PetStatSnapshot stats = petActions.statSnapshot();
-    const StatusValueContext valueContext = {stats, *petBehaviorConfig};
+    const ActivePetState activePetState = petBehaviorRuntime.activePetState(stats);
+    const StatusValueContext valueContext = {
+        stats, *petBehaviorConfig, activePetState};
     StatusSetResolution resolution = {};
     if (!resolveStatusSet(set, statusValueFromSnapshot, &valueContext, resolution))
         return false;

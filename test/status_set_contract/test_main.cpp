@@ -1,5 +1,6 @@
 #include <assert.h>
 #include "commands/domain/StatusSetContract.h"
+#include "pet_behavior/domain/PetStateClassifier.h"
 
 namespace
 {
@@ -31,20 +32,72 @@ void testRuntimeContractStatusResolution()
     assert(resolution.playOnce);
 }
 
-void testPetStateMaskShape()
+void testPetStateSubsetRanksAndOtherFallback()
 {
+    int32_t level = -1;
     StatusSetCondition condition = {};
-    condition.source = StatusConditionSource::PetStatus;
-    condition.petStateMask = 0x0005;
+    condition.petStateMask = 0x8201U; // slots 0, 9, and 15
+    condition.levels = 4;
+    ActivePetState active = {};
+    active.isDefault = false;
+    active.slot = 0;
+    assert(resolvePetStateStatusLevel(condition, active, level));
+    assert(level == 0);
+    active.slot = 9;
+    assert(resolvePetStateStatusLevel(condition, active, level));
+    assert(level == 1);
+    active.slot = 15;
+    assert(resolvePetStateStatusLevel(condition, active, level));
+    assert(level == 2);
+
+    // Unselected named states and Default intentionally share Other.
+    active.slot = 8;
+    assert(resolvePetStateStatusLevel(condition, active, level));
+    assert(level == 3);
+    active = {};
+    assert(resolvePetStateStatusLevel(condition, active, level));
+    assert(level == 3);
+}
+
+void testLowerSelectedSlotCountDeterminesRank()
+{
+    int32_t level = -1;
+    StatusSetCondition condition = {};
+    condition.levels = 4;
+    ActivePetState active = {};
+    active.isDefault = false;
+    active.slot = 8;
+    condition.petStateMask = 0x0103U;
+    assert(resolvePetStateStatusLevel(condition, active, level));
+    assert(level == 2);
+    condition.petStateMask = 0x0301U;
+    assert(resolvePetStateStatusLevel(condition, active, level));
+    assert(level == 1);
+}
+
+void testPetStateLevelShapeFailsClosed()
+{
+    int32_t level = -1;
+    StatusSetCondition condition = {};
+    condition.levels = 1;
+    ActivePetState active = {};
+    active.isDefault = false;
+    active.slot = 0;
+    assert(!resolvePetStateStatusLevel(condition, active, level));
+    condition.petStateMask = 0x0005U;
+    condition.levels = 2;
+    assert(!resolvePetStateStatusLevel(condition, active, level));
     condition.levels = 3;
-    assert(condition.petStateMask == 0x0005);
-    assert(condition.valueId == 0);
+    active.slot = 16;
+    assert(!resolvePetStateStatusLevel(condition, active, level));
 }
 } // namespace
 
 int main()
 {
     testRuntimeContractStatusResolution();
-    testPetStateMaskShape();
+    testPetStateSubsetRanksAndOtherFallback();
+    testLowerSelectedSlotCountDeterminesRank();
+    testPetStateLevelShapeFailsClosed();
     return 0;
 }

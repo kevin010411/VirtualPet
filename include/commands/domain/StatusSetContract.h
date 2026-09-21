@@ -6,6 +6,8 @@
 #include "shared/assets/AssetRuntimeContract.h"
 #include "pet_behavior/domain/RuntimeValueResolver.h"
 
+struct ActivePetState;
+
 constexpr uint8_t kMaxStatusSets = 5;
 constexpr uint8_t kMaxStatusConditions = 3;
 
@@ -51,6 +53,11 @@ struct StatusSetResolution
     uint16_t requiredVersions;
     bool playOnce;
 };
+
+bool resolvePetStateStatusLevel(
+    const StatusSetCondition &condition,
+    const ActivePetState &activePetState,
+    int32_t &level);
 
 bool resolveStatusSet(
     const StatusSetConfig &set,

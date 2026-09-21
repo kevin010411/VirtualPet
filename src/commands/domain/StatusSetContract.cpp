@@ -1,5 +1,7 @@
 #include "commands/domain/StatusSetContract.h"
 
+#include "pet_behavior/domain/PetStateClassifier.h"
+
 namespace
 {
 uint8_t levelForValue(int32_t value, int32_t minValue, int32_t maxValue, uint8_t levels)
@@ -15,6 +17,35 @@ uint8_t levelForValue(int32_t value, int32_t minValue, int32_t maxValue, uint8_t
         level < static_cast<int64_t>(levels) ? level : levels - 1);
 }
 } // namespace
+
+bool resolvePetStateStatusLevel(
+    const StatusSetCondition &condition,
+    const ActivePetState &activePetState,
+    int32_t &level)
+{
+    const uint16_t selectedPetStateMask = condition.petStateMask;
+    if (selectedPetStateMask == 0 ||
+        (!activePetState.isDefault && activePetState.slot >= 16))
+        return false;
+
+    uint8_t selectedCount = 0;
+    uint8_t rank = 0;
+    for (uint8_t slot = 0; slot < 16; ++slot)
+    {
+        if ((selectedPetStateMask & static_cast<uint16_t>(1U << slot)) == 0)
+            continue;
+        if (slot < activePetState.slot)
+            ++rank;
+        ++selectedCount;
+    }
+    if (condition.levels != static_cast<uint8_t>(selectedCount + 1U))
+        return false;
+
+    const bool selected = !activePetState.isDefault &&
+        (selectedPetStateMask & static_cast<uint16_t>(1U << activePetState.slot)) != 0;
+    level = selected ? rank : static_cast<int32_t>(selectedCount);
+    return true;
+}
 
 bool resolveStatusSet(
     const StatusSetConfig &set,

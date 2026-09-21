@@ -7,6 +7,7 @@
 #include "pet/application/PetActionController.h"
 
 struct PetBehaviorConfig;
+class PetBehaviorRuntime;
 
 struct CommandResult
 {
@@ -22,7 +23,9 @@ struct CommandResult
 class CommandExecutor : public CommandHost
 {
 public:
-    CommandExecutor(PetActionController &petActions, AnimationController &animations);
+    CommandExecutor(PetActionController &petActions,
+                    AnimationController &animations,
+                    const PetBehaviorRuntime &petBehaviorRuntime);
 
     void begin(AppCommandId commandId);
     CommandResult complete(bool executed);
@@ -34,6 +37,7 @@ private:
 
     PetActionController &petActions;
     AnimationController &animations;
+    const PetBehaviorRuntime &petBehaviorRuntime;
     const PetBehaviorConfig *petBehaviorConfig = nullptr;
     CommandResult currentResult = {};
 #if ENABLE_SEQUENTIAL_STATUS_SET_SELECTION

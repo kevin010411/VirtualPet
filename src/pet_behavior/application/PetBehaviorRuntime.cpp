@@ -120,5 +120,11 @@ AssetData::AnimationRef PetBehaviorRuntime::baseAnimation() const
 
 ActivePetState PetBehaviorRuntime::activePetState() const
 {
-    return PetStateClassifier::classify(config, petActions.statSnapshot());
+    return activePetState(petActions.statSnapshot());
+}
+
+ActivePetState PetBehaviorRuntime::activePetState(
+    const PetStatSnapshot &snapshot) const
+{
+    return PetStateClassifier::classify(config, snapshot);
 }

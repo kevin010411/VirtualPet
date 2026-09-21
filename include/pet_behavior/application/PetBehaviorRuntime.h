@@ -34,6 +34,7 @@ public:
 #endif
     AssetData::AnimationRef baseAnimation() const;
     ActivePetState activePetState() const;
+    ActivePetState activePetState(const PetStatSnapshot &snapshot) const;
 
 private:
     const PetBehaviorConfig &config;
