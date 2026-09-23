@@ -53,6 +53,7 @@ bool Game::prepare_game()
     if (flow.isFatalError())
         return false;
     initialized = false;
+    cheatEvolutionPending = false;
     setupPrepared = false;
     initialStateLoadingFailed = false;
     if (startupConfigError != nullptr)
@@ -229,6 +230,13 @@ void Game::loop_game()
     {
         renderer.showResourceError();
         return;
+    }
+
+    if (cheatEvolutionPending && !animations->isBusy() &&
+        (flow.isCommand() || flow.isMinigame()))
+    {
+        cheatEvolutionPending = false;
+        handleEvolution();
     }
 
     const unsigned long now = millis();
@@ -673,6 +681,7 @@ bool Game::resetPet()
     if (!petBehaviorLoaded || flow.isFatalError())
         return false;
     initialized = false;
+    cheatEvolutionPending = false;
     if (loadInitialPetState(false) == InitialPetStateResult::Failed)
         return false;
 
@@ -703,6 +712,29 @@ bool Game::resetPet()
 void Game::refreshBaseAnimation()
 {
     animations->setBaseAnimation(petBehaviorRuntime->baseAnimation());
+}
+
+bool Game::setStageDaysForCheat(uint32_t value)
+{
+    if (!initialized || !petBehaviorLoaded || flow.isFatalError() ||
+        pendingEvolutionPhase != PendingEvolutionPhase::None)
+        return false;
+
+    const uint32_t previous = pet.stageDays();
+    pet.setStageDays(value);
+    if (!petActions->saveNow())
+    {
+        pet.setStageDays(previous);
+        return false;
+    }
+    if (!refreshOutfitUnlockMask(false))
+        return false;
+    // A one-shot may be playing during the hold. Check the new day as soon as
+    // normal command playback is idle, before the next daily change.
+    cheatEvolutionPending = true;
+    refreshBaseAnimation();
+    animations->requestFullRedraw();
+    return true;
 }
 
 PlaybackTickResult Game::tickPlayback(unsigned long now)

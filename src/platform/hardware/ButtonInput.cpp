@@ -1,201 +1,152 @@
 #include "platform/hardware/ButtonInput.h"
 
-ButtonInput *ButtonInput::activeInstance = nullptr;
+namespace
+{
+constexpr uint8_t kPrevious = 1;
+constexpr uint8_t kNext = 2;
+constexpr uint8_t kConfirm = 4;
+constexpr uint8_t kAll = kPrevious | kNext | kConfirm;
+constexpr unsigned long kDebounceMs = 30;
+constexpr unsigned long kLongPressMs = 2000;
+constexpr unsigned long kModeTimeoutMs = 30000;
+}
 
 ButtonInput::ButtonInput(int previousPinValue, int nextPinValue, int confirmPinValue, unsigned long cooldownMsValue)
-    : previousPin(previousPinValue),
-      nextPin(nextPinValue),
-      confirmPin(confirmPinValue),
-      cooldownMs(cooldownMsValue)
+    : previousPin(previousPinValue), nextPin(nextPinValue),
+      confirmPin(confirmPinValue), cooldownMs(cooldownMsValue)
 {
 }
 
 void ButtonInput::begin()
 {
-    activeInstance = this;
-
     pinMode(previousPin, INPUT_PULLUP);
     pinMode(confirmPin, INPUT_PULLUP);
     pinMode(nextPin, INPUT_PULLUP);
-
-    attachInterrupt(digitalPinToInterrupt(confirmPin), handleConfirmInterrupt, FALLING);
-    attachInterrupt(digitalPinToInterrupt(nextPin), handleNextInterrupt, FALLING);
-    attachInterrupt(digitalPinToInterrupt(previousPin), handlePreviousInterrupt, FALLING);
+    attachInterrupt(digitalPinToInterrupt(confirmPin), handleWakeInterrupt, FALLING);
+    attachInterrupt(digitalPinToInterrupt(nextPin), handleWakeInterrupt, FALLING);
+    attachInterrupt(digitalPinToInterrupt(previousPin), handleWakeInterrupt, FALLING);
 }
 
 void ButtonInput::clearFlags()
 {
-    previousPressed = false;
-    confirmPressed = false;
-    nextPressed = false;
-    anyPressPending = false;
+    rawMask = readMask();
+    stableMask = rawMask;
+    gestureMask = 0;
+    holdStartedAt = 0;
+    gestureStartedAt = 0;
+    waitForRelease = rawMask != 0;
+    cheatMode = false;
 }
 
-bool ButtonInput::hasPendingPress() const
+uint8_t ButtonInput::readMask() const
 {
-    return previousPressed || confirmPressed || nextPressed;
+    return (digitalRead(previousPin) == LOW ? kPrevious : 0) |
+           (digitalRead(nextPin) == LOW ? kNext : 0) |
+           (digitalRead(confirmPin) == LOW ? kConfirm : 0);
 }
 
-bool ButtonInput::isPreviousNextComboHeld() const
-{
-    return digitalRead(previousPin) == LOW && digitalRead(nextPin) == LOW;
-}
-
-void ButtonInput::update(bool isSleeping,
-                         ButtonCallback onPrevious,
-                         ButtonCallback onNext,
-                         ButtonCallback onConfirm,
-                         ButtonCallback onWake,
-                         ButtonCallback onAnyPress)
+CheatButtonEvent ButtonInput::update(ButtonCallback onPrevious,
+                                     ButtonCallback onNext,
+                                     ButtonCallback onConfirm,
+                                     ButtonCallback onAnyPress)
 {
     const unsigned long now = millis();
-
-    if (anyPressPending)
+    const uint8_t observed = readMask();
+    if (observed != rawMask)
     {
-        anyPressPending = false;
-        if (now - lastAnyPressTime >= cooldownMs && onAnyPress != nullptr)
+        rawMask = observed;
+        rawChangedAt = now;
+    }
+    if (rawMask != stableMask && now - rawChangedAt >= kDebounceMs)
+    {
+        stableMask = rawMask;
+        holdStartedAt = now;
+        if (stableMask != 0)
         {
-            onAnyPress();
-            lastAnyPressTime = now;
+            if (gestureMask == 0)
+                gestureStartedAt = now;
+            gestureMask |= stableMask;
         }
     }
+    return handleStableInput(now, onPrevious, onNext, onConfirm, onAnyPress);
+}
 
-    if (isPreviousNextComboHeld())
+CheatButtonEvent ButtonInput::handleStableInput(unsigned long now,
+                                                ButtonCallback onPrevious,
+                                                ButtonCallback onNext,
+                                                ButtonCallback onConfirm,
+                                                ButtonCallback onAnyPress)
+{
+    if (waitForRelease)
     {
-        previousPressed = false;
-        nextPressed = false;
-        return;
-    }
-
-    if (isSleeping)
-    {
-        if (hasPendingPress() && onWake != nullptr)
-            onWake();
-        return;
-    }
-
-    if (previousPressed)
-    {
-        if (now - lastPreviousPressTime >= cooldownMs && onPrevious != nullptr)
+        if (stableMask == 0)
         {
-            onPrevious();
-            lastPreviousPressTime = now;
+            waitForRelease = false;
+            gestureMask = 0;
         }
-        previousPressed = false;
+        return CheatButtonEvent::None;
     }
-
-    if (nextPressed)
+    if (cheatMode && stableMask == 0 && now - modeActivityAt >= kModeTimeoutMs)
     {
-        if (now - lastNextPressTime >= cooldownMs && onNext != nullptr)
+        cheatMode = false;
+        gestureMask = 0;
+        return CheatButtonEvent::Exited;
+    }
+    if (stableMask != 0)
+    {
+        if (cheatMode)
+            modeActivityAt = now;
+        if (now - holdStartedAt < kLongPressMs)
+            return CheatButtonEvent::None;
+        if (stableMask == kAll && gestureMask == kAll)
         {
-            onNext();
-            lastNextPressTime = now;
+            cheatMode = !cheatMode;
+            modeActivityAt = now;
+            waitForRelease = true;
+            return cheatMode ? CheatButtonEvent::Entered : CheatButtonEvent::Exited;
         }
-        nextPressed = false;
-    }
-
-    if (confirmPressed)
-    {
-        if (now - lastConfirmPressTime >= cooldownMs && onConfirm != nullptr)
+        if (!cheatMode || gestureMask != stableMask)
+            return CheatButtonEvent::None;
+        CheatButtonEvent event = CheatButtonEvent::None;
+        // Physical right is previousPin; normal input maps it to OnRightKey.
+        if (stableMask == kPrevious)
+            event = CheatButtonEvent::SetStageDays;
+        else if (stableMask == kNext)
+            event = CheatButtonEvent::ResetPet;
+        else if (stableMask == kConfirm)
+            event = CheatButtonEvent::RestartTft;
+        if (event != CheatButtonEvent::None)
         {
-            onConfirm();
-            lastConfirmPressTime = now;
+            cheatMode = false;
+            waitForRelease = true;
         }
-        confirmPressed = false;
+        return event;
     }
-}
-
-void ButtonInput::handleConfirmLongPress(unsigned long thresholdMs, ButtonCallback callback)
-{
-    handleLongPress(confirmPin, thresholdMs, callback);
-}
-
-void ButtonInput::handlePreviousNextComboLongPress(unsigned long thresholdMs, ButtonCallback callback)
-{
-    const bool bothPressed = isPreviousNextComboHeld();
-
-    if (bothPressed)
+    if (gestureMask != 0 && now - gestureStartedAt < kLongPressMs &&
+        (lastShortPressAt == 0 || now - lastShortPressAt >= cooldownMs))
     {
-        previousPressed = false;
-        nextPressed = false;
-        if (comboStartTime == 0)
-            comboStartTime = millis();
-
-        if (!comboFired && (millis() - comboStartTime > thresholdMs))
+        ButtonCallback callback = nullptr;
+        if (gestureMask == kPrevious)
+            callback = onPrevious;
+        else if (gestureMask == kNext)
+            callback = onNext;
+        else if (gestureMask == kConfirm)
+            callback = onConfirm;
+        if (callback != nullptr)
         {
-            if (callback != nullptr)
-                callback();
-            comboFired = true;
-        }
-    }
-    else
-    {
-        comboStartTime = 0;
-        comboFired = false;
-    }
-}
-
-void ButtonInput::handlePreviousInterrupt()
-{
-    if (activeInstance != nullptr)
-        activeInstance->notePreviousInterrupt();
-}
-
-void ButtonInput::handleNextInterrupt()
-{
-    if (activeInstance != nullptr)
-        activeInstance->noteNextInterrupt();
-}
-
-void ButtonInput::handleConfirmInterrupt()
-{
-    if (activeInstance != nullptr)
-        activeInstance->noteConfirmInterrupt();
-}
-
-void ButtonInput::notePreviousInterrupt()
-{
-    if (digitalRead(previousPin) == HIGH)
-        return;
-    anyPressPending = true;
-    previousPressed = true;
-}
-
-void ButtonInput::noteNextInterrupt()
-{
-    if (digitalRead(nextPin) == HIGH)
-        return;
-    anyPressPending = true;
-    nextPressed = true;
-}
-
-void ButtonInput::noteConfirmInterrupt()
-{
-    if (digitalRead(confirmPin) == HIGH)
-        return;
-    anyPressPending = true;
-    confirmPressed = true;
-}
-
-void ButtonInput::handleLongPress(int pin, unsigned long thresholdMs, ButtonCallback callback)
-{
-    const int idx = pin % 20;
-
-    if (digitalRead(pin) == LOW)
-    {
-        if (longPressStartTime[idx] == 0)
-            longPressStartTime[idx] = millis();
-
-        if (!longPressFired[idx] && (millis() - longPressStartTime[idx] > thresholdMs))
-        {
-            if (callback != nullptr)
-                callback();
-            longPressFired[idx] = true;
+            const bool leavingCheatMode = cheatMode;
+            cheatMode = false;
+            if (onAnyPress != nullptr)
+                onAnyPress();
+            callback();
+            lastShortPressAt = now;
+            gestureMask = 0;
+            return leavingCheatMode ? CheatButtonEvent::Exited : CheatButtonEvent::None;
         }
     }
-    else
-    {
-        longPressStartTime[idx] = 0;
-        longPressFired[idx] = false;
-    }
+    gestureMask = 0;
+    return CheatButtonEvent::None;
 }
+
+// The interrupt wakes STOP mode; update() owns all button interpretation.
+void ButtonInput::handleWakeInterrupt() {}

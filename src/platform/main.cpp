@@ -278,6 +278,13 @@ void playButtonBeep()
   digitalWrite(BoardConfig::buzzerPin, LOW);
 }
 
+void playCheatStageDaysBeep()
+{
+  playButtonBeep();
+  delay(65);
+  playButtonBeep();
+}
+
 void noteInteraction(unsigned long now = millis())
 {
   g_lastInteractionMs = now;
@@ -375,12 +382,6 @@ void enterSleep()
   g_isSleeping = false;
 }
 
-void wakeFromSleepNow()
-{
-  // Stop mode resumes inside enterSleep(); this callback is retained only to
-  // satisfy ButtonInput's normal-mode interface.
-}
-
 void onPreviousButton()
 {
   game.OnRightKey();
@@ -458,7 +459,7 @@ static void finishTftStartupReset(unsigned long resetLowStartedAt)
   delay(kTftStartupResetHighMs);
 }
 
-void onConfirmLongPress()
+static void restartTftFromCheatMode()
 {
   noteInteraction();
   initializeTftDisplay();
@@ -466,7 +467,7 @@ void onConfirmLongPress()
   setBacklightTarget(brightnessForVoltageState(g_voltageState));
 }
 
-static void onLRComboLongPress()
+static void resetPetFromCheatMode()
 {
   noteInteraction();
   setBacklightImmediate(0);
@@ -709,12 +710,29 @@ void loop()
   if (g_lowBatteryMode)
     return;
 
-  buttons.handlePreviousNextComboLongPress(2000, onLRComboLongPress);
-  buttons.update(g_isSleeping, onPreviousButton, onNextButton, onConfirmButton, wakeFromSleepNow, playButtonBeep);
-  if (g_isSleeping)
-    return;
-
-  buttons.handleConfirmLongPress(2000, onConfirmLongPress);
+  const CheatButtonEvent buttonEvent = buttons.update(
+      onPreviousButton, onNextButton, onConfirmButton, playButtonBeep);
+  switch (buttonEvent)
+  {
+  case CheatButtonEvent::Entered:
+    noteInteraction();
+    playButtonBeep();
+    break;
+  case CheatButtonEvent::RestartTft:
+    restartTftFromCheatMode();
+    break;
+  case CheatButtonEvent::ResetPet:
+    resetPetFromCheatMode();
+    break;
+  case CheatButtonEvent::SetStageDays:
+    noteInteraction();
+    if (game.setStageDaysForCheat(Pet::kStageDaysMax))
+      playCheatStageDaysBeep();
+    break;
+  case CheatButtonEvent::Exited:
+  case CheatButtonEvent::None:
+    break;
+  }
 
   const unsigned long sleepCheckNow = millis();
   // Idle/base animation remains eligible for sleep.  A queued or active

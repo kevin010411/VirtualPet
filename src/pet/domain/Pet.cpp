@@ -46,7 +46,8 @@ bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount)
     if (customStats == nullptr || customStatCount == 0 || customStatCount > kPetCustomStatCount)
         return false;
 
-    const uint32_t nextStageDays = st.stage_days == UINT32_MAX ? UINT32_MAX : st.stage_days + 1;
+    const uint32_t nextStageDays = st.stage_days >= kStageDaysMax
+                                       ? kStageDaysMax : st.stage_days + 1;
     st.stage_days = nextStageDays;
     return commitPetStats(customStats, customStatCount);
 }
@@ -101,6 +102,11 @@ uint8_t Pet::outfitSlot() const
 uint32_t Pet::stageDays() const
 {
     return st.stage_days;
+}
+
+void Pet::setStageDays(uint32_t value)
+{
+    st.stage_days = value > kStageDaysMax ? kStageDaysMax : value;
 }
 
 PetStatSnapshot Pet::statSnapshot() const
@@ -248,5 +254,7 @@ bool Pet::restoreState(const PersistedPetState &state)
 
     st = state;
     st.version = kPetStateVersion;
+    if (st.stage_days > kStageDaysMax)
+        st.stage_days = kStageDaysMax;
     return true;
 }

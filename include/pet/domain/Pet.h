@@ -38,6 +38,7 @@ class Pet
 public:
     static constexpr uint32_t kPetStateMagic = 0x50455431;
     static constexpr uint16_t kPetStateVersion = 14;
+    static constexpr uint32_t kStageDaysMax = 864000UL;
 
     Pet();
 
@@ -47,6 +48,7 @@ public:
     uint8_t speciesSlot() const;
     uint8_t outfitSlot() const;
     uint32_t stageDays() const;
+    void setStageDays(uint32_t value);
     bool commitPetStats(const int16_t *customStats, size_t customStatCount);
     bool commitPetDay(const int16_t *customStats, size_t customStatCount);
     PetStatSnapshot statSnapshot() const;

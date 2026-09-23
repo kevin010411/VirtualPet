@@ -48,6 +48,7 @@ public:
     void OnRightKey();
     void OnConfirmKey();
     bool resetPet();
+    bool setStageDaysForCheat(uint32_t value);
 
 private:
     enum class PendingEvolutionPhase : uint8_t
@@ -89,6 +90,7 @@ private:
 
     unsigned long last_tick_time = 0;
     bool dirtySelect = true;
+    bool cheatEvolutionPending = false;
     PendingEvolutionPhase pendingEvolutionPhase = PendingEvolutionPhase::None;
     bool pendingFirstStartCompletion = false;
     bool initialized = false;
