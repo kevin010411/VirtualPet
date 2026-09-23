@@ -110,7 +110,7 @@ private:
     bool enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot);
     void refreshBaseAnimation();
     PlaybackTickResult tickPlayback(unsigned long now);
-    void syncSceneLayoutWithPlayback();
+    bool syncSceneLayoutWithPlayback();
     void handleCommandResult(const CommandResult &result, int selectedSlot);
     void completeFirstLaunchIfNeeded(AppCommandId commandId);
     InitialPetStateResult loadInitialPetState(bool allowSavedState,

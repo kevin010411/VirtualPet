@@ -10,7 +10,7 @@ constexpr uint8_t kPackKindSpecies = 1;
 constexpr uint8_t kPackKindShared = 2;
 constexpr uint8_t kCodecPal8RunLiteral = 1;
 constexpr uint8_t kCodecRgb565RunLiteral = 2;
-constexpr uint16_t kVersion = 1;
+constexpr uint16_t kVersion = 2;
 constexpr uint16_t kHeaderSize = 80;
 constexpr uint16_t kAnimationRecordSize = 16;
 constexpr uint16_t kFrameRecordSize = 24;
@@ -59,6 +59,7 @@ struct AnimationRecord
     uint32_t firstFrame = 0;
     uint16_t frameCount = 0;
     uint16_t frameMs = 0;
+    uint8_t layoutId = 0;
 };
 
 struct FrameDescriptor
@@ -105,6 +106,7 @@ public:
     bool openFrame(const AssetData::AssetFrameAddress &address,
                    AssetData::OpenFrame &frame);
     void rejectDecodedFrame(const AssetData::AssetFrameAddress &address);
+    void rejectInvalidLayout(uint8_t layoutId);
 
     AssetData::BundleError firstError() const;
     const char *firstErrorResource() const;

@@ -23,6 +23,7 @@ struct Renderer::AnimationState
     uint16_t nextFrame = 0;
     uint16_t maxFrame = 0;
     uint16_t frameMs = 0;
+    uint8_t layoutId = 0;
     bool playOnce = false;
     bool animationFrameFailed = false;
     char externalErrorResource[20] = {};
@@ -72,6 +73,7 @@ void Renderer::initAnimations()
     state->nextFrame = 0;
     state->maxFrame = 0;
     state->frameMs = 0;
+    state->layoutId = 0;
     state->playOnce = false;
     state->animationFrameFailed = false;
 }
@@ -146,6 +148,8 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation,
                             bool playOnce)
 {
     state->animationFrameFailed = false;
+    state->animation = {};
+    state->maxFrame = 0;
     AssetData::AnimationRecord record = {};
     if (!animation.valid() ||
         !state->bundleReader.resolveAnimation(frameAddress(animation, versionIndex, 0), record))
@@ -155,8 +159,36 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation,
     state->nextFrame = 0;
     state->maxFrame = record.frameCount;
     state->frameMs = record.frameMs;
+    state->layoutId = record.layoutId;
     state->playOnce = playOnce;
     return record.frameCount > 0;
+}
+
+bool Renderer::currentLayoutId(uint8_t &layoutId) const
+{
+    if (!state->animation.valid() || state->maxFrame == 0)
+        return false;
+    layoutId = state->layoutId;
+    return true;
+}
+
+bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &unselected,
+                                     const AssetData::AnimationRef &selected,
+                                     uint8_t layoutId)
+{
+    AssetData::AnimationRecord off = {};
+    AssetData::AnimationRecord on = {};
+    if (!unselected.valid() || !selected.valid() ||
+        !unselected.shared() || !selected.shared() ||
+        !state->bundleReader.resolveAnimation(frameAddress(unselected, layoutId, 0), off) ||
+        !state->bundleReader.resolveAnimation(frameAddress(selected, layoutId, 0), on) ||
+        off.frameCount != 8 || on.frameCount != 8 ||
+        off.layoutId != 0 || on.layoutId != 0)
+    {
+        state->bundleReader.rejectInvalidLayout(layoutId);
+        return false;
+    }
+    return true;
 }
 
 bool Renderer::willRestartAnimationLoop() const
@@ -297,7 +329,12 @@ unsigned long Renderer::frameIntervalFor(const AssetData::AnimationRef &animatio
 
 AssetData::BundleError Renderer::firstAssetDataError() const
 {
-    return state->bundleReader.firstError();
+    const AssetData::BundleError readerError = state->bundleReader.firstError();
+    return readerError != AssetData::BundleError::None
+               ? readerError
+               : (state->externalErrorResource[0] != '\0'
+                      ? AssetData::BundleError::InvalidPack
+                      : AssetData::BundleError::None);
 }
 
 const char *Renderer::firstAssetDataErrorResource() const

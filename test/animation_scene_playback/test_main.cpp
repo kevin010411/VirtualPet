@@ -30,6 +30,8 @@ struct RenderEvent
 std::vector<RenderEvent> events;
 uint16_t selectedAnimationId = 0;
 uint8_t selectedVersion = 0;
+uint8_t selectedLayoutId = 0;
+uint8_t fixtureLayoutIds[2] = {};
 
 AssetData::AnimationRef animation(uint16_t id) { return {1, 1, id}; }
 
@@ -54,7 +56,7 @@ AssetData::RuntimeManifest fixtureManifest(const std::vector<uint8_t> &fixture)
 {
     AssetData::RuntimeManifest manifest = {};
     const uint8_t bundleId[16] = {
-        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x46, 0x77,
         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
     for (uint8_t index = 0; index < sizeof(bundleId); ++index)
         manifest.bundleId.bytes[index] = bundleId[index];
@@ -73,11 +75,13 @@ public:
 };
 
 void prepareAndTick(AnimationController &animations, LayoutRenderer &layout,
+                    Renderer &renderer,
                     unsigned long now)
 {
     animations.preparePlayback(now);
-    layout.updatePlayback(
-        animations.currentAnimation(), animations.currentVersionIndex());
+    uint8_t layoutId = 0;
+    assert(renderer.currentLayoutId(layoutId));
+    assert(layout.updatePlayback(layoutId));
     animations.tick(now);
 }
 
@@ -124,7 +128,23 @@ bool Renderer::setAnimation(
 {
     selectedAnimationId = reference.animationId;
     selectedVersion = versionIndex;
+    selectedLayoutId = fixtureLayoutIds[versionIndex < 2 ? versionIndex : 0];
     return true;
+}
+bool Renderer::currentLayoutId(uint8_t &layoutId) const
+{
+    layoutId = selectedLayoutId;
+    return true;
+}
+bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &unselected,
+                                     const AssetData::AnimationRef &selected,
+                                     uint8_t)
+{
+    return unselected.shared() && selected.shared();
+}
+AssetData::BundleError Renderer::firstAssetDataError() const
+{
+    return AssetData::BundleError::None;
 }
 bool Renderer::advanceAnimationFrame()
 {
@@ -155,21 +175,19 @@ SdFat *Renderer::sdCard() const { return nullptr; }
 int main(int argc, char **argv)
 {
     assert(argc == 3);
-    const std::vector<uint8_t> validFixture = readFixture(argv[1]);
-    const std::vector<uint8_t> invalidFixture = readFixture(argv[2]);
+    const std::vector<uint8_t> runtimeFixture = readFixture(argv[1]);
+    const std::vector<uint8_t> packFixture = readFixture(argv[2]);
     PetBehaviorConfig config = {};
-    assert(parseRuntimeTableBehavior(validFixture.data(), validFixture.size(),
-                                     fixtureManifest(validFixture), 1, 1, config));
-    assert(config.animationSceneCount == 3);
-    PetBehaviorConfig unpublished = {};
-    unpublished.animationSceneCount = 7;
-    assert(!parseRuntimeTableBehavior(invalidFixture.data(), invalidFixture.size(),
-                                      fixtureManifest(invalidFixture), 1, 1, unpublished));
-    assert(unpublished.animationSceneCount == 7);
+    assert(parseRuntimeTableBehavior(runtimeFixture.data(), runtimeFixture.size(),
+                                     fixtureManifest(runtimeFixture), 1, 1, config));
+    assert(config.layoutUnselected.shared() && config.layoutUnselected.valid());
+    assert(config.layoutSelected.shared() && config.layoutSelected.valid());
+    assert(packFixture.size() >= 112);
+    assert(packFixture[12] == AssetData::kPackKindSpecies);
+    fixtureLayoutIds[0] = packFixture[92];
+    fixtureLayoutIds[1] = packFixture[108];
+    assert(fixtureLayoutIds[0] == 0 && fixtureLayoutIds[1] == 1);
 
-    const RuntimeAnimationSceneConfig &idleScene = config.animationScenes[0];
-    const RuntimeAnimationSceneConfig &firstScene = config.animationScenes[1];
-    const RuntimeAnimationSceneConfig &secondScene = config.animationScenes[2];
     Renderer renderer(nullptr, nullptr);
     Host host;
     CommandController commands(host);
@@ -178,36 +196,34 @@ int main(int argc, char **argv)
     commands.configure(config);
     animations.configureRuntimeContract(config);
     layout.configureRuntimeContract(config);
-    animations.setup(idleScene.animation);
+    const AssetData::AnimationRef center = animation(1);
+    animations.setup(center);
     layout.begin();
 
-    Animation queue[] = {
-        Animation::complete(firstScene.animation),
-        Animation::complete(secondScene.animation),
-    };
-    assert(animations.replace({queue, 2}) == PlaybackResult::Accepted);
-    events.clear();
-    prepareAndTick(animations, layout, 1000);
-    assertAtomicSceneBeforeFrame(firstScene.layoutVersion, firstScene.animation.animationId);
-
-    events.clear();
-    prepareAndTick(animations, layout, 1001);
-    assertAtomicSceneBeforeFrame(secondScene.layoutVersion, secondScene.animation.animationId);
-
-    events.clear();
-    prepareAndTick(animations, layout, 1002);
-    assertAtomicSceneBeforeFrame(idleScene.layoutVersion, idleScene.animation.animationId);
-
-    Animation first = Animation::complete(firstScene.animation);
+    Animation first = Animation::complete(center);
+    first.versionIndex = 0;
     assert(animations.replace({&first, 1}) == PlaybackResult::Accepted);
     events.clear();
-    prepareAndTick(animations, layout, 2000);
-    assertAtomicSceneBeforeFrame(firstScene.layoutVersion, firstScene.animation.animationId);
+    prepareAndTick(animations, layout, renderer, 1000);
+    assertAtomicSceneBeforeFrame(0, center.animationId);
 
-    Animation interrupt = Animation::complete(secondScene.animation);
-    assert(animations.replace({&interrupt, 1}) == PlaybackResult::Accepted);
+    // Re-selecting an animation with the same layout keeps the button pixels.
+    assert(animations.replace({&first, 1}) == PlaybackResult::Accepted);
     events.clear();
-    prepareAndTick(animations, layout, 2001);
-    assertAtomicSceneBeforeFrame(secondScene.layoutVersion, secondScene.animation.animationId);
+    prepareAndTick(animations, layout, renderer, 1001);
+    assert(events.size() == 1);
+    assert(events[0].kind == RenderEventKind::AnimationFrame);
+
+    Animation second = Animation::complete(center);
+    second.versionIndex = 1;
+    assert(animations.replace({&second, 1}) == PlaybackResult::Accepted);
+    events.clear();
+    prepareAndTick(animations, layout, renderer, 1002);
+    assertAtomicSceneBeforeFrame(1, center.animationId);
+
+    // A display wake invalidates the pixels even when the layout ID is stable.
+    events.clear();
+    layout.drawAll();
+    assert(events.size() == 8);
     return 0;
 }

@@ -7,7 +7,6 @@
 class CommandController;
 class Renderer;
 struct PetBehaviorConfig;
-struct RuntimeAnimationSceneConfig;
 
 class LayoutRenderer
 {
@@ -18,8 +17,7 @@ public:
     void begin();
     void drawAll();
     void drawSelection();
-    bool updatePlayback(const AssetData::AnimationRef &animation,
-                        uint8_t versionIndex);
+    bool updatePlayback(uint8_t layoutId);
 
 private:
     static constexpr uint8_t maxSlots = 8;
@@ -29,12 +27,10 @@ private:
     Renderer &renderer;
     CommandController &commands;
     const PetBehaviorConfig *runtimeContract = nullptr;
-    const RuntimeAnimationSceneConfig *activeScene = nullptr;
+    uint8_t activeLayoutId = 0;
+    bool hasActiveLayout = false;
 
     bool drawSlot(int slot, bool selected);
-    const RuntimeAnimationSceneConfig *sceneFor(
-        const AssetData::AnimationRef &animation,
-        uint8_t versionIndex) const;
     static int slotX(int slot);
     static int slotY(int slot);
 };

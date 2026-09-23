@@ -11,9 +11,9 @@ namespace
 {
 constexpr char kRuntimeTablePath[] = "/runtime.bin";
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// Runtime Value predicates and the Pet Status Axis are the only v6 condition
+// Runtime Value predicates and the Pet Status Axis remain in the v7 condition
 // vocabulary. Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 6;
+constexpr uint16_t kVersion = 7;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint16_t kMaxSections = 32;
@@ -25,10 +25,9 @@ constexpr uint32_t kGuessGameFeature = 1UL << 4;
 constexpr uint32_t kPredictFeature = 1UL << 5;
 constexpr uint32_t kStartupAnimationFeature = 1UL << 6;
 constexpr uint32_t kFirstStartAnimationFeature = 1UL << 7;
-constexpr uint32_t kAnimationVisualContextFeature = 1UL << 8;
 constexpr uint32_t kSequentialStatusFeature = 1UL << 9;
 constexpr uint32_t kOutfitChooseAnimationFeature = 1UL << 11;
-constexpr uint32_t kKnownFeatures = ((1UL << 10) - 1UL) | kOutfitChooseAnimationFeature;
+constexpr uint32_t kKnownFeatures = ((1UL << 12) - 1UL) & ~(1UL << 8);
 
 #ifndef ENABLE_GUESS_GAME_SINGLE_ROUND
 #define ENABLE_GUESS_GAME_SINGLE_ROUND 0
@@ -59,7 +58,6 @@ enum SectionType : uint16_t
     OutfitUnlocks = 35,
     OutfitUnlockConditions = 36,
     SystemRoles = 40,
-    VisualContexts = 41,
     Flow = 42,
     FlowRoles = 43,
 };
@@ -185,7 +183,6 @@ uint16_t recordSizeFor(uint16_t type)
     case OutfitUnlocks: return 8;
     case OutfitUnlockConditions: return 12;
     case SystemRoles: return 8;
-    case VisualContexts: return 12;
     case Flow: return 16;
     case FlowRoles: return 8;
     default: return 0;
@@ -232,7 +229,8 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
             return false;
 
     featureFlags = readU32(header + 12);
-    if ((featureFlags & kPetBehaviorFeature) == 0)
+    if ((featureFlags & kPetBehaviorFeature) == 0 ||
+        (featureFlags & ~kKnownFeatures) != 0)
         return false;
 
     bool nonzeroBundle = false;
@@ -1191,7 +1189,7 @@ bool compiledFeaturesAccept(uint32_t flags)
 }
 
 // Flow and FlowRoles are export/inspector metadata. Firmware executes the
-// resolved system roles and validates the visual-context projection below.
+// resolved system roles, including the two shared button-layout assets.
 bool decodeRuntimePresentation(const RuntimeTable &table,
                                uint8_t speciesSlot,
                                uint8_t outfitSlot,
@@ -1207,16 +1205,12 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
     const Section *assets = table.find(AssetRefs);
     const Section *animations = table.find(Animations);
     const Section *roles = table.find(SystemRoles);
-    const Section *visualContexts = table.find(VisualContexts);
-    const bool hasVisualContexts =
-        (featureFlags & kAnimationVisualContextFeature) != 0;
-    if (assets == nullptr || animations == nullptr || !hasVisualContexts ||
-        visualContexts == nullptr)
+    if (assets == nullptr || animations == nullptr || roles == nullptr)
         return false;
 
     memset(config.systemAnimations, 0, sizeof(config.systemAnimations));
-    memset(config.animationScenes, 0, sizeof(config.animationScenes));
-    config.animationSceneCount = 0;
+    config.layoutUnselected = {};
+    config.layoutSelected = {};
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
     if (roles != nullptr)
     {
@@ -1232,55 +1226,14 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
                 !resolveAnimation(source, *assets, *animations, readU16(record + 2), scope, animation))
                 return false;
             config.systemAnimations[role] = animation;
+            if (role == static_cast<uint8_t>(FirmwarePlaybackRole::Layout))
+                config.layoutUnselected = animation;
+            else if (role == static_cast<uint8_t>(FirmwarePlaybackRole::LayoutSel))
+                config.layoutSelected = animation;
         }
     }
-
-    if (visualContexts != nullptr)
-    {
-        if (visualContexts->count == 0 ||
-            visualContexts->count > APP_MAX_VISUAL_CONTEXTS)
-            return false;
-        for (uint16_t index = 0; index < visualContexts->count; ++index)
-        {
-            uint8_t record[12] = {};
-            uint8_t animation[8] = {};
-            AssetData::AnimationRef center = {};
-            AssetData::AnimationRef unselected = {};
-            AssetData::AnimationRef selected = {};
-            if (!readRecord(source, *visualContexts, index, record))
-                return false;
-            const uint16_t animationRef = readU16(record);
-            const uint16_t centerRef = readU16(record + 4);
-            if (animationRef >= animations->count || record[3] != 0 ||
-                readU16(record + 10) >= visualContexts->count ||
-                !readRecord(source, *animations, animationRef, animation) ||
-                centerRef < readU16(animation + 4) ||
-                centerRef >= static_cast<uint32_t>(readU16(animation + 4)) + readU16(animation + 6) ||
-                !resolveAssetReference(source, *assets, centerRef, center) ||
-                !resolveAssetReference(source, *assets, readU16(record + 6), unselected) ||
-                !resolveAssetReference(source, *assets, readU16(record + 8), selected) ||
-                unselected.speciesSlot != 0 || unselected.outfitSlot != 0 ||
-                selected.speciesSlot != 0 || selected.outfitSlot != 0)
-                return false;
-            const bool activeScope = center.shared() ||
-                (center.speciesSlot == speciesSlot && center.outfitSlot == outfitSlot);
-            if (activeScope)
-            {
-                if (config.animationSceneCount >= APP_MAX_VISUAL_CONTEXTS)
-                    return false;
-                RuntimeAnimationSceneConfig &scene =
-                    config.animationScenes[config.animationSceneCount++];
-                scene.active = true;
-                scene.animation = center;
-                scene.animationVersion = record[2];
-                scene.unselected = unselected;
-                scene.selected = selected;
-                scene.layoutVersion = static_cast<uint8_t>(readU16(record + 10));
-            }
-        }
-    }
-
-    return config.animationSceneCount > 0;
+    return config.layoutUnselected.valid() && config.layoutUnselected.shared() &&
+           config.layoutSelected.valid() && config.layoutSelected.shared();
 }
 } // namespace
 

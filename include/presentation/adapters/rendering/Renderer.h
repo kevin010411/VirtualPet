@@ -32,6 +32,10 @@ public:
     bool setAnimation(const AssetData::AnimationRef &animation,
                       uint8_t versionIndex,
                       bool playOnce);
+    bool currentLayoutId(uint8_t &layoutId) const;
+    bool validateLayoutVersion(const AssetData::AnimationRef &unselected,
+                               const AssetData::AnimationRef &selected,
+                               uint8_t layoutId);
     bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
     bool animationFrameFailed() const;

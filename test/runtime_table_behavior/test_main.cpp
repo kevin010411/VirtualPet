@@ -284,7 +284,21 @@ int main(int argc, char **argv)
     assert(AssetData::isValidFrameAddress(ninthSpecies));
     ninthSpecies.outfitSlot = 9;
     assert(!AssetData::isValidFrameAddress(ninthSpecies));
-#if RUNTIME_TABLE_FULL_FEATURE
+#if RUNTIME_TABLE_V7
+    assert(argc == 3);
+    const std::vector<uint8_t> valid = readFixture(argv[1]);
+    const std::vector<uint8_t> legacy = readFixture(argv[2]);
+    PetBehaviorConfig config = {};
+    assert(parseRuntimeTableBehavior(valid.data(), valid.size(),
+                                     releaseFixtureManifest(valid), 1, 1, config));
+    assert(config.layoutUnselected.valid() && config.layoutUnselected.shared());
+    assert(config.layoutSelected.valid() && config.layoutSelected.shared());
+    PetBehaviorConfig unpublished = {};
+    unpublished.schemaFingerprint = 0xA5A5A5A5UL;
+    assert(!parseRuntimeTableBehavior(legacy.data(), legacy.size(),
+                                      fixtureManifest(legacy), 1, 1, unpublished));
+    assert(unpublished.schemaFingerprint == 0xA5A5A5A5UL);
+#elif RUNTIME_TABLE_FULL_FEATURE
     assert(argc == 5);
     const std::vector<uint8_t> fixture = readFixture(argv[1]);
     PetBehaviorConfig config = {};
@@ -293,7 +307,7 @@ int main(int argc, char **argv)
     assert(config.petStateCount == 5);
     assert(config.petStates[0].idleAnimation.valid());
     assert(config.idleAnimation.valid());
-    assert(config.animationSceneCount > 0);
+    assert(config.layoutUnselected.valid() && config.layoutSelected.valid());
     testOutfitSelectionReleaseFixture(fixture);
     for (int index = 2; index < argc; ++index)
         testInvalidAppearanceFixture(readFixture(argv[index]));

@@ -294,9 +294,8 @@ void AnimationController::preparePlayback(unsigned long now)
 
         frameInterval = renderer.frameIntervalFor(
             showAnimation, showVersionIndex, frameIntervalSlow);
-        if (!(hasActiveAnimation && activeAnimation.isFixedFrame()))
-            animateDone = !renderer.setAnimation(
-                showAnimation, showVersionIndex, playOnce);
+        animateDone = !renderer.setAnimation(
+            showAnimation, showVersionIndex, playOnce);
         dirtyAnimation = false;
         preparedTargetChanged = true;
     }

@@ -12,12 +12,12 @@ LayoutRenderer::LayoutRenderer(Renderer &rendererRef, CommandController &command
 void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
 {
     runtimeContract = &config;
-    activeScene = nullptr;
+    hasActiveLayout = false;
 }
 
 void LayoutRenderer::begin()
 {
-    activeScene = nullptr;
+    hasActiveLayout = false;
 }
 
 void LayoutRenderer::drawAll()
@@ -42,51 +42,36 @@ void LayoutRenderer::drawSelection()
         drawSlot(curIdx, true);
 }
 
-bool LayoutRenderer::updatePlayback(const AssetData::AnimationRef &animation,
-                                    uint8_t versionIndex)
+bool LayoutRenderer::updatePlayback(uint8_t layoutId)
 {
-    const RuntimeAnimationSceneConfig *nextScene = sceneFor(animation, versionIndex);
-    if (activeScene == nextScene)
+    if (runtimeContract == nullptr)
         return false;
-    activeScene = nextScene;
+    if (hasActiveLayout && activeLayoutId == layoutId)
+        return true;
+    if (!renderer.validateLayoutVersion(runtimeContract->layoutUnselected,
+                                        runtimeContract->layoutSelected, layoutId))
+        return false;
+    activeLayoutId = layoutId;
+    hasActiveLayout = true;
     drawAll();
-    return true;
+    return renderer.firstAssetDataError() == AssetData::BundleError::None;
 }
 
 bool LayoutRenderer::drawSlot(int slot, bool selected)
 {
     if (runtimeContract == nullptr)
         return false;
-    if (activeScene == nullptr)
+    if (!hasActiveLayout)
         return false;
     const AssetData::AnimationRef &layout = selected
-                                                ? activeScene->selected
-                                                : activeScene->unselected;
+                                                ? runtimeContract->layoutSelected
+                                                : runtimeContract->layoutUnselected;
     return renderer.ShowAnimationFrame(
         layout,
-        activeScene->layoutVersion,
+        activeLayoutId,
         static_cast<uint16_t>(slot + 1),
         slotX(slot),
         slotY(slot));
-}
-
-const RuntimeAnimationSceneConfig *LayoutRenderer::sceneFor(
-    const AssetData::AnimationRef &animation,
-    uint8_t versionIndex) const
-{
-    if (runtimeContract == nullptr || !animation.valid())
-        return nullptr;
-    for (uint16_t index = 0; index < runtimeContract->animationSceneCount; ++index)
-    {
-        const RuntimeAnimationSceneConfig &scene =
-            runtimeContract->animationScenes[index];
-        if (scene.active && scene.animationVersion == versionIndex &&
-            scene.animation.speciesSlot == animation.speciesSlot &&
-            scene.animation.outfitSlot == animation.outfitSlot &&
-            scene.animation.animationId == animation.animationId)
-            return &scene;
-    }
-    return nullptr;
 }
 
 int LayoutRenderer::slotX(int slot)

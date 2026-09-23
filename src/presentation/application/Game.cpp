@@ -197,7 +197,14 @@ bool Game::finish_setup_game()
         return false;
     }
 
-    layout->drawAll();
+    uint8_t initialLayoutId = 0;
+    if (!renderer.currentLayoutId(initialLayoutId) ||
+        !layout->updatePlayback(initialLayoutId))
+    {
+        flow.enterFatalError();
+        renderer.showResourceError();
+        return false;
+    }
     if (renderer.firstAssetDataError() != AssetData::BundleError::None)
     {
         flow.enterFatalError();
@@ -311,6 +318,8 @@ void Game::redrawAllNow()
     const PlaybackTickResult playbackResult = tickPlayback(now);
     handlePlaybackResult(playbackResult.result);
     completeFirstStartIfReady(playbackResult);
+    if (flow.isFatalError())
+        return;
 
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
@@ -699,15 +708,20 @@ void Game::refreshBaseAnimation()
 PlaybackTickResult Game::tickPlayback(unsigned long now)
 {
     animations->preparePlayback(now);
-    syncSceneLayoutWithPlayback();
+    if (!syncSceneLayoutWithPlayback())
+        return {PlaybackResult::PlaybackFailed, animations->currentPlaybackRole()};
     return animations->tick(now);
 }
 
-void Game::syncSceneLayoutWithPlayback()
+bool Game::syncSceneLayoutWithPlayback()
 {
-    layout->updatePlayback(
-        animations->currentAnimation(),
-        animations->currentVersionIndex());
+    uint8_t layoutId = 0;
+    if (!renderer.currentLayoutId(layoutId))
+    {
+        renderer.recordAssetDataErrorResource("asset data");
+        return false;
+    }
+    return layout->updatePlayback(layoutId);
 }
 
 void Game::handleCommandResult(const CommandResult &result, int selectedSlot)

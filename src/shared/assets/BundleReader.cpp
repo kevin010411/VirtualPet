@@ -159,6 +159,15 @@ void BundleReader::rejectDecodedFrame(const AssetData::AssetFrameAddress &addres
     recordError(AssetData::BundleError::DecodeFailed, address.speciesSlot);
 }
 
+void BundleReader::rejectInvalidLayout(uint8_t layoutId)
+{
+#if ENABLE_DEBUG
+    debugAttemptAddress_ = {};
+    debugAttemptAddress_.versionIndex = layoutId;
+#endif
+    recordError(AssetData::BundleError::InvalidPack, 0);
+}
+
 AssetData::BundleError BundleReader::firstError() const
 {
     return firstError_;
@@ -353,7 +362,8 @@ bool BundleReader::readAnimation(SdBaseFile &file,
         return false;
     uint8_t data[AssetData::kAnimationRecordSize];
     const uint32_t offset = header.animationTableOffset + index * AssetData::kAnimationRecordSize;
-    if (!readExact(file, offset, data, sizeof(data)) || readU32(data + 12) != 0)
+    if (!readExact(file, offset, data, sizeof(data)) ||
+        data[13] != 0 || data[14] != 0 || data[15] != 0)
         return false;
 
     animation.animationId = readU16(data);
@@ -362,6 +372,7 @@ bool BundleReader::readAnimation(SdBaseFile &file,
     animation.firstFrame = readU32(data + 4);
     animation.frameCount = readU16(data + 8);
     animation.frameMs = readU16(data + 10);
+    animation.layoutId = data[12];
     const bool validOutfit =
         (header.packKind == AssetData::kPackKindShared && animation.outfitSlot == 0) ||
         (header.packKind == AssetData::kPackKindSpecies && animation.outfitSlot > 0);

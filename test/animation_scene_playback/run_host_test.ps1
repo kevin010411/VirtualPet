@@ -5,9 +5,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\runtime_table_v6'))
-$validFixture = Join-Path $fixtureRoot 'animation_scene_playback\runtime.bin'
-$invalidFixture = Join-Path $fixtureRoot 'animation_scene_playback_invalid\runtime.bin'
+$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\asset_data_v2_layout\coherent-bundle'))
+$validFixture = Join-Path $fixtureRoot 'runtime.bin'
+$invalidFixture = Join-Path $fixtureRoot 'assets\species_1.data'
 $outputPath = Join-Path $repoRoot '.pio\animation_scene_playback_host.exe'
 $fixturePaths = @($validFixture, $invalidFixture)
 foreach ($fixturePath in $fixturePaths) {

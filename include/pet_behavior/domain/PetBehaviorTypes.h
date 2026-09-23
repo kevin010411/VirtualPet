@@ -145,22 +145,12 @@ struct PetBehaviorButtonConfig
     RuntimeSystemCommandId systemCommandId;
 };
 
-struct RuntimeAnimationSceneConfig
-{
-    bool active;
-    AssetData::AnimationRef animation;
-    uint8_t animationVersion;
-    AssetData::AnimationRef unselected;
-    AssetData::AnimationRef selected;
-    uint8_t layoutVersion;
-};
-
 struct PetBehaviorConfig
 {
     AssetData::RuntimeManifest assetManifest;
     AssetData::AnimationRef systemAnimations[kFirmwarePlaybackRoleCount];
-    RuntimeAnimationSceneConfig animationScenes[APP_MAX_VISUAL_CONTEXTS];
-    uint16_t animationSceneCount;
+    AssetData::AnimationRef layoutUnselected;
+    AssetData::AnimationRef layoutSelected;
     uint32_t schemaFingerprint;
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     RuntimePetStateConfig petStates[kMaxRuntimePetStates];
