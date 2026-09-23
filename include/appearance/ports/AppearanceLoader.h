@@ -38,7 +38,6 @@ class AppearanceLoader
 public:
     virtual ~AppearanceLoader() = default;
     virtual void configureRuntimeContract(const PetBehaviorConfig &) {}
-    virtual bool validateRuntimeContracts(const PetStatSnapshot &stats) = 0;
     virtual bool lastContractLoadSucceeded() const = 0;
     virtual const char *firstAssetDataErrorResource() const = 0;
     virtual bool findInitialAppearance(AppearanceSelection &selection) = 0;

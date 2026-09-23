@@ -7,6 +7,7 @@
 #include "pet_behavior/domain/PetBehaviorTypes.h"
 
 class BundleReader;
+struct AppearanceSelection;
 
 // Reads the bounded /runtime.bin envelope before any asset pack is configured.
 // Export and the host inspector own complete catalog and integrity validation.
@@ -19,7 +20,9 @@ bool loadCompleteRuntimeTable(SdFat *sd,
                               BundleReader &bundleReader,
                               uint8_t speciesSlot,
                               uint8_t outfitSlot,
-                              PetBehaviorConfig &config);
+                              PetBehaviorConfig &config,
+                              AppearanceSelection *initialAppearance = nullptr,
+                              bool *initialAppearanceResolved = nullptr);
 
 // Decodes the Ticket 03-owned records from a complete runtime-table v1 file.
 // The supplied configuration is published only after bounded reads and runtime

@@ -107,6 +107,7 @@ private:
     AssetData::AnimationRef pendingEvolutionTargetAnimation = {};
 
     bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
+    bool activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     bool resolveOutfitUnlockMask(bool initialize);
     bool refreshOutfitUnlockMask(bool initialize);
     bool enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot);

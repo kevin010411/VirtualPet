@@ -11,7 +11,6 @@ public:
     explicit SdAppearanceLoader(SdFat *refSd);
 
     void configureRuntimeContract(const PetBehaviorConfig &config) override;
-    bool validateRuntimeContracts(const PetStatSnapshot &stats) override;
     bool lastContractLoadSucceeded() const override;
     const char *firstAssetDataErrorResource() const override;
     bool findInitialAppearance(AppearanceSelection &selection) override;

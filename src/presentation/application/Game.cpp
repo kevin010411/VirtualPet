@@ -79,21 +79,27 @@ bool Game::prepare_game()
         return false;
     }
 
-    petBehaviorConfig = {};
-    petBehaviorConfig.assetManifest = manifest;
-    appearanceLoader.configureRuntimeContract(petBehaviorConfig);
     AppearanceSelection initialAppearance = {};
-    if (!appearanceLoader.findInitialAppearance(initialAppearance))
+    bool initialAppearanceResolved = false;
+    char errorResource[20] = {};
+    if (!loadInitialRuntimeContract(animations->sdCard(), manifest, initialAppearance,
+                                    petBehaviorConfig, initialAppearanceResolved,
+                                    errorResource, sizeof(errorResource)))
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
         startupConfigError = "runtime.bin";
+        if (initialAppearanceResolved)
+        {
+            renderer.recordAssetDataErrorResource(errorResource);
+            flow.enterFatalError();
+        }
 #if ENABLE_DEBUG
-        startupDebugStage = "initial appearance";
+        startupDebugStage = initialAppearanceResolved ? "active appearance" : "initial appearance";
 #endif
         return false;
     }
-    if (!configureActiveAppearance(initialAppearance.speciesSlot, initialAppearance.outfitSlot))
+    if (!activateLoadedAppearance(initialAppearance.speciesSlot, initialAppearance.outfitSlot))
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
@@ -386,6 +392,11 @@ bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
         flow.enterFatalError();
         return false;
     }
+    return activateLoadedAppearance(speciesSlot, outfitSlot);
+}
+
+bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
+{
     if (!renderer.configureAssetBundle(petBehaviorConfig.assetManifest.bundleId))
     {
         petBehaviorLoaded = false;
@@ -396,15 +407,6 @@ bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 
     renderer.setAssetAppearance(speciesSlot, outfitSlot);
     appearanceLoader.configureRuntimeContract(petBehaviorConfig);
-    if (!appearanceLoader.validateRuntimeContracts(pet.statSnapshot()))
-    {
-        renderer.recordAssetDataErrorResource(appearanceLoader.firstAssetDataErrorResource());
-        petBehaviorLoaded = false;
-        petBehaviorLoadingFailed = true;
-        flow.enterFatalError();
-        renderer.showResourceError(appearanceLoader.firstAssetDataErrorResource());
-        return false;
-    }
     animations->configureRuntimeContract(petBehaviorConfig);
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
     commands->configure(petBehaviorConfig);

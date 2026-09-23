@@ -285,14 +285,75 @@ int main(int argc, char **argv)
     ninthSpecies.outfitSlot = 9;
     assert(!AssetData::isValidFrameAddress(ninthSpecies));
 #if RUNTIME_TABLE_V7
-    assert(argc == 3);
+    assert(argc == 4);
     const std::vector<uint8_t> valid = readFixture(argv[1]);
     const std::vector<uint8_t> legacy = readFixture(argv[2]);
+    const std::vector<uint8_t> startup = readFixture(argv[3]);
     PetBehaviorConfig config = {};
     assert(parseRuntimeTableBehavior(valid.data(), valid.size(),
                                      releaseFixtureManifest(valid), 1, 1, config));
     assert(config.layoutUnselected.valid() && config.layoutUnselected.shared());
     assert(config.layoutSelected.valid() && config.layoutSelected.shared());
+    SdFat sd(startup.data(), startup.size());
+    uint8_t scratch[AssetData::kIoScratchBytes] = {};
+    BundleReader reader(&sd, scratch, sizeof(scratch));
+    AppearanceSelection initial = {};
+    bool initialResolved = false;
+    HostSd::openCount = 0;
+    const bool initialLoaded = loadCompleteRuntimeTable(
+        &sd, releaseFixtureManifest(startup), reader,
+        0, 0, config, &initial, &initialResolved);
+    if (!initialLoaded)
+        printf("initial contract failed: resolved=%d species=%u outfit=%u opens=%zu\n",
+               initialResolved, initial.speciesSlot, initial.outfitSlot, HostSd::openCount);
+    assert(initialLoaded);
+    assert(initialResolved && initial.speciesSlot == 1 && initial.outfitSlot == 1);
+    assert(config.activeSpeciesSlot == initial.speciesSlot &&
+           config.activeOutfitSlot == initial.outfitSlot);
+    assert(HostSd::openCount == 1);
+    HostSd::openCount = 0;
+    assert(loadCompleteRuntimeTable(&sd, releaseFixtureManifest(startup), reader,
+                                    1, 1, config));
+    assert(HostSd::openCount == 1);
+
+    // Replace OutfitUnlocks with a duplicate same-sized section. The initial
+    // appearance and behavior remain decodable, but the required appearance
+    // section check must reject the contract in the same read.
+    std::vector<uint8_t> missingUnlocks = startup;
+    const uint16_t sectionCount = static_cast<uint16_t>(
+        startup[24] | (static_cast<uint16_t>(startup[25]) << 8U));
+    bool replacedUnlocks = false;
+    for (uint16_t index = 0; index < sectionCount; ++index)
+    {
+        const size_t offset = 64U + static_cast<size_t>(index) * 16U;
+        if (missingUnlocks[offset] == 35 && missingUnlocks[offset + 1] == 0)
+        {
+            missingUnlocks[offset] = 32; // Outfits has the same record size.
+            replacedUnlocks = true;
+            break;
+        }
+    }
+    assert(replacedUnlocks);
+    SdFat missingUnlocksSd(missingUnlocks.data(), missingUnlocks.size());
+    BundleReader missingUnlocksReader(&missingUnlocksSd, scratch, sizeof(scratch));
+    assert(!validateRuntimeTableAppearance(&missingUnlocksSd,
+                                           releaseFixtureManifest(missingUnlocks),
+                                           missingUnlocksReader));
+    HostSd::openCount = 0;
+    initialResolved = false;
+    assert(!loadCompleteRuntimeTable(&missingUnlocksSd,
+                                     releaseFixtureManifest(missingUnlocks),
+                                     missingUnlocksReader, 0, 0, config,
+                                     &initial, &initialResolved));
+    assert(initialResolved);
+    assert(HostSd::openCount == 1);
+
+    AssetData::RuntimeManifest mismatched = releaseFixtureManifest(startup);
+    ++mismatched.fileSize;
+    initialResolved = true;
+    assert(!loadCompleteRuntimeTable(&sd, mismatched, reader,
+                                     0, 0, config, &initial, &initialResolved));
+    assert(!initialResolved);
     PetBehaviorConfig unpublished = {};
     unpublished.schemaFingerprint = 0xA5A5A5A5UL;
     assert(!parseRuntimeTableBehavior(legacy.data(), legacy.size(),

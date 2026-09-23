@@ -10,6 +10,7 @@ namespace HostSd
 {
 inline const uint8_t *mountedData = nullptr;
 inline size_t mountedSize = 0;
+inline size_t openCount = 0;
 }
 
 class File
@@ -36,6 +37,7 @@ public:
     uint32_t size() const { return static_cast<uint32_t>(size_); }
     uint32_t fileSize() const { return static_cast<uint32_t>(size_); }
     bool open(const char *, uint8_t) {
+        ++HostSd::openCount;
         data_ = HostSd::mountedData;
         size_ = HostSd::mountedSize;
         position_ = 0;

@@ -35,15 +35,6 @@ void SdAppearanceLoader::configureRuntimeContract(const PetBehaviorConfig &confi
     contractErrorResource[0] = '\0';
 }
 
-bool SdAppearanceLoader::validateRuntimeContracts(const PetStatSnapshot &stats)
-{
-    (void)stats;
-    const bool valid = validateRuntimeTableAppearance(sd, assetManifest, bundleReader);
-    recordRuntimeResult(valid, bundleReader, lastContractSucceeded,
-                        contractErrorResource, sizeof(contractErrorResource));
-    return valid;
-}
-
 bool SdAppearanceLoader::lastContractLoadSucceeded() const
 {
     return lastContractSucceeded;
