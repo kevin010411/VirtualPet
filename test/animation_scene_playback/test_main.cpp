@@ -13,14 +13,23 @@
 
 namespace
 {
+enum class RenderEventChannel : uint8_t
+{
+    SdRead,
+    TftDraw,
+};
+
 enum class RenderEventKind : uint8_t
 {
+    AnimationRecord,
+    LayoutMetadata,
     LayoutFrame,
     AnimationFrame,
 };
 
 struct RenderEvent
 {
+    RenderEventChannel channel;
     RenderEventKind kind;
     uint16_t animationId;
     uint8_t version;
@@ -28,6 +37,12 @@ struct RenderEvent
 };
 
 std::vector<RenderEvent> events;
+
+void recordEvent(RenderEventChannel channel, RenderEventKind kind,
+                 uint16_t animationId, uint8_t version, uint16_t frame)
+{
+    events.push_back({channel, kind, animationId, version, frame});
+}
 uint16_t selectedAnimationId = 0;
 uint8_t selectedVersion = 0;
 uint8_t selectedLayoutId = 0;
@@ -87,15 +102,31 @@ void prepareAndTick(AnimationController &animations, LayoutRenderer &layout,
 
 void assertAtomicSceneBeforeFrame(uint8_t layoutVersion, uint16_t centerId)
 {
-    assert(events.size() == 9);
+    assert(events.size() == 21);
+    assert(events[0].channel == RenderEventChannel::SdRead);
+    assert(events[0].kind == RenderEventKind::AnimationRecord);
+    for (size_t index = 1; index <= 2; ++index)
+    {
+        assert(events[index].channel == RenderEventChannel::SdRead);
+        assert(events[index].kind == RenderEventKind::LayoutMetadata);
+        assert(events[index].version == layoutVersion);
+    }
     for (size_t index = 0; index < 8; ++index)
     {
-        assert(events[index].kind == RenderEventKind::LayoutFrame);
-        assert(events[index].version == layoutVersion);
-        assert(events[index].frame == index + 1);
+        const size_t readIndex = 3 + index * 2;
+        const size_t drawIndex = readIndex + 1;
+        assert(events[readIndex].channel == RenderEventChannel::SdRead);
+        assert(events[readIndex].kind == RenderEventKind::LayoutFrame);
+        assert(events[drawIndex].channel == RenderEventChannel::TftDraw);
+        assert(events[drawIndex].kind == RenderEventKind::LayoutFrame);
+        assert(events[drawIndex].version == layoutVersion);
+        assert(events[drawIndex].frame == index + 1);
     }
-    assert(events.back().kind == RenderEventKind::AnimationFrame);
-    assert(events.back().animationId == centerId);
+    assert(events[19].channel == RenderEventChannel::SdRead);
+    assert(events[19].kind == RenderEventKind::AnimationFrame);
+    assert(events[20].channel == RenderEventChannel::TftDraw);
+    assert(events[20].kind == RenderEventKind::AnimationFrame);
+    assert(events[20].animationId == centerId);
 }
 } // namespace
 
@@ -126,6 +157,8 @@ void Renderer::initAnimations() {}
 bool Renderer::setAnimation(
     const AssetData::AnimationRef &reference, uint8_t versionIndex, bool)
 {
+    recordEvent(RenderEventChannel::SdRead, RenderEventKind::AnimationRecord,
+                reference.animationId, versionIndex, 0);
     selectedAnimationId = reference.animationId;
     selectedVersion = versionIndex;
     selectedLayoutId = fixtureLayoutIds[versionIndex < 2 ? versionIndex : 0];
@@ -138,8 +171,12 @@ bool Renderer::currentLayoutId(uint8_t &layoutId) const
 }
 bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &unselected,
                                      const AssetData::AnimationRef &selected,
-                                     uint8_t)
+                                     uint8_t layoutId)
 {
+    recordEvent(RenderEventChannel::SdRead, RenderEventKind::LayoutMetadata,
+                unselected.animationId, layoutId, 0);
+    recordEvent(RenderEventChannel::SdRead, RenderEventKind::LayoutMetadata,
+                selected.animationId, layoutId, 0);
     return unselected.shared() && selected.shared();
 }
 AssetData::BundleError Renderer::firstAssetDataError() const
@@ -148,14 +185,20 @@ AssetData::BundleError Renderer::firstAssetDataError() const
 }
 bool Renderer::advanceAnimationFrame()
 {
-    events.push_back({RenderEventKind::AnimationFrame, selectedAnimationId, selectedVersion, 1});
+    recordEvent(RenderEventChannel::SdRead, RenderEventKind::AnimationFrame,
+                selectedAnimationId, selectedVersion, 1);
+    recordEvent(RenderEventChannel::TftDraw, RenderEventKind::AnimationFrame,
+                selectedAnimationId, selectedVersion, 1);
     return true;
 }
 bool Renderer::ShowAnimationFrame(
     const AssetData::AnimationRef &reference, uint8_t versionIndex,
     uint16_t frameIndex, int, int, int)
 {
-    events.push_back({RenderEventKind::LayoutFrame, reference.animationId, versionIndex, frameIndex});
+    recordEvent(RenderEventChannel::SdRead, RenderEventKind::LayoutFrame,
+                reference.animationId, versionIndex, frameIndex);
+    recordEvent(RenderEventChannel::TftDraw, RenderEventKind::LayoutFrame,
+                reference.animationId, versionIndex, frameIndex);
     return true;
 }
 bool Renderer::willRestartAnimationLoop() const { return false; }
@@ -187,6 +230,7 @@ int main(int argc, char **argv)
     fixtureLayoutIds[0] = packFixture[92];
     fixtureLayoutIds[1] = packFixture[108];
     assert(fixtureLayoutIds[0] == 0 && fixtureLayoutIds[1] == 1);
+    config.buttons[1] = config.buttons[0];
 
     Renderer renderer(nullptr, nullptr);
     Host host;
@@ -202,28 +246,78 @@ int main(int argc, char **argv)
 
     Animation first = Animation::complete(center);
     first.versionIndex = 0;
-    assert(animations.replace({&first, 1}) == PlaybackResult::Accepted);
     events.clear();
+    assert(animations.replace({&first, 1}) == PlaybackResult::Accepted);
     prepareAndTick(animations, layout, renderer, 1000);
     assertAtomicSceneBeforeFrame(0, center.animationId);
 
-    // Re-selecting an animation with the same layout keeps the button pixels.
-    assert(animations.replace({&first, 1}) == PlaybackResult::Accepted);
+    // A same-layout animation reads its record and frame without layout rereads/redraws.
     events.clear();
+    assert(animations.replace({&first, 1}) == PlaybackResult::Accepted);
     prepareAndTick(animations, layout, renderer, 1001);
-    assert(events.size() == 1);
-    assert(events[0].kind == RenderEventKind::AnimationFrame);
+    assert(events.size() == 3);
+    assert(events[0].channel == RenderEventChannel::SdRead);
+    assert(events[0].kind == RenderEventKind::AnimationRecord);
+    assert(events[1].channel == RenderEventChannel::SdRead);
+    assert(events[1].kind == RenderEventKind::AnimationFrame);
+    assert(events[2].channel == RenderEventChannel::TftDraw);
+    assert(events[2].kind == RenderEventKind::AnimationFrame);
 
     Animation second = Animation::complete(center);
     second.versionIndex = 1;
-    assert(animations.replace({&second, 1}) == PlaybackResult::Accepted);
     events.clear();
+    assert(animations.replace({&second, 1}) == PlaybackResult::Accepted);
     prepareAndTick(animations, layout, renderer, 1002);
     assertAtomicSceneBeforeFrame(1, center.animationId);
 
-    // A display wake invalidates the pixels even when the layout ID is stable.
+    // A display wake redraws all layout frames; SD reads and TFT draws are distinct.
     events.clear();
     layout.drawAll();
-    assert(events.size() == 8);
+    assert(events.size() == 16);
+    for (size_t index = 0; index < 8; ++index)
+    {
+        const size_t readIndex = index * 2;
+        const size_t drawIndex = readIndex + 1;
+        assert(events[readIndex].channel == RenderEventChannel::SdRead);
+        assert(events[readIndex].kind == RenderEventKind::LayoutFrame);
+        assert(events[drawIndex].channel == RenderEventChannel::TftDraw);
+        assert(events[drawIndex].kind == RenderEventKind::LayoutFrame);
+        assert(events[drawIndex].frame == index + 1);
+    }
+
+    // Selection redraws only the previous and current visible buttons.
+    events.clear();
+    commands.next();
+    layout.drawSelection();
+    assert(events.size() == 4);
+    assert(events[0].channel == RenderEventChannel::SdRead);
+    assert(events[0].kind == RenderEventKind::LayoutFrame);
+    assert(events[1].channel == RenderEventChannel::TftDraw);
+    assert(events[1].kind == RenderEventKind::LayoutFrame);
+    assert(events[1].frame == 1);
+    assert(events[2].channel == RenderEventChannel::SdRead);
+    assert(events[2].kind == RenderEventKind::LayoutFrame);
+    assert(events[3].channel == RenderEventChannel::TftDraw);
+    assert(events[3].kind == RenderEventKind::LayoutFrame);
+    assert(events[3].frame == 2);
+
+    // Appearance changes invalidate cached layout metadata before the next frame.
+    events.clear();
+    layout.begin();
+    assert(layout.updatePlayback(1));
+    assert(events.size() == 18);
+    assert(events[0].channel == RenderEventChannel::SdRead);
+    assert(events[0].kind == RenderEventKind::LayoutMetadata);
+    assert(events[1].channel == RenderEventChannel::SdRead);
+    assert(events[1].kind == RenderEventKind::LayoutMetadata);
+    for (size_t index = 0; index < 8; ++index)
+    {
+        const size_t readIndex = 2 + index * 2;
+        const size_t drawIndex = readIndex + 1;
+        assert(events[readIndex].channel == RenderEventChannel::SdRead);
+        assert(events[readIndex].kind == RenderEventKind::LayoutFrame);
+        assert(events[drawIndex].channel == RenderEventChannel::TftDraw);
+        assert(events[drawIndex].kind == RenderEventKind::LayoutFrame);
+    }
     return 0;
 }

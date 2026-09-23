@@ -160,7 +160,7 @@ uint16_t recordSizeFor(uint16_t type)
 {
     switch (type)
     {
-    case Profile: return 40;
+    case Profile: return 38;
     case Persistence: return 16;
     case AssetRefs: return 12;
     case Animations: return 8;
