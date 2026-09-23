@@ -5,6 +5,7 @@
 #include "pet/application/PetActionController.h"
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
 #include "presentation/adapters/rendering/Renderer.h"
+#include "shared/utils/FirmwareRandom.h"
 
 namespace
 {
@@ -24,9 +25,9 @@ bool writeStats(const PetBehaviorStatValues &state,
     return petActions.commitPetStats(state.values, kPetBehaviorSlotCount);
 }
 
-uint16_t arduinoRandomBelow(uint16_t upperExclusive)
+uint16_t firmwareRandomBelow(uint16_t upperExclusive)
 {
-    return static_cast<uint16_t>(random(upperExclusive));
+    return FirmwareRandom::below(upperExclusive);
 }
 
 PlaybackResult resolveActionAnimation(const PetBehaviorActionPlayback &playback,
@@ -39,7 +40,7 @@ PlaybackResult resolveActionAnimation(const PetBehaviorActionPlayback &playback,
     if (versionCount == 0)
         return PlaybackResult::AnimationMissing;
     animation = Animation::complete(playback.animation, playback.playbackCount);
-    animation.versionIndex = versionCount == 1 ? 0 : static_cast<uint8_t>(random(versionCount));
+    animation.versionIndex = versionCount == 1 ? 0 : static_cast<uint8_t>(FirmwareRandom::below(versionCount));
     return PlaybackResult::Accepted;
 }
 } // namespace
@@ -84,7 +85,7 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
     PetBehaviorActionPlayback playback = {};
     if (!applyPetBehaviorAction(
-            config, actionSlot, state, nextPauses, playback, arduinoRandomBelow))
+            config, actionSlot, state, nextPauses, playback, firmwareRandomBelow))
         return PetBehaviorActionResult::Rejected;
     if (!writeStats(state, petActions))
         return PetBehaviorActionResult::Rejected;

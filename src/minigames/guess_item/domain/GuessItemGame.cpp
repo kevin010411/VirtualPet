@@ -3,6 +3,7 @@
 #if ENABLE_GUESS_GAME
 
 #include "minigames/guess_item/domain/GuessItemGame.h"
+#include "shared/utils/FirmwareRandom.h"
 
 namespace
 {
@@ -22,7 +23,7 @@ namespace
 
     FirmwarePlaybackRole randomItemAnimation()
     {
-        switch (random(1, 5))
+        switch (1 + FirmwareRandom::below(4))
         {
         case 1:
             return FirmwarePlaybackRole::GuessItem1;
@@ -140,7 +141,7 @@ void GuessItemGame::update()
     case GuessItemState::WaitingItem:
         if (now - lastMoveTime > kItemRevealDelayMs)
         {
-            itemSide = (random(2) == 0) ? GuessItemSide::Left : GuessItemSide::Right;
+            itemSide = (FirmwareRandom::below(2) == 0) ? GuessItemSide::Left : GuessItemSide::Right;
             state = GuessItemState::WaitingInput;
             lastMoveTime = now;
         }

@@ -6,6 +6,7 @@
 #include "pet/domain/Pet.h"
 #include "presentation/adapters/rendering/Renderer.h"
 #include "pet/adapters/PetStorage.h"
+#include "shared/utils/FirmwareRandom.h"
 #include <SdFat.h>
 #include "stm32f1xx.h"
 #include "stm32f1xx_hal.h"
@@ -589,7 +590,7 @@ void setup()
   g_startupTiming.powerSettleMs = millis() - powerSettleStartedAt;
 #endif
 
-  randomSeed(analogRead(0));
+  FirmwareRandom::seed(analogRead(0));
 
   SPI.begin();   // SPI1
   SPI_2.begin(); // SPI2

@@ -27,6 +27,7 @@ $sources = @(
     'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
     'src/presentation/application/LayoutRenderer.cpp'
     'src/shared/integrity/Crc32.cpp'
+    'src/shared/utils/FirmwareRandom.cpp'
 )
 
 Push-Location $repoRoot

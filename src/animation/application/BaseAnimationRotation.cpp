@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include "presentation/adapters/rendering/Renderer.h"
+#include "shared/utils/FirmwareRandom.h"
 
 
 void BaseAnimationRotation::reset()
@@ -58,6 +59,6 @@ bool BaseAnimationRotation::selectVersion(const AssetData::AnimationRef &animati
     const uint16_t count = renderer.versionCountFor(animation);
     if (count == 0)
         return false;
-    versionIndex = count == 1 ? 0 : static_cast<uint8_t>(random(count));
+    versionIndex = count == 1 ? 0 : static_cast<uint8_t>(FirmwareRandom::below(count));
     return true;
 }

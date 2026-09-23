@@ -5,13 +5,14 @@
 #include "pet_behavior/application/PetBehaviorRuntime.h"
 #include "pet_behavior/domain/PetBehaviorStatSlot.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
+#include "shared/utils/FirmwareRandom.h"
 
 namespace
 {
 #if !ENABLE_SEQUENTIAL_STATUS_SET_SELECTION
-uint8_t arduinoStatusSetIndex(uint8_t setCount)
+uint8_t firmwareStatusSetIndex(uint8_t setCount)
 {
-    return static_cast<uint8_t>(random(setCount));
+    return static_cast<uint8_t>(FirmwareRandom::below(setCount));
 }
 #endif
 struct StatusValueContext
@@ -121,7 +122,7 @@ void CommandExecutor::commandPredict()
     currentResult.layoutPlaybackRole = FirmwarePlaybackRole::PredAnim;
     const Animation sequence[] = {
         Animation(FirmwarePlaybackRole::PredAnim, gameTick * 20, true),
-        Animation(fortuneToPlaybackRole(random(1, maxFortune + 1)), gameTick * 2.4, false),
+        Animation(fortuneToPlaybackRole(1 + FirmwareRandom::below(maxFortune)), gameTick * 2.4, false),
     };
     currentResult.executed = animations.replace(
                                  AnimationSequence(sequence, sizeof(sequence) / sizeof(sequence[0]))) ==
@@ -167,7 +168,7 @@ bool CommandExecutor::queueStatusSetsAnimation()
     selectedSetIndex = static_cast<uint8_t>(nextStatusSetIndex % setCount);
     nextStatusSetIndex = static_cast<uint8_t>((selectedSetIndex + 1) % setCount);
 #else
-    if (!selectStatusSetIndex(petBehaviorConfig->statusSets.count, arduinoStatusSetIndex, selectedSetIndex))
+    if (!selectStatusSetIndex(petBehaviorConfig->statusSets.count, firmwareStatusSetIndex, selectedSetIndex))
         return false;
 #endif
     const StatusSetConfig &set = petBehaviorConfig->statusSets.sets[selectedSetIndex];
