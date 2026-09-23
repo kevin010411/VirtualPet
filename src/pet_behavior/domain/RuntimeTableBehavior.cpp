@@ -1222,9 +1222,18 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
                 return false;
             const uint8_t role = record[0];
             if (role == 0 || role >= kFirmwarePlaybackRoleCount ||
-                readU16(record + 4) != 0 ||
-                !resolveAnimation(source, *assets, *animations, readU16(record + 2), scope, animation))
+                readU16(record + 4) != 0)
                 return false;
+            if (!resolveAnimation(source, *assets, *animations, readU16(record + 2), scope,
+                                  animation))
+            {
+                // Evolution uses references on each evolution record. Start
+                // belongs to the initial appearance, not later species.
+                if (role == static_cast<uint8_t>(FirmwarePlaybackRole::Evolution) ||
+                    role == static_cast<uint8_t>(FirmwarePlaybackRole::Start))
+                    continue;
+                return false;
+            }
             config.systemAnimations[role] = animation;
             if (role == static_cast<uint8_t>(FirmwarePlaybackRole::Layout))
                 config.layoutUnselected = animation;

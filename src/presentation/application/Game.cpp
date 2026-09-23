@@ -16,6 +16,11 @@
 #include "pet/adapters/PetStorage.h"
 #include "shared/config/AppProfile.h"
 
+namespace
+{
+constexpr uint8_t kEvolutionPlaybackCount = 2;
+}
+
 Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AppearanceLoader &appearanceLoaderRef)
     : pet(petRef),
       petStorage(petStorageRef),
@@ -290,6 +295,8 @@ void Game::loop_game()
     const PlaybackTickResult playbackResult = tickPlayback(now);
     handlePlaybackResult(playbackResult.result);
     completeFirstStartIfReady(playbackResult);
+    if (playbackResult.result == PlaybackResult::Accepted)
+        completePendingEvolutionIfReady();
 
     if (flow.isFatalError())
     {
@@ -326,6 +333,8 @@ void Game::redrawAllNow()
     const PlaybackTickResult playbackResult = tickPlayback(now);
     handlePlaybackResult(playbackResult.result);
     completeFirstStartIfReady(playbackResult);
+    if (playbackResult.result == PlaybackResult::Accepted)
+        completePendingEvolutionIfReady();
     if (flow.isFatalError())
         return;
 
@@ -937,7 +946,7 @@ bool Game::completePendingEvolutionIfReady()
         pendingEvolutionTargetAnimation.valid())
     {
         const Animation targetAnimation = Animation::complete(
-            pendingEvolutionTargetAnimation, 1, FirmwarePlaybackRole::Evolution);
+            pendingEvolutionTargetAnimation, kEvolutionPlaybackCount, FirmwarePlaybackRole::Evolution);
         if (animations->replace(AnimationSequence(&targetAnimation, 1)) == PlaybackResult::Accepted)
         {
             pendingEvolutionPhase = PendingEvolutionPhase::TargetSegment;
@@ -1007,7 +1016,7 @@ bool Game::beginEvolutionAnimation(const AppearanceSelection &selection)
 
     const Animation animation = Animation::complete(
         selection.sourceEvolutionAnimation,
-        selection.evolutionMode == EvolutionAnimationMode::Single ? 2 : 1,
+        kEvolutionPlaybackCount,
         FirmwarePlaybackRole::Evolution);
     const PlaybackResult replaceResult = animations->replace(AnimationSequence(&animation, 1));
     if (replaceResult != PlaybackResult::Accepted)
