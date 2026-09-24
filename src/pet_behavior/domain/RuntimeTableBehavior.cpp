@@ -1394,20 +1394,6 @@ bool validateRuntimeTableAppearance(SdFat *sd,
     return loadRuntimeTableAppearanceQuery(sd, manifest, bundleReader, query);
 }
 
-bool loadRuntimeTableInitialAppearance(SdFat *sd,
-                                       const AssetData::RuntimeManifest &manifest,
-                                       BundleReader &bundleReader,
-                                       AppearanceSelection &selection,
-                                       AssetData::AnimationRef *idleAnimation)
-{
-    selection = {};
-    AppearanceQuery query = {};
-    query.kind = AppearanceQueryKind::Initial;
-    query.selection = &selection;
-    query.idleAnimation = idleAnimation;
-    return loadRuntimeTableAppearanceQuery(sd, manifest, bundleReader, query);
-}
-
 bool findRuntimeTableEvolutionTarget(SdFat *sd,
                                      const AssetData::RuntimeManifest &manifest,
                                      BundleReader &bundleReader,

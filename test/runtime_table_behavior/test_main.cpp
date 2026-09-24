@@ -209,10 +209,6 @@ void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
     assert(loadRuntimeTableSpecies(&sd, manifest, reader, species, 8, speciesCount));
     assert(speciesCount == 2 && species[0] == 1 && species[1] == 2);
 
-    AppearanceSelection initial = {};
-    assert(loadRuntimeTableInitialAppearance(&sd, manifest, reader, initial));
-    assert(initial.speciesSlot == 1 && initial.outfitSlot == 1);
-
     ActivePetBehaviorStatSlots activeSlots(config);
     PetStatSnapshot stats = {};
     stats.speciesSlot = 1;

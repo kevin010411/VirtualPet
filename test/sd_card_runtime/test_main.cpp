@@ -86,7 +86,10 @@ int main(int argc, char **argv)
     }
 
     PetBehaviorConfig config = {};
-    if (!loadCompleteRuntimeTable(&sd, manifest, reader, 1, 1, config))
+    AppearanceSelection initialAppearance = {};
+    bool initialAppearanceResolved = false;
+    if (!loadCompleteRuntimeTable(&sd, manifest, reader, 0, 0, config,
+                                  &initialAppearance, &initialAppearanceResolved))
     {
         printf("runtime decode failed: %s\n", reader.firstErrorResource());
         return 3;
@@ -102,8 +105,7 @@ int main(int argc, char **argv)
         return 4;
     }
 
-    AppearanceSelection initialAppearance = {};
-    if (!loadRuntimeTableInitialAppearance(&sd, manifest, reader, initialAppearance))
+    if (!initialAppearanceResolved)
     {
         printf("initial appearance failed: %s\n", reader.firstErrorResource());
         return 6;

@@ -37,7 +37,7 @@ class AppearanceLoader
 {
 public:
     virtual ~AppearanceLoader() = default;
-    virtual void configureRuntimeContract(const PetBehaviorConfig &) {}
+    virtual void configureRuntimeContract(const PetBehaviorConfig &config) = 0;
     virtual bool lastContractLoadSucceeded() const = 0;
     virtual const char *firstAssetDataErrorResource() const = 0;
     virtual bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) = 0;

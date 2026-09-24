@@ -11,11 +11,6 @@
 bool validateRuntimeTableAppearance(SdFat *sd,
                                     const AssetData::RuntimeManifest &manifest,
                                     BundleReader &bundleReader);
-bool loadRuntimeTableInitialAppearance(SdFat *sd,
-                                       const AssetData::RuntimeManifest &manifest,
-                                       BundleReader &bundleReader,
-                                       AppearanceSelection &selection,
-                                       AssetData::AnimationRef *idleAnimation = nullptr);
 bool findRuntimeTableEvolutionTarget(SdFat *sd,
                                      const AssetData::RuntimeManifest &manifest,
                                      BundleReader &bundleReader,

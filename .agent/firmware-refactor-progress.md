@@ -55,9 +55,15 @@
 
 同一 `project_12` 設定的 A/B 建置：Flash 57,860 → 57,892 B（+32 B）、靜態 RAM 6,828 → 6,828 B。`test/runtime_contract_loader/run_host_test.ps1` 驗證啟動只讀一次 manifest、初始外觀與後續外觀錯誤路由，以及一般切換重新讀 manifest；`test/runtime_table_behavior/run_host_test.ps1` 與 `pio run -e project_12` 通過。未直接執行 `Game::prepare_game` 或實機 SD 讀取。
 
+## 第三步：過薄介面與舊相容入口
+
+依現行呼叫者與 Web `backend/services/feature_sets/profile_resolver.py` 的旗標映射核對：`APP_PROFILE_*` 舊客戶巨集沒有程式使用；Profile Resolver 不輸出 `ENABLE_COMMAND_SPECIES`，正式建置也未設定它。已移除這個直接 Species 命令的編譯分支、CommandHost/Executor 轉呼叫及 Game 的結果分支；Evolution 與首次啟動選擇仍保留。`RuntimeSystemCommandId::ChangeSpecies` 與 `APP_COMMAND_CHANGE_SPECIES` 的數值保留作為 tombstone，不會在命令目錄接受 `change_species`。只有測試與離線 SD 檢查器使用的 `loadRuntimeTableInitialAppearance` 重複開檔入口已移除；離線檢查器改用完整表讀取交付的初始外觀。`AppearanceLoader` 仍負責 manifest、BundleReader、第一錯誤資源與可替換呼叫介面；`configureRuntimeContract` 改為必須實作，避免無聲略過載入設定。`validateRuntimeTableAppearance` 保留供離線檢查及缺少必要段落的 host 測試使用。
+
+同一 `project_12` 設定的 A/B 建置：Flash 57,892 → 57,884 B（-8 B）、靜態 RAM 6,828 → 6,828 B。`test/runtime_table_behavior/run_host_test.ps1`、`test/animation_scene_playback/run_host_test.ps1`、`test/runtime_contract_loader/run_host_test.ps1` 及 `pio run -e project_12` 通過；離線 `sd_card_runtime` 工具已做 C++ 語法編譯，未以實際 SD bundle 執行。未進行實機 SD、時間或 SRAM 峰值量測。
+
 ## 後續擬議實作順序
 
-架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。第一步已清除舊建置與素材指引；其餘程式碼清理仍需逐一驗證現行呼叫者、Profile Resolver 輸出、錯誤順序與 linked 尺寸。
+架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。第一至第三步已完成；主要剩餘工作是第四步 Game 協調與第五步熱路徑/容量評估，以下細項分屬這兩步或第二步盤點後的後續候選。
 
 1. **以架構角度繼續 Flash 優化。** 初始外觀的重複查詢已收斂；下一輪追查其餘 Runtime Table 外觀操作之間重複的開檔、manifest 驗證、查詢與錯誤轉譯責任，選擇能縮小對外介面、移除重複資料流的模組 seam；先確認既有語意與第一錯誤資源，再實作與 A/B 建置。不得再以 pack 路徑字串組裝、內聯標註等局部省位元組變動作為優化方向；不可藉移除目前使用中的第三方庫節省 Flash，也不採用 Status 減法迴圈。
 2. **補齊 Game 啟動整合驗證。** 現有 host 測試未直接覆蓋 `Game::prepare_game` 的 renderer/fatal 狀態與存檔恢復分支；後續若有可維護的測試替身，再加入缺檔、損毀、不同外觀恢復和第一錯誤資源案例。
