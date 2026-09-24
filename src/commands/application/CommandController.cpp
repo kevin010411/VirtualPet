@@ -19,12 +19,6 @@ namespace
 #define COMMAND_SLOT_CHANGE_OUTFIT CommandController::emptySlot()
 #endif
 
-#if ENABLE_COMMAND_SPECIES
-#define COMMAND_SLOT_CHANGE_SPECIES COMMAND_SLOT(AppCommandId::ChangeSpecies, "CHANGE_SPECIES", canAlwaysExecute, executeChangeSpecies)
-#else
-#define COMMAND_SLOT_CHANGE_SPECIES CommandController::emptySlot()
-#endif
-
 #if ENABLE_GUESS_GAME
 #define COMMAND_SLOT_GUESS_GAME COMMAND_SLOT(AppCommandId::GuessGame, "GUESS_GAME", canAlwaysExecute, executeGuessGame)
 #else
@@ -242,13 +236,6 @@ void CommandController::executeUserAction()
 void CommandController::executeChangeOutfit()
 {
     host.commandChangeOutfit();
-}
-#endif
-
-#if ENABLE_COMMAND_SPECIES
-void CommandController::executeChangeSpecies()
-{
-    host.commandChangeSpecies();
 }
 #endif
 

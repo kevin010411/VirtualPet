@@ -137,13 +137,6 @@ void CommandExecutor::commandChangeOutfit()
 }
 #endif
 
-#if ENABLE_COMMAND_SPECIES
-void CommandExecutor::commandChangeSpecies()
-{
-    currentResult.requestedSpecies = true;
-}
-#endif
-
 void CommandExecutor::commandStatus()
 {
     currentResult.layoutPlaybackRole = FirmwarePlaybackRole::Status;

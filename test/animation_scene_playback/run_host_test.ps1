@@ -34,7 +34,7 @@ Push-Location $repoRoot
 try {
     & g++ -std=c++17 -DENABLE_DYNAMIC_ACTION_LAYOUT=1 -DAPP_MAX_PET_STATS=10 `
         -DENABLE_COMMAND_PREDICT=0 -DENABLE_GUESS_GAME=0 `
-        -DENABLE_COMMAND_OUTFIT=0 -DENABLE_COMMAND_SPECIES=0 `
+        -DENABLE_COMMAND_OUTFIT=0 `
         -Itest/host_stubs -Itest/animation_scene_playback -Iinclude @sources -o $outputPath
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE

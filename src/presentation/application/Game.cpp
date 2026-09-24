@@ -787,18 +787,6 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
     }
 #endif
 
-#if ENABLE_COMMAND_SPECIES
-    if (result.requestedSpecies)
-    {
-        if (appearanceSelection->startSpecies(petActions->speciesSlot(), pet.statSnapshot()))
-        {
-            animations->cancelAll();
-            animations->requestFullRedraw();
-        }
-        return;
-    }
-#endif
-
 #if ENABLE_GUESS_GAME
     if (result.requestedMinigame && !flow.isFirstLaunch())
     {

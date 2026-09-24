@@ -35,9 +35,6 @@ public:
 #if ENABLE_COMMAND_OUTFIT
     virtual void commandChangeOutfit() = 0;
 #endif
-#if ENABLE_COMMAND_SPECIES
-    virtual void commandChangeSpecies() = 0;
-#endif
     virtual void commandStatus() = 0;
 };
 
@@ -99,9 +96,6 @@ private:
     void executeUserAction();
 #if ENABLE_COMMAND_OUTFIT
     void executeChangeOutfit();
-#endif
-#if ENABLE_COMMAND_SPECIES
-    void executeChangeSpecies();
 #endif
     void executeStatus();
 };

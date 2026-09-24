@@ -15,7 +15,6 @@ struct CommandResult
     AppCommandId commandId = AppCommandId::None;
     FirmwarePlaybackRole layoutPlaybackRole = FirmwarePlaybackRole::None;
     bool requestedOutfit = false;
-    bool requestedSpecies = false;
     bool requestedMinigame = false;
     bool resourceError = false;
 };
@@ -63,9 +62,6 @@ private:
 #endif
 #if ENABLE_COMMAND_OUTFIT
     void commandChangeOutfit() override;
-#endif
-#if ENABLE_COMMAND_SPECIES
-    void commandChangeSpecies() override;
 #endif
     void commandStatus() override;
 };

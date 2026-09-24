@@ -8,6 +8,3 @@ SYSTEM_COMMAND(Status, "status", Status, COMMAND_SLOT_STATUS)
 #if ENABLE_COMMAND_OUTFIT
 SYSTEM_COMMAND(ChangeOutfit, "change_outfit", ChangeOutfit, COMMAND_SLOT_CHANGE_OUTFIT)
 #endif
-#if ENABLE_COMMAND_SPECIES
-SYSTEM_COMMAND(ChangeSpecies, "change_species", ChangeSpecies, COMMAND_SLOT_CHANGE_SPECIES)
-#endif
