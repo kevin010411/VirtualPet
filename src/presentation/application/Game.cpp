@@ -65,10 +65,8 @@ bool Game::prepare_game()
 #if ENABLE_DEBUG
     startupDebugStage = nullptr;
 #endif
-    if (petBehaviorLoadingFailed)
+    if (runtimeLoadState == RuntimeLoadState::Failed)
     {
-        petBehaviorLoadingFailed = true;
-        petBehaviorLoaded = false;
         startupConfigError = "runtime.bin";
 #if ENABLE_DEBUG
         startupDebugStage = "runtime contract";
@@ -83,8 +81,7 @@ bool Game::prepare_game()
                                     petBehaviorConfig, initialAppearanceResolved,
                                     errorResource, sizeof(errorResource)))
     {
-        petBehaviorLoadingFailed = true;
-        petBehaviorLoaded = false;
+        runtimeLoadState = RuntimeLoadState::Failed;
         startupConfigError = "runtime.bin";
         if (initialAppearanceResolved)
         {
@@ -100,8 +97,7 @@ bool Game::prepare_game()
     initialOutfitSlot = initialAppearance.outfitSlot;
     if (!activateLoadedAppearance(initialAppearance.speciesSlot, initialAppearance.outfitSlot))
     {
-        petBehaviorLoadingFailed = true;
-        petBehaviorLoaded = false;
+        runtimeLoadState = RuntimeLoadState::Failed;
         startupConfigError = "runtime.bin";
 #if ENABLE_DEBUG
         startupDebugStage = "active appearance";
@@ -144,21 +140,21 @@ bool Game::prepare_game()
     if (initialState == InitialPetStateResult::Restored && appearanceChanged &&
         !configureActiveAppearance(restoredSpeciesSlot, restoredOutfitSlot))
     {
-        petBehaviorLoadingFailed = true;
-        petBehaviorLoaded = false;
+        runtimeLoadState = RuntimeLoadState::Failed;
         startupConfigError = "runtime.bin";
 #if ENABLE_DEBUG
         startupDebugStage = "restored appearance";
 #endif
         return false;
     }
+    // Fresh state uses the initial contract already activated above. Restored
+    // state keeps its saved appearance and only refreshes the unlock mask.
     const bool unlockStateReady = initialState == InitialPetStateResult::Restored
                                       ? refreshOutfitUnlockMask(false)
-                                      : enterSpecies(restoredSpeciesSlot, restoredOutfitSlot);
+                                      : commitSpeciesAppearance(restoredSpeciesSlot, restoredOutfitSlot);
     if (!unlockStateReady)
     {
-        petBehaviorLoadingFailed = true;
-        petBehaviorLoaded = false;
+        runtimeLoadState = RuntimeLoadState::Failed;
         startupConfigError = "runtime.bin";
 #if ENABLE_DEBUG
         startupDebugStage = "outfit unlocks";
@@ -363,7 +359,7 @@ void Game::redrawAllNow()
 
 void Game::setRendererAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
-    if (petBehaviorLoadingFailed)
+    if (runtimeLoadState == RuntimeLoadState::Failed)
     {
         renderer.showResourceError();
         return;
@@ -386,8 +382,7 @@ bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
                              petBehaviorConfig, errorResource, sizeof(errorResource)))
     {
         renderer.recordAssetDataErrorResource(errorResource);
-        petBehaviorLoaded = false;
-        petBehaviorLoadingFailed = true;
+        runtimeLoadState = RuntimeLoadState::Failed;
         flow.enterFatalError();
         return false;
     }
@@ -398,8 +393,7 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
     if (!renderer.configureAssetBundle(petBehaviorConfig.assetManifest.bundleId))
     {
-        petBehaviorLoaded = false;
-        petBehaviorLoadingFailed = true;
+        runtimeLoadState = RuntimeLoadState::Failed;
         flow.enterFatalError();
         return false;
     }
@@ -410,7 +404,7 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
     commands->configure(petBehaviorConfig);
     layout->configureRuntimeContract(petBehaviorConfig);
-    petBehaviorLoaded = true;
+    runtimeLoadState = RuntimeLoadState::Ready;
     return true;
 }
 
@@ -440,6 +434,11 @@ bool Game::enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot)
 #endif
         return false;
     }
+    return commitSpeciesAppearance(speciesSlot, entryOutfitSlot);
+}
+
+bool Game::commitSpeciesAppearance(uint8_t speciesSlot, uint8_t entryOutfitSlot)
+{
     if (!petActions->stageAppearance(speciesSlot, entryOutfitSlot))
     {
         renderer.recordAssetDataErrorResource("pet appearance");
@@ -688,7 +687,7 @@ void Game::OnConfirmKey()
 
 bool Game::resetPet()
 {
-    if (!petBehaviorLoaded || flow.isFatalError())
+    if (runtimeLoadState != RuntimeLoadState::Ready || flow.isFatalError())
         return false;
     initialized = false;
     cheatEvolutionPending = false;
@@ -726,7 +725,7 @@ void Game::refreshBaseAnimation()
 
 bool Game::setStageDaysForCheat(uint32_t value)
 {
-    if (!initialized || !petBehaviorLoaded || flow.isFatalError() ||
+    if (!initialized || runtimeLoadState != RuntimeLoadState::Ready || flow.isFatalError() ||
         pendingEvolutionPhase != PendingEvolutionPhase::None)
         return false;
 
@@ -961,8 +960,7 @@ void Game::handleEvolution()
     {
         if (!appearanceLoader.lastContractLoadSucceeded())
         {
-            petBehaviorLoaded = false;
-            petBehaviorLoadingFailed = true;
+            runtimeLoadState = RuntimeLoadState::Failed;
             flow.enterFatalError();
             renderer.showResourceError(appearanceLoader.firstAssetDataErrorResource());
         }

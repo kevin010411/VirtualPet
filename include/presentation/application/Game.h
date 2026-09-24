@@ -67,6 +67,13 @@ private:
         Restored,
     };
 
+    enum class RuntimeLoadState : uint8_t
+    {
+        Unloaded,
+        Ready,
+        Failed,
+    };
+
     static constexpr unsigned long gameTick = 2000;
 
     Pet &pet;
@@ -94,8 +101,7 @@ private:
     PendingEvolutionPhase pendingEvolutionPhase = PendingEvolutionPhase::None;
     bool pendingFirstStartCompletion = false;
     bool initialized = false;
-    bool petBehaviorLoadingFailed = false;
-    bool petBehaviorLoaded = false;
+    RuntimeLoadState runtimeLoadState = RuntimeLoadState::Unloaded;
     bool setupPrepared = false;
     bool initialStateLoadingFailed = false;
     const char *startupConfigError = nullptr;
@@ -114,6 +120,7 @@ private:
     bool resolveOutfitUnlockMask(bool initialize);
     bool refreshOutfitUnlockMask(bool initialize);
     bool enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot);
+    bool commitSpeciesAppearance(uint8_t speciesSlot, uint8_t entryOutfitSlot);
     void refreshBaseAnimation();
     PlaybackTickResult tickPlayback(unsigned long now);
     bool syncSceneLayoutWithPlayback();
