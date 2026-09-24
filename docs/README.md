@@ -17,11 +17,11 @@ Pet Stat、Status 與 Evolution runtime table 請由 Web exporter 產生；權�
 [sd_card_example](sd_card_example/README.md) 只保留韌體資源布局提示。
 
 - `runtime.bin`：完整的 versioned runtime table，不接受 TXT fallback。
-- `index/`：動畫 manifest 範例。
+- `index/`：舊版動畫 manifest 範例，僅供歷史對照。
 
 相關格式說明：
 
-- [動畫 manifest 格式](index_txt_format.md)
+- [舊版 `/index/` manifest 格式（歷史資料）](index_txt_format.md)
 - [Renderer 資源格式](renderer_asset_formats.md)
 - [寵物存檔格式](pet_storage.md)
 
@@ -31,4 +31,4 @@ Pet Stat、Status 與 Evolution runtime table 請由 Web exporter 產生；權�
 - [待辦事項](Todo.md)
 - `legacy/`：舊版硬體與 PlatformIO 設定，僅供參考。
 
-根目錄中舊有的 `.txt` 範例仍暫時保留以維持舊連結；新增或更新 SD 設定時，請只修改 `sd_card_example/` 內的版本。
+舊版 `/index/` 與 `.txt` 範例只供歷史對照；目前專案的 runtime 設定應由 Web exporter 產生，不能依舊範例手寫。
