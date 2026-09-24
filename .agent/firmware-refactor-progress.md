@@ -16,6 +16,7 @@
 | Flash：初始外觀責任收斂 | 已實作並完成建置及相關 host 測試，待 Game/實機驗證 | 啟動時已驗證的初始 species/outfit 成為 Game 當次工作階段的初始值；新狀態與重置直接使用，移除 `AppearanceLoader::findInitialAppearance` 的重讀介面；Flash 57,948 → 57,860 B，靜態 RAM 維持 6,828 B |
 | 架構方案與過時指引清理（第一步） | 已更新文件，未修改韌體程式碼 | `docs/architecture.md` 明確分開現況與 Proposed Architecture，列出逐步移除條件；建置、profile、size 文件改依目前 `project_12`；舊 `/index/` 格式標為歷史資料，Renderer、SD 範例及動畫播放文件改指向現行 `.data` pack |
 | 載入責任：啟動契約介面（第二步） | 已收斂一條流程並完成 host/建置驗證，待實機驗證 | `Game` 不再先讀 manifest 或傳遞已驗證 manifest；`RuntimeContractLoader` 負責啟動兩次讀取、完整表驗證及錯誤資源。一般外觀切換仍重新讀 manifest 與完整表；Flash 57,860 → 57,892 B，靜態 RAM 維持 6,828 B |
+| Game 協調：啟動與外觀狀態（第四步） | 已實作首批，待 Game 整合與實機驗證 | 新狀態沿用啟動時已啟用的外觀設定，直接執行 Pet 外觀、解鎖與存檔；存檔恢復到不同外觀、重置及後續切換仍重新載入。兩個載入布林旗標收斂為 Unloaded/Ready/Failed。Flash 57,884 → 57,832 B，靜態 RAM 6,828 → 6,824 B |
 
 ## 重構前：啟動讀取現況
 
@@ -61,13 +62,19 @@
 
 同一 `project_12` 設定的 A/B 建置：Flash 57,892 → 57,884 B（-8 B）、靜態 RAM 6,828 → 6,828 B。`test/runtime_table_behavior/run_host_test.ps1`、`test/animation_scene_playback/run_host_test.ps1`、`test/runtime_contract_loader/run_host_test.ps1` 及 `pio run -e project_12` 通過；離線 `sd_card_runtime` 工具已做 C++ 語法編譯，未以實際 SD bundle 執行。未進行實機 SD、時間或 SRAM 峰值量測。
 
+## 第四步：Game 啟動與外觀協調首批
+
+`prepare_game` 在 `loadInitialRuntimeContract` 後已啟用已驗證的初始外觀。新狀態的 `loadInitialPetState` 也設定相同 species/outfit；過去再呼叫 `enterSpecies`，因而重新讀 manifest 與完整 Runtime Table。現在 `enterSpecies` 保留重載責任，另將 Pet 外觀暫存、解鎖與一次存檔放在 `commitSpeciesAppearance`；新狀態只走後半段。存檔恢復仍先預覽檢查，與初始外觀不同時重新載入；重置及日後切換維持 `enterSpecies` 重新驗證。`Game` 原本兩個互斥的載入旗標改為一個三態值，避免 Ready/Failed 同時為真。
+
+同一 `project_12` 設定的 A/B 建置：Flash 57,884 → 57,832 B（-52 B）、靜態 RAM 6,828 → 6,824 B（-4 B）。Runtime Contract Loader、Runtime Table、Animation Scene host 測試及建置通過；`git diff --check` 通過。這些 host 測試沒有直接執行 `Game::prepare_game`、恢復、重置或 fatal 分支，因此第四步的整合驗證仍未完成。新狀態省掉一次 manifest 與一次完整表開檔是原始碼路徑推論，未量測 SD 次數或時間。未做實機驗證。
+
 ## 後續擬議實作順序
 
-架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。第一至第三步已完成；主要剩餘工作是第四步 Game 協調與第五步熱路徑/容量評估，以下細項分屬這兩步或第二步盤點後的後續候選。
+架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。第一至第三步已完成；第四步已開始，仍需 Game 啟動/恢復/重置/fatal 的可維護整合驗證；第五步熱路徑/容量尚未開始。以下細項分屬這兩步或第二步盤點後的後續候選。
 
 1. **以架構角度繼續 Flash 優化。** 初始外觀的重複查詢已收斂；下一輪追查其餘 Runtime Table 外觀操作之間重複的開檔、manifest 驗證、查詢與錯誤轉譯責任，選擇能縮小對外介面、移除重複資料流的模組 seam；先確認既有語意與第一錯誤資源，再實作與 A/B 建置。不得再以 pack 路徑字串組裝、內聯標註等局部省位元組變動作為優化方向；不可藉移除目前使用中的第三方庫節省 Flash，也不採用 Status 減法迴圈。
 2. **補齊 Game 啟動整合驗證。** 現有 host 測試未直接覆蓋 `Game::prepare_game` 的 renderer/fatal 狀態與存檔恢復分支；後續若有可維護的測試替身，再加入缺檔、損毀、不同外觀恢復和第一錯誤資源案例。
-3. **評估首次啟動重複載入。** `enterSpecies` 目前即使 species/outfit 與已載入的初始外觀一致，也會重讀 manifest 與完整表；須先確認初始狀態建立、renderer 設定與錯誤處理的順序，再決定是否安全略過這次重讀。
+3. **首次啟動重複載入。** 新狀態已沿用啟動設定，下一步需在可維護的 Game 整合測試驗證這條路徑及錯誤順序。
 4. **其他效能候選。** Renderer 行緩衝、每幀 pack 存取與一次性配置均未實作；使用者已跳過實機效能量測，若處理這些項目只能報告靜態正確性及尺寸，不能宣稱執行速度改善。
 
 因使用者跳過實機效能量測，後續只能報告結構、正確性和尺寸結果，不能宣稱啟動加速。
