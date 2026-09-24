@@ -40,7 +40,7 @@ std::vector<uint8_t> packWithInvalidUnselectedRows(const AssetData::BundleId &bu
     std::vector<uint8_t> bytes(kPayloadOffset + 2, 0);
     const uint8_t magic[8] = {'V', 'P', 'A', 'D', 'A', 'T', 'A', 0};
     memcpy(bytes.data(), magic, sizeof(magic));
-    writeU16(bytes, 8, 1);
+    writeU16(bytes, 8, AssetData::kVersion);
     writeU16(bytes, 10, 80);
     bytes[12] = AssetData::kPackKindShared;
     memcpy(bytes.data() + 16, bundleId.bytes, sizeof(bundleId.bytes));
@@ -80,7 +80,7 @@ std::vector<uint8_t> packForPayload(const AssetData::BundleId &bundleId,
     std::vector<uint8_t> bytes(kPayloadOffset + payload.size(), 0);
     const uint8_t magic[8] = {'V', 'P', 'A', 'D', 'A', 'T', 'A', 0};
     memcpy(bytes.data(), magic, sizeof(magic));
-    writeU16(bytes, 8, 1);
+    writeU16(bytes, 8, AssetData::kVersion);
     writeU16(bytes, 10, 80);
     bytes[12] = AssetData::kPackKindShared;
     memcpy(bytes.data() + 16, bundleId.bytes, sizeof(bundleId.bytes));
