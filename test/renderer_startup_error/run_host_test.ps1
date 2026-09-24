@@ -13,6 +13,7 @@ try {
         -Itest/renderer_startup_error -Itest/host_stubs -Iinclude `
         test/renderer_startup_error/test_main.cpp `
         src/shared/assets/BundleReader.cpp `
+        src/shared/utils/CopyResourceName.cpp `
         src/presentation/adapters/rendering/FrameDecoder.cpp `
         src/presentation/adapters/rendering/Renderer.cpp `
         src/presentation/adapters/rendering/TftDebugDisplay.cpp `

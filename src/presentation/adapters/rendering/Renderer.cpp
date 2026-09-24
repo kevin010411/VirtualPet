@@ -9,6 +9,7 @@
 #endif
 #include "presentation/adapters/rendering/FrameDecoder.h"
 #include "presentation/adapters/rendering/RenderStatsReporter.h"
+#include "shared/utils/CopyResourceName.h"
 
 
 struct Renderer::AnimationState
@@ -257,8 +258,7 @@ void Renderer::recordAssetDataErrorResource(const char *resource)
 {
     if (state->externalErrorResource[0] != '\0' || resource == nullptr || resource[0] == '\0')
         return;
-    strncpy(state->externalErrorResource, resource, sizeof(state->externalErrorResource) - 1);
-    state->externalErrorResource[sizeof(state->externalErrorResource) - 1] = '\0';
+    copyResourceName(state->externalErrorResource, sizeof(state->externalErrorResource), resource);
 }
 
 #if ENABLE_DEBUG

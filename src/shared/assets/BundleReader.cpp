@@ -3,6 +3,7 @@
 #include "shared/sd/SdBinaryRead.h"
 
 #include <string.h>
+#include "shared/utils/CopyResourceName.h"
 #include "shared/utils/TextBuffer.h"
 
 namespace
@@ -441,7 +442,6 @@ bool BundleReader::recordError(AssetData::BundleError error, uint8_t speciesSlot
         resource = "shared.data";
     else
         resource = "species.data";
-    strncpy(firstErrorResource_, resource, sizeof(firstErrorResource_) - 1);
-    firstErrorResource_[sizeof(firstErrorResource_) - 1] = '\0';
+    copyResourceName(firstErrorResource_, sizeof(firstErrorResource_), resource);
     return false;
 }

@@ -1,7 +1,7 @@
 #include "appearance/adapters/SdAppearanceLoader.h"
 
-#include <string.h>
 #include "appearance/domain/RuntimeTableAppearance.h"
+#include "shared/utils/CopyResourceName.h"
 
 namespace
 {
@@ -16,8 +16,7 @@ void recordRuntimeResult(bool succeeded, BundleReader &reader, bool &lastSucceed
     }
     const char *pack = reader.firstErrorResource();
     const char *resource = pack != nullptr && pack[0] != '\0' ? pack : "runtime";
-    strncpy(errorResource, resource, errorResourceSize - 1);
-    errorResource[errorResourceSize - 1] = '\0';
+    copyResourceName(errorResource, errorResourceSize, resource);
 }
 } // namespace
 

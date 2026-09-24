@@ -131,6 +131,11 @@ int main()
     assert(strcmp(error, "species1.pack") == 0);
     assert(manifestReads == 0 && completeTableReads == 0);
 
+    char shortError[5] = {'x', 'x', 'x', 'x', 'x'};
+    assert(!loadRuntimeContract(&sd, 2, 3, config, shortError, sizeof(shortError),
+                                &startupManifest));
+    assert(strcmp(shortError, "spec") == 0);
+
     reset();
     tableSucceeds = false;
     assert(!loadRuntimeContract(&sd, 2, 3, config, error, sizeof(error), &startupManifest));

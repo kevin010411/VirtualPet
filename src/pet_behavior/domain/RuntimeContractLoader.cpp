@@ -1,19 +1,11 @@
 #include "pet_behavior/domain/RuntimeContractLoader.h"
 
-#include <string.h>
 #include "appearance/domain/RuntimeTableAppearance.h"
 #include "pet_behavior/domain/RuntimeTableBehavior.h"
+#include "shared/utils/CopyResourceName.h"
 
 namespace
 {
-void copyLoadError(char *destination, size_t capacity, const char *resource)
-{
-    if (destination == nullptr || capacity == 0)
-        return;
-    strncpy(destination, resource, capacity - 1);
-    destination[capacity - 1] = '\0';
-}
-
 bool loadFromManifest(SdFat *sd,
                       const AssetData::RuntimeManifest &manifest,
                       uint8_t speciesSlot,
@@ -29,7 +21,7 @@ bool loadFromManifest(SdFat *sd,
     if (!bundleReader.configureBundle(manifest.bundleId))
     {
         const char *resource = bundleReader.firstErrorResource();
-        copyLoadError(errorResource, errorResourceCapacity,
+        copyResourceName(errorResource, errorResourceCapacity,
                       resource != nullptr && resource[0] != '\0' ? resource : "asset data");
         return false;
     }
@@ -39,7 +31,7 @@ bool loadFromManifest(SdFat *sd,
                                   selection, initialAppearanceResolved))
     {
         const char *resource = bundleReader.firstErrorResource();
-        copyLoadError(errorResource, errorResourceCapacity,
+        copyResourceName(errorResource, errorResourceCapacity,
                       resource != nullptr && resource[0] != '\0' ? resource : "runtime.bin");
         return false;
     }
@@ -64,7 +56,7 @@ bool loadRuntimeContract(SdFat *sd,
     if (speciesSlot == 0 || outfitSlot == 0 ||
         (validatedManifest == nullptr && !loadRuntimeManifest(sd, manifest)))
     {
-        copyLoadError(errorResource, errorResourceCapacity, "runtime.bin");
+        copyResourceName(errorResource, errorResourceCapacity, "runtime.bin");
         return false;
     }
     if (validatedManifest != nullptr)
