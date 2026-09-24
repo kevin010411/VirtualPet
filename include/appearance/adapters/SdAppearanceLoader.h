@@ -13,7 +13,6 @@ public:
     void configureRuntimeContract(const PetBehaviorConfig &config) override;
     bool lastContractLoadSucceeded() const override;
     const char *firstAssetDataErrorResource() const override;
-    bool findInitialAppearance(AppearanceSelection &selection) override;
     bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) override;
     bool loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount) override;
     bool loadOutfits(uint8_t speciesSlot, uint8_t unlockMask, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount) override;

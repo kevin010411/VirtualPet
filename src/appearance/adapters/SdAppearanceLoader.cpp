@@ -45,14 +45,6 @@ const char *SdAppearanceLoader::firstAssetDataErrorResource() const
     return pack != nullptr && pack[0] != '\0' ? pack : contractErrorResource;
 }
 
-bool SdAppearanceLoader::findInitialAppearance(AppearanceSelection &selection)
-{
-    const bool loaded = loadRuntimeTableInitialAppearance(sd, assetManifest, bundleReader, selection);
-    recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
-                        contractErrorResource, sizeof(contractErrorResource));
-    return loaded;
-}
-
 bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats,
                                              AppearanceSelection &selection)
 {

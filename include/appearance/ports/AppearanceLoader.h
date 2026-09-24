@@ -40,7 +40,6 @@ public:
     virtual void configureRuntimeContract(const PetBehaviorConfig &) {}
     virtual bool lastContractLoadSucceeded() const = 0;
     virtual const char *firstAssetDataErrorResource() const = 0;
-    virtual bool findInitialAppearance(AppearanceSelection &selection) = 0;
     virtual bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) = 0;
     virtual bool loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount) = 0;
     virtual bool loadOutfits(uint8_t speciesSlot, uint8_t unlockMask, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount) = 0;

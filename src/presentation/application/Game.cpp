@@ -99,6 +99,8 @@ bool Game::prepare_game()
 #endif
         return false;
     }
+    initialSpeciesSlot = initialAppearance.speciesSlot;
+    initialOutfitSlot = initialAppearance.outfitSlot;
     if (!activateLoadedAppearance(initialAppearance.speciesSlot, initialAppearance.outfitSlot))
     {
         petBehaviorLoadingFailed = true;
@@ -850,19 +852,11 @@ Game::InitialPetStateResult Game::loadInitialPetState(bool allowSavedState,
         petStorage.discard();
     }
 
-    AppearanceSelection initialAppearance = {};
-    if (!appearanceLoader.findInitialAppearance(initialAppearance))
-    {
-        if (showError)
-            renderer.showResourceError();
-        return InitialPetStateResult::Failed;
-    }
-
     pet.setDefaultState();
     pet.setSchemaFingerprint(petBehaviorConfig.schemaFingerprint);
     petBehaviorRuntime->initializeStats();
-    const bool applied = pet.setSpeciesSlot(initialAppearance.speciesSlot) &&
-                         pet.setOutfitSlot(initialAppearance.outfitSlot);
+    const bool applied = pet.setSpeciesSlot(initialSpeciesSlot) &&
+                         pet.setOutfitSlot(initialOutfitSlot);
     if (!applied && showError)
         renderer.showResourceError();
     return applied ? InitialPetStateResult::Fresh : InitialPetStateResult::Failed;

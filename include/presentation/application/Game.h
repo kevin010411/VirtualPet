@@ -104,6 +104,9 @@ private:
 #endif
     uint8_t pendingEvolutionSpeciesSlot = 0;
     uint8_t pendingEvolutionOutfitSlot = 0;
+    // Keep the validated startup selection for fresh state and in-session reset.
+    uint8_t initialSpeciesSlot = 0;
+    uint8_t initialOutfitSlot = 0;
     AssetData::AnimationRef pendingEvolutionTargetAnimation = {};
 
     bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
