@@ -1,6 +1,8 @@
-# `/index/` manifest format
+# 歷史格式：`/index/` manifest
 
-動畫 manifest 存放在 SD 卡的 `/index/` 資料夾。韌體會讀取兩個檔案：
+> 歷史文件：目前 `project_12` 韌體不讀取 `/index/` 或 `main.txt`。現行資源由 Web exporter 產生，runtime 使用 `/runtime.bin` 與 `.data` pack；此頁僅供舊素材格式對照，不能當成現行 SD 設定指引。
+
+舊版動畫 manifest 存放在 SD 卡的 `/index/` 資料夾。以下讀取流程只描述已退役版本：
 
 ```txt
 /index/main.txt

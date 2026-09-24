@@ -13,6 +13,4 @@ Web exporter 的 read-back 與 host inspector 診斷完整性問題。
 
 - `runtime.bin`：Pet Stats、Actions、Status、Appearance、Evolution、Flow 與 Layout。
 - `species_<slot>.data`、`shared.data`：動畫 asset packs。
-- `index/`：動畫資源 manifest。
-
-所有 `#` 開頭的行都是註解。範例不包含 BMP／RLE 動畫檔，需另行放入 manifest 指定的路徑。
+舊版 `index/`、BMP 與獨立 RLE 影格不是目前 release firmware 的輸入；若範例目錄仍保留這些檔案，僅供歷史對照。請複製 Web exporter 產生的完整 bundle。

@@ -72,5 +72,4 @@ Battery 與 FatalError 不進入普通 FIFO，也不是 priority：
 - 離開 Battery 後要求完整 redraw，恢復目前 base/idle 或合法 owning flow。
 - FatalError 採 reboot-only recovery，普通輸入與重新 setup 不會離開該狀態。
 
-`index.txt` 不包含 owner 或 priority metadata。Manifest 只描述資源、frame 與播放所需
-metadata；產品流程與互斥規則保留在韌體程式碼中。
+`.data` pack 與 `/runtime.bin` 提供資源、影格及播放所需資料；產品流程與互斥規則保留在韌體程式碼中，不由資源 metadata 指定 owner 或 priority。

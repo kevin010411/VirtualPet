@@ -14,6 +14,7 @@
 | Flash：亂數模組收斂 | 已實作並完成建置與 host 驗證，待實機驗證 | 以共用無配置的 `FirmwareRandom` 取代韌體對 Arduino `random/randomSeed` 的呼叫，保留原有選擇範圍與類比輸入種子；`project_12` Flash 61,628 → 57,992 B，靜態 RAM 6,840 → 6,828 B；三項既有第三方依賴未移除 |
 | Flash：錯誤資源字串複製 | 已實作並完成建置與 host 驗證 | 共用只複製到字串結尾的有界函式，移除連結後的 `strncpy`；`project_12` Flash 57,992 → 57,948 B，靜態 RAM 維持 6,828 B。BundleReader 測試資料改用現行 pack 版本後通過 |
 | Flash：初始外觀責任收斂 | 已實作並完成建置及相關 host 測試，待 Game/實機驗證 | 啟動時已驗證的初始 species/outfit 成為 Game 當次工作階段的初始值；新狀態與重置直接使用，移除 `AppearanceLoader::findInitialAppearance` 的重讀介面；Flash 57,948 → 57,860 B，靜態 RAM 維持 6,828 B |
+| 架構方案與過時指引清理（第一步） | 已更新文件，未修改韌體程式碼 | `docs/architecture.md` 明確分開現況與 Proposed Architecture，列出逐步移除條件；建置、profile、size 文件改依目前 `project_12`；舊 `/index/` 格式標為歷史資料，Renderer、SD 範例及動畫播放文件改指向現行 `.data` pack |
 
 ## 重構前：啟動讀取現況
 
@@ -46,6 +47,8 @@
 2026-09-24 架構優化：`prepare_game` 原本已由 `loadInitialRuntimeContract` 取得並驗證初始外觀，但 `loadInitialPetState` 在新狀態路徑又透過 `AppearanceLoader::findInitialAppearance` 重讀 Runtime Table；`resetPet` 也經此介面重讀。Game 現在保存本次啟動已驗證的 species/outfit，初始狀態與工作階段內重置沿用，並從 `AppearanceLoader` 介面及 SD adapter 移除該專用方法。這把初始外觀歸到啟動契約的結果，不再由狀態初始化自行取得；恢復存檔的外觀預覽驗證與必要時的其他外觀重載仍維持。`project_12` 的 A/B 連結尺寸 Flash 57,948 → 57,860 B（-88 B）、靜態 RAM 6,828 B（不變）；Runtime Table、Runtime Contract Loader、BundleReader host 測試通過。未直接執行 `Game::prepare_game/resetPet` 的 host 整合測試，也未做實機 SD 或時間量測；重置時的初始選擇現在固定為本次啟動已驗證的值，符合需重新開機才能載入更換內容的契約。
 
 ## 後續擬議實作順序
+
+架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。本輪先清除容易誤導後續修改的舊建置與素材文件；程式碼清理仍需逐一驗證現行呼叫者、Profile Resolver 輸出、錯誤順序與 linked 尺寸。
 
 1. **以架構角度繼續 Flash 優化。** 初始外觀的重複查詢已收斂；下一輪追查其餘 Runtime Table 外觀操作之間重複的開檔、manifest 驗證、查詢與錯誤轉譯責任，選擇能縮小對外介面、移除重複資料流的模組 seam；先確認既有語意與第一錯誤資源，再實作與 A/B 建置。不得再以 pack 路徑字串組裝、內聯標註等局部省位元組變動作為優化方向；不可藉移除目前使用中的第三方庫節省 Flash，也不採用 Status 減法迴圈。
 2. **補齊 Game 啟動整合驗證。** 現有 host 測試未直接覆蓋 `Game::prepare_game` 的 renderer/fatal 狀態與存檔恢復分支；後續若有可維護的測試替身，再加入缺檔、損毀、不同外觀恢復和第一錯誤資源案例。
