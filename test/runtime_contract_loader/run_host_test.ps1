@@ -16,7 +16,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] Runtime contract manifest reuse and error routing'
+    Write-Host '[PASS] Runtime contract loading and error routing'
     exit 0
 }
 finally {

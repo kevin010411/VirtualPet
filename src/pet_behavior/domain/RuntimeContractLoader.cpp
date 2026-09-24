@@ -45,29 +45,23 @@ bool loadRuntimeContract(SdFat *sd,
                          uint8_t outfitSlot,
                          PetBehaviorConfig &config,
                          char *errorResource,
-                         size_t errorResourceCapacity,
-                         const AssetData::RuntimeManifest *validatedManifest)
+                         size_t errorResourceCapacity)
 {
     config = {};
     if (errorResource != nullptr && errorResourceCapacity != 0)
         errorResource[0] = '\0';
 
     AssetData::RuntimeManifest manifest = {};
-    if (speciesSlot == 0 || outfitSlot == 0 ||
-        (validatedManifest == nullptr && !loadRuntimeManifest(sd, manifest)))
+    if (speciesSlot == 0 || outfitSlot == 0 || !loadRuntimeManifest(sd, manifest))
     {
         copyResourceName(errorResource, errorResourceCapacity, "runtime.bin");
         return false;
     }
-    if (validatedManifest != nullptr)
-        manifest = *validatedManifest;
-
     return loadFromManifest(sd, manifest, speciesSlot, outfitSlot, config,
                             nullptr, nullptr, errorResource, errorResourceCapacity);
 }
 
 bool loadInitialRuntimeContract(SdFat *sd,
-                                const AssetData::RuntimeManifest &manifest,
                                 AppearanceSelection &selection,
                                 PetBehaviorConfig &config,
                                 bool &initialAppearanceResolved,
@@ -79,6 +73,12 @@ bool loadInitialRuntimeContract(SdFat *sd,
     initialAppearanceResolved = false;
     if (errorResource != nullptr && errorResourceCapacity != 0)
         errorResource[0] = '\0';
+    AssetData::RuntimeManifest manifest = {};
+    if (!loadRuntimeManifest(sd, manifest))
+    {
+        copyResourceName(errorResource, errorResourceCapacity, "runtime.bin");
+        return false;
+    }
     return loadFromManifest(sd, manifest, 0, 0, config, &selection,
                             &initialAppearanceResolved, errorResource, errorResourceCapacity);
 }

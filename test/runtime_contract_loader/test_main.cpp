@@ -79,35 +79,47 @@ int main()
     SdFat sd;
     PetBehaviorConfig config = {};
     char error[20] = {};
-    AssetData::RuntimeManifest startupManifest = {};
-    startupManifest.fileSize = 99;
-
-    // Startup uses the manifest already read for initial appearance.
-    assert(loadRuntimeContract(&sd, 2, 3, config, error, sizeof(error), &startupManifest));
-    assert(manifestReads == 0);
+    // An ordinary appearance change always refreshes the manifest.
+    assert(loadRuntimeContract(&sd, 2, 3, config, error, sizeof(error)));
+    assert(manifestReads == 1);
     assert(bundleConfigurations == 1 && completeTableReads == 1);
-    assert(observedManifest.fileSize == 99);
+    assert(observedManifest.fileSize == 42);
     assert(config.activeSpeciesSlot == 2 && config.activeOutfitSlot == 3);
     assert(error[0] == '\0');
 
     reset();
     AppearanceSelection initial = {};
     bool initialResolved = false;
-    assert(loadInitialRuntimeContract(&sd, startupManifest, initial, config,
+    assert(loadInitialRuntimeContract(&sd, initial, config,
                                       initialResolved, error, sizeof(error)));
     assert(initialResolved && initial.speciesSlot == 1 && initial.outfitSlot == 1);
-    assert(manifestReads == 0 && bundleConfigurations == 1 && completeTableReads == 1);
-    assert(observedManifest.fileSize == 99);
+    assert(manifestReads == 1 && bundleConfigurations == 1 && completeTableReads == 1);
+    assert(observedManifest.fileSize == 42);
+
+    reset();
+    manifestSucceeds = false;
+    assert(!loadInitialRuntimeContract(&sd, initial, config,
+                                       initialResolved, error, sizeof(error)));
+    assert(!initialResolved && strcmp(error, "runtime.bin") == 0);
+    assert(bundleConfigurations == 0 && completeTableReads == 0);
+
+    reset();
+    bundleSucceeds = false;
+    bundleError = "shared.data";
+    assert(!loadInitialRuntimeContract(&sd, initial, config,
+                                       initialResolved, error, sizeof(error)));
+    assert(!initialResolved && strcmp(error, "shared.data") == 0);
+    assert(manifestReads == 1 && completeTableReads == 0);
 
     reset();
     initialQuerySucceeds = false;
-    assert(!loadInitialRuntimeContract(&sd, startupManifest, initial, config,
+    assert(!loadInitialRuntimeContract(&sd, initial, config,
                                        initialResolved, error, sizeof(error)));
     assert(!initialResolved && strcmp(error, "runtime.bin") == 0);
 
     reset();
     tableSucceeds = false;
-    assert(!loadInitialRuntimeContract(&sd, startupManifest, initial, config,
+    assert(!loadInitialRuntimeContract(&sd, initial, config,
                                        initialResolved, error, sizeof(error)));
     assert(initialResolved && strcmp(error, "runtime.bin") == 0);
 
@@ -127,23 +139,22 @@ int main()
     reset();
     bundleSucceeds = false;
     bundleError = "species1.pack";
-    assert(!loadRuntimeContract(&sd, 2, 3, config, error, sizeof(error), &startupManifest));
+    assert(!loadRuntimeContract(&sd, 2, 3, config, error, sizeof(error)));
     assert(strcmp(error, "species1.pack") == 0);
-    assert(manifestReads == 0 && completeTableReads == 0);
+    assert(manifestReads == 1 && completeTableReads == 0);
 
     char shortError[5] = {'x', 'x', 'x', 'x', 'x'};
-    assert(!loadRuntimeContract(&sd, 2, 3, config, shortError, sizeof(shortError),
-                                &startupManifest));
+    assert(!loadRuntimeContract(&sd, 2, 3, config, shortError, sizeof(shortError)));
     assert(strcmp(shortError, "spec") == 0);
 
     reset();
     tableSucceeds = false;
-    assert(!loadRuntimeContract(&sd, 2, 3, config, error, sizeof(error), &startupManifest));
+    assert(!loadRuntimeContract(&sd, 2, 3, config, error, sizeof(error)));
     assert(strcmp(error, "runtime.bin") == 0);
-    assert(manifestReads == 0 && completeTableReads == 1);
+    assert(manifestReads == 1 && completeTableReads == 1);
 
     reset();
-    assert(!loadRuntimeContract(&sd, 0, 3, config, error, sizeof(error), &startupManifest));
+    assert(!loadRuntimeContract(&sd, 0, 3, config, error, sizeof(error)));
     assert(strcmp(error, "runtime.bin") == 0);
     assert(manifestReads == 0 && bundleConfigurations == 0);
 }

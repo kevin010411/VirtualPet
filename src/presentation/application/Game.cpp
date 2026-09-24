@@ -10,7 +10,6 @@
 #endif
 #include "pet/application/PetActionController.h"
 #include "pet_behavior/application/PetBehaviorRuntime.h"
-#include "pet_behavior/domain/RuntimeTableBehavior.h"
 #include "pet/domain/Pet.h"
 #include "presentation/adapters/rendering/Renderer.h"
 #include "pet/adapters/PetStorage.h"
@@ -66,15 +65,13 @@ bool Game::prepare_game()
 #if ENABLE_DEBUG
     startupDebugStage = nullptr;
 #endif
-    AssetData::RuntimeManifest manifest = {};
-    if (petBehaviorLoadingFailed ||
-        !loadRuntimeManifest(animations->sdCard(), manifest))
+    if (petBehaviorLoadingFailed)
     {
         petBehaviorLoadingFailed = true;
         petBehaviorLoaded = false;
         startupConfigError = "runtime.bin";
 #if ENABLE_DEBUG
-        startupDebugStage = "runtime manifest";
+        startupDebugStage = "runtime contract";
 #endif
         return false;
     }
@@ -82,7 +79,7 @@ bool Game::prepare_game()
     AppearanceSelection initialAppearance = {};
     bool initialAppearanceResolved = false;
     char errorResource[20] = {};
-    if (!loadInitialRuntimeContract(animations->sdCard(), manifest, initialAppearance,
+    if (!loadInitialRuntimeContract(animations->sdCard(), initialAppearance,
                                     petBehaviorConfig, initialAppearanceResolved,
                                     errorResource, sizeof(errorResource)))
     {
@@ -95,7 +92,7 @@ bool Game::prepare_game()
             flow.enterFatalError();
         }
 #if ENABLE_DEBUG
-        startupDebugStage = initialAppearanceResolved ? "active appearance" : "initial appearance";
+        startupDebugStage = initialAppearanceResolved ? "active appearance" : "runtime contract";
 #endif
         return false;
     }

@@ -15,6 +15,7 @@
 | Flash：錯誤資源字串複製 | 已實作並完成建置與 host 驗證 | 共用只複製到字串結尾的有界函式，移除連結後的 `strncpy`；`project_12` Flash 57,992 → 57,948 B，靜態 RAM 維持 6,828 B。BundleReader 測試資料改用現行 pack 版本後通過 |
 | Flash：初始外觀責任收斂 | 已實作並完成建置及相關 host 測試，待 Game/實機驗證 | 啟動時已驗證的初始 species/outfit 成為 Game 當次工作階段的初始值；新狀態與重置直接使用，移除 `AppearanceLoader::findInitialAppearance` 的重讀介面；Flash 57,948 → 57,860 B，靜態 RAM 維持 6,828 B |
 | 架構方案與過時指引清理（第一步） | 已更新文件，未修改韌體程式碼 | `docs/architecture.md` 明確分開現況與 Proposed Architecture，列出逐步移除條件；建置、profile、size 文件改依目前 `project_12`；舊 `/index/` 格式標為歷史資料，Renderer、SD 範例及動畫播放文件改指向現行 `.data` pack |
+| 載入責任：啟動契約介面（第二步） | 已收斂一條流程並完成 host/建置驗證，待實機驗證 | `Game` 不再先讀 manifest 或傳遞已驗證 manifest；`RuntimeContractLoader` 負責啟動兩次讀取、完整表驗證及錯誤資源。一般外觀切換仍重新讀 manifest 與完整表；Flash 57,860 → 57,892 B，靜態 RAM 維持 6,828 B |
 
 ## 重構前：啟動讀取現況
 
@@ -26,7 +27,7 @@
 
 ## 已實作：共用 manifest 與完整表讀取
 
-`prepare_game` 先讀取 manifest，再呼叫 `loadInitialRuntimeContract`。後者以已讀取的 manifest 開啟完整表一次，先解析初始 species/outfit，再解碼該外觀的行為與顯示設定；同一讀取仍執行 envelope 比對、bundle 引用、idle animation 及必要外觀段落檢查。原本 `SdAppearanceLoader::validateRuntimeContracts` 的檢查只驗證 Appearance、Species、Outfits、OutfitUnlocks，以及啟用演化時的 Evolutions 段落是否存在，已移到完整表讀取後段；不再為此重開 `/runtime.bin`。設定直接寫入 `Game` 持有的 `PetBehaviorConfig`，沒有第二份約 6 KiB 暫存。初始外觀解析失敗與其後的設定失敗仍可區分；恢復不同外觀及一般外觀切換仍重新讀取 manifest 與完整表，且執行相同段落檢查。
+首輪載入重構時，`prepare_game` 先讀取 manifest，再呼叫 `loadInitialRuntimeContract`。後者以已讀取的 manifest 開啟完整表一次，先解析初始 species/outfit，再解碼該外觀的行為與顯示設定；同一讀取仍執行 envelope 比對、bundle 引用、idle animation 及必要外觀段落檢查。原本 `SdAppearanceLoader::validateRuntimeContracts` 的檢查只驗證 Appearance、Species、Outfits、OutfitUnlocks，以及啟用演化時的 Evolutions 段落是否存在，已移到完整表讀取後段；不再為此重開 `/runtime.bin`。設定直接寫入 `Game` 持有的 `PetBehaviorConfig`，沒有第二份約 6 KiB 暫存。初始外觀解析失敗與其後的設定失敗仍可區分；恢復不同外觀及一般外觀切換仍重新讀取 manifest 與完整表，且執行相同段落檢查。第二步再將啟動 manifest 讀取移入載入器，見下文。
 
 依原始碼路徑，初始外觀設定完成前的 `/runtime.bin` 開檔由重構前至少五次降為兩次：manifest、初始外觀與完整設定合併讀取。首次啟動後的 `enterSpecies` 目前仍重讀 manifest 與完整表；解鎖與存檔恢復也可能繼續開檔，所以此計數不代表整個啟動流程總開檔數，更非時間量測。
 
@@ -46,9 +47,17 @@
 
 2026-09-24 架構優化：`prepare_game` 原本已由 `loadInitialRuntimeContract` 取得並驗證初始外觀，但 `loadInitialPetState` 在新狀態路徑又透過 `AppearanceLoader::findInitialAppearance` 重讀 Runtime Table；`resetPet` 也經此介面重讀。Game 現在保存本次啟動已驗證的 species/outfit，初始狀態與工作階段內重置沿用，並從 `AppearanceLoader` 介面及 SD adapter 移除該專用方法。這把初始外觀歸到啟動契約的結果，不再由狀態初始化自行取得；恢復存檔的外觀預覽驗證與必要時的其他外觀重載仍維持。`project_12` 的 A/B 連結尺寸 Flash 57,948 → 57,860 B（-88 B）、靜態 RAM 6,828 B（不變）；Runtime Table、Runtime Contract Loader、BundleReader host 測試通過。未直接執行 `Game::prepare_game/resetPet` 的 host 整合測試，也未做實機 SD 或時間量測；重置時的初始選擇現在固定為本次啟動已驗證的值，符合需重新開機才能載入更換內容的契約。
 
+## 第二步：載入責任盤點與首條流程收斂
+
+現行 `RuntimeContractLoader` 啟動流程先開 `/runtime.bin` 讀 manifest，再開一次讀完整表並解析初始外觀與設定。一般外觀切換也先讀 manifest、再讀完整表，且完整表會對照 manifest 驗證 envelope、bundle 與必要段落。這次把 manifest 開檔移入 `loadInitialRuntimeContract`，移除 `loadRuntimeContract` 的已驗證 manifest 可選參數；`Game` 不再協調兩個載入結果。初始外觀解析失敗與後續設定失敗仍由 `initialAppearanceResolved` 區分，錯誤資源由載入器回傳。啟動與切換的開檔次數未變，未宣稱速度改善。
+
+外觀查詢目前由 `SdAppearanceLoader` 保存載入後的 manifest 與 BundleReader；Evolution、species、outfits、preview、unlock 等各次查詢都經 `loadRuntimeTableAppearanceQuery` 重新開表並比對 manifest，adapter 再記錄第一個錯誤資源。這些查詢沒有在本批改動；選單的載入與錯誤順序需在下一次收斂前逐一驗證，不能共用未證明新鮮的表格快取。
+
+同一 `project_12` 設定的 A/B 建置：Flash 57,860 → 57,892 B（+32 B）、靜態 RAM 6,828 → 6,828 B。`test/runtime_contract_loader/run_host_test.ps1` 驗證啟動只讀一次 manifest、初始外觀與後續外觀錯誤路由，以及一般切換重新讀 manifest；`test/runtime_table_behavior/run_host_test.ps1` 與 `pio run -e project_12` 通過。未直接執行 `Game::prepare_game` 或實機 SD 讀取。
+
 ## 後續擬議實作順序
 
-架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。本輪先清除容易誤導後續修改的舊建置與素材文件；程式碼清理仍需逐一驗證現行呼叫者、Profile Resolver 輸出、錯誤順序與 linked 尺寸。
+架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。第一步已清除舊建置與素材指引；其餘程式碼清理仍需逐一驗證現行呼叫者、Profile Resolver 輸出、錯誤順序與 linked 尺寸。
 
 1. **以架構角度繼續 Flash 優化。** 初始外觀的重複查詢已收斂；下一輪追查其餘 Runtime Table 外觀操作之間重複的開檔、manifest 驗證、查詢與錯誤轉譯責任，選擇能縮小對外介面、移除重複資料流的模組 seam；先確認既有語意與第一錯誤資源，再實作與 A/B 建置。不得再以 pack 路徑字串組裝、內聯標註等局部省位元組變動作為優化方向；不可藉移除目前使用中的第三方庫節省 Flash，也不採用 Status 減法迴圈。
 2. **補齊 Game 啟動整合驗證。** 現有 host 測試未直接覆蓋 `Game::prepare_game` 的 renderer/fatal 狀態與存檔恢復分支；後續若有可維護的測試替身，再加入缺檔、損毀、不同外觀恢復和第一錯誤資源案例。
