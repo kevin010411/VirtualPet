@@ -16,7 +16,7 @@
 | Flash：初始外觀責任收斂 | 已實作並完成建置及相關 host 測試，待 Game/實機驗證 | 啟動時已驗證的初始 species/outfit 成為 Game 當次工作階段的初始值；新狀態與重置直接使用，移除 `AppearanceLoader::findInitialAppearance` 的重讀介面；Flash 57,948 → 57,860 B，靜態 RAM 維持 6,828 B |
 | 架構方案與過時指引清理（第一步） | 已更新文件，未修改韌體程式碼 | `docs/architecture.md` 明確分開現況與 Proposed Architecture，列出逐步移除條件；建置、profile、size 文件改依目前 `project_12`；舊 `/index/` 格式標為歷史資料，Renderer、SD 範例及動畫播放文件改指向現行 `.data` pack |
 | 載入責任：啟動契約介面（第二步） | 已收斂一條流程並完成 host/建置驗證，待實機驗證 | `Game` 不再先讀 manifest 或傳遞已驗證 manifest；`RuntimeContractLoader` 負責啟動兩次讀取、完整表驗證及錯誤資源。一般外觀切換仍重新讀 manifest 與完整表；Flash 57,860 → 57,892 B，靜態 RAM 維持 6,828 B |
-| Game 協調：啟動與外觀狀態（第四步） | 已實作首批，待 Game 整合與實機驗證 | 新狀態沿用啟動時已啟用的外觀設定，直接執行 Pet 外觀、解鎖與存檔；存檔恢復到不同外觀、重置及後續切換仍重新載入。兩個載入布林旗標收斂為 Unloaded/Ready/Failed。Flash 57,884 → 57,832 B，靜態 RAM 6,828 → 6,824 B |
+| Game 協調：啟動與外觀狀態（第四步） | 程式與 host 整合驗證完成，待實機 SRAM 峰值與 SD 驗證 | 新狀態沿用已啟用的外觀設定；不同外觀恢復、重置與後續切換仍重新載入。載入布林旗標收斂為三態，release fatal 畫面優先顯示第一個資源。Flash 57,884 → 57,856 B，靜態 RAM 6,828 → 6,824 B |
 
 ## 重構前：啟動讀取現況
 
@@ -68,13 +68,27 @@
 
 同一 `project_12` 設定的 A/B 建置：Flash 57,884 → 57,832 B（-52 B）、靜態 RAM 6,828 → 6,824 B（-4 B）。Runtime Contract Loader、Runtime Table、Animation Scene host 測試及建置通過；`git diff --check` 通過。這些 host 測試沒有直接執行 `Game::prepare_game`、恢復、重置或 fatal 分支，因此第四步的整合驗證仍未完成。新狀態省掉一次 manifest 與一次完整表開檔是原始碼路徑推論，未量測 SD 次數或時間。未做實機驗證。
 
+後續加入 `test/game_startup/run_host_test.ps1`，直接執行 `Game::prepare_game`、`finish_setup_game` 與 `resetPet`，使用 SD 載入、存檔、Renderer 的 host 替身驗證新狀態、同/不同外觀恢復、預覽失敗與 fingerprint 不符後回到新狀態、重置，以及載入與存檔失敗後禁止互動。測試揭露 release fatal 畫面忽略已記錄的第一資源，現已與 debug 路徑一致，優先顯示該資源，否則顯示 `runtime.bin`。Game、Renderer startup error、Runtime Contract Loader host 測試及 `project_12` 建置通過；最終 Flash 57,856 B（較本步前 -28 B）、靜態 RAM 6,824 B（-4 B）。實際 SD 開檔次數、實機時間與 SRAM 峰值仍未量測。
+
+## 進化查詢介面收斂
+
+2026-09-27：`AppearanceLoader` 與 `PetActionController` 的進化查詢改為 `Found`、`NoTarget`、`LoadFailed` 三態；Game 不再用 `lastContractLoadSucceeded()` 旁路判斷。載入失敗會保留受影響資源、進入 fatal，且同一輪不再繼續更新 Pet；沒有目標及目標仍為目前 species 都維持不進化。`SdAppearanceLoader` 移除只服務此旁路查詢的布林狀態，外觀查詢仍每次讀取並驗證 `/runtime.bin`，進化條件不變。
+
+`test/game_startup/run_host_test.ps1` 覆蓋三態、同 species 目標、正常 tick 與 cheat 觸發的失敗路徑；`test/runtime_table_behavior/run_host_test.ps1` 和 `project_12` 建置通過。相對本批前 Flash 57,856 → 57,856 B（不變），靜態 RAM 6,824 → 6,820 B（-4 B）。沒有實機 SD、時間或 SRAM 峰值量測。
+
+## 外觀查詢內部路徑收斂
+
+完整契約載入與外觀查詢改用同一個內部 `RuntimeTableFile` 持有 SD 檔案、Source context 與已對照 manifest 的表格；物件離開查詢範圍即關檔。`SdAppearanceLoader::recordQueryResult` 統一處理六種外觀查詢的成功狀態與錯誤資源。對外 `AppearanceLoader` 操作、每次查詢重新開檔驗證、第一錯誤資源及無進化目標語意維持；沒有新增常駐快取或第二份 `PetBehaviorConfig`。
+
+Runtime Table host 測試直接執行 SD adapter，確認 species、outfit、preview、unlock 查詢各開檔一次，manifest 不符時回報 `runtime`；Game startup 與 Runtime Contract Loader host 測試、`project_12` 建置通過。相對本批前 Flash 57,856 → 57,776 B（-80 B），靜態 RAM 維持 6,820 B。未量測實機 SD 時間或 SRAM 峰值，不宣稱速度改善。
+
 ## 後續擬議實作順序
 
-架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。第一至第三步已完成；第四步已開始，仍需 Game 啟動/恢復/重置/fatal 的可維護整合驗證；第五步熱路徑/容量尚未開始。以下細項分屬這兩步或第二步盤點後的後續候選。
+架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。第一至第三步已完成；第四步程式與 host 整合驗證完成，實機 SRAM 峰值與 SD 尚待驗證。因無法建立實機效能基線，第五步先完成 Evolution 與外觀查詢的靜態責任收斂；逐幀熱路徑和 Renderer 容量改動尚未開始。以下為後續候選。
 
-1. **以架構角度繼續 Flash 優化。** 初始外觀的重複查詢已收斂；下一輪追查其餘 Runtime Table 外觀操作之間重複的開檔、manifest 驗證、查詢與錯誤轉譯責任，選擇能縮小對外介面、移除重複資料流的模組 seam；先確認既有語意與第一錯誤資源，再實作與 A/B 建置。不得再以 pack 路徑字串組裝、內聯標註等局部省位元組變動作為優化方向；不可藉移除目前使用中的第三方庫節省 Flash，也不採用 Status 減法迴圈。
-2. **補齊 Game 啟動整合驗證。** 現有 host 測試未直接覆蓋 `Game::prepare_game` 的 renderer/fatal 狀態與存檔恢復分支；後續若有可維護的測試替身，再加入缺檔、損毀、不同外觀恢復和第一錯誤資源案例。
-3. **首次啟動重複載入。** 新狀態已沿用啟動設定，下一步需在可維護的 Game 整合測試驗證這條路徑及錯誤順序。
+1. **以架構角度繼續 Flash 優化。** 初始外觀的重複查詢、Evolution 三態結果及其餘外觀查詢的開檔與錯誤處理已收斂。後續若拆分 `RuntimeTableBehavior` 的行為與外觀解碼實作，須先盤點共用的有界讀取、動畫參照與載入順序，避免另建轉呼叫層。不得再以 pack 路徑字串組裝、內聯標註等局部省位元組變動作為優化方向；不可藉移除目前使用中的第三方庫節省 Flash，也不採用 Status 減法迴圈。
+2. **Game 啟動後續驗證。** host 已覆蓋協調與首錯資源；真實缺檔/損毀的完整 SD bundle、顯示與實機記憶體峰值仍需另驗證。
+3. **首次啟動重複載入。** 新狀態已沿用啟動設定，Game host 測試確認不呼叫一般外觀重載；實際 SD 開檔次數仍待實機觀測。
 4. **其他效能候選。** Renderer 行緩衝、每幀 pack 存取與一次性配置均未實作；使用者已跳過實機效能量測，若處理這些項目只能報告靜態正確性及尺寸，不能宣稱執行速度改善。
 
 因使用者跳過實機效能量測，後續只能報告結構、正確性和尺寸結果，不能宣稱啟動加速。

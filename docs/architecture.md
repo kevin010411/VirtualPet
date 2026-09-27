@@ -39,6 +39,18 @@
 
 每一步只保留有實際責任收益的改動。Status 等級計算保留除法，不以減法迴圈換取 Flash；不採用僅調整字串組裝或內聯標註的局部省位元組方案。第三方圖形與 SdFat 依賴保持可用。
 
+## 第四步後的下一個結構規劃
+
+第四步以 `Game::prepare_game`、恢復、重置及 fatal 的 host 整合測試作為流程回歸入口。第五步先保持現有模組分工：`AnimationController` 決定播放狀態，`Renderer` 持有顯示與緩衝，`BundleReader` 驗證及定位 pack frame，`FrameDecoder` 串流解碼並送往 TFT。不要先增加一層播放 façade，或把 SD 開檔責任搬進 Game。
+
+| 順序 | 先確認的事 | 可評估的結構變更 | 採納條件 |
+| --- | --- | --- | --- |
+| 1. 靜態責任收斂 | 無法建立實機逐幀基線時，先追查外觀查詢的結果、首錯資源與責任歸屬 | Evolution 查詢已區分找到、無目標、載入失敗；完整契約與其餘外觀查詢共用內部檔案生命週期與錯誤記錄 | 保留目前重新驗證與失敗語意；host 測試及 `project_12` 建置通過，不宣稱速度收益 |
+| 2. Pack 存取 | `openFrame` 每幀開檔並驗證 header，已快取上一個 animation record；確認重複成本、切換 species/outfit、缺檔和首錯資源 | 若開檔確為瓶頸，再評估由 `BundleReader` 持有單一目前 pack 的開檔生命週期與失效規則 | 正常/切換/故障路徑測試通過；實機逐幀時間有收益，Flash/RAM 在容量內 |
+| 3. Renderer 緩衝 | 目前 1,024 B 讀緩衝與 128×12 RGB565 行緩衝由 `AnimationState` 一次配置 | 比較 12 行與較小批次，或調整固定生命週期配置；不改變 `FrameDecoder` 的有界讀取與錯誤拒絕 | 以 SRAM 峰值及 SPI/解碼時間 A/B 決定，不只看靜態 RAM 或 Flash |
+
+目前無法建立實機 SD 時間與記憶體基線，已先以靜態分析收斂 Evolution 查詢結果、完整契約與外觀查詢共用的檔案生命週期，以及外觀查詢的錯誤記錄。每次查詢仍開檔並驗證，逐幀熱路徑維持現狀，不宣稱效能改善。Pack 常駐開檔與 Renderer 緩衝調整仍須實機量測才決定；目前沒有證據支持新增常駐快取或擴大對外介面。
+
 ## 驗證與回退
 
 目前 `platformio.ini` 的預設及唯一專案 environment 是 `project_12`。結構變更至少建置 `platformio run -e project_12`，並執行受影響的 host 測試；更動 profile flag 時，再核對 Web Profile Resolver 實際產生的設定。每次記錄修改前後的 linked Flash 與靜態 RAM。沒有實機 SD/時間量測時，只能報告靜態流程、建置與測試結果。
