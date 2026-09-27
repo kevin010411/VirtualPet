@@ -49,14 +49,14 @@ EvolutionLookupResult SdAppearanceLoader::findEvolutionTarget(const PetStatSnaps
 bool SdAppearanceLoader::loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount)
 {
     return recordQueryResult(loadRuntimeTableSpecies(
-        sd, assetManifest, bundleReader, species, maxSpecies, speciesCount));
+        sd, assetManifest, species, maxSpecies, speciesCount));
 }
 
 bool SdAppearanceLoader::loadOutfits(uint8_t speciesSlot, uint8_t unlockMask, uint8_t *outfits,
                                      size_t maxOutfits, size_t &outfitCount)
 {
     return recordQueryResult(loadRuntimeTableOutfits(
-        sd, assetManifest, bundleReader, speciesSlot, unlockMask, outfits, maxOutfits, outfitCount));
+        sd, assetManifest, speciesSlot, unlockMask, outfits, maxOutfits, outfitCount));
 }
 
 bool SdAppearanceLoader::findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, bool locked,
@@ -71,7 +71,7 @@ bool SdAppearanceLoader::resolveOutfitUnlockMask(uint8_t speciesSlot, const PetS
                                                   uint8_t &resolvedMask)
 {
     return recordQueryResult(resolveRuntimeTableOutfitUnlockMask(
-        sd, assetManifest, bundleReader, speciesSlot, evolutionStatSlots, stats,
+        sd, assetManifest, speciesSlot, evolutionStatSlots, stats,
         currentMask, initialize, resolvedMask));
 }
 
@@ -80,6 +80,6 @@ bool SdAppearanceLoader::resolveConsumableOutfitUnlock(uint8_t speciesSlot, uint
                                                         PetStatSnapshot &consumedStats)
 {
     return recordQueryResult(resolveRuntimeTableConsumableOutfitUnlock(
-        sd, assetManifest, bundleReader, speciesSlot, outfitSlot,
+        sd, assetManifest, speciesSlot, outfitSlot,
         evolutionStatSlots, stats, consumedStats));
 }

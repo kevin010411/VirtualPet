@@ -220,7 +220,7 @@ void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
 
     uint8_t species[8] = {};
     size_t speciesCount = 0;
-    assert(loadRuntimeTableSpecies(&sd, manifest, reader, species, 8, speciesCount));
+    assert(loadRuntimeTableSpecies(&sd, manifest, species, 8, speciesCount));
     assert(speciesCount == 2 && species[0] == 1 && species[1] == 2);
 
     ActivePetBehaviorStatSlots activeSlots(config);
@@ -231,36 +231,94 @@ void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
 
     uint8_t unlockMask = 0;
     assert(resolveRuntimeTableOutfitUnlockMask(
-        &sd, manifest, reader, 1, activeSlots, stats, 0, true, unlockMask));
+        &sd, manifest, 1, activeSlots, stats, 0, true, unlockMask));
     assert(unlockMask == 0xE3U);
 
     uint8_t outfits[8] = {};
     size_t outfitCount = 0;
     assert(loadRuntimeTableOutfits(
-        &sd, manifest, reader, 1, unlockMask, outfits, 8, outfitCount));
+        &sd, manifest, 1, unlockMask, outfits, 8, outfitCount));
     const uint8_t expectedVisible[] = {1, 2, 4, 5, 6, 7, 8};
     assert(outfitCount == sizeof(expectedVisible));
     for (size_t index = 0; index < outfitCount; ++index)
         assert(outfits[index] == expectedVisible[index]);
 
+    // Species 2 starts after Species 1's eight records in the exported table.
+    outfitCount = 0;
+    assert(loadRuntimeTableOutfits(
+        &sd, manifest, 2, 0x01U, outfits, 8, outfitCount));
+    assert(outfitCount == 1 && outfits[0] == 1);
+    assert(!loadRuntimeTableOutfits(
+        &sd, manifest, 3, 0x01U, outfits, 8, outfitCount));
+
     OutfitPreview locked = {};
     assert(findRuntimeTableOutfitPreview(&sd, manifest, reader, 1, 4, true, locked));
     assert(locked.speciesSlot == 1 && locked.outfitSlot == 4 && locked.animation.valid());
+    OutfitPreview secondSpecies = {};
+    assert(findRuntimeTableOutfitPreview(&sd, manifest, reader, 2, 1, false, secondSpecies));
+    assert(secondSpecies.speciesSlot == 2 && secondSpecies.outfitSlot == 1);
+    assert(!findRuntimeTableOutfitPreview(&sd, manifest, reader, 2, 2, false, secondSpecies));
 
     stats.stage_days = 10;
     assert(resolveRuntimeTableOutfitUnlockMask(
-        &sd, manifest, reader, 1, activeSlots, stats, unlockMask, false, unlockMask));
+        &sd, manifest, 1, activeSlots, stats, unlockMask, false, unlockMask));
     assert(unlockMask == 0xFBU);
     stats.stage_days = 0;
     stats.customStats[0] = 0;
     assert(resolveRuntimeTableOutfitUnlockMask(
-        &sd, manifest, reader, 1, activeSlots, stats, unlockMask, false, unlockMask));
+        &sd, manifest, 1, activeSlots, stats, unlockMask, false, unlockMask));
     assert(unlockMask == 0xFBU);
 
     uint8_t resetMask = 0;
     assert(resolveRuntimeTableOutfitUnlockMask(
-        &sd, manifest, reader, 1, activeSlots, stats, 0, true, resetMask));
+        &sd, manifest, 1, activeSlots, stats, 0, true, resetMask));
     assert(resetMask == 0xC3U);
+
+    std::vector<uint8_t> badRange = fixture;
+    const uint16_t sectionCount = static_cast<uint16_t>(
+        badRange[24] | (static_cast<uint16_t>(badRange[25]) << 8U));
+    bool changed = false;
+    for (uint16_t section = 0; section < sectionCount; ++section)
+    {
+        const size_t directoryOffset = 64U + static_cast<size_t>(section) * 16U;
+        if (badRange[directoryOffset] != 31 || badRange[directoryOffset + 1] != 0)
+            continue;
+        const size_t speciesOffset = readFixtureU32(badRange, directoryOffset + 4U);
+        badRange[speciesOffset + 8U + 2U] = 9; // Species 2 range now exceeds Outfits.
+        badRange[speciesOffset + 8U + 3U] = 0;
+        changed = true;
+        break;
+    }
+    assert(changed);
+    SdFat badSd(badRange.data(), badRange.size());
+    outfitCount = 0;
+    assert(!loadRuntimeTableOutfits(&badSd, releaseFixtureManifest(badRange),
+                                    2, 0x01U, outfits, 8, outfitCount));
+    assert(outfitCount == 0);
+
+    std::vector<uint8_t> consumable = fixture;
+    bool changedUnlock = false;
+    for (uint16_t section = 0; section < sectionCount; ++section)
+    {
+        const size_t directoryOffset = 64U + static_cast<size_t>(section) * 16U;
+        if (consumable[directoryOffset] != 35 || consumable[directoryOffset + 1] != 0)
+            continue;
+        const size_t unlockOffset = readFixtureU32(consumable, directoryOffset + 4U);
+        consumable[unlockOffset + 3U * 8U + 2U] = 2; // Outfit 4 consumes stage days.
+        changedUnlock = true;
+        break;
+    }
+    assert(changedUnlock);
+    SdFat consumeSd(consumable.data(), consumable.size());
+    PetStatSnapshot before = {};
+    before.speciesSlot = 1;
+    before.outfitSlot = 1;
+    before.stage_days = 10;
+    PetStatSnapshot after = {};
+    assert(resolveRuntimeTableConsumableOutfitUnlock(
+        &consumeSd, releaseFixtureManifest(consumable),
+        1, 4, activeSlots, before, after));
+    assert(after.stage_days == 2 && after.speciesSlot == 1);
 }
 
 void testAppearanceQueryAdapter(const std::vector<uint8_t> &fixture)
@@ -313,8 +371,6 @@ void testAppearanceQueryAdapter(const std::vector<uint8_t> &fixture)
 void testInvalidAppearanceFixture(const std::vector<uint8_t> &fixture)
 {
     SdFat sd(fixture.data(), fixture.size());
-    uint8_t scratch[AssetData::kIoScratchBytes] = {};
-    BundleReader reader(&sd, scratch, sizeof(scratch));
     PetBehaviorConfig published = {};
     published.schemaFingerprint = 0xA5A5A5A5UL;
     published.statCount = 7;
@@ -323,7 +379,7 @@ void testInvalidAppearanceFixture(const std::vector<uint8_t> &fixture)
     bool accepted = parseRuntimeTableBehavior(
         fixture.data(), fixture.size(), manifest, 1, 1, candidate);
     if (accepted)
-        accepted = validateRuntimeTableAppearance(&sd, manifest, reader);
+        accepted = validateRuntimeTableAppearance(&sd, manifest);
     if (accepted)
         published = candidate;
     assert(!accepted);
@@ -395,8 +451,7 @@ int main(int argc, char **argv)
     SdFat missingUnlocksSd(missingUnlocks.data(), missingUnlocks.size());
     BundleReader missingUnlocksReader(&missingUnlocksSd, scratch, sizeof(scratch));
     assert(!validateRuntimeTableAppearance(&missingUnlocksSd,
-                                           releaseFixtureManifest(missingUnlocks),
-                                           missingUnlocksReader));
+                                           releaseFixtureManifest(missingUnlocks)));
     HostSd::openCount = 0;
     initialResolved = false;
     assert(!loadCompleteRuntimeTable(&missingUnlocksSd,

@@ -9,8 +9,7 @@
 // intentionally stream /runtime.bin: no project-sized appearance table is
 // retained in STM32 RAM during the expand-contract migration.
 bool validateRuntimeTableAppearance(SdFat *sd,
-                                    const AssetData::RuntimeManifest &manifest,
-                                    BundleReader &bundleReader);
+                                    const AssetData::RuntimeManifest &manifest);
 bool findRuntimeTableEvolutionTarget(SdFat *sd,
                                      const AssetData::RuntimeManifest &manifest,
                                      BundleReader &bundleReader,
@@ -18,22 +17,21 @@ bool findRuntimeTableEvolutionTarget(SdFat *sd,
                                      const PetStatSnapshot &stats,
                                      AppearanceSelection &selection);
 bool loadRuntimeTableSpecies(SdFat *sd, const AssetData::RuntimeManifest &manifest,
-                             BundleReader &bundleReader, uint8_t *species,
+                             uint8_t *species,
                              size_t maxSpecies, size_t &speciesCount);
 bool loadRuntimeTableOutfits(SdFat *sd, const AssetData::RuntimeManifest &manifest,
-                             BundleReader &bundleReader, uint8_t speciesSlot,
+                             uint8_t speciesSlot,
                              uint8_t unlockMask, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount);
 bool findRuntimeTableOutfitPreview(SdFat *sd, const AssetData::RuntimeManifest &manifest,
                                    BundleReader &bundleReader, uint8_t speciesSlot,
                                    uint8_t outfitSlot, bool locked, OutfitPreview &preview);
 bool resolveRuntimeTableOutfitUnlockMask(SdFat *sd, const AssetData::RuntimeManifest &manifest,
-                                         BundleReader &bundleReader, uint8_t speciesSlot,
+                                         uint8_t speciesSlot,
                                          const ActivePetBehaviorStatSlots &activeSlots,
                                          const PetStatSnapshot &stats, uint8_t currentMask, bool initialize,
                                          uint8_t &resolvedMask);
 bool resolveRuntimeTableConsumableOutfitUnlock(SdFat *sd,
                                                const AssetData::RuntimeManifest &manifest,
-                                               BundleReader &bundleReader,
                                                uint8_t speciesSlot, uint8_t outfitSlot,
                                                const ActivePetBehaviorStatSlots &activeSlots,
                                                const PetStatSnapshot &stats,

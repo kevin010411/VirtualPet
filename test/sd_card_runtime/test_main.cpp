@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     PetStatSnapshot stats = {};
     stats.speciesSlot = 1;
     stats.outfitSlot = 1;
-    if (!validateRuntimeTableAppearance(&sd, manifest, reader))
+    if (!validateRuntimeTableAppearance(&sd, manifest))
     {
         printf("appearance validation failed: %s\n", reader.firstErrorResource());
         return 4;
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
     stats.outfitSlot = initialAppearance.outfitSlot;
     uint8_t unlockMask = 0;
     if (!resolveRuntimeTableOutfitUnlockMask(
-            &sd, manifest, reader, initialAppearance.speciesSlot, slots,
+            &sd, manifest, initialAppearance.speciesSlot, slots,
             stats, 0, true, unlockMask))
     {
         printf("initial unlock failed: species=%u outfit=%u resource=%s\n",
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
     uint8_t outfitOptions[AssetData::kMaxOutfitsPerSpecies] = {};
     size_t outfitCount = 0;
     if (!loadRuntimeTableOutfits(
-            &sd, manifest, reader, initialAppearance.speciesSlot, unlockMask,
+            &sd, manifest, initialAppearance.speciesSlot, unlockMask,
             outfitOptions, AssetData::kMaxOutfitsPerSpecies, outfitCount))
     {
         printf("outfit options failed: species=%u resource=%s\n",
