@@ -84,6 +84,12 @@ Runtime Table host 測試直接執行 SD adapter，確認 species、outfit、pre
 
 ## 後續擬議實作順序
 
+2026-09-27 外觀 Outfit 查詢首批重構：Web Runtime Table v7 匯出已在 `SPECIES` 記錄提供 `first_outfit` 與 `outfit_count`，並依 Species/Outfit slot 排序，故本批不改後端輸出格式。韌體共用有界的 Species Outfit 範圍讀取；Outfit 列表只讀該物種範圍，預覽及消耗解鎖直接定位指定 Outfit，且保留記錄身分及越界拒絕。`runtime_table_behavior` host 測試新增第二物種、越界範圍及消耗解鎖情境；`game_startup`、`runtime_contract_loader` host 測試與 `project_12` 建置通過。連結結果 Flash 57,968 B、靜態 RAM 6,820 B。這是原始碼層面的讀取次數收斂，未量測實機 SD 時間；本批也未拆分整個外觀解碼函式。
+
+2026-09-27 外觀解碼第二批：`decodeRuntimeTableAppearance` 僅保留共同的 Appearance feature、Asset/Animation section 檢查及查詢分派；初始外觀、Species、Outfit 列表／預覽、一般／消耗解鎖及 Evolution 的解碼規則各移至同檔案的私有函式。沒有新增對外介面、常駐表格或配置；查詢仍由 `RuntimeTableFile` 每次重新開檔與 manifest 比對。Runtime Table、Game startup、Runtime Contract Loader host 測試及 `project_12` 建置通過；連結 Flash 57,992 B（較首批 +24 B）、靜態 RAM 6,820 B（持平）。沒有實機 SD 時間或 SRAM 峰值量測。
+
+2026-09-27 外觀查詢介面第三批：移除私有 `AppearanceQuery` 萬用欄位與 kind 分派，各查詢改由具體參數呼叫對應解碼函式；共用的 Appearance feature、Asset/Animation section 檢查與必要外觀段落檢查仍集中。`AppearanceLoader` adapter 與離線 SD 檢查器所用的表格查詢，若不解析動畫，就不再傳入 `BundleReader`。`RuntimeTableFile` 仍持有每次開檔、manifest 比對與離開作用域時關檔；`loadCompleteRuntimeTable` 的初始外觀、行為設定、idle 參照、必要段落驗證順序維持。Runtime Table、Game startup、Runtime Contract Loader host 測試及 `project_12` 建置通過；離線 `sd_card_runtime` 入口以 host stub 做 C++ 語法編譯。連結 Flash 57,896 B（較第二批 -96 B）、靜態 RAM 6,820 B（持平）。外觀規則尚在 `RuntimeTableBehavior.cpp`，搬到 `appearance/` 前須先讓共用的 bounded table reader 有小而明確的內部介面，避免把底層讀表細節全部公開。
+
 架構清理以 `docs/architecture.md` 的 Proposed Architecture 與逐步完成條件為準。第一至第三步已完成；第四步程式與 host 整合驗證完成，實機 SRAM 峰值與 SD 尚待驗證。因無法建立實機效能基線，第五步先完成 Evolution 與外觀查詢的靜態責任收斂；逐幀熱路徑和 Renderer 容量改動尚未開始。以下為後續候選。
 
 1. **以架構角度繼續 Flash 優化。** 初始外觀的重複查詢、Evolution 三態結果及其餘外觀查詢的開檔與錯誤處理已收斂。後續若拆分 `RuntimeTableBehavior` 的行為與外觀解碼實作，須先盤點共用的有界讀取、動畫參照與載入順序，避免另建轉呼叫層。不得再以 pack 路徑字串組裝、內聯標註等局部省位元組變動作為優化方向；不可藉移除目前使用中的第三方庫節省 Flash，也不採用 Status 減法迴圈。
