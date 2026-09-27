@@ -182,7 +182,10 @@ bool Game::finish_setup_game()
 #if ENABLE_DEBUG
             renderer.showStartupResourceError(startupConfigError, startupDebugStage);
 #else
-            renderer.showResourceError(startupConfigError);
+            const char *recordedResource = renderer.firstAssetDataErrorResource();
+            renderer.showResourceError(recordedResource != nullptr && recordedResource[0] != '\0'
+                                           ? recordedResource
+                                           : startupConfigError);
 #endif
         }
         else if (initialStateLoadingFailed)
@@ -243,6 +246,8 @@ void Game::loop_game()
     {
         cheatEvolutionPending = false;
         handleEvolution();
+        if (flow.isFatalError())
+            return;
     }
 
     const unsigned long now = millis();
@@ -254,6 +259,8 @@ void Game::loop_game()
 
         if (flow.isCommand() || flow.isMinigame())
             maybeTickPet();
+        if (flow.isFatalError())
+            return;
 
         if (flow.isStartup() && !animations->isBusy())
         {
@@ -880,6 +887,8 @@ void Game::maybeTickPet()
     if (!animations->isBusy())
     {
         handleEvolution();
+        if (flow.isFatalError())
+            return;
         if (pendingEvolutionPhase != PendingEvolutionPhase::None)
             return;
     }
@@ -894,6 +903,8 @@ void Game::maybeTickPet()
             return;
         }
         handleEvolution();
+        if (flow.isFatalError())
+            return;
         if (pendingEvolutionPhase != PendingEvolutionPhase::None)
             return;
 
@@ -956,13 +967,16 @@ void Game::clearPendingEvolution()
 void Game::handleEvolution()
 {
     AppearanceSelection selection = {};
-    if (!petActions->findEvolutionTarget(selection))
+    const EvolutionLookupResult result = petActions->findEvolutionTarget(selection);
+    if (result != EvolutionLookupResult::Found)
     {
-        if (!appearanceLoader.lastContractLoadSucceeded())
+        if (result == EvolutionLookupResult::LoadFailed)
         {
             runtimeLoadState = RuntimeLoadState::Failed;
             flow.enterFatalError();
-            renderer.showResourceError(appearanceLoader.firstAssetDataErrorResource());
+            const char *resource = appearanceLoader.firstAssetDataErrorResource();
+            renderer.recordAssetDataErrorResource(resource);
+            renderer.showResourceError();
         }
         return;
     }

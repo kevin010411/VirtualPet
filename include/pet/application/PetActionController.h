@@ -21,7 +21,7 @@ public:
     void maybeSave();
     bool commitPetStats(const int16_t *customStats, size_t customStatCount);
     bool commitPetDay(const int16_t *customStats, size_t customStatCount);
-    bool findEvolutionTarget(AppearanceSelection &selection) const;
+    EvolutionLookupResult findEvolutionTarget(AppearanceSelection &selection) const;
     bool applyEvolutionTarget();
     bool stageAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     bool applyAppearance(uint8_t speciesSlot, uint8_t outfitSlot);

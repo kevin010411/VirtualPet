@@ -3,23 +3,6 @@
 #include "appearance/domain/RuntimeTableAppearance.h"
 #include "shared/utils/CopyResourceName.h"
 
-namespace
-{
-void recordRuntimeResult(bool succeeded, BundleReader &reader, bool &lastSucceeded,
-                         char *errorResource, size_t errorResourceSize)
-{
-    lastSucceeded = succeeded;
-    if (succeeded)
-    {
-        errorResource[0] = '\0';
-        return;
-    }
-    const char *pack = reader.firstErrorResource();
-    const char *resource = pack != nullptr && pack[0] != '\0' ? pack : "runtime";
-    copyResourceName(errorResource, errorResourceSize, resource);
-}
-} // namespace
-
 SdAppearanceLoader::SdAppearanceLoader(SdFat *refSd)
     : sd(refSd), bundleReader(refSd, ioScratch, sizeof(ioScratch))
 {
@@ -30,13 +13,7 @@ void SdAppearanceLoader::configureRuntimeContract(const PetBehaviorConfig &confi
     evolutionStatSlots.configure(config);
     assetManifest = config.assetManifest;
     bundleReader.configureBundle(assetManifest.bundleId);
-    lastContractSucceeded = true;
     contractErrorResource[0] = '\0';
-}
-
-bool SdAppearanceLoader::lastContractLoadSucceeded() const
-{
-    return lastContractSucceeded;
 }
 
 const char *SdAppearanceLoader::firstAssetDataErrorResource() const
@@ -45,65 +22,64 @@ const char *SdAppearanceLoader::firstAssetDataErrorResource() const
     return pack != nullptr && pack[0] != '\0' ? pack : contractErrorResource;
 }
 
-bool SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats,
-                                             AppearanceSelection &selection)
+bool SdAppearanceLoader::recordQueryResult(bool succeeded)
 {
-    const bool loaded = findRuntimeTableEvolutionTarget(
-        sd, assetManifest, bundleReader, evolutionStatSlots, stats, selection);
-    recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
-                        contractErrorResource, sizeof(contractErrorResource));
-    return loaded && selection.speciesSlot != 0;
+    if (succeeded)
+    {
+        contractErrorResource[0] = '\0';
+        return true;
+    }
+    const char *pack = bundleReader.firstErrorResource();
+    copyResourceName(contractErrorResource, sizeof(contractErrorResource),
+                     pack != nullptr && pack[0] != '\0' ? pack : "runtime");
+    return false;
+}
+
+EvolutionLookupResult SdAppearanceLoader::findEvolutionTarget(const PetStatSnapshot &stats,
+                                                              AppearanceSelection &selection)
+{
+    const bool loaded = recordQueryResult(findRuntimeTableEvolutionTarget(
+        sd, assetManifest, bundleReader, evolutionStatSlots, stats, selection));
+    if (!loaded)
+        return EvolutionLookupResult::LoadFailed;
+    return selection.speciesSlot != 0 ? EvolutionLookupResult::Found
+                                      : EvolutionLookupResult::NoTarget;
 }
 
 bool SdAppearanceLoader::loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount)
 {
-    const bool loaded = loadRuntimeTableSpecies(
-        sd, assetManifest, bundleReader, species, maxSpecies, speciesCount);
-    recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
-                        contractErrorResource, sizeof(contractErrorResource));
-    return loaded;
+    return recordQueryResult(loadRuntimeTableSpecies(
+        sd, assetManifest, bundleReader, species, maxSpecies, speciesCount));
 }
 
 bool SdAppearanceLoader::loadOutfits(uint8_t speciesSlot, uint8_t unlockMask, uint8_t *outfits,
                                      size_t maxOutfits, size_t &outfitCount)
 {
-    const bool loaded = loadRuntimeTableOutfits(
-        sd, assetManifest, bundleReader, speciesSlot, unlockMask, outfits, maxOutfits, outfitCount);
-    recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
-                        contractErrorResource, sizeof(contractErrorResource));
-    return loaded;
+    return recordQueryResult(loadRuntimeTableOutfits(
+        sd, assetManifest, bundleReader, speciesSlot, unlockMask, outfits, maxOutfits, outfitCount));
 }
 
 bool SdAppearanceLoader::findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, bool locked,
                                            OutfitPreview &preview)
 {
-    const bool loaded = findRuntimeTableOutfitPreview(
-        sd, assetManifest, bundleReader, speciesSlot, outfitSlot, locked, preview);
-    recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
-                        contractErrorResource, sizeof(contractErrorResource));
-    return loaded;
+    return recordQueryResult(findRuntimeTableOutfitPreview(
+        sd, assetManifest, bundleReader, speciesSlot, outfitSlot, locked, preview));
 }
 
 bool SdAppearanceLoader::resolveOutfitUnlockMask(uint8_t speciesSlot, const PetStatSnapshot &stats,
                                                   uint8_t currentMask, bool initialize,
                                                   uint8_t &resolvedMask)
 {
-    const bool loaded = resolveRuntimeTableOutfitUnlockMask(
+    return recordQueryResult(resolveRuntimeTableOutfitUnlockMask(
         sd, assetManifest, bundleReader, speciesSlot, evolutionStatSlots, stats,
-        currentMask, initialize, resolvedMask);
-    recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
-                        contractErrorResource, sizeof(contractErrorResource));
-    return loaded;
+        currentMask, initialize, resolvedMask));
 }
 
 bool SdAppearanceLoader::resolveConsumableOutfitUnlock(uint8_t speciesSlot, uint8_t outfitSlot,
                                                         const PetStatSnapshot &stats,
                                                         PetStatSnapshot &consumedStats)
 {
-    const bool loaded = resolveRuntimeTableConsumableOutfitUnlock(
+    return recordQueryResult(resolveRuntimeTableConsumableOutfitUnlock(
         sd, assetManifest, bundleReader, speciesSlot, outfitSlot,
-        evolutionStatSlots, stats, consumedStats);
-    recordRuntimeResult(loaded, bundleReader, lastContractSucceeded,
-                        contractErrorResource, sizeof(contractErrorResource));
-    return loaded;
+        evolutionStatSlots, stats, consumedStats));
 }

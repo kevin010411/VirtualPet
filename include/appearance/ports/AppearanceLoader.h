@@ -15,6 +15,13 @@ enum class EvolutionAnimationMode : uint8_t
     TwoPhase = 2,
 };
 
+enum class EvolutionLookupResult : uint8_t
+{
+    Found,
+    NoTarget,
+    LoadFailed,
+};
+
 struct AppearanceSelection
 {
     uint8_t speciesSlot;
@@ -38,9 +45,9 @@ class AppearanceLoader
 public:
     virtual ~AppearanceLoader() = default;
     virtual void configureRuntimeContract(const PetBehaviorConfig &config) = 0;
-    virtual bool lastContractLoadSucceeded() const = 0;
     virtual const char *firstAssetDataErrorResource() const = 0;
-    virtual bool findEvolutionTarget(const PetStatSnapshot &stats, AppearanceSelection &selection) = 0;
+    virtual EvolutionLookupResult findEvolutionTarget(const PetStatSnapshot &stats,
+                                                      AppearanceSelection &selection) = 0;
     virtual bool loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount) = 0;
     virtual bool loadOutfits(uint8_t speciesSlot, uint8_t unlockMask, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount) = 0;
     virtual bool findOutfitPreview(uint8_t speciesSlot, uint8_t outfitSlot, bool locked, OutfitPreview &preview) = 0;

@@ -16,11 +16,13 @@ foreach ($fixturePath in @($validFixture, $legacyFixture, $startupFixture)) {
 }
 $sources = @(
     'test/runtime_table_behavior/test_main.cpp',
+    'src/appearance/adapters/SdAppearanceLoader.cpp',
     'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
     'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
     'src/pet_behavior/domain/RuntimeValueResolver.cpp',
     'src/commands/domain/StatusSetContract.cpp',
-    'src/commands/domain/SystemCommandCatalog.cpp'
+    'src/commands/domain/SystemCommandCatalog.cpp',
+    'src/shared/utils/CopyResourceName.cpp'
 )
 Push-Location $repoRoot
 try {

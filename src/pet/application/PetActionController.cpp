@@ -74,18 +74,22 @@ bool PetActionController::commitPetStats(const int16_t *customStats, size_t cust
     return pet.commitPetStats(customStats, customStatCount);
 }
 
-bool PetActionController::findEvolutionTarget(AppearanceSelection &selection) const
+EvolutionLookupResult PetActionController::findEvolutionTarget(AppearanceSelection &selection) const
 {
-    if (!appearanceLoader.findEvolutionTarget(pet.statSnapshot(), selection))
-        return false;
+    const EvolutionLookupResult result =
+        appearanceLoader.findEvolutionTarget(pet.statSnapshot(), selection);
+    if (result != EvolutionLookupResult::Found)
+        return result;
 
-    return pet.speciesSlot() != selection.speciesSlot;
+    return pet.speciesSlot() != selection.speciesSlot
+               ? EvolutionLookupResult::Found
+               : EvolutionLookupResult::NoTarget;
 }
 
 bool PetActionController::applyEvolutionTarget()
 {
     AppearanceSelection selection = {};
-    if (!findEvolutionTarget(selection))
+    if (findEvolutionTarget(selection) != EvolutionLookupResult::Found)
         return false;
 
     return applyAppearance(selection.speciesSlot, selection.outfitSlot);

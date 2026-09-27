@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <vector>
@@ -6,6 +7,7 @@
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/SystemCommandCatalog.h"
 #include "appearance/domain/RuntimeTableAppearance.h"
+#include "appearance/adapters/SdAppearanceLoader.h"
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
 #include "pet_behavior/domain/RuntimeTableBehavior.h"
 
@@ -30,6 +32,18 @@ bool animationReferenceExists(BundleReader &, const AnimationRef &, uint8_t)
 BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t scratchSize)
     : sd_(sd), scratch_(scratch), scratchSize_(scratchSize)
 {
+}
+
+bool BundleReader::configureBundle(const AssetData::BundleId &bundleId)
+{
+    bundleId_ = bundleId;
+    bundleConfigured_ = true;
+    return true;
+}
+
+const char *BundleReader::firstErrorResource() const
+{
+    return firstErrorResource_;
 }
 
 namespace
@@ -249,6 +263,53 @@ void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
     assert(resetMask == 0xC3U);
 }
 
+void testAppearanceQueryAdapter(const std::vector<uint8_t> &fixture)
+{
+    SdFat sd(fixture.data(), fixture.size());
+    PetBehaviorConfig config = {};
+    const AssetData::RuntimeManifest manifest = releaseFixtureManifest(fixture);
+    assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
+    SdAppearanceLoader loader(&sd);
+    loader.configureRuntimeContract(config);
+
+    uint8_t species[8] = {};
+    size_t speciesCount = 0;
+    HostSd::openCount = 0;
+    assert(loader.loadSpecies(species, 8, speciesCount));
+    assert(speciesCount == 2 && HostSd::openCount == 1);
+
+    uint8_t outfits[8] = {};
+    size_t outfitCount = 0;
+    HostSd::openCount = 0;
+    assert(loader.loadOutfits(1, 0xE3U, outfits, 8, outfitCount));
+    assert(outfitCount == 7 && HostSd::openCount == 1);
+
+    OutfitPreview preview = {};
+    HostSd::openCount = 0;
+    assert(loader.findOutfitPreview(1, 4, true, preview));
+    assert(preview.animation.valid() && HostSd::openCount == 1);
+
+    PetStatSnapshot stats = {};
+    stats.speciesSlot = 1;
+    stats.outfitSlot = 7;
+    stats.customStats[0] = 50;
+    uint8_t unlockMask = 0;
+    HostSd::openCount = 0;
+    assert(loader.resolveOutfitUnlockMask(1, stats, 0, true, unlockMask));
+    assert(unlockMask == 0xE3U && HostSd::openCount == 1);
+    assert(loader.firstAssetDataErrorResource()[0] == '\0');
+
+    PetBehaviorConfig mismatched = config;
+    ++mismatched.assetManifest.fileSize;
+    SdAppearanceLoader invalidLoader(&sd);
+    invalidLoader.configureRuntimeContract(mismatched);
+    HostSd::openCount = 0;
+    speciesCount = 0;
+    assert(!invalidLoader.loadSpecies(species, 8, speciesCount));
+    assert(HostSd::openCount == 1);
+    assert(strcmp(invalidLoader.firstAssetDataErrorResource(), "runtime") == 0);
+}
+
 void testInvalidAppearanceFixture(const std::vector<uint8_t> &fixture)
 {
     SdFat sd(fixture.data(), fixture.size());
@@ -307,6 +368,7 @@ int main(int argc, char **argv)
     assert(config.activeSpeciesSlot == initial.speciesSlot &&
            config.activeOutfitSlot == initial.outfitSlot);
     assert(HostSd::openCount == 1);
+    testAppearanceQueryAdapter(startup);
     HostSd::openCount = 0;
     assert(loadCompleteRuntimeTable(&sd, releaseFixtureManifest(startup), reader,
                                     1, 1, config));

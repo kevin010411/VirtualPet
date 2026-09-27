@@ -294,6 +294,33 @@ bool readRuntimeTable(const Source &source,
            expectedManifest->fileCrc32 == fileCrc32;
 }
 
+// Keep the file, its Source context, and the validated table alive together.
+// Appearance queries and complete contract loads both use one fresh snapshot.
+class RuntimeTableFile
+{
+public:
+    RuntimeTableFile() : fileSource_{&file_} {}
+    ~RuntimeTableFile() { file_.close(); }
+
+    RuntimeTableFile(const RuntimeTableFile &) = delete;
+    RuntimeTableFile &operator=(const RuntimeTableFile &) = delete;
+
+    bool open(SdFat *sd, const AssetData::RuntimeManifest &manifest)
+    {
+        if (sd == nullptr || !file_.open(kRuntimeTablePath, FILE_READ))
+            return false;
+        const Source source = {&fileSource_, readFile, file_.fileSize()};
+        return readRuntimeTable(source, &manifest, table_);
+    }
+
+    const RuntimeTable &table() const { return table_; }
+
+private:
+    SdBaseFile file_;
+    FileSource fileSource_;
+    RuntimeTable table_ = {};
+};
+
 bool resolveAnimation(const Source &source,
                       const Section &assets,
                       const Section &animations,
@@ -1315,22 +1342,17 @@ bool loadCompleteRuntimeTable(SdFat *sd,
         *initialAppearance = {};
     if (initialAppearanceResolved != nullptr)
         *initialAppearanceResolved = false;
-    if (sd == nullptr)
+    RuntimeTableFile tableFile;
+    if (!tableFile.open(sd, manifest))
         return false;
-    SdBaseFile file;
-    if (!file.open(kRuntimeTablePath, FILE_READ))
-        return false;
-    const uint32_t byteCount = file.fileSize();
-    FileSource fileSource = {&file};
-    const Source source = {&fileSource, readFile, byteCount};
-    RuntimeTable table = {};
+    const RuntimeTable &table = tableFile.table();
 
     AppearanceSelection decodedInitial = {};
     AppearanceQuery query = {};
     query.kind = AppearanceQueryKind::Initial;
     query.selection = &decodedInitial;
-    bool decoded = readRuntimeTable(source, &manifest, table);
-    if (decoded && initialAppearance != nullptr)
+    bool decoded = true;
+    if (initialAppearance != nullptr)
     {
         decoded = decodeRuntimeTableAppearance(table, bundleReader, query);
         if (decoded)
@@ -1355,7 +1377,6 @@ bool loadCompleteRuntimeTable(SdFat *sd,
         AppearanceQuery validation = {};
         decoded = decodeRuntimeTableAppearance(table, bundleReader, validation);
     }
-    file.close();
     if (!decoded)
         return false;
     if (initialAppearance != nullptr)
@@ -1370,19 +1391,9 @@ bool loadRuntimeTableAppearanceQuery(SdFat *sd,
                                      BundleReader &bundleReader,
                                      AppearanceQuery &query)
 {
-    if (sd == nullptr)
-        return false;
-    SdBaseFile file;
-    if (!file.open(kRuntimeTablePath, FILE_READ))
-        return false;
-    const uint32_t byteCount = file.fileSize();
-    FileSource fileSource = {&file};
-    const Source source = {&fileSource, readFile, byteCount};
-    RuntimeTable table = {};
-    const bool decoded = readRuntimeTable(source, &manifest, table) &&
-                         decodeRuntimeTableAppearance(table, bundleReader, query);
-    file.close();
-    return decoded;
+    RuntimeTableFile tableFile;
+    return tableFile.open(sd, manifest) &&
+           decodeRuntimeTableAppearance(tableFile.table(), bundleReader, query);
 }
 } // namespace
 
