@@ -23,9 +23,10 @@ void verifyFixture(const std::string &root)
     assert(records.good());
     std::string packPath, expectedPath;
     unsigned species, outfit, animation, version, frameIndex, width, height;
+    int x, y;
     unsigned checked = 0;
     bool checkedAnimation = false, checkedButton = false;
-    while (records >> packPath >> expectedPath >> species >> outfit >> animation >> version >> frameIndex >> width >> height)
+    while (records >> packPath >> expectedPath >> species >> outfit >> animation >> version >> frameIndex >> width >> height >> x >> y)
     {
         const auto pack = readFile(root + "/" + packPath);
         const auto expected = readFile(root + "/" + expectedPath);
@@ -44,9 +45,7 @@ void verifyFixture(const std::string &root)
         uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
         Adafruit_ST7735 display;
         const bool button = width == 32 && height == 32;
-        assert(button || (width == 128 && height == 96));
-        const int x = button ? static_cast<int>(frameIndex % 4) * 32 : 0;
-        const int y = button ? (frameIndex < 4 ? 0 : 128) : 32;
+        assert(width <= 128 && height <= 160 && width % 16 == 0 && height % 16 == 0);
         assert(FrameDecoder::showDataFrame(reader, address, &display,
             readBuffer, sizeof(readBuffer), lineBuffer, FrameDecoder::kLineBufferPixels,
             x, y, FrameDecoder::kWorkingBatchLines));

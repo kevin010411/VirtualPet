@@ -400,14 +400,14 @@ Renderer::Renderer(Adafruit_ST7735 *display, SdFat *sd) : tft(display), SD(sd), 
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
 void Renderer::setAssetAppearance(uint8_t, uint8_t) {}
-void Renderer::setAnimationArea(uint8_t, uint8_t) {}
+void Renderer::setAnimationArea(uint8_t, uint8_t, uint8_t, uint8_t) {}
 bool Renderer::configureAssetBundle(const AssetData::BundleId &) { return scenario->bundleSucceeds; }
 bool Renderer::setAnimation(const AssetData::AnimationRef &, uint8_t, bool) { return true; }
 bool Renderer::currentLayoutId(uint8_t &layout) const { layout = 0; return true; }
 bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &,
-                                     const AssetData::AnimationRef &, uint8_t) { return true; }
+                                     const AssetData::AnimationRef &, uint8_t, uint8_t) { return true; }
 bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &, uint8_t,
-                                  uint16_t, int, int, int) { return true; }
+                                  uint16_t, int, int, int, uint16_t, uint16_t) { return true; }
 bool Renderer::willRestartAnimationLoop() const { return false; }
 bool Renderer::advanceAnimationFrame() { return true; }
 bool Renderer::animationFrameFailed() const { return false; }

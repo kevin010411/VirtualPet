@@ -409,8 +409,7 @@ bool BundleReader::readDescriptor(SdBaseFile &file,
     descriptor.payloadOffset = readU32(data + 8);
     descriptor.encodedSize = readU32(data + 12);
     descriptor.decodedSize = readU32(data + 16);
-    const bool validDimensions = (descriptor.width == 128 && descriptor.height == 96) ||
-                                 (descriptor.width == 32 && descriptor.height == 32);
+    const bool validDimensions = AssetData::validFrameDimensions(descriptor.width, descriptor.height);
     const uint32_t expectedDecodedSize = static_cast<uint32_t>(descriptor.width) *
                                          static_cast<uint32_t>(descriptor.height) * 2UL;
     return validDimensions &&

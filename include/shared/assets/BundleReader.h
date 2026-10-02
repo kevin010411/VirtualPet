@@ -22,10 +22,16 @@ constexpr uint16_t kMaxVersions = 256;
 constexpr uint8_t kMaxOutfitsPerSpecies = 8;
 constexpr uint16_t kSpeciesSlotCount = 256;
 constexpr uint16_t kMaxWidth = 128;
-constexpr uint16_t kMaxHeight = 96;
-constexpr uint32_t kMaxDecodedBytes = 24576;
+constexpr uint16_t kMaxHeight = 160;
+constexpr uint32_t kMaxDecodedBytes = 128UL * 160UL * 2UL;
 constexpr uint32_t kMaxPackBytes = 20UL * 1024UL * 1024UL;
 constexpr size_t kIoScratchBytes = 512;
+
+constexpr bool validFrameDimensions(uint16_t width, uint16_t height)
+{
+    return width >= 16 && width <= kMaxWidth && height >= 16 && height <= kMaxHeight &&
+           width % 16 == 0 && height % 16 == 0;
+}
 
 struct BundleId
 {

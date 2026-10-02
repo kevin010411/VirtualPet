@@ -18,25 +18,25 @@ public:
 
     void initAnimations();
     void setAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
-    void setAnimationArea(uint8_t x, uint8_t y);
+    void setAnimationArea(uint8_t x, uint8_t y, uint8_t width = 128, uint8_t height = 96);
     bool configureAssetBundle(const AssetData::BundleId &bundleId);
     bool ShowDataFrame(const AssetData::AssetFrameAddress &address,
                        int xmin = -1,
                        int ymin = -1,
-                       int batch_lines = 12);
+                       int batch_lines = 12, uint16_t expectedWidth = 0, uint16_t expectedHeight = 0);
     bool ShowAnimationFrame(const AssetData::AnimationRef &animation,
                             uint8_t versionIndex,
                             uint16_t frameIndex,
                             int xmin = -1,
                             int ymin = -1,
-                            int batchLines = 12);
+                            int batchLines = 12, uint16_t expectedWidth = 0, uint16_t expectedHeight = 0);
     bool setAnimation(const AssetData::AnimationRef &animation,
                       uint8_t versionIndex,
                       bool playOnce);
     bool currentLayoutId(uint8_t &layoutId) const;
     bool validateLayoutVersion(const AssetData::AnimationRef &unselected,
                                const AssetData::AnimationRef &selected,
-                               uint8_t layoutId);
+                               uint8_t layoutId, uint8_t blockCount);
     bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
     bool animationFrameFailed() const;

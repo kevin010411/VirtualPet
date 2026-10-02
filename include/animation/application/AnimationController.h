@@ -30,6 +30,7 @@ public:
     AssetData::AnimationRef currentAnimation() const;
     uint8_t currentVersionIndex() const;
     void requestFullRedraw();
+    bool takeFullRedrawRequest();
     void preparePlayback(unsigned long now);
     PlaybackTickResult tick(unsigned long now);
     void startBatteryAnimation();
@@ -67,6 +68,7 @@ private:
     bool playbackPrepared = false;
     bool preparedTargetChanged = false;
     bool preparedFrameDue = false;
+    bool fullRedrawRequested = false;
 
     void resetPlaybackState();
     unsigned long completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const;

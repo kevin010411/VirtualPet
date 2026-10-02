@@ -22,6 +22,11 @@ void LayoutRenderer::begin()
 
 void LayoutRenderer::drawAll()
 {
+    if (!hasActiveLayout || runtimeContract == nullptr)
+        return;
+    if (!renderer.ShowAnimationFrame(runtimeContract->layoutUnselected, activeLayoutId,
+                                     1, 0, 0, 12, 128, 160))
+        return;
     const int selectedSlot = commands.selectedSlot();
 
     for (int slot = 0; slot < commands.commandCount(); ++slot)
@@ -49,7 +54,8 @@ bool LayoutRenderer::updatePlayback(uint8_t layoutId)
     if (hasActiveLayout && activeLayoutId == layoutId)
         return true;
     if (!renderer.validateLayoutVersion(runtimeContract->layoutUnselected,
-                                        runtimeContract->layoutSelected, layoutId))
+                                        runtimeContract->layoutSelected, layoutId,
+                                        runtimeContract->screenBlockCount))
         return false;
     activeLayoutId = layoutId;
     hasActiveLayout = true;
@@ -71,8 +77,8 @@ bool LayoutRenderer::drawSlot(int slot, bool selected)
         const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
         if (block.kind != ScreenBlockKind::Button || block.source != slot + 1)
             continue;
-        if (!renderer.ShowAnimationFrame(layout, activeLayoutId, block.source,
-                                         block.x, block.y))
+        if (!renderer.ShowAnimationFrame(layout, activeLayoutId, index + 2,
+                                         block.x, block.y, 12, block.width, block.height))
             return false;
     }
     return true;

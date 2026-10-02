@@ -32,6 +32,8 @@ struct Renderer::AnimationState
     uint8_t outfitSlot = 1;
     uint8_t animationX = 0;
     uint8_t animationY = 32;
+    uint8_t animationWidth = 128;
+    uint8_t animationHeight = 96;
     alignas(uint16_t) uint8_t readBuffer[FrameDecoder::kDataReadBufferBytes] = {};
     BundleReader bundleReader;
     uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
@@ -90,10 +92,12 @@ void Renderer::setAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     }
 }
 
-void Renderer::setAnimationArea(uint8_t x, uint8_t y)
+void Renderer::setAnimationArea(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
 {
     state->animationX = x;
     state->animationY = y;
+    state->animationWidth = width;
+    state->animationHeight = height;
 }
 
 bool Renderer::configureAssetBundle(const AssetData::BundleId &bundleId)
@@ -114,13 +118,13 @@ size_t Renderer::lineBufferPixels() const
 bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
                              int xmin,
                              int ymin,
-                             int batch_lines)
+                             int batch_lines, uint16_t expectedWidth, uint16_t expectedHeight)
 {
     const bool ok = FrameDecoder::showDataFrame(
         state->bundleReader, address, display(), readBuffer(), readBufferSize(),
         lineBuffer(), lineBufferPixels(),
         xmin < 0 ? state->animationX : xmin,
-        ymin < 0 ? state->animationY : ymin, batch_lines);
+        ymin < 0 ? state->animationY : ymin, batch_lines, expectedWidth, expectedHeight);
     if (!ok)
     {
         FrameDecoder::showAssetDataError(tft, state->bundleReader.firstErrorResource());
@@ -139,7 +143,7 @@ bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation,
                                   uint16_t frameIndex,
                                   int xmin,
                                   int ymin,
-                                  int batchLines)
+                                  int batchLines, uint16_t expectedWidth, uint16_t expectedHeight)
 {
     if (!animation.valid() || frameIndex == 0)
     {
@@ -149,9 +153,16 @@ bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation,
 #endif
         return false;
     }
+    if (xmin < 0 && ymin < 0)
+    {
+        if (state->animationWidth == 0)
+            return true;
+        expectedWidth = state->animationWidth;
+        expectedHeight = state->animationHeight;
+    }
     return ShowDataFrame(frameAddress(animation, versionIndex,
                                       static_cast<uint16_t>(frameIndex - 1)),
-                         xmin, ymin, batchLines);
+                         xmin, ymin, batchLines, expectedWidth, expectedHeight);
 }
 
 bool Renderer::setAnimation(const AssetData::AnimationRef &animation,
@@ -185,7 +196,7 @@ bool Renderer::currentLayoutId(uint8_t &layoutId) const
 
 bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &unselected,
                                      const AssetData::AnimationRef &selected,
-                                     uint8_t layoutId)
+                                     uint8_t layoutId, uint8_t blockCount)
 {
     AssetData::AnimationRecord off = {};
     AssetData::AnimationRecord on = {};
@@ -193,7 +204,7 @@ bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &unselected,
         !unselected.shared() || !selected.shared() ||
         !state->bundleReader.resolveAnimation(frameAddress(unselected, layoutId, 0), off) ||
         !state->bundleReader.resolveAnimation(frameAddress(selected, layoutId, 0), on) ||
-        off.frameCount != 8 || on.frameCount != 8 ||
+        off.frameCount != blockCount + 1 || on.frameCount != blockCount + 1 ||
         off.layoutId != 0 || on.layoutId != 0)
     {
         state->bundleReader.rejectInvalidLayout(layoutId);
@@ -220,8 +231,10 @@ bool Renderer::advanceAnimationFrame()
             return true;
         state->nextFrame = 0;
     }
-    const bool ok = ShowAnimationFrame(state->animation, state->versionIndex,
-                                       static_cast<uint16_t>(state->nextFrame + 1));
+    const bool ok = state->animationWidth == 0 || ShowAnimationFrame(
+        state->animation, state->versionIndex, static_cast<uint16_t>(state->nextFrame + 1),
+        state->animationX, state->animationY, FrameDecoder::kWorkingBatchLines,
+        state->animationWidth, state->animationHeight);
     if (ok)
         ++state->nextFrame;
     state->animationFrameFailed = !ok;

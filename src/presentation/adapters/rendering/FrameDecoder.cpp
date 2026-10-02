@@ -130,7 +130,7 @@ bool showDataFrame(BundleReader &bundleReader,
                    size_t lineBufferPixels,
                    int xmin,
                    int ymin,
-                   int batchLines)
+                   int batchLines, uint16_t expectedWidth, uint16_t expectedHeight)
 {
     if (tft == nullptr || readBuffer == nullptr ||
         readBufferSize < kDataReadBufferBytes || lineBuffer == nullptr)
@@ -144,9 +144,9 @@ bool showDataFrame(BundleReader &bundleReader,
         return false;
 
     const AssetData::FrameDescriptor &descriptor = frame.descriptor;
-    const bool validDimensions = (descriptor.width == 128 && descriptor.height == 96) ||
-                                 (descriptor.width == 32 && descriptor.height == 32);
-    if (!validDimensions)
+    const bool validDimensions = AssetData::validFrameDimensions(descriptor.width, descriptor.height);
+    if (!validDimensions || (expectedWidth && descriptor.width != expectedWidth) ||
+        (expectedHeight && descriptor.height != expectedHeight))
         return rejectDataFrame(bundleReader, address, frame);
     const uint32_t pixelCount = static_cast<uint32_t>(descriptor.width) * descriptor.height;
     const int safeBatchLines = batchLines < 1 ? 1 : batchLines;

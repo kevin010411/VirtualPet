@@ -172,12 +172,20 @@ uint8_t AnimationController::currentVersionIndex() const
 
 void AnimationController::requestFullRedraw()
 {
+    fullRedrawRequested = true;
     dirtyAnimation = true;
     showPlaybackRole = FirmwarePlaybackRole::None;
     showAnimation = {};
     animateDone = true;
     lastFrameTime = 0;
     playbackPrepared = false;
+}
+
+bool AnimationController::takeFullRedrawRequest()
+{
+    const bool requested = fullRedrawRequested;
+    fullRedrawRequested = false;
+    return requested;
 }
 
 bool AnimationController::hasAnimationPending(FirmwarePlaybackRole id) const

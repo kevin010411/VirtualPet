@@ -34,7 +34,7 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       layout(std::make_unique<LayoutRenderer>(renderer, *commands))
 #if ENABLE_APPEARANCE_SELECTION
       ,
-      appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader))
+      appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader, *layout))
 #endif
 #if ENABLE_GUESS_GAME
       ,
@@ -326,6 +326,10 @@ void Game::requestFullRedraw()
 {
     dirtySelect = true;
     animations->requestFullRedraw();
+#if ENABLE_APPEARANCE_SELECTION
+    if (appearanceSelection->isActive())
+        appearanceSelection->requestFullRedraw();
+#endif
 }
 
 void Game::redrawAllNow()
@@ -335,7 +339,7 @@ void Game::redrawAllNow()
 
     const unsigned long now = millis();
 
-    // Repaint the entire center area even when an animation frame was already
+    // Repaint the entire animation area even when an animation frame was already
     // considered current before STOP mode.
     animations->requestFullRedraw();
     const PlaybackTickResult playbackResult = tickPlayback(now);
@@ -354,9 +358,6 @@ void Game::redrawAllNow()
     }
 #endif
 
-    // drawSelection() only updates two slots. After display sleep the complete
-    // top and bottom layout must be restored from the SD card.
-    layout->drawAll();
     dirtySelect = false;
 
 #if ENABLE_DEBUG
@@ -406,8 +407,13 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     }
 
     renderer.setAssetAppearance(speciesSlot, outfitSlot);
-    const ScreenBlockConfig &animationBlock = petBehaviorConfig.screenBlocks[0];
-    renderer.setAnimationArea(animationBlock.x, animationBlock.y);
+    renderer.setAnimationArea(0, 0, 0, 0);
+    for (uint8_t index = 0; index < petBehaviorConfig.screenBlockCount; ++index)
+    {
+        const ScreenBlockConfig &block = petBehaviorConfig.screenBlocks[index];
+        if (block.kind == ScreenBlockKind::Animation)
+            renderer.setAnimationArea(block.x, block.y, block.width, block.height);
+    }
     appearanceLoader.configureRuntimeContract(petBehaviorConfig);
     animations->configureRuntimeContract(petBehaviorConfig);
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
@@ -759,6 +765,8 @@ bool Game::setStageDaysForCheat(uint32_t value)
 
 PlaybackTickResult Game::tickPlayback(unsigned long now)
 {
+    if (animations->takeFullRedrawRequest())
+        layout->begin();
     animations->preparePlayback(now);
     if (!syncSceneLayoutWithPlayback())
         return {PlaybackResult::PlaybackFailed, animations->currentPlaybackRole()};

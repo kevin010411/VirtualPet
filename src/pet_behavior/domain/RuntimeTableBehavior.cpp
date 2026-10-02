@@ -1261,7 +1261,7 @@ bool compiledFeaturesAccept(uint32_t flags)
 bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
 {
     const Section *blocks = table.find(ScreenBlocks);
-    if (blocks == nullptr || blocks->count == 0 || blocks->count > kMaxScreenBlocks)
+    if (blocks == nullptr || blocks->count > kMaxScreenBlocks)
         return false;
     config.screenBlockCount = 0;
     uint8_t animationCount = 0;
@@ -1299,22 +1299,7 @@ bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
                 block.y < other.y + other.height && block.y + block.height > other.y)
                 return false;
         }
-        // Ticket 01 only enables the canonical default geometry. The record
-        // language has capacity for later tickets, but cannot enable them yet.
-        if (index == 0)
-        {
-            if (block.kind != ScreenBlockKind::Animation || block.x != 0 ||
-                block.y != 32 || block.width != 128 || block.height != 96)
-                return false;
-        }
-        else if (block.kind != ScreenBlockKind::Button || block.source != index ||
-                 block.x != ((index - 1) % 4) * 32 ||
-                 block.y != (index <= 4 ? 0 : 128) ||
-                 block.width != 32 || block.height != 32)
-            return false;
     }
-    if (blocks->count != 9 || animationCount != 1)
-        return false;
     // Publish the count only after the entire section has passed validation.
     config.screenBlockCount = static_cast<uint8_t>(blocks->count);
     return true;

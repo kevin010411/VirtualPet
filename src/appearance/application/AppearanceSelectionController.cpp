@@ -3,10 +3,12 @@
 #include <string.h>
 #include "shared/config/AppProfile.h"
 #include "presentation/adapters/rendering/Renderer.h"
+#include "presentation/application/LayoutRenderer.h"
 
-AppearanceSelectionController::AppearanceSelectionController(Renderer &rendererRef, AppearanceLoader &appearanceLoaderRef)
+AppearanceSelectionController::AppearanceSelectionController(Renderer &rendererRef,
+    AppearanceLoader &appearanceLoaderRef, LayoutRenderer &layoutRef)
     : renderer(rendererRef),
-      appearanceLoader(appearanceLoaderRef)
+      appearanceLoader(appearanceLoaderRef), layout(layoutRef)
 {
 }
 
@@ -161,8 +163,16 @@ void AppearanceSelectionController::exit()
 
 void AppearanceSelectionController::requestFullRedraw()
 {
+    layout.begin();
     dirtyOutfitPreview = true;
     lastOutfitPreviewFrameTime = 0;
+}
+
+bool AppearanceSelectionController::preparePreviewLayout()
+{
+    uint8_t layoutId = 0;
+    return renderer.setAnimation(selectedOutfitPreview.animation, 0, false) &&
+           renderer.currentLayoutId(layoutId) && layout.updatePlayback(layoutId);
 }
 
 void AppearanceSelectionController::render(unsigned long now)
@@ -174,8 +184,11 @@ void AppearanceSelectionController::render(unsigned long now)
     if (!frameDue)
         return;
 
+    if ((dirtyOutfitPreview || lastOutfitPreviewFrameTime == 0) && !preparePreviewLayout())
+        return;
+
     lastOutfitPreviewFrameTime = now;
-    renderer.ShowAnimationFrame(selectedOutfitPreview.animation, 0, outfitPreviewFrame, 0, 32);
+    renderer.ShowAnimationFrame(selectedOutfitPreview.animation, 0, outfitPreviewFrame);
     dirtyOutfitPreview = false;
 
     ++outfitPreviewFrame;
@@ -243,12 +256,15 @@ void AppearanceSelectionController::playSelectedChooseAnimation()
     if (!hasSelectedOutfitPreview)
         return;
 
+    if (!preparePreviewLayout())
+        return;
+
     const unsigned long interval = renderer.frameIntervalFor(
         selectedOutfitPreview.animation, 0, frameIntervalSlow);
     const uint16_t frameCount = renderer.frameCountFor(selectedOutfitPreview.animation);
     for (uint16_t frame = 1; frame <= frameCount; ++frame)
     {
-        renderer.ShowAnimationFrame(selectedOutfitPreview.animation, 0, frame, 0, 32);
+        renderer.ShowAnimationFrame(selectedOutfitPreview.animation, 0, frame);
         if (frame < frameCount)
             delay(interval);
     }

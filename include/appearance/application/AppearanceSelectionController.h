@@ -5,11 +5,13 @@
 #include "appearance/ports/AppearanceLoader.h"
 
 class Renderer;
+class LayoutRenderer;
 
 class AppearanceSelectionController
 {
 public:
-    AppearanceSelectionController(Renderer &renderer, AppearanceLoader &appearanceLoader);
+    AppearanceSelectionController(Renderer &renderer, AppearanceLoader &appearanceLoader,
+                                  LayoutRenderer &layout);
 
     bool start(uint8_t speciesSlot, uint8_t currentOutfitSlot, uint8_t unlockMask);
     bool startSpecies(uint8_t currentSpeciesSlot, const PetStatSnapshot &stats);
@@ -30,6 +32,7 @@ private:
 
     Renderer &renderer;
     AppearanceLoader &appearanceLoader;
+    LayoutRenderer &layout;
     bool selectingOutfit = false;
     bool selectingSpecies = false;
     uint8_t speciesSlot = 1;
@@ -49,6 +52,7 @@ private:
     bool dirtyOutfitPreview = false;
 
     bool loadSelectedOutfitPreview();
+    bool preparePreviewLayout();
     bool loadSelectedSpeciesPreview();
     void playSelectedChooseAnimation();
     void changeSelection(int delta);

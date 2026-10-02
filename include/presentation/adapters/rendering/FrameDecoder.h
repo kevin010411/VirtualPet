@@ -24,7 +24,9 @@ bool showDataFrame(BundleReader &bundleReader,
                    size_t lineBufferPixels,
                    int xmin,
                    int ymin,
-                   int batchLines);
+                   int batchLines,
+                   uint16_t expectedWidth = 0,
+                   uint16_t expectedHeight = 0);
 } // namespace FrameDecoder
 
 #endif
