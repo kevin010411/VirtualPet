@@ -53,6 +53,16 @@
 
 ## 驗證與回退
 
+畫面版面目前以 Runtime Table v9 的必要 SCREEN_BLOCKS／SCREEN_RULES 載入，
+`.data` v2 Layout 產品包含完整背景、積木矩形及數值圖案。後端預合成素材，
+韌體只做有界載入與串流繪製，Command Layout 槽與圖片產品身份分開。
+須整包重新匯出並配對本版韌體；舊 runtime 或混合 bundle 不做猜測回退。
+2026-10-02 的 `project_12` linked Flash 為 59,864／65,536 bytes，靜態 RAM
+7,916／20,480 bytes；畫面、數值、reader、playback、startup 及 persistence
+hosts 已通過。Web 正式客製入口仍受完整驗證 gate 保護，實機 SD／TFT／按鍵
+未驗收，不能把 host 結果或靜態 RAM 當作設備表現。逐票證據見 Web
+`.scratch/screen-layout-runtime/verification.md`。
+
 目前 `platformio.ini` 的預設及唯一專案 environment 是 `project_12`。結構變更至少建置 `platformio run -e project_12`，並執行受影響的 host 測試；更動 profile flag 時，再核對 Web Profile Resolver 實際產生的設定。每次記錄修改前後的 linked Flash 與靜態 RAM。沒有實機 SD/時間量測時，只能報告靜態流程、建置與測試結果。
 
 實作進度、A/B 數字與未驗證項目記於 [`.agent/firmware-refactor-progress.md`](../.agent/firmware-refactor-progress.md)。

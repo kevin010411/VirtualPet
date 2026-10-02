@@ -348,7 +348,7 @@ unsigned long Renderer::frameIntervalFor(const AssetData::AnimationRef &animatio
         !state->bundleReader.tryResolveAnimation(frameAddress(animation, versionIndex, 0), record) ||
         record.frameMs == 0)
         return defaultIntervalMs;
-    return max(1UL, static_cast<unsigned long>(record.frameMs));
+    return static_cast<unsigned long>(record.frameMs);
 }
 
 AssetData::BundleError Renderer::firstAssetDataError() const
