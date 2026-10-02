@@ -11,9 +11,9 @@ namespace
 {
 constexpr char kRuntimeTablePath[] = "/runtime.bin";
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// v8 adds the applied screen geometry; .data button-product IDs stay separate.
+// v9 adds bounded numeric image rules; .data button-product IDs stay separate.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 8;
+constexpr uint16_t kVersion = 9;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint16_t kMaxSections = 32;
@@ -61,6 +61,7 @@ enum SectionType : uint16_t
     Flow = 42,
     FlowRoles = 43,
     ScreenBlocks = 50,
+    ScreenRules = 51,
 };
 
 struct Section
@@ -187,6 +188,7 @@ uint16_t recordSizeFor(uint16_t type)
     case Flow: return 16;
     case FlowRoles: return 8;
     case ScreenBlocks: return 16;
+    case ScreenRules: return 12;
     default: return 0;
     }
 }
@@ -1261,20 +1263,28 @@ bool compiledFeaturesAccept(uint32_t flags)
 bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
 {
     const Section *blocks = table.find(ScreenBlocks);
-    if (blocks == nullptr || blocks->count > kMaxScreenBlocks)
+    const Section *rules = table.find(ScreenRules);
+    if (blocks == nullptr || blocks->count > kMaxScreenBlocks ||
+        rules == nullptr || rules->count > kMaxScreenRules)
         return false;
     config.screenBlockCount = 0;
+    config.screenRuleCount = 0;
+    uint16_t nextRule = 0;
+    uint16_t nextFrame = blocks->count + 2;
     uint8_t animationCount = 0;
     for (uint16_t index = 0; index < blocks->count; ++index)
     {
         uint8_t record[16] = {};
         if (!readRecord(table.source, *blocks, index, record) ||
-            readU16(record + 6) != 0 || readU16(record + 8) != 0 ||
-            readU16(record + 10) != 0 || readU32(record + 12) != 0)
+            readU32(record + 12) != 0)
             return false;
         ScreenBlockConfig &block = config.screenBlocks[index];
         block = {static_cast<ScreenBlockKind>(record[0]), record[1],
-                 record[2], record[3], record[4], record[5]};
+                 record[2], record[3], record[4], record[5], 0, 0, readU16(record + 10)};
+        const uint16_t firstRule = readU16(record + 6);
+        const uint16_t ruleCount = readU16(record + 8);
+        if (block.kind != ScreenBlockKind::Stat && (firstRule || ruleCount || block.fallbackFrame))
+            return false;
         if (block.width == 0 || block.height == 0 ||
             static_cast<uint16_t>(block.x) + block.width > 128 ||
             static_cast<uint16_t>(block.y) + block.height > 160 ||
@@ -1290,6 +1300,50 @@ bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
             if (block.source == 0 || block.source > kPetBehaviorButtonCount)
                 return false;
         }
+        else if (block.kind == ScreenBlockKind::Stat)
+        {
+            if (block.source != kUnboundScreenSource && block.source != kRuntimeValueStageDays &&
+                (!isRuntimeValueIdPetStat(block.source) || runtimePetStatSlot(block.source) >= config.statCount))
+                return false;
+            if (firstRule != nextRule || ruleCount > 32 || firstRule + ruleCount > rules->count)
+                return false;
+            block.firstRule = static_cast<uint8_t>(firstRule);
+            block.ruleCount = static_cast<uint8_t>(ruleCount);
+            uint16_t localFrames[33] = {};
+            uint8_t localCount = 0;
+            for (uint16_t child = 0; child <= ruleCount; ++child)
+            {
+                uint16_t frame = block.fallbackFrame;
+                if (child != 0)
+                {
+                    uint8_t ruleRecord[12] = {};
+                    if (!readRecord(table.source, *rules, firstRule + child - 1, ruleRecord) || readU16(ruleRecord + 10))
+                        return false;
+                    ScreenRuleConfig &rule = config.screenRules[firstRule + child - 1];
+                    rule = {readI32(ruleRecord), readI32(ruleRecord + 4), readU16(ruleRecord + 8)};
+                    if (rule.minimum > rule.maximum)
+                        return false;
+                    for (uint16_t earlier = firstRule; earlier < firstRule + child - 1; ++earlier)
+                    {
+                        const ScreenRuleConfig &other = config.screenRules[earlier];
+                        if (rule.minimum <= other.maximum && rule.maximum >= other.minimum)
+                            return false;
+                    }
+                    frame = rule.frame;
+                }
+                bool known = frame == index + 2;
+                for (uint8_t entry = 0; entry < localCount; ++entry)
+                    known = known || localFrames[entry] == frame;
+                if (!known)
+                {
+                    if (frame != nextFrame)
+                        return false;
+                    localFrames[localCount++] = frame;
+                    ++nextFrame;
+                }
+            }
+            nextRule += ruleCount;
+        }
         else
             return false;
         for (uint16_t previous = 0; previous < index; ++previous)
@@ -1301,6 +1355,10 @@ bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
         }
     }
     // Publish the count only after the entire section has passed validation.
+    if (nextRule != rules->count)
+        return false;
+    config.screenRuleCount = static_cast<uint8_t>(rules->count);
+    config.screenProductFrameCount = nextFrame - 1;
     config.screenBlockCount = static_cast<uint8_t>(blocks->count);
     return true;
 }

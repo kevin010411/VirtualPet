@@ -146,11 +146,14 @@ struct PetBehaviorButtonConfig
 };
 
 constexpr uint8_t kMaxScreenBlocks = 32;
+constexpr uint8_t kMaxScreenRules = 64;
+constexpr uint8_t kUnboundScreenSource = 255;
 
 enum class ScreenBlockKind : uint8_t
 {
     Animation = 1,
     Button = 2,
+    Stat = 3,
 };
 
 struct ScreenBlockConfig
@@ -161,6 +164,16 @@ struct ScreenBlockConfig
     uint8_t y;
     uint8_t width;
     uint8_t height;
+    uint8_t firstRule;
+    uint8_t ruleCount;
+    uint16_t fallbackFrame;
+};
+
+struct ScreenRuleConfig
+{
+    int32_t minimum;
+    int32_t maximum;
+    uint16_t frame;
 };
 
 struct PetBehaviorConfig
@@ -184,6 +197,9 @@ struct PetBehaviorConfig
     PetBehaviorButtonConfig buttons[kPetBehaviorButtonCount];
     ScreenBlockConfig screenBlocks[kMaxScreenBlocks];
     uint8_t screenBlockCount;
+    ScreenRuleConfig screenRules[kMaxScreenRules];
+    uint8_t screenRuleCount;
+    uint16_t screenProductFrameCount;
     StatusSetsConfig statusSets;
     AssetData::AnimationRef idleAnimation;
     uint8_t activeSpeciesSlot;

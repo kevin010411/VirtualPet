@@ -196,15 +196,16 @@ bool Renderer::currentLayoutId(uint8_t &layoutId) const
 
 bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &unselected,
                                      const AssetData::AnimationRef &selected,
-                                     uint8_t layoutId, uint8_t blockCount)
+                                     uint8_t layoutId, uint8_t blockCount, uint16_t productFrameCount)
 {
+    const uint16_t expectedFrames = productFrameCount ? productFrameCount : blockCount + 1;
     AssetData::AnimationRecord off = {};
     AssetData::AnimationRecord on = {};
     if (!unselected.valid() || !selected.valid() ||
         !unselected.shared() || !selected.shared() ||
         !state->bundleReader.resolveAnimation(frameAddress(unselected, layoutId, 0), off) ||
         !state->bundleReader.resolveAnimation(frameAddress(selected, layoutId, 0), on) ||
-        off.frameCount != blockCount + 1 || on.frameCount != blockCount + 1 ||
+        off.frameCount != expectedFrames || on.frameCount != expectedFrames ||
         off.layoutId != 0 || on.layoutId != 0)
     {
         state->bundleReader.rejectInvalidLayout(layoutId);

@@ -207,6 +207,7 @@ bool Game::finish_setup_game()
         return false;
     }
 
+    layout->updateValues(pet.statSnapshot());
     uint8_t initialLayoutId = 0;
     if (!renderer.currentLayoutId(initialLayoutId) ||
         !layout->updatePlayback(initialLayoutId))
@@ -287,6 +288,7 @@ void Game::loop_game()
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
+        layout->updateValues(pet.statSnapshot());
         appearanceSelection->render(now);
         if (dirtySelect)
         {
@@ -312,6 +314,7 @@ void Game::loop_game()
         return;
     }
 
+    layout->updateValues(pet.statSnapshot());
     if (dirtySelect)
     {
         layout->drawSelection();
@@ -358,6 +361,7 @@ void Game::redrawAllNow()
     }
 #endif
 
+    layout->updateValues(pet.statSnapshot());
     dirtySelect = false;
 
 #if ENABLE_DEBUG
@@ -781,6 +785,7 @@ bool Game::syncSceneLayoutWithPlayback()
         renderer.recordAssetDataErrorResource("asset data");
         return false;
     }
+    layout->updateValues(pet.statSnapshot());
     return layout->updatePlayback(layoutId);
 }
 

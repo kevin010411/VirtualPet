@@ -1,11 +1,17 @@
 [CmdletBinding()]
-param()
+param([switch]$Numeric)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $fixtures = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\custom_layout_v8'))
+if ($Numeric) {
+    $fixtures = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures\stat_layout_v9'))
+    if (-not (Test-Path -LiteralPath (Join-Path $fixtures 'frames.tsv') -PathType Leaf)) {
+        throw 'Run Web scripts/generate_stat_layout_fixtures.py at ticket 05 first.'
+    }
+}
 $outputPath = Join-Path $repoRoot '.pio\custom_layout_export_host.exe'
-foreach ($case in @('moved', 'enlarged', 'shrunk-duplicates', 'animation-only', 'buttons-only', 'empty')) {
+foreach ($case in $(if ($Numeric) { @() } else { @('moved', 'enlarged', 'shrunk-duplicates', 'animation-only', 'buttons-only', 'empty') })) {
     if (-not (Test-Path -LiteralPath (Join-Path $fixtures "$case\frames.tsv") -PathType Leaf)) {
         throw 'Run Web scripts/generate_custom_layout_fixtures.py at ticket 05 first.'
     }
@@ -30,7 +36,8 @@ try {
         -DENABLE_STARTUP_ANIMATION=1 -DENABLE_FIRST_START_ANIMATION=1 -DENABLE_OUTFIT_CHOOSE_ANIMATION=1 `
         -Itest/custom_layout_export -Itest/host_stubs -Iinclude @sources -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    & $outputPath $fixtures
+    if ($Numeric) { & $outputPath $fixtures --numeric }
+    else { & $outputPath $fixtures }
     exit $LASTEXITCODE
 }
 finally { Pop-Location }

@@ -171,7 +171,7 @@ bool Renderer::currentLayoutId(uint8_t &layoutId) const
 }
 bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &unselected,
                                      const AssetData::AnimationRef &selected,
-                                     uint8_t layoutId, uint8_t)
+                                     uint8_t layoutId, uint8_t, uint16_t)
 {
     recordEvent(RenderEventChannel::SdRead, RenderEventKind::LayoutMetadata,
                 unselected.animationId, layoutId, 0);

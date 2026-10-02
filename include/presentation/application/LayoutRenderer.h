@@ -7,6 +7,7 @@
 class CommandController;
 class Renderer;
 struct PetBehaviorConfig;
+struct PetStatSnapshot;
 
 class LayoutRenderer
 {
@@ -17,6 +18,7 @@ public:
     void begin();
     void drawAll();
     void drawSelection();
+    void updateValues(const PetStatSnapshot &snapshot);
     bool updatePlayback(uint8_t layoutId);
 
 private:
@@ -25,7 +27,9 @@ private:
     const PetBehaviorConfig *runtimeContract = nullptr;
     uint8_t activeLayoutId = 0;
     bool hasActiveLayout = false;
+    uint16_t numericFrames[32] = {};
 
+    bool drawNumeric(uint8_t index);
     bool drawSlot(int slot, bool selected);
 };
 

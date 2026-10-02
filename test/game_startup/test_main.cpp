@@ -405,7 +405,7 @@ bool Renderer::configureAssetBundle(const AssetData::BundleId &) { return scenar
 bool Renderer::setAnimation(const AssetData::AnimationRef &, uint8_t, bool) { return true; }
 bool Renderer::currentLayoutId(uint8_t &layout) const { layout = 0; return true; }
 bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &,
-                                     const AssetData::AnimationRef &, uint8_t, uint8_t) { return true; }
+                                     const AssetData::AnimationRef &, uint8_t, uint8_t, uint16_t) { return true; }
 bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &, uint8_t,
                                   uint16_t, int, int, int, uint16_t, uint16_t) { return true; }
 bool Renderer::willRestartAnimationLoop() const { return false; }

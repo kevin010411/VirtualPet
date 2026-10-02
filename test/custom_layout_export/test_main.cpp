@@ -7,6 +7,7 @@
 #include "presentation/adapters/rendering/Renderer.h"
 #include "presentation/application/LayoutRenderer.h"
 #include "commands/application/CommandController.h"
+#include "pet/domain/Pet.h"
 
 namespace
 {
@@ -114,6 +115,8 @@ void verify(const std::string &root)
     commands.resetSelection();
     LayoutRenderer layout(renderer, commands);
     layout.configureRuntimeContract(config);
+    PetStatSnapshot snapshot = {};
+    layout.updateValues(snapshot);
     const AssetData::AnimationRef active = config.idleAnimation;
     assert(renderer.setAnimation(active, 0, true));
     uint8_t layoutId;
@@ -125,6 +128,26 @@ void verify(const std::string &root)
         for (uint8_t index = 0; index < config.screenBlockCount; ++index)
         {
             const auto &block = config.screenBlocks[index];
+            if (block.kind == ScreenBlockKind::Stat)
+            {
+                uint16_t frame = block.fallbackFrame;
+                if (block.source != kUnboundScreenSource)
+                {
+                    const int32_t value = block.source == kRuntimeValueStageDays
+                        ? snapshot.stage_days : snapshot.customStats[runtimePetStatSlot(block.source)];
+                    for (uint8_t child = 0; child < block.ruleCount; ++child)
+                    {
+                        const auto &rule = config.screenRules[block.firstRule + child];
+                        if (value >= rule.minimum && value <= rule.maximum)
+                        {
+                            frame = rule.frame;
+                            break;
+                        }
+                    }
+                }
+                paint(expected, findFrame(frames, config.layoutUnselected, layoutId, frame - 1));
+                continue;
+            }
             if (block.kind != ScreenBlockKind::Button) continue;
             const bool selected = commands.isSlotVisible(block.source - 1) &&
                                   commands.selectedSlot() == block.source - 1;
@@ -136,6 +159,52 @@ void verify(const std::string &root)
     };
     assert(renderer.ShowAnimationFrame(active, 0, 1));
     assert(display.screen == expectedScreen());
+    if (config.screenRuleCount)
+    {
+        // Both inclusive ends, crossing ranges, null-image fallback, and blank restoration.
+        for (int value : {9, 10, 20, 21, 30, 40, 41, 50, 60, 70, 80, 81})
+        {
+            snapshot.stage_days = value;
+            for (auto &stat : snapshot.customStats) stat = value;
+            display.windows.clear();
+            layout.updateValues(snapshot);
+            assert(display.screen == expectedScreen());
+            for (const auto &window : display.windows)
+            {
+                bool numeric = false;
+                for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+                {
+                    const auto &block = config.screenBlocks[index];
+                    numeric |= block.kind == ScreenBlockKind::Stat && block.x == window.x &&
+                               block.y <= window.y && window.y < block.y + block.height;
+                }
+                assert(numeric);  // Animation and button pixels must survive value changes.
+            }
+            display.windows.clear();
+            layout.updateValues(snapshot);
+            assert(display.windows.empty());
+        }
+        // Distinct intervals mapped to the same image must also skip TFT writes.
+        for (auto &stat : snapshot.customStats) stat = 10;
+        snapshot.stage_days = 10;
+        layout.updateValues(snapshot);
+        for (auto &stat : snapshot.customStats) stat = 50;
+        snapshot.stage_days = 50;
+        display.windows.clear();
+        layout.updateValues(snapshot);
+        assert(display.windows.empty());
+        // Different source values catch accidental Stage Days/Pet Stat aliasing.
+        snapshot.stage_days = 30;
+        for (auto &stat : snapshot.customStats) stat = 10;
+        layout.updateValues(snapshot);
+        assert(display.screen == expectedScreen());
+        // Reconfiguring an appearance must display restored/current values, not Initial.
+        layout.configureRuntimeContract(config);
+        layout.updateValues(snapshot);
+        assert(layout.updatePlayback(layoutId));
+        assert(renderer.ShowAnimationFrame(active, 0, 1));
+        assert(display.screen == expectedScreen());
+    }
     for (int step = 0; step < 8; ++step)
     {
         display.windows.clear();
@@ -169,7 +238,13 @@ void verify(const std::string &root)
 
 int main(int argc, char **argv)
 {
-    assert(argc == 2);
+    assert(argc == 2 || argc == 3);
+    if (argc == 3)
+    {
+        assert(std::string(argv[2]) == "--numeric");
+        verify(argv[1]);
+        return 0;
+    }
     for (const char *name : {"moved", "enlarged", "shrunk-duplicates", "animation-only", "buttons-only", "empty"})
         verify(std::string(argv[1]) + "/" + name);
 }

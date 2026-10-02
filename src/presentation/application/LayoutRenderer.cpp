@@ -1,6 +1,7 @@
 #include "presentation/application/LayoutRenderer.h"
 
 #include "commands/application/CommandController.h"
+#include "pet/domain/Pet.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
 #include "presentation/adapters/rendering/Renderer.h"
 
@@ -12,6 +13,8 @@ LayoutRenderer::LayoutRenderer(Renderer &rendererRef, CommandController &command
 void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
 {
     runtimeContract = &config;
+    for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+        numericFrames[index] = config.screenBlocks[index].fallbackFrame;
     hasActiveLayout = false;
 }
 
@@ -34,6 +37,9 @@ void LayoutRenderer::drawAll()
         if (!drawSlot(slot, slot == selectedSlot && commands.isSlotVisible(slot)))
             return;
     }
+    for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
+        if (runtimeContract->screenBlocks[index].kind == ScreenBlockKind::Stat && !drawNumeric(index))
+            return;
 }
 
 void LayoutRenderer::drawSelection()
@@ -55,7 +61,7 @@ bool LayoutRenderer::updatePlayback(uint8_t layoutId)
         return true;
     if (!renderer.validateLayoutVersion(runtimeContract->layoutUnselected,
                                         runtimeContract->layoutSelected, layoutId,
-                                        runtimeContract->screenBlockCount))
+                                        runtimeContract->screenBlockCount, runtimeContract->screenProductFrameCount))
         return false;
     activeLayoutId = layoutId;
     hasActiveLayout = true;
@@ -82,4 +88,48 @@ bool LayoutRenderer::drawSlot(int slot, bool selected)
             return false;
     }
     return true;
+}
+
+void LayoutRenderer::updateValues(const PetStatSnapshot &snapshot)
+{
+    if (runtimeContract == nullptr)
+        return;
+    RuntimeValueContext values = {};
+    values.petStats = snapshot.customStats;
+    values.stageDays = snapshot.stage_days;
+    for (uint8_t slot = 0; slot < runtimeContract->statCount && slot < PetStatSnapshot::kCustomStatCount; ++slot)
+        values.activePetStatMask |= static_cast<uint16_t>(1U << slot);
+    for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
+    {
+        const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
+        if (block.kind != ScreenBlockKind::Stat)
+            continue;
+        uint16_t frame = block.fallbackFrame;
+        int32_t value = 0;
+        if (block.source != kUnboundScreenSource && resolveRuntimeValue(block.source, values, value))
+        {
+            for (uint8_t child = 0; child < block.ruleCount; ++child)
+            {
+                const ScreenRuleConfig &rule = runtimeContract->screenRules[block.firstRule + child];
+                if (value >= rule.minimum && value <= rule.maximum)
+                {
+                    frame = rule.frame;
+                    break;
+                }
+            }
+        }
+        if (numericFrames[index] == frame)
+            continue;
+        numericFrames[index] = frame;
+        if (hasActiveLayout && !drawNumeric(index))
+            return;
+    }
+}
+
+bool LayoutRenderer::drawNumeric(uint8_t index)
+{
+    const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
+    return renderer.ShowAnimationFrame(runtimeContract->layoutUnselected, activeLayoutId,
+                                       numericFrames[index], block.x, block.y, 12,
+                                       block.width, block.height);
 }

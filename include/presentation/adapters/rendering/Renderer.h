@@ -36,7 +36,7 @@ public:
     bool currentLayoutId(uint8_t &layoutId) const;
     bool validateLayoutVersion(const AssetData::AnimationRef &unselected,
                                const AssetData::AnimationRef &selected,
-                               uint8_t layoutId, uint8_t blockCount);
+                               uint8_t layoutId, uint8_t blockCount, uint16_t productFrameCount = 0);
     bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
     bool animationFrameFailed() const;
