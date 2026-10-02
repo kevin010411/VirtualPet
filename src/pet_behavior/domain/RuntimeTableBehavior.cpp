@@ -11,9 +11,9 @@ namespace
 {
 constexpr char kRuntimeTablePath[] = "/runtime.bin";
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// Runtime Value predicates and the Pet Status Axis remain in the v7 condition
-// vocabulary. Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 7;
+// v8 adds the applied screen geometry; .data button-product IDs stay separate.
+// Older binaries are rejected without a compatibility parser.
+constexpr uint16_t kVersion = 8;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint16_t kMaxSections = 32;
@@ -60,6 +60,7 @@ enum SectionType : uint16_t
     SystemRoles = 40,
     Flow = 42,
     FlowRoles = 43,
+    ScreenBlocks = 50,
 };
 
 struct Section
@@ -185,6 +186,7 @@ uint16_t recordSizeFor(uint16_t type)
     case SystemRoles: return 8;
     case Flow: return 16;
     case FlowRoles: return 8;
+    case ScreenBlocks: return 16;
     default: return 0;
     }
 }
@@ -656,7 +658,9 @@ bool decodeButtons(const Source &source, const Section &buttons, PetBehaviorConf
     for (uint16_t index = 0; index < buttons.count; ++index)
     {
         uint8_t record[8] = {};
-        if (!readRecord(source, buttons, index, record))
+        if (!readRecord(source, buttons, index, record) || record[0] != index + 1 ||
+            record[1] > static_cast<uint8_t>(PetBehaviorButtonKind::SystemCommand) ||
+            readU32(record + 4) != 0)
             return false;
         PetBehaviorButtonConfig &button = config.buttons[index];
         button.active = true;
@@ -1254,6 +1258,68 @@ bool compiledFeaturesAccept(uint32_t flags)
 
 // Flow and FlowRoles are export/inspector metadata. Firmware executes the
 // resolved system roles, including the two shared button-layout assets.
+bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
+{
+    const Section *blocks = table.find(ScreenBlocks);
+    if (blocks == nullptr || blocks->count == 0 || blocks->count > kMaxScreenBlocks)
+        return false;
+    config.screenBlockCount = 0;
+    uint8_t animationCount = 0;
+    for (uint16_t index = 0; index < blocks->count; ++index)
+    {
+        uint8_t record[16] = {};
+        if (!readRecord(table.source, *blocks, index, record) ||
+            readU16(record + 6) != 0 || readU16(record + 8) != 0 ||
+            readU16(record + 10) != 0 || readU32(record + 12) != 0)
+            return false;
+        ScreenBlockConfig &block = config.screenBlocks[index];
+        block = {static_cast<ScreenBlockKind>(record[0]), record[1],
+                 record[2], record[3], record[4], record[5]};
+        if (block.width == 0 || block.height == 0 ||
+            static_cast<uint16_t>(block.x) + block.width > 128 ||
+            static_cast<uint16_t>(block.y) + block.height > 160 ||
+            (block.x | block.y | block.width | block.height) % 16 != 0)
+            return false;
+        if (block.kind == ScreenBlockKind::Animation)
+        {
+            if (block.source != 0 || ++animationCount > 1)
+                return false;
+        }
+        else if (block.kind == ScreenBlockKind::Button)
+        {
+            if (block.source == 0 || block.source > kPetBehaviorButtonCount)
+                return false;
+        }
+        else
+            return false;
+        for (uint16_t previous = 0; previous < index; ++previous)
+        {
+            const ScreenBlockConfig &other = config.screenBlocks[previous];
+            if (block.x < other.x + other.width && block.x + block.width > other.x &&
+                block.y < other.y + other.height && block.y + block.height > other.y)
+                return false;
+        }
+        // Ticket 01 only enables the canonical default geometry. The record
+        // language has capacity for later tickets, but cannot enable them yet.
+        if (index == 0)
+        {
+            if (block.kind != ScreenBlockKind::Animation || block.x != 0 ||
+                block.y != 32 || block.width != 128 || block.height != 96)
+                return false;
+        }
+        else if (block.kind != ScreenBlockKind::Button || block.source != index ||
+                 block.x != ((index - 1) % 4) * 32 ||
+                 block.y != (index <= 4 ? 0 : 128) ||
+                 block.width != 32 || block.height != 32)
+            return false;
+    }
+    if (blocks->count != 9 || animationCount != 1)
+        return false;
+    // Publish the count only after the entire section has passed validation.
+    config.screenBlockCount = static_cast<uint8_t>(blocks->count);
+    return true;
+}
+
 bool decodeRuntimePresentation(const RuntimeTable &table,
                                uint8_t speciesSlot,
                                uint8_t outfitSlot,
@@ -1263,7 +1329,7 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
         return false;
     const Source &source = table.source;
     const uint32_t featureFlags = table.featureFlags;
-    if (!compiledFeaturesAccept(featureFlags))
+    if (!compiledFeaturesAccept(featureFlags) || !decodeScreenBlocks(table, config))
         return false;
 
     const Section *assets = table.find(AssetRefs);

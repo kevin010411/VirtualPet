@@ -7,9 +7,13 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $webFixtures = [IO.Path]::GetFullPath((Join-Path $repoRoot '..\..\web\tests\fixtures'))
 $validFixture = Join-Path $webFixtures 'asset_data_v2_layout\coherent-bundle\runtime.bin'
 $legacyFixture = Join-Path $webFixtures 'runtime_table_v6\minimal\runtime.bin'
-$startupFixture = Join-Path $webFixtures 'runtime_table_v7\outfit_selection_release\runtime.bin'
+$startupFixture = Join-Path $webFixtures 'runtime_table_v8\outfit_selection_release\runtime.bin'
+$appliedFixtureRoot = Join-Path $webFixtures 'applied_screen_layout_v8'
+$appliedFixtures = @('valid', 'bad_geometry', 'bad_button_source', 'unsupported_stat',
+    'unsupported_rules', 'duplicate_animation', 'over_capacity', 'missing_screen_blocks') |
+    ForEach-Object { Join-Path $appliedFixtureRoot "$_\runtime.bin" }
 $outputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_host.exe'
-foreach ($fixturePath in @($validFixture, $legacyFixture, $startupFixture)) {
+foreach ($fixturePath in @($validFixture, $legacyFixture, $startupFixture) + $appliedFixtures) {
     if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) {
         throw "Web exporter fixture is missing: $fixturePath"
     }
@@ -26,12 +30,12 @@ $sources = @(
 )
 Push-Location $repoRoot
 try {
-    & g++ -std=c++17 -DRUNTIME_TABLE_V7=1 -DENABLE_GUESS_GAME=1 `
+    & g++ -std=c++17 -DRUNTIME_TABLE_V8=1 -DENABLE_GUESS_GAME=1 `
         -DAPP_MAX_PET_STATS=10 -Itest/host_stubs -Iinclude @sources -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    & $outputPath $validFixture $legacyFixture $startupFixture
+    & $outputPath $validFixture $legacyFixture $startupFixture @appliedFixtures
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] Runtime Table v7 layout, initial contract, and v6 rejection'
+    Write-Host '[PASS] Runtime Table v8 applied screen, initial contract, malformed screens, and legacy rejection'
     exit 0
 }
 finally {

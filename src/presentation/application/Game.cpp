@@ -406,6 +406,8 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     }
 
     renderer.setAssetAppearance(speciesSlot, outfitSlot);
+    const ScreenBlockConfig &animationBlock = petBehaviorConfig.screenBlocks[0];
+    renderer.setAnimationArea(animationBlock.x, animationBlock.y);
     appearanceLoader.configureRuntimeContract(petBehaviorConfig);
     animations->configureRuntimeContract(petBehaviorConfig);
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
@@ -673,6 +675,8 @@ void Game::OnConfirmKey()
 
     const AppCommandId commandId = commands->currentCommandId();
     const int selectedSlot = commands->selectedSlot();
+    if (!commands->isSlotVisible(selectedSlot))
+        return;
     const PetBehaviorButtonConfig &behaviorButton = petBehaviorConfig.buttons[selectedSlot];
     if (behaviorButton.active && behaviorButton.kind == PetBehaviorButtonKind::UserAction)
     {

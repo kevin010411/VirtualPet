@@ -70,7 +70,16 @@ CommandController::CommandController(CommandHost &hostRef)
 void CommandController::configure(const PetBehaviorConfig &config)
 {
     for (uint8_t slot = 0; slot < kPetBehaviorButtonCount; ++slot)
+    {
         slots[slot] = buttonSlot(config.buttons[slot]);
+        bool displayed = false;
+        for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+        {
+            const ScreenBlockConfig &block = config.screenBlocks[index];
+            displayed |= block.kind == ScreenBlockKind::Button && block.source == slot + 1;
+        }
+        slots[slot].visible &= displayed;
+    }
 }
 
 void CommandController::resetSelection()
@@ -159,7 +168,7 @@ int CommandController::previousSlot() const
 
 bool CommandController::isSlotVisible(int slot) const
 {
-    return slotAt(slot).visible;
+    return slot >= 0 && slot < commandCount() && slotAt(slot).visible;
 }
 
 const CommandController::CommandSlot &CommandController::slotAt(int slot) const

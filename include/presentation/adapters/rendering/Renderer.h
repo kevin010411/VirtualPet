@@ -18,16 +18,17 @@ public:
 
     void initAnimations();
     void setAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
+    void setAnimationArea(uint8_t x, uint8_t y);
     bool configureAssetBundle(const AssetData::BundleId &bundleId);
     bool ShowDataFrame(const AssetData::AssetFrameAddress &address,
-                       int xmin = 0,
-                       int ymin = 32,
+                       int xmin = -1,
+                       int ymin = -1,
                        int batch_lines = 12);
     bool ShowAnimationFrame(const AssetData::AnimationRef &animation,
                             uint8_t versionIndex,
                             uint16_t frameIndex,
-                            int xmin = 0,
-                            int ymin = 32,
+                            int xmin = -1,
+                            int ymin = -1,
                             int batchLines = 12);
     bool setAnimation(const AssetData::AnimationRef &animation,
                       uint8_t versionIndex,

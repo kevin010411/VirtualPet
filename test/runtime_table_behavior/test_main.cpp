@@ -397,8 +397,8 @@ int main(int argc, char **argv)
     assert(AssetData::isValidFrameAddress(ninthSpecies));
     ninthSpecies.outfitSlot = 9;
     assert(!AssetData::isValidFrameAddress(ninthSpecies));
-#if RUNTIME_TABLE_V7
-    assert(argc == 4);
+#if RUNTIME_TABLE_V8
+    assert(argc >= 5);
     const std::vector<uint8_t> valid = readFixture(argv[1]);
     const std::vector<uint8_t> legacy = readFixture(argv[2]);
     const std::vector<uint8_t> startup = readFixture(argv[3]);
@@ -472,6 +472,32 @@ int main(int argc, char **argv)
     assert(!parseRuntimeTableBehavior(legacy.data(), legacy.size(),
                                       fixtureManifest(legacy), 1, 1, unpublished));
     assert(unpublished.schemaFingerprint == 0xA5A5A5A5UL);
+    // Both backend read-back and this host reader consume the exact runtime
+    // from a real backend-exported bundle, rather than a similar hand model.
+    const std::vector<uint8_t> applied = readFixture(argv[4]);
+    assert(parseRuntimeTableBehavior(applied.data(), applied.size(),
+                                     releaseFixtureManifest(applied), 1, 1, config));
+    assert(config.screenBlockCount == 9);
+    assert(config.screenBlocks[0].kind == ScreenBlockKind::Animation);
+    assert(config.screenBlocks[0].source == 0);
+    assert(config.screenBlocks[0].x == 0 && config.screenBlocks[0].y == 32);
+    assert(config.screenBlocks[0].width == 128 && config.screenBlocks[0].height == 96);
+    for (uint8_t slot = 1; slot <= 8; ++slot)
+    {
+        const ScreenBlockConfig &block = config.screenBlocks[slot];
+        assert(block.kind == ScreenBlockKind::Button && block.source == slot);
+        assert(block.x == ((slot - 1) % 4) * 32);
+        assert(block.y == (slot <= 4 ? 0 : 128));
+    }
+    for (int argument = 5; argument < argc; ++argument)
+    {
+        const std::vector<uint8_t> invalid = readFixture(argv[argument]);
+        unpublished.screenBlockCount = 0xAA;
+        assert(!parseRuntimeTableBehavior(invalid.data(), invalid.size(),
+                                          releaseFixtureManifest(invalid), 1, 1, unpublished));
+        assert(unpublished.screenBlockCount == 0xAA);
+        assert(unpublished.schemaFingerprint == 0xA5A5A5A5UL);
+    }
 #elif RUNTIME_TABLE_FULL_FEATURE
     assert(argc == 5);
     const std::vector<uint8_t> fixture = readFixture(argv[1]);

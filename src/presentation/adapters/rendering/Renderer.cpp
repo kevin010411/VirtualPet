@@ -30,6 +30,8 @@ struct Renderer::AnimationState
     char externalErrorResource[20] = {};
     uint8_t speciesSlot = 1;
     uint8_t outfitSlot = 1;
+    uint8_t animationX = 0;
+    uint8_t animationY = 32;
     alignas(uint16_t) uint8_t readBuffer[FrameDecoder::kDataReadBufferBytes] = {};
     BundleReader bundleReader;
     uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
@@ -88,6 +90,12 @@ void Renderer::setAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     }
 }
 
+void Renderer::setAnimationArea(uint8_t x, uint8_t y)
+{
+    state->animationX = x;
+    state->animationY = y;
+}
+
 bool Renderer::configureAssetBundle(const AssetData::BundleId &bundleId)
 {
     return state->bundleReader.configureBundle(bundleId);
@@ -110,7 +118,9 @@ bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
 {
     const bool ok = FrameDecoder::showDataFrame(
         state->bundleReader, address, display(), readBuffer(), readBufferSize(),
-        lineBuffer(), lineBufferPixels(), xmin, ymin, batch_lines);
+        lineBuffer(), lineBufferPixels(),
+        xmin < 0 ? state->animationX : xmin,
+        ymin < 0 ? state->animationY : ymin, batch_lines);
     if (!ok)
     {
         FrameDecoder::showAssetDataError(tft, state->bundleReader.firstErrorResource());

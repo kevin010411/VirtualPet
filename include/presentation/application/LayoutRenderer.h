@@ -20,10 +20,6 @@ public:
     bool updatePlayback(uint8_t layoutId);
 
 private:
-    static constexpr uint8_t maxSlots = 8;
-    static constexpr uint8_t tileSize = 32;
-    static constexpr uint16_t screenHeight = 160;
-
     Renderer &renderer;
     CommandController &commands;
     const PetBehaviorConfig *runtimeContract = nullptr;
@@ -31,8 +27,6 @@ private:
     bool hasActiveLayout = false;
 
     bool drawSlot(int slot, bool selected);
-    static int slotX(int slot);
-    static int slotY(int slot);
 };
 
 #endif // LAYOUT_RENDERER_H

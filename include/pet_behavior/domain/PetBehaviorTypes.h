@@ -145,6 +145,24 @@ struct PetBehaviorButtonConfig
     RuntimeSystemCommandId systemCommandId;
 };
 
+constexpr uint8_t kMaxScreenBlocks = 32;
+
+enum class ScreenBlockKind : uint8_t
+{
+    Animation = 1,
+    Button = 2,
+};
+
+struct ScreenBlockConfig
+{
+    ScreenBlockKind kind;
+    uint8_t source;
+    uint8_t x;
+    uint8_t y;
+    uint8_t width;
+    uint8_t height;
+};
+
 struct PetBehaviorConfig
 {
     AssetData::RuntimeManifest assetManifest;
@@ -164,6 +182,8 @@ struct PetBehaviorConfig
     PetBehaviorGuessEffectConfig guessEffects[kMaxPetBehaviorGuessEffects];
 #endif
     PetBehaviorButtonConfig buttons[kPetBehaviorButtonCount];
+    ScreenBlockConfig screenBlocks[kMaxScreenBlocks];
+    uint8_t screenBlockCount;
     StatusSetsConfig statusSets;
     AssetData::AnimationRef idleAnimation;
     uint8_t activeSpeciesSlot;

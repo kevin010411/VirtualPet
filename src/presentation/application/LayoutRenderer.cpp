@@ -26,7 +26,7 @@ void LayoutRenderer::drawAll()
 
     for (int slot = 0; slot < commands.commandCount(); ++slot)
     {
-        if (!drawSlot(slot, slot == selectedSlot))
+        if (!drawSlot(slot, slot == selectedSlot && commands.isSlotVisible(slot)))
             return;
     }
 }
@@ -66,20 +66,14 @@ bool LayoutRenderer::drawSlot(int slot, bool selected)
     const AssetData::AnimationRef &layout = selected
                                                 ? runtimeContract->layoutSelected
                                                 : runtimeContract->layoutUnselected;
-    return renderer.ShowAnimationFrame(
-        layout,
-        activeLayoutId,
-        static_cast<uint16_t>(slot + 1),
-        slotX(slot),
-        slotY(slot));
-}
-
-int LayoutRenderer::slotX(int slot)
-{
-    return (slot % 4) * tileSize;
-}
-
-int LayoutRenderer::slotY(int slot)
-{
-    return (slot < 4) ? 0 : (screenHeight - tileSize);
+    for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
+    {
+        const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
+        if (block.kind != ScreenBlockKind::Button || block.source != slot + 1)
+            continue;
+        if (!renderer.ShowAnimationFrame(layout, activeLayoutId, block.source,
+                                         block.x, block.y))
+            return false;
+    }
+    return true;
 }

@@ -400,6 +400,7 @@ Renderer::Renderer(Adafruit_ST7735 *display, SdFat *sd) : tft(display), SD(sd), 
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
 void Renderer::setAssetAppearance(uint8_t, uint8_t) {}
+void Renderer::setAnimationArea(uint8_t, uint8_t) {}
 bool Renderer::configureAssetBundle(const AssetData::BundleId &) { return scenario->bundleSucceeds; }
 bool Renderer::setAnimation(const AssetData::AnimationRef &, uint8_t, bool) { return true; }
 bool Renderer::currentLayoutId(uint8_t &layout) const { layout = 0; return true; }
