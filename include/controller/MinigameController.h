@@ -1,0 +1,42 @@
+#ifndef MINIGAME_CONTROLLER_H
+#define MINIGAME_CONTROLLER_H
+
+#include "common/AppProfile.h"
+
+#if ENABLE_GUESS_GAME
+
+#include "animation/AnimationController.h"
+#include "game/GuessItemGame.h"
+
+class PetBehaviorRuntime;
+
+class MinigameController : public GuessItemGameHost
+{
+public:
+    MinigameController(AnimationController &animations, PetBehaviorRuntime &petBehavior);
+
+    void startGuessItem();
+    void reset();
+    void update();
+    void onLeft();
+    void onRight();
+    void onConfirm();
+    void onPlaybackFailed();
+    bool isActive() const;
+
+private:
+    AnimationController &animations;
+    PetBehaviorRuntime &petBehavior;
+    GuessItemGame guessItem;
+
+    PlaybackResult replace(const AnimationSequence &sequence) override;
+    void cancelPlayback() override;
+    bool isPlaybackBusy() const override;
+    bool hasAnimation(FirmwarePlaybackRole id) const override;
+    bool hasAnimationPending(FirmwarePlaybackRole id) const override;
+    void settleOutcome(GuessItemOutcome outcome) override;
+};
+
+#endif // ENABLE_GUESS_GAME
+
+#endif // MINIGAME_CONTROLLER_H

@@ -1,0 +1,99 @@
+#include "controller/MinigameController.h"
+#include "pet/PetBehaviorRuntime.h"
+
+#if ENABLE_GUESS_GAME
+
+MinigameController::MinigameController(AnimationController &animationsRef,
+                                       PetBehaviorRuntime &petBehaviorRef)
+    : animations(animationsRef),
+      petBehavior(petBehaviorRef),
+      guessItem(*this)
+{
+}
+
+void MinigameController::startGuessItem()
+{
+    guessItem.start();
+}
+
+void MinigameController::reset()
+{
+    guessItem.reset();
+}
+
+void MinigameController::update()
+{
+    guessItem.update();
+}
+
+void MinigameController::onLeft()
+{
+    guessItem.onLeft();
+}
+
+void MinigameController::onRight()
+{
+    guessItem.onRight();
+}
+
+void MinigameController::onConfirm()
+{
+    guessItem.onMid();
+}
+
+void MinigameController::onPlaybackFailed()
+{
+    guessItem.onPlaybackFailed();
+}
+
+bool MinigameController::isActive() const
+{
+    return guessItem.isActive();
+}
+
+PlaybackResult MinigameController::replace(const AnimationSequence &sequence)
+{
+    return animations.replace(sequence);
+}
+
+void MinigameController::cancelPlayback()
+{
+    animations.cancelAll();
+}
+
+bool MinigameController::isPlaybackBusy() const
+{
+    return animations.isBusy();
+}
+
+bool MinigameController::hasAnimation(FirmwarePlaybackRole id) const
+{
+    return animations.hasAnimation(id);
+}
+
+bool MinigameController::hasAnimationPending(FirmwarePlaybackRole id) const
+{
+    return animations.hasAnimationPending(id);
+}
+
+void MinigameController::settleOutcome(GuessItemOutcome outcome)
+{
+    PetBehaviorGuessOutcome behaviorOutcome = PetBehaviorGuessOutcome::RoundCorrect;
+    switch (outcome)
+    {
+    case GuessItemOutcome::RoundWrong:
+        behaviorOutcome = PetBehaviorGuessOutcome::RoundWrong;
+        break;
+    case GuessItemOutcome::GameWin:
+        behaviorOutcome = PetBehaviorGuessOutcome::GameWin;
+        break;
+    case GuessItemOutcome::GameLoss:
+        behaviorOutcome = PetBehaviorGuessOutcome::GameLoss;
+        break;
+    default:
+        break;
+    }
+    petBehavior.applyGuessOutcome(behaviorOutcome);
+}
+
+#endif // ENABLE_GUESS_GAME
