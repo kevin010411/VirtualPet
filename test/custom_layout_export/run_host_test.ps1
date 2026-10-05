@@ -26,6 +26,9 @@ $sources = @(
     'src/commands/application/CommandController.cpp',
     'src/commands/domain/SystemCommandCatalog.cpp', 'src/commands/domain/StatusSetContract.cpp',
     'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
+    'src/appearance/domain/RuntimeTableAppearance.cpp',
+    'src/shared/runtime_table/RuntimeTableReader.cpp',
+    'src/shared/runtime_table/RuntimeTableFile.cpp',
     'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp', 'src/pet_behavior/domain/RuntimeValueResolver.cpp'
 )
 Push-Location $repoRoot

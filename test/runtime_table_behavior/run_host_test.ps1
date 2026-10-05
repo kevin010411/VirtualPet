@@ -22,6 +22,9 @@ $sources = @(
     'test/runtime_table_behavior/test_main.cpp',
     'src/appearance/adapters/SdAppearanceLoader.cpp',
     'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
+    'src/appearance/domain/RuntimeTableAppearance.cpp',
+    'src/shared/runtime_table/RuntimeTableReader.cpp',
+    'src/shared/runtime_table/RuntimeTableFile.cpp',
     'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
     'src/pet_behavior/domain/RuntimeValueResolver.cpp',
     'src/commands/domain/StatusSetContract.cpp',
@@ -35,7 +38,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath $validFixture $legacyFixture $startupFixture @appliedFixtures
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] Runtime Table v8 applied screen, initial contract, malformed screens, and legacy rejection'
+    Write-Host '[PASS] Runtime Table v9 action ranges, applied screen, initial contract, malformed records, and legacy rejection'
     exit 0
 }
 finally {

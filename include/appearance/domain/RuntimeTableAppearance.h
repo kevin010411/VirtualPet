@@ -5,9 +5,8 @@
 #include "appearance/ports/AppearanceLoader.h"
 #include "pet_behavior/domain/PetBehaviorStatSlot.h"
 
-// Ticket 04 owns the binary Appearance and Evolution sections.  The functions
-// intentionally stream /runtime.bin: no project-sized appearance table is
-// retained in STM32 RAM during the expand-contract migration.
+// Each query streams and validates a fresh /runtime.bin snapshot. Appearance,
+// Outfit and Evolution records stay on SD instead of occupying a resident table.
 bool validateRuntimeTableAppearance(SdFat *sd,
                                     const AssetData::RuntimeManifest &manifest);
 bool findRuntimeTableEvolutionTarget(SdFat *sd,

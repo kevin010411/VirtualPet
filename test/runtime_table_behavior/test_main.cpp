@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -91,6 +92,143 @@ uint16_t selectFirstOutcome(uint16_t)
     return 0;
 }
 
+// Replace only Action sections in a real exported v9 bundle. The physical
+// asset/layout records remain the exporter's; these synthetic records exercise
+// all Action modes without introducing an older-format compatibility reader.
+void putFixtureU16(std::vector<uint8_t> &bytes, size_t offset, uint16_t value)
+{
+    bytes[offset] = static_cast<uint8_t>(value);
+    bytes[offset + 1] = static_cast<uint8_t>(value >> 8);
+}
+
+void putFixtureU32(std::vector<uint8_t> &bytes, size_t offset, uint32_t value)
+{
+    putFixtureU16(bytes, offset, static_cast<uint16_t>(value));
+    putFixtureU16(bytes, offset + 2, static_cast<uint16_t>(value >> 16));
+}
+
+struct FixtureSection
+{
+    uint16_t type;
+    uint16_t recordSize;
+    std::vector<uint8_t> records;
+};
+
+std::vector<uint8_t> actionModesFixture(const std::vector<uint8_t> &base)
+{
+    std::vector<FixtureSection> sections;
+    uint16_t animationRef = 0;
+    const uint16_t count = base[24] | (static_cast<uint16_t>(base[25]) << 8);
+    for (uint16_t index = 0; index < count; ++index)
+    {
+        const size_t entry = 64 + index * 16;
+        const uint16_t type = base[entry] | (static_cast<uint16_t>(base[entry + 1]) << 8);
+        const uint16_t size = base[entry + 10] | (static_cast<uint16_t>(base[entry + 11]) << 8);
+        const size_t offset = readFixtureU32(base, entry + 4);
+        const size_t length = readFixtureU32(base, entry + 12);
+        if (type == 13)
+            animationRef = base[offset + 2] | (static_cast<uint16_t>(base[offset + 3]) << 8);
+        if (type < 12 || type > 15)
+            sections.push_back({type, size, {base.begin() + offset, base.begin() + offset + length}});
+    }
+    std::vector<uint8_t> actions(3 * 16, 0);
+    const uint16_t firstOutcomes[] = {0, 1, 2};
+    for (uint8_t index = 0; index < 3; ++index)
+    {
+        actions[index * 16] = index;
+        actions[index * 16 + 1] = index; // standard, conditional, random
+        actions[index * 16 + 2] = 3;
+        actions[index * 16 + 3] = index == 1 ? 1 : 0;
+        putFixtureU16(actions, index * 16 + 4, firstOutcomes[index]);
+        actions[index * 16 + 6] = index == 2 ? 2 : 1;
+        putFixtureU16(actions, index * 16 + 8, index == 2 ? 1 : 0);
+        actions[index * 16 + 10] = index == 1 ? 1 : 0;
+    }
+    std::vector<uint8_t> outcomes(4 * 10, 0);
+    std::vector<uint8_t> effects(4 * 6, 0);
+    for (uint8_t index = 0; index < 4; ++index)
+    {
+        outcomes[index * 10] = index >= 2 ? 1 : 0;
+        outcomes[index * 10 + 1] = 1;
+        putFixtureU16(outcomes, index * 10 + 2, animationRef);
+        putFixtureU16(outcomes, index * 10 + 4, index);
+        putFixtureU16(outcomes, index * 10 + 6, 1);
+        effects[index * 6 + 1] = 1; // set stat zero
+        putFixtureU16(effects, index * 6 + 2, index + 1);
+    }
+    std::vector<uint8_t> conditions(16, 0);
+    putFixtureU16(conditions, 2, runtimeValueIdForPetStat(0));
+    conditions[4] = 5;
+    putFixtureU16(conditions, 6, animationRef);
+    putFixtureU32(conditions, 8, 10);
+    putFixtureU32(conditions, 12, 10);
+    sections.push_back({12, 16, actions});
+    sections.push_back({13, 10, outcomes});
+    sections.push_back({14, 16, conditions});
+    sections.push_back({15, 6, effects});
+    std::sort(sections.begin(), sections.end(), [](const FixtureSection &a, const FixtureSection &b) {
+        return a.type < b.type;
+    });
+    std::vector<uint8_t> fixture(base.begin(), base.begin() + 64);
+    fixture.resize(64 + sections.size() * 16);
+    putFixtureU16(fixture, 24, static_cast<uint16_t>(sections.size()));
+    for (size_t index = 0; index < sections.size(); ++index)
+    {
+        const auto &section = sections[index];
+        fixture.resize((fixture.size() + 3) & ~size_t(3));
+        const size_t entry = 64 + index * 16;
+        putFixtureU16(fixture, entry, section.type);
+        putFixtureU32(fixture, entry + 4, static_cast<uint32_t>(fixture.size()));
+        putFixtureU16(fixture, entry + 8, static_cast<uint16_t>(section.records.size() / section.recordSize));
+        putFixtureU16(fixture, entry + 10, section.recordSize);
+        putFixtureU32(fixture, entry + 12, static_cast<uint32_t>(section.records.size()));
+        fixture.insert(fixture.end(), section.records.begin(), section.records.end());
+    }
+    putFixtureU32(fixture, 16, static_cast<uint32_t>(fixture.size()));
+    return fixture;
+}
+
+uint16_t selectLastOutcome(uint16_t upperExclusive) { return upperExclusive - 1; }
+
+void testDecodedActionRanges(const std::vector<uint8_t> &exported)
+{
+    auto fixture = actionModesFixture(exported);
+    PetBehaviorConfig config = {};
+    assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(),
+                                     releaseFixtureManifest(fixture), 1, 1, config));
+    assert(config.actionCount == 3 && config.actionOutcomeCount == 4);
+    assert(config.actionEffectCount == 4 && config.actionConditionCount == 1);
+    assert(config.actions[2].firstOutcome == 2 && config.actions[2].outcomeCount == 2);
+    PetBehaviorStatValues state = {};
+    PetBehaviorDailyChangePauses pauses = {};
+    PetBehaviorActionPlayback playback = {};
+    assert(config.stats[0].minValue <= 1 && config.stats[0].maxValue >= 10);
+    state.values[0] = 10;
+    assert(applyPetBehaviorAction(config, 0, state, pauses, playback));
+    assert(state.values[0] == 1 && playback.playbackCount == 1);
+    state.values[0] = 10;
+    assert(applyPetBehaviorAction(config, 1, state, pauses, playback));
+    assert(state.values[0] == 2 && playback.playbackCount == 5);
+    assert(applyPetBehaviorAction(config, 1, state, pauses, playback));
+    assert(state.values[0] == 2 && playback.playbackCount == 1);
+    assert(applyPetBehaviorAction(config, 2, state, pauses, playback, selectFirstOutcome));
+    assert(state.values[0] == 3);
+    assert(applyPetBehaviorAction(config, 2, state, pauses, playback, selectLastOutcome));
+    assert(state.values[0] == 4);
+
+    // A second Outcome cannot borrow effects from the first one.
+    for (size_t entry = 64; entry < 64U + fixture[24] * 16U; entry += 16)
+    {
+        if (fixture[entry] != 13) continue;
+        const size_t offset = readFixtureU32(fixture, entry + 4);
+        putFixtureU16(fixture, offset + 10 + 4, 0);
+        break;
+    }
+    config.schemaFingerprint = 0xA5A5A5A5UL;
+    assert(!parseRuntimeTableBehavior(fixture.data(), fixture.size(),
+                                      releaseFixtureManifest(fixture), 1, 1, config));
+    assert(config.schemaFingerprint == 0xA5A5A5A5UL);
+}
 struct StatusContext
 {
     const PetBehaviorStatValues *stats;
@@ -388,6 +526,55 @@ void testInvalidAppearanceFixture(const std::vector<uint8_t> &fixture)
 }
 } // namespace
 
+// Exercise the public loaders so ownership stays covered across source splits.
+void testRuntimeSnapshotLifecycle(const std::vector<uint8_t> &fixture)
+{
+    SdFat sd(fixture.data(), fixture.size());
+    AssetData::RuntimeManifest manifest = {};
+    HostSd::openCount = HostSd::closeCount = 0;
+    assert(loadRuntimeManifest(&sd, manifest));
+    assert(manifest.fileSize == fixture.size());
+    assert(manifest.schemaFingerprint == readFixtureU32(fixture, 44));
+    assert(manifest.fileCrc32 == readFixtureU32(fixture, 48));
+    assert(HostSd::openCount == 1 && HostSd::closeCount == 1);
+
+    uint8_t species[8] = {};
+    size_t count = 0;
+    HostSd::openCount = HostSd::closeCount = 0;
+    assert(loadRuntimeTableSpecies(&sd, manifest, species, 8, count));
+    assert(count != 0 && HostSd::openCount == 1 && HostSd::closeCount == 1);
+
+    auto mismatched = manifest;
+    ++mismatched.schemaFingerprint;
+    HostSd::openCount = HostSd::closeCount = 0;
+    assert(!loadRuntimeTableSpecies(&sd, mismatched, species, 8, count));
+    assert(count == 0 && HostSd::openCount == 1 && HostSd::closeCount == 1);
+
+    // Repeated queries must read the current snapshot, even after a valid load.
+    for (size_t length : {size_t(0), size_t(63), fixture.size() - 1})
+    {
+        HostSd::mountedSize = length;
+        HostSd::openCount = HostSd::closeCount = 0;
+        auto rejected = manifest;
+        assert(!loadRuntimeManifest(&sd, rejected));
+        assert(rejected.fileSize == 0 && rejected.schemaFingerprint == 0);
+        assert(HostSd::openCount == 1 && HostSd::closeCount == 1);
+        assert(!loadRuntimeTableSpecies(&sd, manifest, species, 8, count));
+        assert(count == 0 && HostSd::openCount == 2 && HostSd::closeCount == 2);
+    }
+    HostSd::mountedSize = fixture.size();
+    assert(loadRuntimeTableSpecies(&sd, manifest, species, 8, count));
+
+    HostSd::mountedData = nullptr;
+    HostSd::openCount = HostSd::closeCount = 0;
+    assert(!loadRuntimeManifest(&sd, manifest));
+    assert(manifest.fileSize == 0);
+    assert(HostSd::openCount == 1 && HostSd::closeCount == 0);
+    assert(!loadRuntimeManifest(nullptr, manifest));
+    assert(HostSd::openCount == 1);
+    HostSd::mountedData = fixture.data();
+}
+
 int main(int argc, char **argv)
 {
     AssetData::AssetFrameAddress ninthSpecies = {};
@@ -400,8 +587,10 @@ int main(int argc, char **argv)
 #if RUNTIME_TABLE_V8
     assert(argc >= 5);
     const std::vector<uint8_t> valid = readFixture(argv[1]);
+    testDecodedActionRanges(valid);
     const std::vector<uint8_t> legacy = readFixture(argv[2]);
     const std::vector<uint8_t> startup = readFixture(argv[3]);
+    testRuntimeSnapshotLifecycle(startup);
     PetBehaviorConfig config = {};
     assert(parseRuntimeTableBehavior(valid.data(), valid.size(),
                                      releaseFixtureManifest(valid), 1, 1, config));

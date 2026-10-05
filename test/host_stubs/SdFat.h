@@ -11,6 +11,7 @@ namespace HostSd
 inline const uint8_t *mountedData = nullptr;
 inline size_t mountedSize = 0;
 inline size_t openCount = 0;
+inline size_t closeCount = 0;
 }
 
 class File
@@ -44,7 +45,10 @@ public:
         return data_ != nullptr;
     }
     bool sync() { return false; }
-    void close() { data_ = nullptr; size_ = 0; position_ = 0; }
+    void close() {
+        if (data_ != nullptr) ++HostSd::closeCount;
+        data_ = nullptr; size_ = 0; position_ = 0;
+    }
 private:
     const uint8_t *data_ = nullptr;
     size_t size_ = 0;

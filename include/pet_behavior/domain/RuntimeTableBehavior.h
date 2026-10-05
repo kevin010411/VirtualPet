@@ -13,8 +13,9 @@ struct AppearanceSelection;
 // Export and the host inspector own complete catalog and integrity validation.
 bool loadRuntimeManifest(SdFat *sd, AssetData::RuntimeManifest &manifest);
 
-// Loads the execution-owned records from one open /runtime.bin snapshot and
-// publishes the candidate only after bounded reads and used references succeed.
+// Loads execution-owned records from one validated /runtime.bin snapshot into
+// caller-owned storage. Failure invalidates config and is fatal to the session;
+// initialAppearanceResolved identifies whether initial appearance decoding passed.
 bool loadCompleteRuntimeTable(SdFat *sd,
                               const AssetData::RuntimeManifest &manifest,
                               BundleReader &bundleReader,
@@ -24,7 +25,7 @@ bool loadCompleteRuntimeTable(SdFat *sd,
                               AppearanceSelection *initialAppearance = nullptr,
                               bool *initialAppearanceResolved = nullptr);
 
-// Decodes the Ticket 03-owned records from a complete runtime-table v1 file.
+// Decodes behavior and presentation records from a complete Runtime Table v9 file.
 // The supplied configuration is published only after bounded reads and runtime
 // array/reference guards succeed; export and host tooling validate semantics.
 bool parseRuntimeTableBehavior(const uint8_t *bytes,
