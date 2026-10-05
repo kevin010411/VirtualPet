@@ -27,9 +27,9 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       appearanceLoader(appearanceLoaderRef),
       petActions(std::make_unique<PetActionController>(pet, petStorage, renderer, appearanceLoader)),
       animations(std::make_unique<AnimationController>(renderer)),
-      petBehaviorRuntime(std::make_unique<PetBehaviorRuntime>(petBehaviorConfig, *petActions, *animations, renderer)),
+      petBehaviorRuntime(std::make_unique<PetBehaviorRuntime>(petBehaviorConfig, pet, *animations, renderer)),
       commandExecutor(std::make_unique<CommandExecutor>(
-          *petActions, *animations, *petBehaviorRuntime)),
+          pet, *animations, *petBehaviorRuntime)),
       commands(std::make_unique<CommandController>(*commandExecutor)),
       layout(std::make_unique<LayoutRenderer>(renderer, *commands))
 #if ENABLE_APPEARANCE_SELECTION
@@ -45,188 +45,6 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
 
 Game::~Game()
     = default;
-
-bool Game::setup_game()
-{
-    prepare_game();
-    return finish_setup_game();
-}
-
-bool Game::prepare_game()
-{
-    if (flow.isFatalError())
-        return false;
-    initialized = false;
-    cheatEvolutionPending = false;
-    setupPrepared = false;
-    initialStateLoadingFailed = false;
-    if (startupConfigError != nullptr)
-        return false;
-#if ENABLE_DEBUG
-    startupDebugStage = nullptr;
-#endif
-    if (runtimeLoadState == RuntimeLoadState::Failed)
-    {
-        startupConfigError = "runtime.bin";
-#if ENABLE_DEBUG
-        startupDebugStage = "runtime contract";
-#endif
-        return false;
-    }
-
-    AppearanceSelection initialAppearance = {};
-    bool initialAppearanceResolved = false;
-    char errorResource[20] = {};
-    if (!loadInitialRuntimeContract(animations->sdCard(), initialAppearance,
-                                    petBehaviorConfig, initialAppearanceResolved,
-                                    errorResource, sizeof(errorResource)))
-    {
-        runtimeLoadState = RuntimeLoadState::Failed;
-        startupConfigError = "runtime.bin";
-        if (initialAppearanceResolved)
-        {
-            renderer.recordAssetDataErrorResource(errorResource);
-            flow.enterFatalError();
-        }
-#if ENABLE_DEBUG
-        startupDebugStage = initialAppearanceResolved ? "active appearance" : "runtime contract";
-#endif
-        return false;
-    }
-    initialSpeciesSlot = initialAppearance.speciesSlot;
-    initialOutfitSlot = initialAppearance.outfitSlot;
-    if (!activateLoadedAppearance(initialAppearance.speciesSlot, initialAppearance.outfitSlot))
-    {
-        runtimeLoadState = RuntimeLoadState::Failed;
-        startupConfigError = "runtime.bin";
-#if ENABLE_DEBUG
-        startupDebugStage = "active appearance";
-#endif
-        return false;
-    }
-    commands->resetSelection();
-    layout->begin();
-
-    dirtySelect = true;
-    clearPendingEvolution();
-    pendingFirstStartCompletion = false;
-    last_tick_time = millis();
-#if ENABLE_APPEARANCE_SELECTION
-    appearanceSelection->exit();
-#endif
-#if ENABLE_GUESS_GAME
-    minigame->reset();
-#endif
-
-    const InitialPetStateResult initialState = loadInitialPetState(true, false);
-    if (initialState == InitialPetStateResult::Failed)
-    {
-        initialStateLoadingFailed = true;
-#if ENABLE_DEBUG
-        startupDebugStage = "pet state restore";
-#endif
-        return false;
-    }
-
-    // The initial contract already validated the active asset references.
-    // A first-launch state normally selects that same appearance, so do not
-    // reopen and revalidate the complete SD table a second time.  Reload only
-    // when a compatible saved state actually restored a different appearance.
-    const uint8_t restoredSpeciesSlot = pet.speciesSlot();
-    const uint8_t restoredOutfitSlot = pet.outfitSlot();
-    const bool appearanceChanged =
-        restoredSpeciesSlot != petBehaviorConfig.activeSpeciesSlot ||
-        restoredOutfitSlot != petBehaviorConfig.activeOutfitSlot;
-    if (initialState == InitialPetStateResult::Restored && appearanceChanged &&
-        !configureActiveAppearance(restoredSpeciesSlot, restoredOutfitSlot))
-    {
-        runtimeLoadState = RuntimeLoadState::Failed;
-        startupConfigError = "runtime.bin";
-#if ENABLE_DEBUG
-        startupDebugStage = "restored appearance";
-#endif
-        return false;
-    }
-    // Fresh state uses the initial contract already activated above. Restored
-    // state keeps its saved appearance and only refreshes the unlock mask.
-    const bool unlockStateReady = initialState == InitialPetStateResult::Restored
-                                      ? refreshOutfitUnlockMask(false)
-                                      : commitSpeciesAppearance(restoredSpeciesSlot, restoredOutfitSlot);
-    if (!unlockStateReady)
-    {
-        runtimeLoadState = RuntimeLoadState::Failed;
-        startupConfigError = "runtime.bin";
-#if ENABLE_DEBUG
-        startupDebugStage = "outfit unlocks";
-#endif
-        return false;
-    }
-
-    // A successfully restored appearance is authoritative. Re-evaluating the
-    // evolution table here can immediately replace a saved later-stage species
-    // with an earlier wildcard/fallback match before the startup animation.
-    // Evolution is still evaluated by handleEvolution() during normal ticks.
-    animations->setup(petBehaviorRuntime->baseAnimation());
-
-    setupPrepared = true;
-    return true;
-}
-
-bool Game::finish_setup_game()
-{
-    if (!setupPrepared)
-    {
-        flow.enterFatalError();
-        if (startupConfigError != nullptr)
-        {
-#if ENABLE_DEBUG
-            renderer.showStartupResourceError(startupConfigError, startupDebugStage);
-#else
-            const char *recordedResource = renderer.firstAssetDataErrorResource();
-            renderer.showResourceError(recordedResource != nullptr && recordedResource[0] != '\0'
-                                           ? recordedResource
-                                           : startupConfigError);
-#endif
-        }
-        else if (initialStateLoadingFailed)
-        {
-#if ENABLE_DEBUG
-            renderer.showStartupResourceError("pet state", startupDebugStage);
-#else
-            renderer.showResourceError("pet state");
-#endif
-        }
-        else
-        {
-#if ENABLE_DEBUG
-            renderer.showStartupResourceError("startup", "prepare game");
-#else
-            renderer.showResourceError("startup");
-#endif
-        }
-        return false;
-    }
-
-    layout->updateValues(pet.statSnapshot());
-    uint8_t initialLayoutId = 0;
-    if (!renderer.currentLayoutId(initialLayoutId) ||
-        !layout->updatePlayback(initialLayoutId))
-    {
-        flow.enterFatalError();
-        renderer.showResourceError();
-        return false;
-    }
-    if (renderer.firstAssetDataError() != AssetData::BundleError::None)
-    {
-        flow.enterFatalError();
-        renderer.showResourceError();
-        return false;
-    }
-
-    initialized = true;
-    enterCommand();
-    return true;
-}
 
 void Game::loop_game()
 {
@@ -636,21 +454,21 @@ void Game::OnConfirmKey()
         const bool confirmed = appearanceSelection->onConfirm(selectedOutfit, requiresUnlock);
         if (confirmed)
         {
-            if (configureActiveAppearance(petActions->speciesSlot(), selectedOutfit))
+            if (configureActiveAppearance(pet.speciesSlot(), selectedOutfit))
             {
                 bool applied = false;
                 if (requiresUnlock)
                 {
                     PetStatSnapshot consumedStats = {};
                     if (appearanceLoader.resolveConsumableOutfitUnlock(
-                            petActions->speciesSlot(), selectedOutfit,
-                            petActions->statSnapshot(), consumedStats))
+                            pet.speciesSlot(), selectedOutfit,
+                            pet.statSnapshot(), consumedStats))
                         applied = petActions->applyConsumableOutfitUnlock(
                             selectedOutfit, consumedStats);
                 }
                 else
                     applied = petActions->applyAppearance(
-                        petActions->speciesSlot(), selectedOutfit);
+                        pet.speciesSlot(), selectedOutfit);
                 if (applied)
                 {
                     appearanceSelection->exit();
@@ -704,39 +522,6 @@ void Game::OnConfirmKey()
     commandExecutor->begin(commandId);
     const bool executed = commands->executeCurrent();
     handleCommandResult(commandExecutor->complete(executed), selectedSlot);
-}
-
-bool Game::resetPet()
-{
-    if (runtimeLoadState != RuntimeLoadState::Ready || flow.isFatalError())
-        return false;
-    initialized = false;
-    cheatEvolutionPending = false;
-    if (loadInitialPetState(false) == InitialPetStateResult::Failed)
-        return false;
-
-    clearPendingEvolution();
-    pendingFirstStartCompletion = false;
-    petActions->resetFirstStartCompleted();
-    if (!enterSpecies(petActions->speciesSlot(), petActions->outfitSlot()))
-        return false;
-    animations->cancelAll();
-#if ENABLE_GUESS_GAME
-    minigame->reset();
-#endif
-    refreshBaseAnimation();
-    animations->requestFullRedraw();
-    // startStartupAnimation() deliberately rejects calls before the game is
-    // ready.  A left+right reset must therefore re-enable the game before it
-    // queues FirstStart.
-    initialized = true;
-    if (ENABLE_STARTUP_ANIMATION)
-        startStartupAnimation();
-    else if (isFirstLaunchSelectionPending())
-        enterFirstLaunch();
-    else
-        enterCommand();
-    return true;
 }
 
 void Game::refreshBaseAnimation()
@@ -800,7 +585,7 @@ void Game::handleCommandResult(const CommandResult &result, int selectedSlot)
 #if ENABLE_COMMAND_OUTFIT
     if (result.requestedOutfit)
     {
-        if (appearanceSelection->start(petActions->speciesSlot(), petActions->outfitSlot(),
+        if (appearanceSelection->start(pet.speciesSlot(), pet.outfitSlot(),
                                        pet.outfitUnlockMask()))
         {
             animations->cancelAll();
@@ -830,7 +615,7 @@ void Game::completeFirstLaunchIfNeeded(AppCommandId commandId)
     const bool shouldStart = flow.completeFirstLaunch(commandId);
     if (!flow.isFirstLaunch())
     {
-        petActions->markFirstLaunchComplete();
+        pet.markFirstLaunchComplete();
         petActions->saveNow();
     }
 
@@ -845,38 +630,13 @@ bool Game::isFirstLaunchSelectionPending() const
     return false;
 }
 
-Game::InitialPetStateResult Game::loadInitialPetState(bool allowSavedState,
-                                                       bool showError)
-{
-    if (allowSavedState && petStorage.load(pet, petBehaviorConfig.schemaFingerprint))
-    {
-        OutfitPreview preview = {};
-        if (pet.speciesSlot() != 0 && pet.outfitSlot() != 0 &&
-            appearanceLoader.findOutfitPreview(
-                pet.speciesSlot(), pet.outfitSlot(), false, preview))
-        {
-            return InitialPetStateResult::Restored;
-        }
-        petStorage.discard();
-    }
-
-    pet.setDefaultState();
-    pet.setSchemaFingerprint(petBehaviorConfig.schemaFingerprint);
-    petBehaviorRuntime->initializeStats();
-    const bool applied = pet.setSpeciesSlot(initialSpeciesSlot) &&
-                         pet.setOutfitSlot(initialOutfitSlot);
-    if (!applied && showError)
-        renderer.showResourceError();
-    return applied ? InitialPetStateResult::Fresh : InitialPetStateResult::Failed;
-}
-
 bool Game::startFirstLaunchRequiredCommand()
 {
 #if ENABLE_APPEARANCE_SELECTION
     switch (flow.firstLaunchRequiredCommand())
     {
     case AppCommandId::ChangeOutfit:
-        if (appearanceSelection->start(petActions->speciesSlot(), petActions->outfitSlot(),
+        if (appearanceSelection->start(pet.speciesSlot(), pet.outfitSlot(),
                                        pet.outfitUnlockMask()))
         {
             animations->cancelAll();
@@ -1042,7 +802,7 @@ bool Game::beginStartupAnimation()
 #if ENABLE_STARTUP_ANIMATION
     const bool hasIntro = animations->hasAnimation(FirmwarePlaybackRole::StartIntro);
     const bool hasSpeciesStart = animations->hasAnimation(FirmwarePlaybackRole::Start);
-    const bool needsFirstStart = ENABLE_FIRST_START_ANIMATION && !petActions->isFirstStartCompleted();
+    const bool needsFirstStart = ENABLE_FIRST_START_ANIMATION && !pet.isFirstStartCompleted();
     const bool hasFirstStart = animations->hasAnimation(FirmwarePlaybackRole::FirstStart);
     if (needsFirstStart && !hasFirstStart)
     {
@@ -1133,9 +893,9 @@ void Game::completeFirstStartIfReady(const PlaybackTickResult &playbackResult)
 
     pendingFirstStartCompletion = false;
 
-    petActions->markFirstStartCompleted();
+    pet.markFirstStartCompleted();
     if (!petActions->saveNow())
-        petActions->resetFirstStartCompleted();
+        pet.resetFirstStartCompleted();
 #endif
 #if !ENABLE_FIRST_START_ANIMATION
     (void)playbackResult;

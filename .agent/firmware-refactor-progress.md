@@ -98,3 +98,121 @@ Runtime Table host 測試直接執行 SD adapter，確認 species、outfit、pre
 4. **其他效能候選。** Renderer 行緩衝、每幀 pack 存取與一次性配置均未實作；使用者已跳過實機效能量測，若處理這些項目只能報告靜態正確性及尺寸，不能宣稱執行速度改善。
 
 因使用者跳過實機效能量測，後續只能報告結構、正確性和尺寸結果，不能宣稱啟動加速。
+
+## 2026-10-05：Action 資料範圍與規則收斂
+
+本批依使用者最新優先序，先改善與 MCU 無關的資料模型、可讀性與程式分布；第三方庫及板級硬體優化往後排，保留未來移植 GD32 的彈性。
+
+- `PetBehaviorActionTypes.h` 集中 Action、Outcome、Condition、Effect 型別與容量；`PetBehaviorTypes.h` 保留總配置的組成。
+- Action 持有 Outcome／Condition 的連續範圍，Outcome 持有 Effect 範圍。標準、條件與隨機模式共用 Outcome／Effect 陣列，移除子記錄的 `active`、`actionSlot`、`outcomeSlot` 與兩套效果儲存。
+- `RuntimeTableBehavior.cpp` 負責 wire 解碼及有界範圍建立；`PetBehaviorRuntimeRules.cpp` 分為 Outcome 選擇、播放選擇、效果計算與原子發布；application 層繼續負責提交 Pet 與要求播放。
+- 保留 Runtime Table v9 格式、條件以效果前數值判斷、最低 priority 優先、加權 Outcome、clamp、Daily Change suspension、原子提交與提交後播放失敗不回滾。未改第三方庫、硬體介面、SD 格式或使用者的 `platformio.ini`。
+
+### 尺寸證據
+
+基準原始碼為 `189fb2ec0054a9c9785b6d08be7b3af8e7f0a711`。使用者工作樹已有 `platformio.ini` 修改，board 為 `genericSTM32`；依本次明確選擇，以 `.pio/action-refactor.ini` 將 board 單獨設為 `genericSTM32F103C8`、build_dir 設為 `.pio/action-refactor-build`，其餘 project_29 flags 維持。基準與候選用同一設定與工具鏈重新連結，沒有燒錄。
+
+工具鏈：ST STM32 19.0.0、Arduino STM32 2.9.0、GCC ARM 12.3.1；相依庫為 GFX 1.12.6、ST7735/ST7789 1.11.0、SdFat Adafruit Fork 2.3.103。
+
+| 指標 | 基準 | 本批 | 差額 |
+| --- | ---: | ---: | ---: |
+| PlatformIO reported Flash | 57,652 B | 57,224 B | -428 B |
+| Flash 載入區段合計（含 vector、初始化區段） | 57,948 B | 57,520 B | -428 B |
+| 靜態 RAM（.data + .bss） | 7,768 B | 6,792 B | -976 B |
+
+基準 ELF 保存在 `.pio/action-refactor-baseline.elf`；候選在 `.pio/action-refactor-build/project_29/firmware.elf`。以上均為本機忽略產物。Flash 指標需使用同一口徑比較；靜態 RAM 不代表 heap／stack 峰值。
+
+### 驗證
+
+- `test/pet_behavior_runtime/run_host_test.ps1`：修復落後數字動畫契約的舊測試，6／10 Stat 容量均通過；涵蓋三種模式、條件優先序與效果前判斷、隨機權重邊界、選中範圍隔離、非法範圍、重複／無效 Stat 的原子拒絕、clamp 與 suspension。
+- `test/runtime_table_behavior/run_host_test.ps1`：通過既有 exporter fixture 與 malformed／legacy 測試；另在現行 exporter fixture 中替換測試用 Action sections，驗證三種模式從 wire 載入後執行及跨 Outcome 借用 Effect 的拒絕。合成測試資料不冒充 Web exporter 的全模式整包輸出。
+- `test/game_startup/run_host_test.ps1`、`test/runtime_contract_loader/run_host_test.ps1`：通過。
+- `platformio run -c .pio/action-refactor.ini -e project_29`：通過。既有第三方 `boolean` deprecated 與 LTO serial compilation 警告仍存在。
+- 未執行 GD32 build、實機 SD／TFT／按鍵、時間量測或 SRAM 峰值量測，不宣稱設備速度提升。
+
+後續優先候選為 Runtime Table reader／各領域 decoder 的責任分布，再處理 Game 狀態收斂。SD 常駐 handle／快取與 lib 精簡仍是獨立批次，不能把本批結果套用為其效能證據。
+
+## 2026-10-05：Runtime Table reader 與外觀解碼責任分布
+
+本批接續 Action 重構後的工作樹，保留先前修改及使用者的 `platformio.ini`。`RuntimeTableBehavior.cpp` 由 1,607 行降為 715 行，這是責任搬移與介面收斂，不代表刪除同等行數的功能。
+
+- `shared/runtime_table/RuntimeTableReader.cpp` 集中 envelope、段落尺寸／範圍、manifest 比對、記錄讀取與數字動畫參照解析；Source callback 可接 SD 或記憶體，沒有 MCU 專用實作。
+- `shared/runtime_table/RuntimeTableFile.cpp` 持有 SD snapshot 的開檔、驗證及關檔；Source context 直接指向其持有的檔案，移除只有一個指標的 `FileSource` 包裝。每次查詢仍重新開檔並比對 manifest。
+- `appearance/domain/RuntimeTableAppearance.cpp` 擁有 Species、Outfit、Unlock、Evolution 與初始外觀規則及其既有公開查詢。完整載入只使用兩個內部操作：初始外觀解碼與必要段落驗證；初始外觀解碼自行檢查所需的 feature／asset／animation sections。
+- `RuntimeTableBehavior.cpp` 保留行為／畫面配置解碼，以及既定的完整載入順序；完整 SD 載入仍直接寫入 caller-owned config，失敗即使本次契約失效，不增加第二份設定。
+- `detail/` 標示供解碼器共用的內部介面；未新增 application port、常駐快取、wire 格式、lib 或硬體相依變更。同步修正公開 header 中已過期的 v1／migration 與錯誤發布說明。
+
+### 尺寸與驗證
+
+基準包含上一批 Action 重構。先以同一 `.pio/action-refactor.ini`／`project_29`／STM32F103C8 設定建置並保存 `.pio/runtime-table-split-baseline.elf`，候選仍為 `.pio/action-refactor-build/project_29/firmware.elf`。工具鏈與前一批相同。
+
+| 指標 | 本批前 | 本批後 | 差額 |
+| --- | ---: | ---: | ---: |
+| PlatformIO reported Flash | 57,224 B | 57,232 B | +8 B |
+| Flash 載入區段合計 | 57,520 B | 57,528 B | +8 B |
+| 靜態 RAM（.data + .bss） | 6,792 B | 6,792 B | 0 B |
+
+本批主要收益是責任分布與可維護性，沒有 Flash 節省；相較兩批開始前，累計 Flash 減少 420 B、靜態 RAM 減少 976 B。中途單純拆分版本曾為 +20 B，收斂初始外觀前置檢查後最終為 +8 B。
+
+- `test/runtime_table_behavior/run_host_test.ps1` 通過；沿用 exporter／malformed／Action／外觀查詢測試，新增公開載入介面的成功、manifest 不符、截斷、缺檔、null SD、每次重新讀取及關檔生命週期驗證。
+- `test/animation_scene_playback/run_host_test.ps1`、`test/custom_layout_export/run_host_test.ps1`（一般與 `-Numeric`）、`test/game_startup/run_host_test.ps1`、`test/runtime_contract_loader/run_host_test.ps1` 均通過。三份直接編譯 RuntimeTableBehavior 的測試腳本已納入拆出的 sources。
+- `platformio run -c .pio/action-refactor.ini -e project_29` 通過；最終介面調整後重跑 Runtime Table host 與建置。其他 host 在此次等價前置檢查搬移前已通過。
+- 本批檔案的 `git diff --check` 通過；使用者 `platformio.ini` 原有尾端空白不在本批修改範圍。
+- 未執行 GD32 build、實機 SD／TFT／按鍵、設備速度或 SRAM 峰值驗證；不宣稱設備效能改善。
+
+## 2026-10-05：Game 啟動準備狀態收斂
+
+本批接續 Runtime Table 拆分後的工作樹。聚焦 Game 的啟動生命週期，保留 MCU 無關的實作、既有 lib、使用者的 `platformio.ini` 與前兩批未提交修改。
+
+- `PreparationState` 取代兩個布林值與一個錯誤字串指標：未準備、已準備、Runtime 失敗、Pet 狀態失敗只能擇一。契約失敗仍禁止重新載入；準備成功後，須經 `finish_setup_game()` 才開放遊戲運作。
+- 準備開始即設定預設 Runtime 失敗結果，完成全部流程後才發布 Ready；Pet 狀態失敗另行區分，避免各個錯誤出口重複維護準備結果。
+- `GameStartup.cpp` 集中 setup／prepare／finish、初始或儲存狀態恢復及 reset，仍實作原有 Game 方法，不增加物件、配置副本、動態配置或外部介面。`Game.cpp` 從 1,207 行降為 967 行，新檔 244 行；行數只是責任分布指標。
+- 保留首錯資源優先序、Debug 階段資訊、相同外觀不重載、不同外觀重載、重置使用啟動選擇及既有存檔順序。`initialized` 與 `runtimeLoadState` 分別表示可運作狀態與契約有效性，沒有硬合併成啟動結果。
+
+### 尺寸與驗證
+
+修改前以 `.pio/action-refactor.ini`／`project_29`／STM32F103C8 成功建置，保存 `.pio/game-startup-baseline.elf`；最終候選為 `.pio/action-refactor-build/project_29/firmware.elf`。工具鏈與前兩批相同。
+
+| 指標 | 本批前 | 本批後 | 差額 |
+| --- | ---: | ---: | ---: |
+| PlatformIO reported Flash | 57,232 B | 57,272 B | +40 B |
+| Flash 載入區段合計 | 57,528 B | 57,568 B | +40 B |
+| 靜態 RAM（.data + .bss） | 6,792 B | 6,788 B | -4 B |
+
+本批收益是啟動狀態可讀性與程式碼分布，沒有 Flash 節省。前三批累計相對 57,652／7,768 B 基準，Flash 減少 380 B、靜態 RAM 減少 980 B；不代表 heap／stack 峰值或執行速度。中途版本 Flash 為 57,280 B，集中錯誤狀態設定後為上表最終結果。
+
+- `test/game_startup/run_host_test.ps1` 最終版本通過。新增準備階段禁止 tick／修改、契約失敗後重複 prepare 不再載入、未 prepare 直接 finish、bundle／unlock 啟動失敗，以及 reset 重載失敗後禁止操作的公開介面測試。既有 fresh／restore／fingerprint／reset／Evolution／首錯測試沿用。
+- `Game.cpp` 與 `GameStartup.cpp` 在 Debug、Guess Game、Outfit／Appearance Selection、Startup／FirstStart Animation 全開旗標下通過 `g++ -fsyntax-only`。此項只確認條件編譯與型別，不是該組態的連結或執行驗證。
+- 獨立 STM32F103C8 PlatformIO 建置通過；既有第三方 boolean deprecated 與 LTO serial compilation 警告保留。
+- 任務檔案 `git diff --check` 通過；使用者 ini 原有空白不在本批範圍。Codebase graph 已更新。
+- 未執行 GD32 build、實機 SD／TFT／按鍵、時間或 SRAM 峰值量測，未燒錄。
+
+## 2026-10-05：PetActionController 介面精簡與獨立驗收
+
+依使用者要求，由 GPT-6.1 Sol／medium subagent 實作，主代理獨立對照本批修改前檔案、審查行為與執行驗證。Subagent 完成 production 與新增測試程式後因額度耗盡中斷；主代理接手檢查並執行完整的本批驗收。
+
+- `PetActionController` 公開操作從 24 個降至 6 個（均不含建構子）：移除 15 個純 Pet 轉呼叫，以及無現行呼叫者的 `loadOrInitial`、`reset`、`applyEvolutionTarget`。
+- `PetBehaviorRuntime` 完全移除對 controller 的相依，直接持有 `Pet &`；CommandExecutor 只持有 `const Pet &`。Game 使用原有 Pet 取得外觀、snapshot 及更新啟動完成旗標。
+- Controller 保留 `saveNow`、`maybeSave`、`findEvolutionTarget`、`stageAppearance`、`applyAppearance`、`applyConsumableOutfitUnlock`；保留原有存檔節奏、外觀顯示與儲存順序。Pet 的交易方法、SD 格式、持久化內容、lib 與硬體程式均未改動。
+- 修改前檔案保存在忽略目錄 `.pio/next-refactor-before/`，主代理檢查的是本批 delta，不將前三批修改算入本批。未 commit 或 stage。
+
+### 尺寸
+
+同一 `.pio/action-refactor.ini`／`project_29`／STM32F103C8 設定，修改前成功建置並保存 `.pio/subagent-refactor-baseline.elf`；候選為 `.pio/action-refactor-build/project_29/firmware.elf`。工具鏈維持前批版本。
+
+| 指標 | 本批前 | 本批後 | 差額 |
+| --- | ---: | ---: | ---: |
+| PlatformIO reported Flash | 57,272 B | 57,228 B | -44 B |
+| Flash 載入區段合計 | 57,568 B | 57,524 B | -44 B |
+| 靜態 RAM（.data + .bss） | 6,788 B | 6,788 B | 0 B |
+
+四批累計相對 57,652／7,768 B 起始基準，Flash 減少 424 B、靜態 RAM 減少 980 B。本批主要收益仍是介面與相依關係精簡；刪除原本已被 linker 排除的函式，不等於同等 Flash 節省。
+
+### 主代理驗收
+
+- 逐檔對照：轉呼叫確實無額外副作用，直接 Pet 操作保留同一物件、參數與呼叫順序；Action 原子提交及 pause 發布仍在動畫解析之前，Status 使用同一份 snapshot 分類與取值。未發現本批需修正的 production 行為差異。
+- `test/game_startup/run_host_test.ps1` 通過。新增真實 Pet／PetBehaviorRuntime／AnimationController／CommandExecutor 整合案例：非法重複 Effect 不部分提交也不暫停日變化；缺動畫仍保留多 Stat 提交與兩天 pause；每日天數正常推進；Status 在 Action 前後依最新 Pet 值選不同版本；這些操作不額外存檔。Renderer／SD 為 host fake，並非設備驗證。
+- `test/pet_behavior_runtime/run_host_test.ps1` 通過（6 與 10 Stat 容量）；`test/pet_persistence/run_host_test.ps1` 通過。
+- 六份受影響 application cpp（Game、GameStartup、PetActionController、PetBehaviorRuntime、CommandExecutor、MinigameController）於 Debug／Guess Game／Outfit／Predict／Appearance Selection／Startup／FirstStart／Sequential Status 旗標全開時通過 `g++ -fsyntax-only`。只證明條件編譯與型別，未將該組態當作完整連結或執行驗證。
+- 獨立 STM32F103C8 release 建置通過；既有 boolean deprecated 與 LTO serial 警告保留。任務檔案 `git diff --check` 通過；使用者 `platformio.ini` SHA256 前後一致。
+- 未驗證 GD32、實機 SD／TFT／按鍵、設備時間或 SRAM 峰值，未燒錄。

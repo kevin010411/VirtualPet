@@ -7,6 +7,9 @@
 #include "pet/adapters/PetStorage.h"
 #include "presentation/adapters/rendering/Renderer.h"
 #include "pet_behavior/domain/PetBehaviorTypes.h"
+#include "pet_behavior/application/PetBehaviorRuntime.h"
+#include "animation/application/AnimationController.h"
+#include "commands/application/CommandExecutor.h"
 
 unsigned long hostMillis = 0;
 
@@ -36,6 +39,8 @@ struct Scenario
     char firstRecordedResource[24] = {};
     char lastShownResource[24] = {};
     bool hasSave = false;
+    uint16_t actionVersions = 1;
+    uint16_t statusVersions = 1;
     Pet savedPet;
 };
 
@@ -105,6 +110,12 @@ void testFreshStartup()
     assert(data.unlocks == 1 && data.lastUnlockInitialize);
     assert(data.saves == 1);
     assert(pet.speciesSlot() == 1 && pet.outfitSlot() == 1);
+    // Preparation loads state but does not enable input or normal ticking.
+    assert(!game.setStageDaysForCheat(1));
+    hostMillis = 2000;
+    game.loop_game();
+    assert(pet.stageDays() == 0 && data.evolutionLookups == 0);
+    hostMillis = 0;
     assert(game.finish_setup_game());
     assert(data.resourceShows == 0);
 }
@@ -237,12 +248,76 @@ void testInitialLoadFailure(bool appearanceResolved)
     Game game(pet, storage, renderer, appearance);
 
     assert(!game.prepare_game());
+    // A failed contract cannot be retried even before finish displays the error.
+    data.initialLoadSucceeds = true;
+    assert(!game.prepare_game());
+    assert(data.initialLoads == 1);
     assert(!game.finish_setup_game());
     assert(strcmp(data.lastShownResource,
                   appearanceResolved ? "behavior" : "runtime.bin") == 0);
     assert(strcmp(data.firstRecordedResource, appearanceResolved ? "behavior" : "") == 0);
     assert(!game.resetPet());
     assert(data.saves == 0);
+}
+
+void testFinishWithoutPreparation()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+
+    assert(!game.finish_setup_game());
+    assert(strcmp(data.lastShownResource, "startup") == 0);
+    assert(!game.prepare_game());
+    assert(!game.resetPet());
+    assert(data.initialLoads == 0 && data.saves == 0);
+}
+
+void testStartupActivationFailure(bool bundleFailure)
+{
+    Scenario data;
+    scenario = &data;
+    data.bundleSucceeds = !bundleFailure;
+    data.unlockSucceeds = bundleFailure;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+
+    assert(!game.setup_game());
+    assert(strcmp(data.lastShownResource, bundleFailure ? "runtime.bin" : "appearance") == 0);
+    assert(data.saves == 0);
+    assert(!game.prepare_game());
+    assert(!game.setStageDaysForCheat(1));
+    assert(data.initialLoads == 1);
+}
+
+void testResetReloadFailure()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+
+    assert(game.setup_game());
+    data.reloadSucceeds = false;
+    assert(!game.resetPet());
+    assert(data.reloads == 1 && data.saves == 1);
+    assert(!game.setStageDaysForCheat(1));
+    assert(!game.saveNow());
+    assert(!game.resetPet());
+    assert(data.reloads == 1 && data.saves == 1);
 }
 
 void testRestoredReloadFailure()
@@ -340,6 +415,105 @@ void testEvolutionLoadFailureDuringPetTick()
     assert(!game.setStageDaysForCheat(1));
     hostMillis = 0;
 }
+void testBehaviorTransactionsUseLivePet()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    Renderer renderer(nullptr, &sd);
+    AnimationController animations(renderer);
+    PetBehaviorConfig config = {};
+    config.stats[0] = {true, 2, 0, 10, -1};
+    config.stats[1] = {true, 3, 0, 10, 1};
+    config.actions[0].active = true;
+    config.actions[0].mode = PetBehaviorActionMode::Standard;
+    config.actions[0].outcomeCount = 1;
+    config.actions[0].suspendDailyChangeDays = 2;
+    config.actionOutcomeCount = 1;
+    config.actionOutcomes[0].animationPlayback = {{0, 0, 1}, 1};
+    config.actionOutcomes[0].effectCount = 2;
+    config.actionEffectCount = 2;
+    config.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
+    config.actionEffects[1] = {1, PetBehaviorEffectOperation::Change, 2};
+    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    runtime.initializeStats();
+    assert(pet.customStat(0) == 2 && pet.customStat(1) == 3);
+
+    // Reject a duplicate effect after the first effect has been calculated.
+    // The real Pet must receive neither a partial commit nor a suspension.
+    config.actionEffects[1].statSlot = 0;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Rejected);
+    assert(pet.customStat(0) == 2 && pet.customStat(1) == 3);
+    assert(runtime.advancePetDay());
+    assert(pet.customStat(0) == 1 && pet.customStat(1) == 4);
+    assert(pet.stageDays() == 1);
+
+    config.actionEffects[1].statSlot = 1;
+    data.actionVersions = 0;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::AppliedAnimationMissing);
+    assert(pet.customStat(0) == 8 && pet.customStat(1) == 6);
+    assert(!animations.isBusy());
+    for (int day = 0; day < 2; ++day)
+    {
+        assert(runtime.advancePetDay());
+        assert(pet.customStat(0) == 8 && pet.customStat(1) == 6);
+    }
+    assert(pet.stageDays() == 3);
+    assert(runtime.advancePetDay());
+    assert(pet.customStat(0) == 7 && pet.customStat(1) == 7);
+    assert(pet.stageDays() == 4);
+    assert(data.saves == 0);
+}
+
+void testStatusReadsActionCommittedPet()
+{
+    Scenario data;
+    scenario = &data;
+    data.statusVersions = 2;
+    SdFat sd;
+    Pet pet;
+    Renderer renderer(nullptr, &sd);
+    AnimationController animations(renderer);
+    PetBehaviorConfig config = {};
+    config.stats[0] = {true, 2, 0, 10, 0};
+    config.actions[0].active = true;
+    config.actions[0].mode = PetBehaviorActionMode::Standard;
+    config.actions[0].outcomeCount = 1;
+    config.actionOutcomeCount = 1;
+    config.actionOutcomes[0].animationPlayback = {{0, 0, 1}, 1};
+    config.actionOutcomes[0].effectCount = 1;
+    config.actionEffectCount = 1;
+    config.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
+    config.statusSets.count = 1;
+    StatusSetConfig &set = config.statusSets.sets[0];
+    set.animation = {0, 0, 2};
+    set.versionCount = 2;
+    set.conditionCount = 1;
+    set.conditions[0] = {StatusConditionKind::RuntimeValue,
+                         runtimeValueIdForPetStat(0), 0, 2, 0, 10};
+    animations.configureRuntimeContract(config);
+    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    runtime.initializeStats();
+    CommandExecutor executor(pet, animations, runtime);
+    executor.configureRuntimeContract(config);
+    CommandHost &host = executor;
+    executor.begin(AppCommandId::Status);
+    host.commandStatus();
+    assert(!executor.complete(true).resourceError);
+    animations.preparePlayback(0);
+    assert(animations.currentVersionIndex() == 0);
+
+    data.actionVersions = 0;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::AppliedAnimationMissing);
+    assert(pet.customStat(0) == 8);
+    executor.begin(AppCommandId::Status);
+    host.commandStatus();
+    assert(!executor.complete(true).resourceError);
+    animations.preparePlayback(1);
+    assert(animations.currentVersionIndex() == 1);
+    assert(data.saves == 0);
+}
 } // namespace
 
 bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
@@ -412,7 +586,11 @@ bool Renderer::willRestartAnimationLoop() const { return false; }
 bool Renderer::advanceAnimationFrame() { return true; }
 bool Renderer::animationFrameFailed() const { return false; }
 uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &, uint8_t) { return 1; }
-uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &) { return 1; }
+uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &animation)
+{
+    return animation.animationId == 1 ? scenario->actionVersions
+         : animation.animationId == 2 ? scenario->statusVersions : 1;
+}
 unsigned long Renderer::frameIntervalFor(const AssetData::AnimationRef &, uint8_t,
                                          unsigned long defaultInterval) { return defaultInterval; }
 void Renderer::showResourceError()
@@ -446,10 +624,16 @@ int main()
     testInvalidInitialState();
     testInitialLoadFailure(false);
     testInitialLoadFailure(true);
+    testFinishWithoutPreparation();
+    testStartupActivationFailure(true);
+    testStartupActivationFailure(false);
+    testResetReloadFailure();
     testRestoredReloadFailure();
     testEvolutionLookup(EvolutionLookupResult::NoTarget, 2);
     testEvolutionLookup(EvolutionLookupResult::Found, 1);
     testEvolutionLookup(EvolutionLookupResult::Found, 2);
     testEvolutionLookup(EvolutionLookupResult::LoadFailed, 2);
     testEvolutionLoadFailureDuringPetTick();
+    testBehaviorTransactionsUseLivePet();
+    testStatusReadsActionCommittedPet();
 }

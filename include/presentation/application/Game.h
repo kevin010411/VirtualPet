@@ -74,6 +74,15 @@ private:
         Failed,
     };
 
+    // Result of prepare_game(), consumed after platform/display setup finishes.
+    enum class PreparationState : uint8_t
+    {
+        NotPrepared,
+        Ready,
+        RuntimeFailed,
+        PetStateFailed,
+    };
+
     static constexpr unsigned long gameTick = 2000;
 
     Pet &pet;
@@ -102,9 +111,7 @@ private:
     bool pendingFirstStartCompletion = false;
     bool initialized = false;
     RuntimeLoadState runtimeLoadState = RuntimeLoadState::Unloaded;
-    bool setupPrepared = false;
-    bool initialStateLoadingFailed = false;
-    const char *startupConfigError = nullptr;
+    PreparationState preparationState = PreparationState::NotPrepared;
 #if ENABLE_DEBUG
     const char *startupDebugStage = nullptr;
 #endif

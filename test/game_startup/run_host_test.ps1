@@ -8,6 +8,7 @@ $outputPath = Join-Path $repoRoot '.pio\game_startup_host.exe'
 $sources = @(
     'test/game_startup/test_main.cpp',
     'src/presentation/application/Game.cpp',
+    'src/presentation/application/GameStartup.cpp',
     'src/presentation/application/AppFlowController.cpp',
     'src/presentation/application/LayoutRenderer.cpp',
     'src/animation/application/AnimationController.cpp',
@@ -37,7 +38,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] Game startup, restore, reset, evolution lookup, and fatal routing'
+    Write-Host '[PASS] Game startup, restore, reset, evolution, fatal routing, live Pet transactions and Status'
     exit 0
 }
 finally {

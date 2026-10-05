@@ -1,6 +1,6 @@
 # 韌體架構與分階段精簡方案
 
-本文件描述目前 `project_12` 韌體的責任分工，以及接下來的架構清理順序。Pet Stat、Action、Status、Evolution、持久化與 SD 失敗語意，以 `E:\C++\virtualPet\web\.scratch\sd-driven-pet-stats\spec.md` 為準；此處只記韌體實作安排。
+本文件描述韌體的責任分工，以及接下來的架構清理順序。2026-10-05 工作區的專案 environment 為 `project_29`；下方 `project_12` 數字與階段驗證屬歷史紀錄。Pet Stat、Action、Status、Evolution、持久化與 SD 失敗語意，以 `E:\C++\virtualPet\web\.scratch\sd-driven-pet-stats\spec.md` 為準；此處只記韌體實作安排。
 
 ## 目前的執行路徑
 
@@ -13,9 +13,10 @@
 | `animation/`、`commands/`、`minigames/` | 動畫排程、System Command、猜物小遊戲 |
 | `presentation/` | Game 流程、版面、Renderer 與逐幀解碼 |
 | `shared/assets/` | `/runtime.bin` 的共用資料結構與 `.data` pack 存取 |
+| `shared/runtime_table/` | Runtime Table envelope、段落與記錄讀取、數字動畫參照解析，以及 SD snapshot 生命週期 |
 | `platform/` | STM32、TFT、SD、按鍵與電源整合 |
 
-正式韌體只讀 `/runtime.bin` v1。啟動時先讀 manifest，再由同一次完整表讀取取得初始外觀及其設定；Game 保存已驗證的初始外觀，供新狀態與工作階段內重置使用。恢復不同外觀及日後切換外觀仍重新讀取並驗證。錯誤保留第一個資源名稱，失敗後需重新開機。這些行為不能因移動檔案或收斂介面而改變。
+正式韌體只讀目前的 `/runtime.bin` v9。啟動時先讀 manifest，再由同一次完整表讀取取得初始外觀及其設定；Game 保存已驗證的初始外觀。恢復不同外觀、重置及日後切換外觀仍走既定的重新載入流程。錯誤保留第一個資源名稱，失敗後需重新開機。這些行為不能因移動檔案或收斂介面而改變。
 
 ## Proposed Architecture：以責任收斂取代層數增加
 
@@ -25,7 +26,7 @@
 4. **外觀操作。** 外觀選單負責互動狀態，載入模組負責 SD 查詢、預覽與錯誤。逐一檢查 `AppearanceLoader` 的方法：若只有單一 adapter 的轉呼叫，且沒有替呼叫端隱藏驗證、錯誤或生命週期複雜度，就合併到真正擁有該行為的模組；不為了目錄對稱新增 port。
 5. **渲染與資源。** Renderer 管理畫面與播放，BundleReader 管理 pack 格式及讀取，FrameDecoder 管理像素解碼。逐幀路徑不加入為節省 Flash 而增加的迴圈、開檔或轉接呼叫。
 
-這是目標責任，不表示現有檔案已符合。`pet_behavior/domain/RuntimeTableBehavior.cpp` 目前仍讀 SD；`Game` 仍協調多個載入結果；`AppearanceLoader` 仍有多個查詢方法。調整時先確認呼叫者、失敗順序與資料持有者，再以替換舊路徑的方式收斂，避免另疊一層 façade。
+這是目標責任，不表示現有檔案已完全符合。2026-10-05 已將外觀解碼與查詢移至 `appearance/domain/RuntimeTableAppearance.cpp`；共用二進位讀取與 SD snapshot 分別由 `RuntimeTableReader`、`RuntimeTableFile` 實作。`detail/` 介面僅供解碼器共享，呼叫端仍使用原有載入操作。行為、畫面配置解碼與完整載入順序仍在 `RuntimeTableBehavior.cpp`，後續可再依責任收斂。調整時先確認呼叫者、失敗順序與資料持有者，避免另疊一層 façade。
 
 ## 逐步清理順序
 
@@ -40,6 +41,10 @@
 每一步只保留有實際責任收益的改動。Status 等級計算保留除法，不以減法迴圈換取 Flash；不採用僅調整字串組裝或內聯標註的局部省位元組方案。第三方圖形與 SdFat 依賴保持可用。
 
 ## 第四步後的下一個結構規劃
+
+2026-10-05 已將 `Game` 的啟動準備、啟動完成、存檔恢復與重置集中於 `GameStartup.cpp`，仍是同一個 Game 的實作，不增加 controller 或公開介面。`PreparationState` 取代 `setupPrepared`、`initialStateLoadingFailed` 與 `startupConfigError`，統一表示未準備、已準備、契約失敗或 Pet 狀態失敗。`runtimeLoadState` 表示目前契約是否有效，`initialized` 表示可否執行遊戲迴圈；兩者與準備結果用途不同，保留分工。一般輸入、播放與 Evolution 協調仍在 `Game.cpp`。
+
+同日進一步精簡 `PetActionController`：Pet 狀態讀取與原子提交由 `PetBehaviorRuntime` 直接使用 `Pet`，Status 命令以 `const Pet` 取得 snapshot；Game 的狀態欄位操作也直接使用既有 Pet。Controller 保留存檔節奏、Evolution 查詢結果篩選及外觀套用／顯示／存檔協調共六個操作；移除純轉呼叫與無使用者的 load/reset/Evolution 套用入口。初始化與重置仍由 `GameStartup.cpp` 協調，不新增替代生命週期。
 
 第四步以 `Game::prepare_game`、恢復、重置及 fatal 的 host 整合測試作為流程回歸入口。第五步先保持現有模組分工：`AnimationController` 決定播放狀態，`Renderer` 持有顯示與緩衝，`BundleReader` 驗證及定位 pack frame，`FrameDecoder` 串流解碼並送往 TFT。不要先增加一層播放 façade，或把 SD 開檔責任搬進 Game。
 
@@ -63,6 +68,6 @@ hosts 已通過。Web 正式客製入口仍受完整驗證 gate 保護，實機 
 未驗收，不能把 host 結果或靜態 RAM 當作設備表現。逐票證據見 Web
 `.scratch/screen-layout-runtime/verification.md`。
 
-目前 `platformio.ini` 的預設及唯一專案 environment 是 `project_12`。結構變更至少建置 `platformio run -e project_12`，並執行受影響的 host 測試；更動 profile flag 時，再核對 Web Profile Resolver 實際產生的設定。每次記錄修改前後的 linked Flash 與靜態 RAM。沒有實機 SD/時間量測時，只能報告靜態流程、建置與測試結果。
+目前使用者的 `platformio.ini` 為 `project_29`／`genericSTM32`。依本次選擇，尺寸比較使用獨立 `.pio/action-refactor.ini`，指定 `genericSTM32F103C8` 並保留相同 profile flags；建置命令為 `platformio run -c .pio/action-refactor.ini -e project_29`，不修改使用者的設定。結構變更需執行受影響的 host 測試；更動 profile flag 時，再核對 Web Profile Resolver 實際產生的設定。每次記錄修改前後的 linked Flash 與靜態 RAM。沒有實機 SD/時間量測時，只能報告靜態流程、建置與測試結果。
 
 實作進度、A/B 數字與未驗證項目記於 [`.agent/firmware-refactor-progress.md`](../.agent/firmware-refactor-progress.md)。
