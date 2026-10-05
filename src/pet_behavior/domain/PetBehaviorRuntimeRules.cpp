@@ -4,12 +4,6 @@
 
 namespace
 {
-struct PetBehaviorActionEffectSelection
-{
-    bool usesRandomOutcome;
-    uint8_t outcomeSlot;
-};
-
 int16_t clampedChange(int16_t current, int16_t delta, int16_t minimum, int16_t maximum)
 {
     const int32_t next = static_cast<int32_t>(current) + static_cast<int32_t>(delta);
@@ -37,119 +31,72 @@ bool applyEffect(const PetBehaviorConfig &config,
     return true;
 }
 
-bool matchesSelectedEffect(const PetBehaviorActionEffectConfig &effect,
-                           uint8_t actionSlot,
-                           const PetBehaviorActionEffectSelection &selection)
+// Check both published counts and compiled storage before dereferencing a range.
+bool validRange(uint8_t first, uint8_t count, uint16_t total, uint16_t capacity)
 {
-    return !selection.usesRandomOutcome && effect.active && effect.actionSlot == actionSlot;
+    return total <= capacity && static_cast<uint16_t>(first) + count <= total;
 }
 
-bool matchesSelectedEffect(const PetBehaviorRandomOutcomeEffectConfig &effect,
-                           uint8_t actionSlot,
-                           const PetBehaviorActionEffectSelection &selection)
+const PetBehaviorActionOutcomeConfig *selectOutcome(
+    const PetBehaviorConfig &config, const PetBehaviorActionConfig &action,
+    PetBehaviorRandomBoundedSource randomSource)
 {
-    return selection.usesRandomOutcome && effect.active && effect.actionSlot == actionSlot &&
-           effect.outcomeSlot == selection.outcomeSlot;
-}
+    if (!validRange(action.firstOutcome, action.outcomeCount,
+                    config.actionOutcomeCount, kMaxPetBehaviorActionOutcomes))
+        return nullptr;
+    const auto *outcomes = config.actionOutcomes + action.firstOutcome;
+    if (action.mode != PetBehaviorActionMode::RandomOutcome)
+        return action.outcomeCount == 1 ? outcomes : nullptr;
+    if (action.outcomeCount < kMinPetBehaviorRandomOutcomesPerAction ||
+        action.outcomeCount > kMaxPetBehaviorRandomOutcomesPerAction || randomSource == nullptr)
+        return nullptr;
 
-template <typename EffectConfig>
-bool applySelectedEffects(const PetBehaviorConfig &config,
-                          const EffectConfig *effects,
-                          uint16_t effectCount,
-                          uint8_t actionSlot,
-                          const PetBehaviorActionEffectSelection &selection,
-                          PetBehaviorStatValues &state,
-                          bool *affectedSlots)
-{
-    for (uint16_t index = 0; index < effectCount; ++index)
+    uint16_t totalWeight = 0;
+    for (uint8_t index = 0; index < action.outcomeCount; ++index)
+        totalWeight += outcomes[index].weight;
+    if (totalWeight == 0)
+        return nullptr;
+    const uint16_t selectedWeight = randomSource(totalWeight);
+    if (selectedWeight >= totalWeight)
+        return nullptr;
+    uint16_t coveredWeight = 0;
+    for (uint8_t index = 0; index < action.outcomeCount; ++index)
     {
-        const EffectConfig &effect = effects[index];
-        if (!matchesSelectedEffect(effect, actionSlot, selection))
-            continue;
-        if (!applyEffect(config, effect.statSlot, effect.operation, effect.value, state, affectedSlots))
-            return false;
+        coveredWeight += outcomes[index].weight;
+        if (selectedWeight < coveredWeight)
+            return &outcomes[index];
     }
-    return true;
+    return nullptr;
 }
 
-bool conditionMatches(const PetBehaviorConfig &config,
-                      const PetBehaviorActionConditionConfig &condition,
-                      const PetBehaviorStatValues &state)
+bool selectPlayback(const PetBehaviorConfig &config,
+                    const PetBehaviorActionConfig &action,
+                    const PetBehaviorActionOutcomeConfig &outcome,
+                    const PetBehaviorStatValues &state,
+                    PetBehaviorActionPlayback &playback)
 {
+    if (action.mode == PetBehaviorActionMode::Standard ||
+        action.mode == PetBehaviorActionMode::RandomOutcome)
+    {
+        playback = outcome.animationPlayback;
+        return true;
+    }
+    if (action.mode != PetBehaviorActionMode::ConditionalAnimation ||
+        action.conditionCount > kMaxPetBehaviorActionConditionsPerAction ||
+        !validRange(action.firstCondition, action.conditionCount,
+                    config.actionConditionCount, kMaxPetBehaviorActionConditions))
+        return false;
+
     RuntimeValueContext context = {};
     context.petStats = state.values;
     context.activePetStatMask = activePetBehaviorStatMask(config);
     context.stageDays = state.stageDays;
-    return matchesRuntimeRange(condition.predicate, context);
-}
-
-bool selectActionPlayback(const PetBehaviorConfig &config,
-                          uint8_t actionSlot,
-                          const PetBehaviorStatValues &state,
-                          PetBehaviorActionPlayback &playback,
-                          PetBehaviorRandomBoundedSource randomSource,
-                          PetBehaviorActionEffectSelection &selection)
-{
-    const PetBehaviorActionConfig &action = config.actions[actionSlot];
-    selection = {};
-    if (action.mode == PetBehaviorActionMode::Standard)
-    {
-        playback = action.animationPlayback;
-        return true;
-    }
-
-    if (action.mode == PetBehaviorActionMode::RandomOutcome)
-    {
-        if (randomSource == nullptr)
-            return false;
-        uint16_t totalWeight = 0;
-        for (uint8_t outcomeSlot = 0;
-             outcomeSlot < kMaxPetBehaviorRandomOutcomesPerAction;
-             ++outcomeSlot)
-        {
-            const PetBehaviorRandomOutcomeConfig &outcome =
-                config.randomOutcomes[actionSlot][outcomeSlot];
-            if (outcome.active)
-                totalWeight = static_cast<uint16_t>(totalWeight + outcome.weight);
-        }
-        if (totalWeight == 0)
-            return false;
-
-        const uint16_t selectedWeight = randomSource(totalWeight);
-        if (selectedWeight >= totalWeight)
-            return false;
-        uint16_t coveredWeight = 0;
-        for (uint8_t outcomeSlot = 0;
-             outcomeSlot < kMaxPetBehaviorRandomOutcomesPerAction;
-             ++outcomeSlot)
-        {
-            const PetBehaviorRandomOutcomeConfig &outcome =
-                config.randomOutcomes[actionSlot][outcomeSlot];
-            if (!outcome.active)
-                continue;
-            coveredWeight = static_cast<uint16_t>(coveredWeight + outcome.weight);
-            if (selectedWeight < coveredWeight)
-            {
-                playback = outcome.animationPlayback;
-                selection.usesRandomOutcome = true;
-                selection.outcomeSlot = outcomeSlot;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    if (action.mode != PetBehaviorActionMode::ConditionalAnimation)
-        return false;
-
     const PetBehaviorActionConditionConfig *selected = nullptr;
-    for (uint8_t index = 0; index < config.actionConditionCount; ++index)
+    for (uint8_t index = 0; index < action.conditionCount; ++index)
     {
-        const PetBehaviorActionConditionConfig &condition = config.actionConditions[index];
-        if (!condition.active || condition.actionSlot != actionSlot ||
-            !conditionMatches(config, condition, state))
-            continue;
-        if (selected == nullptr || condition.priority < selected->priority)
+        const auto &condition = config.actionConditions[action.firstCondition + index];
+        if (matchesRuntimeRange(condition.predicate, context) &&
+            (selected == nullptr || condition.priority < selected->priority))
             selected = &condition;
     }
     if (selected != nullptr)
@@ -159,7 +106,24 @@ bool selectActionPlayback(const PetBehaviorConfig &config,
     }
     if (!action.hasFallbackAnimation)
         return false;
-    playback = action.animationPlayback;
+    playback = outcome.animationPlayback;
+    return true;
+}
+
+bool applyOutcomeEffects(const PetBehaviorConfig &config,
+                         const PetBehaviorActionOutcomeConfig &outcome,
+                         PetBehaviorStatValues &state, bool *affectedSlots)
+{
+    if (outcome.effectCount > kPetBehaviorSlotCount ||
+        !validRange(outcome.firstEffect, outcome.effectCount,
+                    config.actionEffectCount, kMaxPetBehaviorActionEffects))
+        return false;
+    for (uint8_t index = 0; index < outcome.effectCount; ++index)
+    {
+        const auto &effect = config.actionEffects[outcome.firstEffect + index];
+        if (!applyEffect(config, effect.statSlot, effect.operation, effect.value, state, affectedSlots))
+            return false;
+    }
     return true;
 }
 } // namespace
@@ -203,28 +167,17 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
     if (actionSlot >= kMaxPetBehaviorActions || !config.actions[actionSlot].active)
         return false;
 
-    PetBehaviorActionEffectSelection selection = {};
-    if (!selectActionPlayback(
-            config, actionSlot, state, playback, randomSource, selection))
+    const PetBehaviorActionConfig &action = config.actions[actionSlot];
+    const auto *outcome = selectOutcome(config, action, randomSource);
+    if (outcome == nullptr || !selectPlayback(config, action, *outcome, state, playback))
         return false;
 
+    // Resolve conditions against the original values, then apply the selected
+    // Outcome to a temporary state. Publish values and pauses only on success.
     PetBehaviorStatValues next = state;
     bool affectedSlots[kPetBehaviorSlotCount] = {};
-    const PetBehaviorActionConfig &action = config.actions[actionSlot];
-    if (action.mode == PetBehaviorActionMode::RandomOutcome)
-    {
-        if (!applySelectedEffects(
-                config, config.randomOutcomeEffects, config.randomOutcomeEffectCount,
-                actionSlot, selection, next, affectedSlots))
-            return false;
-    }
-    else
-    {
-        if (!applySelectedEffects(
-                config, config.actionEffects, config.actionEffectCount,
-                actionSlot, selection, next, affectedSlots))
-            return false;
-    }
+    if (!applyOutcomeEffects(config, *outcome, next, affectedSlots))
+        return false;
 
     for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
     {

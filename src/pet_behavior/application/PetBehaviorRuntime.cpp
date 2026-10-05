@@ -2,17 +2,17 @@
 
 #include "animation/application/AnimationController.h"
 #include "animation/domain/Animation.h"
-#include "pet/application/PetActionController.h"
+#include "pet/domain/Pet.h"
 #include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
 #include "presentation/adapters/rendering/Renderer.h"
 #include "shared/utils/FirmwareRandom.h"
 
 namespace
 {
-PetBehaviorStatValues readStats(const PetActionController &petActions)
+PetBehaviorStatValues readStats(const Pet &pet)
 {
     PetBehaviorStatValues state = {};
-    const PetStatSnapshot snapshot = petActions.statSnapshot();
+    const PetStatSnapshot snapshot = pet.statSnapshot();
     for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
         state.values[slot] = snapshot.customStats[slot];
     state.stageDays = snapshot.stage_days;
@@ -20,9 +20,9 @@ PetBehaviorStatValues readStats(const PetActionController &petActions)
 }
 
 bool writeStats(const PetBehaviorStatValues &state,
-                PetActionController &petActions)
+                Pet &pet)
 {
-    return petActions.commitPetStats(state.values, kPetBehaviorSlotCount);
+    return pet.commitPetStats(state.values, kPetBehaviorSlotCount);
 }
 
 uint16_t firmwareRandomBelow(uint16_t upperExclusive)
@@ -46,11 +46,11 @@ PlaybackResult resolveActionAnimation(const PetBehaviorActionPlayback &playback,
 } // namespace
 
 PetBehaviorRuntime::PetBehaviorRuntime(const PetBehaviorConfig &configRef,
-                                       PetActionController &petActionsRef,
+                                       Pet &petRef,
                                        AnimationController &animationsRef,
                                        Renderer &rendererRef)
     : config(configRef),
-      petActions(petActionsRef),
+      pet(petRef),
       animations(animationsRef),
       renderer(rendererRef),
       dailyChangePauses{}
@@ -64,16 +64,16 @@ bool PetBehaviorRuntime::hasAction(uint8_t actionSlot) const
 
 void PetBehaviorRuntime::initializeStats()
 {
-    PetBehaviorStatValues state = readStats(petActions);
+    PetBehaviorStatValues state = readStats(pet);
     initializePetBehaviorStats(config, state);
-    writeStats(state, petActions);
+    writeStats(state, pet);
 }
 
 bool PetBehaviorRuntime::advancePetDay()
 {
-    PetBehaviorStatValues state = readStats(petActions);
+    PetBehaviorStatValues state = readStats(pet);
     applyPetBehaviorDailyChanges(config, state, dailyChangePauses);
-    return petActions.commitPetDay(state.values, kPetBehaviorSlotCount);
+    return pet.commitPetDay(state.values, kPetBehaviorSlotCount);
 }
 
 PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
@@ -81,13 +81,13 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     if (!hasAction(actionSlot))
         return PetBehaviorActionResult::Rejected;
 
-    PetBehaviorStatValues state = readStats(petActions);
+    PetBehaviorStatValues state = readStats(pet);
     PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
     PetBehaviorActionPlayback playback = {};
     if (!applyPetBehaviorAction(
             config, actionSlot, state, nextPauses, playback, firmwareRandomBelow))
         return PetBehaviorActionResult::Rejected;
-    if (!writeStats(state, petActions))
+    if (!writeStats(state, pet))
         return PetBehaviorActionResult::Rejected;
     dailyChangePauses = nextPauses;
 
@@ -107,10 +107,10 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
 #if ENABLE_GUESS_GAME
 bool PetBehaviorRuntime::applyGuessOutcome(PetBehaviorGuessOutcome outcome)
 {
-    PetBehaviorStatValues state = readStats(petActions);
+    PetBehaviorStatValues state = readStats(pet);
     if (!applyPetBehaviorGuessOutcome(config, outcome, state))
         return false;
-    return writeStats(state, petActions);
+    return writeStats(state, pet);
 }
 #endif
 
@@ -121,7 +121,7 @@ AssetData::AnimationRef PetBehaviorRuntime::baseAnimation() const
 
 ActivePetState PetBehaviorRuntime::activePetState() const
 {
-    return activePetState(petActions.statSnapshot());
+    return activePetState(pet.statSnapshot());
 }
 
 ActivePetState PetBehaviorRuntime::activePetState(

@@ -2,7 +2,6 @@
 #define PET_ACTION_CONTROLLER_H
 
 #include <Arduino.h>
-#include "animation/domain/Animation.h"
 #include "pet/domain/Pet.h"
 #include "appearance/ports/AppearanceLoader.h"
 
@@ -15,34 +14,13 @@ class PetActionController
 public:
     PetActionController(Pet &pet, PetStorage &petStorage, Renderer &renderer, AppearanceLoader &appearanceLoader);
 
-    bool loadOrInitial(const AppearanceSelection &initialAppearance, uint32_t schemaFingerprint);
     bool saveNow();
-    void reset();
     void maybeSave();
-    bool commitPetStats(const int16_t *customStats, size_t customStatCount);
-    bool commitPetDay(const int16_t *customStats, size_t customStatCount);
     EvolutionLookupResult findEvolutionTarget(AppearanceSelection &selection) const;
-    bool applyEvolutionTarget();
     bool stageAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     bool applyAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     bool applyConsumableOutfitUnlock(uint8_t outfitSlot,
                                      const PetStatSnapshot &consumedStats);
-
-    int16_t customStat(uint8_t index) const;
-    bool setCustomStat(uint8_t index, int16_t value);
-    bool changeCustomStat(uint8_t index, int16_t delta);
-    bool changeCustomStatClamped(uint8_t index, int16_t delta, int16_t minValue, int16_t maxValue);
-
-    bool isFirstLaunchComplete() const;
-    void markFirstLaunchComplete();
-    void resetFirstLaunch();
-    bool isFirstStartCompleted() const;
-    void markFirstStartCompleted();
-    void resetFirstStartCompleted();
-
-    uint8_t speciesSlot() const;
-    uint8_t outfitSlot() const;
-    PetStatSnapshot statSnapshot() const;
 
 private:
     static constexpr uint8_t savePeriodTicks = 2;

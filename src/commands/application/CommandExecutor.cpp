@@ -1,5 +1,6 @@
 #include "commands/application/CommandExecutor.h"
 
+#include "pet/domain/Pet.h"
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/StatusSetSelection.h"
 #include "pet_behavior/application/PetBehaviorRuntime.h"
@@ -42,10 +43,10 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
 } // namespace
 
 CommandExecutor::CommandExecutor(
-    PetActionController &petActionsRef,
+    const Pet &petRef,
     AnimationController &animationsRef,
     const PetBehaviorRuntime &petBehaviorRuntimeRef)
-    : petActions(petActionsRef),
+    : pet(petRef),
       animations(animationsRef),
       petBehaviorRuntime(petBehaviorRuntimeRef)
 {
@@ -165,7 +166,7 @@ bool CommandExecutor::queueStatusSetsAnimation()
         return false;
 #endif
     const StatusSetConfig &set = petBehaviorConfig->statusSets.sets[selectedSetIndex];
-    const PetStatSnapshot stats = petActions.statSnapshot();
+    const PetStatSnapshot stats = pet.statSnapshot();
     const ActivePetState activePetState = petBehaviorRuntime.activePetState(stats);
     const StatusValueContext valueContext = {
         stats, *petBehaviorConfig, activePetState};

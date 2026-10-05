@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "animation/domain/Animation.h"
+#include "pet_behavior/domain/PetBehaviorActionTypes.h"
 #include "commands/domain/StatusSetContract.h"
 #include "commands/domain/SystemCommandCatalog.h"
 #include "pet_behavior/domain/RuntimeValueResolver.h"
@@ -14,28 +15,11 @@ constexpr uint8_t kMaxPetBehaviorStats = kPetBehaviorSlotCount;
 static_assert(kPetBehaviorSlotCount > 0, "Pet Stat capacity must be positive.");
 static_assert(kPetBehaviorSlotCount <= 10, "Pet Stat Slot tokens require one decimal digit.");
 constexpr uint8_t kMaxRuntimePetStates = 16;
-constexpr uint8_t kMaxPetBehaviorActions = 8;
-constexpr uint8_t kMaxPetBehaviorActionConditionsPerAction = 4;
-constexpr uint8_t kMaxPetBehaviorActionConditions =
-    kMaxPetBehaviorActions * kMaxPetBehaviorActionConditionsPerAction;
-constexpr uint8_t kMinPetBehaviorRandomOutcomesPerAction = 2;
-constexpr uint8_t kMaxPetBehaviorRandomOutcomesPerAction = 3;
-constexpr uint8_t kMaxPetBehaviorActionEffects = kMaxPetBehaviorActions * kMaxPetBehaviorStats;
-constexpr uint16_t kMaxPetBehaviorRandomOutcomeEffects =
-    kMaxPetBehaviorActions * kMaxPetBehaviorRandomOutcomesPerAction * kMaxPetBehaviorStats;
-static_assert(kMaxPetBehaviorRandomOutcomeEffects <= UINT8_MAX,
-              "Random Outcome effect tokens require one byte.");
 #if ENABLE_GUESS_GAME
 constexpr uint8_t kPetBehaviorGuessOutcomeCount = 4;
 constexpr uint8_t kMaxPetBehaviorGuessEffects = kPetBehaviorGuessOutcomeCount * kMaxPetBehaviorStats;
 #endif
 constexpr uint8_t kPetBehaviorButtonCount = 8;
-
-enum class PetBehaviorEffectOperation : uint8_t
-{
-    Change,
-    Set,
-};
 
 struct PetBehaviorStatConfig
 {
@@ -50,65 +34,6 @@ struct RuntimePetStateConfig
 {
     RuntimeRangePredicate predicate;
     AssetData::AnimationRef idleAnimation;
-};
-
-enum class PetBehaviorActionMode : uint8_t
-{
-    Standard,
-    ConditionalAnimation,
-    RandomOutcome,
-};
-
-struct PetBehaviorAnimationPlaybackConfig
-{
-    AssetData::AnimationRef animation;
-    uint8_t playbackCount;
-};
-
-struct PetBehaviorActionConfig
-{
-    bool active;
-    PetBehaviorActionMode mode;
-    bool hasFallbackAnimation;
-    PetBehaviorAnimationPlaybackConfig animationPlayback;
-    uint8_t suspendDailyChangeDays;
-};
-
-struct PetBehaviorRandomOutcomeConfig
-{
-    bool active;
-    uint8_t weight;
-    PetBehaviorAnimationPlaybackConfig animationPlayback;
-};
-
-struct PetBehaviorActionConditionConfig
-{
-    bool active;
-    uint8_t actionSlot;
-    uint8_t priority;
-    RuntimeRangePredicate predicate;
-    PetBehaviorAnimationPlaybackConfig animationPlayback;
-};
-
-struct PetBehaviorActionEffectConfig
-{
-    using Operation = PetBehaviorEffectOperation;
-
-    bool active;
-    uint8_t actionSlot;
-    uint8_t statSlot;
-    Operation operation;
-    int16_t value;
-};
-
-struct PetBehaviorRandomOutcomeEffectConfig
-{
-    bool active;
-    uint8_t actionSlot;
-    uint8_t outcomeSlot;
-    uint8_t statSlot;
-    PetBehaviorEffectOperation operation;
-    int16_t value;
 };
 
 #if ENABLE_GUESS_GAME
@@ -186,11 +111,9 @@ struct PetBehaviorConfig
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     RuntimePetStateConfig petStates[kMaxRuntimePetStates];
     PetBehaviorActionConfig actions[kMaxPetBehaviorActions];
-    PetBehaviorRandomOutcomeConfig
-        randomOutcomes[kMaxPetBehaviorActions][kMaxPetBehaviorRandomOutcomesPerAction];
+    PetBehaviorActionOutcomeConfig actionOutcomes[kMaxPetBehaviorActionOutcomes];
     PetBehaviorActionConditionConfig actionConditions[kMaxPetBehaviorActionConditions];
     PetBehaviorActionEffectConfig actionEffects[kMaxPetBehaviorActionEffects];
-    PetBehaviorRandomOutcomeEffectConfig randomOutcomeEffects[kMaxPetBehaviorRandomOutcomeEffects];
 #if ENABLE_GUESS_GAME
     PetBehaviorGuessEffectConfig guessEffects[kMaxPetBehaviorGuessEffects];
 #endif
@@ -209,7 +132,7 @@ struct PetBehaviorConfig
     uint8_t actionCount;
     uint8_t actionConditionCount;
     uint8_t actionEffectCount;
-    uint16_t randomOutcomeEffectCount;
+    uint8_t actionOutcomeCount;
 #if ENABLE_GUESS_GAME
     uint8_t guessEffectCount;
 #endif

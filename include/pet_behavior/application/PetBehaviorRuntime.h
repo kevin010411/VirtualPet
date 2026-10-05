@@ -7,7 +7,7 @@
 #include "pet_behavior/domain/PetStateClassifier.h"
 
 class AnimationController;
-class PetActionController;
+class Pet;
 class Renderer;
 
 enum class PetBehaviorActionResult : uint8_t
@@ -21,7 +21,7 @@ class PetBehaviorRuntime
 {
 public:
     PetBehaviorRuntime(const PetBehaviorConfig &config,
-                       PetActionController &petActions,
+                       Pet &pet,
                        AnimationController &animations,
                        Renderer &renderer);
 
@@ -38,7 +38,7 @@ public:
 
 private:
     const PetBehaviorConfig &config;
-    PetActionController &petActions;
+    Pet &pet;
     AnimationController &animations;
     Renderer &renderer;
     PetBehaviorDailyChangePauses dailyChangePauses;

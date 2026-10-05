@@ -4,7 +4,8 @@
 #include <Arduino.h>
 #include "animation/application/AnimationController.h"
 #include "commands/application/CommandController.h"
-#include "pet/application/PetActionController.h"
+
+class Pet;
 
 struct PetBehaviorConfig;
 class PetBehaviorRuntime;
@@ -22,7 +23,7 @@ struct CommandResult
 class CommandExecutor : public CommandHost
 {
 public:
-    CommandExecutor(PetActionController &petActions,
+    CommandExecutor(const Pet &pet,
                     AnimationController &animations,
                     const PetBehaviorRuntime &petBehaviorRuntime);
 
@@ -34,7 +35,7 @@ private:
     static constexpr unsigned long gameTick = 2000;
     static constexpr int maxFortune = 11;
 
-    PetActionController &petActions;
+    const Pet &pet;
     AnimationController &animations;
     const PetBehaviorRuntime &petBehaviorRuntime;
     const PetBehaviorConfig *petBehaviorConfig = nullptr;
