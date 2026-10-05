@@ -1,8 +1,8 @@
 #include <assert.h>
 #include <limits.h>
 
-#include "pet_behavior/domain/PetBehaviorStatSlot.h"
-#include "pet_behavior/domain/RuntimeValueResolver.h"
+#include "pet/PetBehaviorStatSlot.h"
+#include "pet/RuntimeValueResolver.h"
 
 namespace
 {

@@ -12,8 +12,8 @@ try {
         & g++ -std=c++17 -Wall -Wextra -DENABLE_GUESS_GAME=1 `
             "-DAPP_MAX_PET_STATS=$statCapacity" -Itest/host_stubs -Iinclude `
             test/pet_behavior_runtime/test_main.cpp `
-            src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp `
-            src/pet_behavior/domain/RuntimeValueResolver.cpp -o $outputPath
+            src/pet/PetBehaviorRuntimeRules.cpp `
+            src/pet/RuntimeValueResolver.cpp -o $outputPath
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         & $outputPath
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

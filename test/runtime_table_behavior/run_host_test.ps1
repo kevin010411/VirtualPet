@@ -20,16 +20,16 @@ foreach ($fixturePath in @($validFixture, $legacyFixture, $startupFixture) + $ap
 }
 $sources = @(
     'test/runtime_table_behavior/test_main.cpp',
-    'src/appearance/adapters/SdAppearanceLoader.cpp',
-    'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
-    'src/appearance/domain/RuntimeTableAppearance.cpp',
-    'src/shared/runtime_table/RuntimeTableReader.cpp',
-    'src/shared/runtime_table/RuntimeTableFile.cpp',
-    'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
-    'src/pet_behavior/domain/RuntimeValueResolver.cpp',
-    'src/commands/domain/StatusSetContract.cpp',
-    'src/commands/domain/SystemCommandCatalog.cpp',
-    'src/shared/utils/CopyResourceName.cpp'
+    'src/appearance/SdAppearanceLoader.cpp',
+    'src/resources/RuntimeTableBehavior.cpp',
+    'src/appearance/RuntimeTableAppearance.cpp',
+    'src/resources/RuntimeTableReader.cpp',
+    'src/resources/RuntimeTableFile.cpp',
+    'src/pet/PetBehaviorRuntimeRules.cpp',
+    'src/pet/RuntimeValueResolver.cpp',
+    'src/controller/StatusSetContract.cpp',
+    'src/controller/SystemCommandCatalog.cpp',
+    'src/common/CopyResourceName.cpp'
 )
 Push-Location $repoRoot
 try {

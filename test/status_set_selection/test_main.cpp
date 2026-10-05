@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdint.h>
 
-#include "commands/domain/StatusSetSelection.h"
+#include "controller/StatusSetSelection.h"
 
 namespace
 {

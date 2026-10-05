@@ -5,12 +5,12 @@
 #include <iterator>
 #include <vector>
 
-#include "commands/domain/StatusSetContract.h"
-#include "commands/domain/SystemCommandCatalog.h"
-#include "appearance/domain/RuntimeTableAppearance.h"
-#include "appearance/adapters/SdAppearanceLoader.h"
-#include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
-#include "pet_behavior/domain/RuntimeTableBehavior.h"
+#include "controller/StatusSetContract.h"
+#include "controller/SystemCommandCatalog.h"
+#include "appearance/RuntimeTableAppearance.h"
+#include "appearance/SdAppearanceLoader.h"
+#include "pet/PetBehaviorRuntimeRules.h"
+#include "resources/RuntimeTableBehavior.h"
 
 namespace AssetData
 {

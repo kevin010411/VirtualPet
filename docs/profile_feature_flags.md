@@ -1,6 +1,6 @@
 # `project_12` Profile flags
 
-本頁只列目前 `platformio.ini` 的 `project_12` 覆寫；其他可用預設值見 `include/shared/config/AppProfile.h`。專案環境由 Profile Resolver 產生，修改後須用實際產生的設定重新建置。`APP_STATUS_MODE`、`STATUS_MODE_AGE` 等舊固定照護模式不是現行 Status Sets 的設定方式。
+本頁列出編譯期功能開關；目前 `platformio.ini` 的環境為 `project_29`，實際覆寫以該檔案為準，其他可用預設值見 `include/common/AppProfile.h`。專案環境由 Profile Resolver 產生，修改後須用實際產生的設定重新建置。`APP_STATUS_MODE`、`STATUS_MODE_AGE` 等舊固定照護模式不是現行 Status Sets 的設定方式。
 
 | Flag | `project_12` 值 | 用途 |
 | --- | --- | --- |

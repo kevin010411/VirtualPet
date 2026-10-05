@@ -11,9 +11,9 @@ Push-Location $repoRoot
 try {
     & g++ -std=c++17 -DENABLE_DEBUG=1 -Itest/pet_storage_sd_instance -Iinclude `
         test/pet_storage_sd_instance/test_main.cpp `
-        src/pet/domain/Pet.cpp `
-        src/pet/adapters/PetStorage.cpp `
-        src/shared/integrity/Crc32.cpp `
+        src/pet/Pet.cpp `
+        src/pet/PetStorage.cpp `
+        src/common/Crc32.cpp `
         -o $outputPath
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE

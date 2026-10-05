@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <string.h>
-#include "pet_behavior/domain/PetBehaviorRuntimeRules.h"
+#include "pet/PetBehaviorRuntimeRules.h"
 
 namespace
 {

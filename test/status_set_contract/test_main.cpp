@@ -1,6 +1,6 @@
 #include <assert.h>
-#include "commands/domain/StatusSetContract.h"
-#include "pet_behavior/domain/PetStateClassifier.h"
+#include "controller/StatusSetContract.h"
+#include "pet/PetStateClassifier.h"
 
 namespace
 {

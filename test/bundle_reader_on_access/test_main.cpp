@@ -1,5 +1,5 @@
-#include "shared/assets/BundleReader.h"
-#include "presentation/adapters/rendering/FrameDecoder.h"
+#include "resources/BundleReader.h"
+#include "display/FrameDecoder.h"
 
 #include <assert.h>
 #include <string.h>

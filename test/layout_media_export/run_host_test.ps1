@@ -16,9 +16,9 @@ try {
     New-Item -ItemType Directory -Path (Split-Path -Parent $outputPath) -Force | Out-Null
     & g++ -std=c++17 -DENABLE_DEBUG=1 -Itest/layout_media_export -Itest/bundle_reader_on_access -Itest/host_stubs -Iinclude `
         test/layout_media_export/test_main.cpp `
-        src/shared/assets/BundleReader.cpp `
-        src/shared/utils/CopyResourceName.cpp `
-        src/presentation/adapters/rendering/FrameDecoder.cpp `
+        src/resources/BundleReader.cpp `
+        src/common/CopyResourceName.cpp `
+        src/display/FrameDecoder.cpp `
         -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath $fixtureRoot

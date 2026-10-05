@@ -10,8 +10,8 @@ Push-Location $repoRoot
 try {
     & g++ -std=c++17 -Itest/host_stubs -Iinclude `
         test/runtime_contract_loader/test_main.cpp `
-        src/pet_behavior/domain/RuntimeContractLoader.cpp `
-        src/shared/utils/CopyResourceName.cpp `
+        src/resources/RuntimeContractLoader.cpp `
+        src/common/CopyResourceName.cpp `
         -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath

@@ -1,6 +1,6 @@
 #include <assert.h>
 
-#include "pet_behavior/domain/PetStateClassifier.h"
+#include "pet/PetStateClassifier.h"
 
 namespace
 {

@@ -3,11 +3,11 @@
 #include <iterator>
 #include <string>
 #include <vector>
-#include "pet_behavior/domain/RuntimeTableBehavior.h"
-#include "presentation/adapters/rendering/Renderer.h"
-#include "presentation/application/LayoutRenderer.h"
-#include "commands/application/CommandController.h"
-#include "pet/domain/Pet.h"
+#include "resources/RuntimeTableBehavior.h"
+#include "display/Renderer.h"
+#include "display/LayoutRenderer.h"
+#include "controller/CommandController.h"
+#include "pet/Pet.h"
 
 namespace
 {
@@ -59,16 +59,6 @@ void paint(std::vector<uint16_t> &screen, const Frame &frame)
             screen[(frame.y + y) * 128 + frame.x + x] = frame.pixels[y * frame.width + x];
 }
 
-class Host : public CommandHost
-{
-public:
-    bool commandHasAnimation(FirmwarePlaybackRole) const override { return true; }
-    bool commandCanStatus() const override { return true; }
-    void commandStatus() override {}
-    void commandChangeOutfit() override {}
-    void commandPredict() override {}
-    void commandGuessGame() override {}
-};
 
 void verify(const std::string &root)
 {
@@ -100,28 +90,23 @@ void verify(const std::string &root)
             for (unsigned x = 0; x < frame.width; ++x)
                 assert(display.screen[(frame.y + y) * 128 + frame.x + x] == frame.pixels[y * frame.width + x]);
     }
-    renderer.setAnimationArea(0, 0, 0, 0);
     const ScreenBlockConfig *animationBlock = nullptr;
     for (uint8_t index = 0; index < config.screenBlockCount; ++index)
         if (config.screenBlocks[index].kind == ScreenBlockKind::Animation)
         {
             animationBlock = &config.screenBlocks[index];
-            renderer.setAnimationArea(animationBlock->x, animationBlock->y,
-                                       animationBlock->width, animationBlock->height);
         }
-    Host host;
-    CommandController commands(host);
+    CommandController commands;
     commands.configure(config);
     commands.resetSelection();
     LayoutRenderer layout(renderer, commands);
     layout.configureRuntimeContract(config);
     PetStatSnapshot snapshot = {};
-    layout.updateValues(snapshot);
     const AssetData::AnimationRef active = config.idleAnimation;
     assert(renderer.setAnimation(active, 0, true));
     uint8_t layoutId;
     assert(renderer.currentLayoutId(layoutId));
-    assert(layout.updatePlayback(layoutId));
+    assert(layout.syncPlayback(snapshot));
     const auto expectedScreen = [&]() {
         std::vector<uint16_t> expected(128 * 160);
         paint(expected, findFrame(frames, config.layoutUnselected, layoutId, 0));
@@ -200,8 +185,7 @@ void verify(const std::string &root)
         assert(display.screen == expectedScreen());
         // Reconfiguring an appearance must display restored/current values, not Initial.
         layout.configureRuntimeContract(config);
-        layout.updateValues(snapshot);
-        assert(layout.updatePlayback(layoutId));
+        assert(layout.syncPlayback(snapshot));
         assert(renderer.ShowAnimationFrame(active, 0, 1));
         assert(display.screen == expectedScreen());
     }
@@ -225,11 +209,11 @@ void verify(const std::string &root)
     }
     bool visible = false;
     for (int slot = 0; slot < 8; ++slot) visible |= commands.isSlotVisible(slot);
-    assert(commands.executeCurrent() == visible);
+    assert(commands.isSlotVisible(commands.selectedSlot()) == visible);
     // Complete display invalidation must restore holes, transparent on images and the active frame.
     std::fill(display.screen.begin(), display.screen.end(), 0xdead);
     layout.begin();
-    assert(layout.updatePlayback(layoutId));
+    assert(layout.syncPlayback(snapshot));
     assert(renderer.ShowAnimationFrame(active, 0, 1));
     assert(display.screen == expectedScreen());
     assert(renderer.firstAssetDataError() == AssetData::BundleError::None);

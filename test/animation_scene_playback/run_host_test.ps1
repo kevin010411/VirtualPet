@@ -17,20 +17,20 @@ foreach ($fixturePath in $fixturePaths) {
 }
 $sources = @(
     'test/animation_scene_playback/test_main.cpp',
-    'src/animation/application/AnimationController.cpp',
-    'src/animation/application/BaseAnimationRotation.cpp',
-    'src/commands/application/CommandController.cpp',
-    'src/commands/domain/SystemCommandCatalog.cpp',
-    'src/commands/domain/StatusSetContract.cpp',
-    'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
-    'src/pet_behavior/domain/RuntimeValueResolver.cpp',
-    'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
-    'src/appearance/domain/RuntimeTableAppearance.cpp',
-    'src/shared/runtime_table/RuntimeTableReader.cpp',
-    'src/shared/runtime_table/RuntimeTableFile.cpp',
-    'src/presentation/application/LayoutRenderer.cpp'
-    'src/shared/integrity/Crc32.cpp'
-    'src/shared/utils/FirmwareRandom.cpp'
+    'src/animation/AnimationController.cpp',
+    'src/animation/BaseAnimationRotation.cpp',
+    'src/controller/CommandController.cpp',
+    'src/controller/SystemCommandCatalog.cpp',
+    'src/controller/StatusSetContract.cpp',
+    'src/pet/PetBehaviorRuntimeRules.cpp',
+    'src/pet/RuntimeValueResolver.cpp',
+    'src/resources/RuntimeTableBehavior.cpp',
+    'src/appearance/RuntimeTableAppearance.cpp',
+    'src/resources/RuntimeTableReader.cpp',
+    'src/resources/RuntimeTableFile.cpp',
+    'src/display/LayoutRenderer.cpp'
+    'src/common/Crc32.cpp'
+    'src/common/FirmwareRandom.cpp'
 )
 
 Push-Location $repoRoot

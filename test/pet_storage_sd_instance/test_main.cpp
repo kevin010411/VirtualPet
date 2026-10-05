@@ -1,4 +1,4 @@
-#include "pet/adapters/PetStorage.h"
+#include "pet/PetStorage.h"
 
 #include <assert.h>
 

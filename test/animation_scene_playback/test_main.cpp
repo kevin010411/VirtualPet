@@ -4,12 +4,14 @@
 #include <iterator>
 #include <vector>
 
-#include "animation/application/AnimationController.h"
-#include "commands/application/CommandController.h"
-#include "pet_behavior/domain/PetBehaviorTypes.h"
-#include "pet_behavior/domain/RuntimeTableBehavior.h"
-#include "presentation/adapters/rendering/Renderer.h"
-#include "presentation/application/LayoutRenderer.h"
+#include "animation/AnimationController.h"
+#include "controller/CommandController.h"
+#include "pet/PetBehaviorTypes.h"
+#include "pet/Pet.h"
+#include "pet/Pet.h"
+#include "resources/RuntimeTableBehavior.h"
+#include "display/Renderer.h"
+#include "display/LayoutRenderer.h"
 
 namespace
 {
@@ -81,22 +83,13 @@ AssetData::RuntimeManifest fixtureManifest(const std::vector<uint8_t> &fixture)
     return manifest;
 }
 
-class Host : public CommandHost
-{
-public:
-    bool commandHasAnimation(FirmwarePlaybackRole) const override { return true; }
-    bool commandCanStatus() const override { return true; }
-    void commandStatus() override {}
-};
 
 void prepareAndTick(AnimationController &animations, LayoutRenderer &layout,
                     Renderer &renderer,
                     unsigned long now)
 {
     animations.preparePlayback(now);
-    uint8_t layoutId = 0;
-    assert(renderer.currentLayoutId(layoutId));
-    assert(layout.updatePlayback(layoutId));
+    assert(layout.syncPlayback(PetStatSnapshot{}));
     animations.tick(now);
 }
 
@@ -154,6 +147,8 @@ BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t scratchSize)
 Renderer::Renderer(Adafruit_ST7735 *, SdFat *) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
+void Renderer::setAnimationArea(uint8_t, uint8_t, uint8_t, uint8_t) {}
+void Renderer::recordAssetDataErrorResource(const char *) {}
 bool Renderer::setAnimation(
     const AssetData::AnimationRef &reference, uint8_t versionIndex, bool)
 {
@@ -233,8 +228,7 @@ int main(int argc, char **argv)
     config.buttons[1] = config.buttons[0];
 
     Renderer renderer(nullptr, nullptr);
-    Host host;
-    CommandController commands(host);
+    CommandController commands;
     AnimationController animations(renderer);
     LayoutRenderer layout(renderer, commands);
     commands.configure(config);

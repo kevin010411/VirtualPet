@@ -18,18 +18,18 @@ foreach ($case in $(if ($Numeric) { @() } else { @('moved', 'enlarged', 'shrunk-
 }
 $sources = @(
     'test/custom_layout_export/test_main.cpp',
-    'src/shared/assets/BundleReader.cpp', 'src/shared/assets/AssetRuntimeContract.cpp',
-    'src/shared/utils/CopyResourceName.cpp',
-    'src/presentation/adapters/rendering/Renderer.cpp',
-    'src/presentation/adapters/rendering/FrameDecoder.cpp',
-    'src/presentation/application/LayoutRenderer.cpp',
-    'src/commands/application/CommandController.cpp',
-    'src/commands/domain/SystemCommandCatalog.cpp', 'src/commands/domain/StatusSetContract.cpp',
-    'src/pet_behavior/domain/RuntimeTableBehavior.cpp',
-    'src/appearance/domain/RuntimeTableAppearance.cpp',
-    'src/shared/runtime_table/RuntimeTableReader.cpp',
-    'src/shared/runtime_table/RuntimeTableFile.cpp',
-    'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp', 'src/pet_behavior/domain/RuntimeValueResolver.cpp'
+    'src/resources/BundleReader.cpp', 'src/resources/AssetRuntimeContract.cpp',
+    'src/common/CopyResourceName.cpp',
+    'src/display/Renderer.cpp',
+    'src/display/FrameDecoder.cpp',
+    'src/display/LayoutRenderer.cpp',
+    'src/controller/CommandController.cpp',
+    'src/controller/SystemCommandCatalog.cpp', 'src/controller/StatusSetContract.cpp',
+    'src/resources/RuntimeTableBehavior.cpp',
+    'src/appearance/RuntimeTableAppearance.cpp',
+    'src/resources/RuntimeTableReader.cpp',
+    'src/resources/RuntimeTableFile.cpp',
+    'src/pet/PetBehaviorRuntimeRules.cpp', 'src/pet/RuntimeValueResolver.cpp'
 )
 Push-Location $repoRoot
 try {

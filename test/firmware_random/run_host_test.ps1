@@ -10,7 +10,7 @@ Push-Location $repoRoot
 try {
     & g++ -std=c++17 -Iinclude `
         test/firmware_random/test_main.cpp `
-        src/shared/utils/FirmwareRandom.cpp -o $outputPath
+        src/common/FirmwareRandom.cpp -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

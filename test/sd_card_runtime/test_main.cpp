@@ -3,11 +3,11 @@
 #include <iterator>
 #include <vector>
 
-#include "appearance/domain/RuntimeTableAppearance.h"
-#include "pet_behavior/domain/RuntimeTableBehavior.h"
-#include "pet_behavior/domain/PetBehaviorStatSlot.h"
-#include "presentation/adapters/rendering/FrameDecoder.h"
-#include "shared/assets/BundleReader.h"
+#include "appearance/RuntimeTableAppearance.h"
+#include "resources/RuntimeTableBehavior.h"
+#include "pet/PetBehaviorStatSlot.h"
+#include "display/FrameDecoder.h"
+#include "resources/BundleReader.h"
 
 namespace
 {

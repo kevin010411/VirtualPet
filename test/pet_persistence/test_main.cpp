@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <string.h>
 
-#include "pet/domain/Pet.h"
+#include "pet/Pet.h"
 
 int main()
 {

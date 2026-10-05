@@ -1,5 +1,5 @@
 #include <cassert>
-#include "platform/hardware/ButtonInput.h"
+#include "platform/ButtonInput.h"
 
 static unsigned long clockMs = 1000;
 static int pins[3] = {HIGH, HIGH, HIGH};

@@ -1,10 +1,10 @@
 #include <assert.h>
 #include <string.h>
 
-#include "appearance/ports/AppearanceLoader.h"
-#include "pet_behavior/domain/RuntimeContractLoader.h"
-#include "pet_behavior/domain/RuntimeTableBehavior.h"
-#include "shared/assets/BundleReader.h"
+#include "appearance/AppearanceLoader.h"
+#include "resources/RuntimeContractLoader.h"
+#include "resources/RuntimeTableBehavior.h"
+#include "resources/BundleReader.h"
 
 namespace
 {

@@ -7,6 +7,7 @@
 - [Profile feature flags 中文查表](profile_feature_flags.md)
 - [Profile size 驗證](profile_size_verification.md)
 - [系統架構](architecture.md)
+- [程式碼目錄與歸檔規則](source-layout.md)
 
 ## SD 卡設定與資源
 

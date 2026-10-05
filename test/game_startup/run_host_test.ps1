@@ -7,24 +7,26 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $outputPath = Join-Path $repoRoot '.pio\game_startup_host.exe'
 $sources = @(
     'test/game_startup/test_main.cpp',
-    'src/presentation/application/Game.cpp',
-    'src/presentation/application/GameStartup.cpp',
-    'src/presentation/application/AppFlowController.cpp',
-    'src/presentation/application/LayoutRenderer.cpp',
-    'src/animation/application/AnimationController.cpp',
-    'src/animation/application/BaseAnimationRotation.cpp',
-    'src/commands/application/CommandController.cpp',
-    'src/commands/application/CommandExecutor.cpp',
-    'src/commands/domain/SystemCommandCatalog.cpp',
-    'src/commands/domain/StatusSetContract.cpp',
-    'src/commands/domain/StatusSetSelection.cpp',
-    'src/pet/application/PetActionController.cpp',
-    'src/pet/domain/Pet.cpp',
-    'src/pet_behavior/application/PetBehaviorRuntime.cpp',
-    'src/pet_behavior/domain/PetBehaviorRuntimeRules.cpp',
-    'src/pet_behavior/domain/PetStateClassifier.cpp',
-    'src/pet_behavior/domain/RuntimeValueResolver.cpp',
-    'src/shared/utils/FirmwareRandom.cpp'
+    'src/controller/Game.cpp',
+    'src/controller/GameStartup.cpp',
+    'src/appearance/EvolutionController.cpp',
+    'src/controller/AppFlowController.cpp',
+    'src/display/LayoutRenderer.cpp',
+    'src/animation/AnimationController.cpp',
+    'src/animation/BaseAnimationRotation.cpp',
+    'src/controller/CommandController.cpp',
+    'src/controller/CommandExecutor.cpp',
+    'src/controller/SystemCommandCatalog.cpp',
+    'src/controller/StatusSetContract.cpp',
+    'src/controller/StatusSetSelection.cpp',
+    'src/pet/PetSaveController.cpp',
+    'src/appearance/AppearanceChangeController.cpp',
+    'src/pet/Pet.cpp',
+    'src/pet/PetBehaviorRuntime.cpp',
+    'src/pet/PetBehaviorRuntimeRules.cpp',
+    'src/pet/PetStateClassifier.cpp',
+    'src/pet/RuntimeValueResolver.cpp',
+    'src/common/FirmwareRandom.cpp'
 )
 
 Push-Location $repoRoot
@@ -38,7 +40,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] Game startup, restore, reset, evolution, fatal routing, live Pet transactions and Status'
+    Write-Host '[PASS] Game startup, restore, reset, evolution, fatal routing, Pet transactions, Status, appearance failure order and save cadence'
     exit 0
 }
 finally {

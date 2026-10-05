@@ -1,4 +1,4 @@
-#include "shared/utils/FirmwareRandom.h"
+#include "common/FirmwareRandom.h"
 
 #include <assert.h>
 #include <stdint.h>

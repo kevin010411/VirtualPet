@@ -1,4 +1,4 @@
-#include "presentation/adapters/rendering/Renderer.h"
+#include "display/Renderer.h"
 
 #include <assert.h>
 #include <string>

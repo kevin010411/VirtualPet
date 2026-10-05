@@ -11,7 +11,7 @@ Push-Location $repoRoot
 try {
     & g++ -std=c++17 -Itest/host_stubs -Iinclude `
         test/pet_persistence/test_main.cpp `
-        src/pet/domain/Pet.cpp `
+        src/pet/Pet.cpp `
         -o $outputPath
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
