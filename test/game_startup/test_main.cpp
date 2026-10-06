@@ -39,6 +39,8 @@ struct Scenario
     EvolutionLookupResult evolutionResult = EvolutionLookupResult::NoTarget;
     uint8_t evolutionSpecies = 2;
     EvolutionAnimationMode evolutionMode = EvolutionAnimationMode::Disabled;
+    uint8_t sourcePlaybackCount = 2;
+    uint8_t targetPlaybackCount = 2;
     bool sourceAvailable = true;
     bool targetAvailable = true;
     bool rejectSourceQueue = false;
@@ -95,6 +97,8 @@ public:
             selection.speciesSlot = scenario->evolutionSpecies;
             selection.outfitSlot = 1;
             selection.evolutionMode = scenario->evolutionMode;
+            selection.sourceEvolutionPlaybackCount = scenario->sourcePlaybackCount;
+            selection.targetEvolutionPlaybackCount = scenario->targetPlaybackCount;
             if (selection.evolutionMode != EvolutionAnimationMode::Disabled)
                 selection.sourceEvolutionAnimation = {1, 1, 3};
             if (selection.evolutionMode == EvolutionAnimationMode::TwoPhase)
@@ -949,6 +953,41 @@ void testStatusReadsActionCommittedPet()
     assert(animations.currentVersionIndex() == 1);
     assert(data.saves == 0);
 }
+void testExportedEvolutionPlaybackCounts()
+{
+    for (const uint8_t sourceCount : {1, 3, 5})
+    for (const uint8_t targetCount : {1, 4, 5})
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.evolutionResult = EvolutionLookupResult::Found;
+        data.evolutionMode = EvolutionAnimationMode::TwoPhase;
+        data.sourcePlaybackCount = sourceCount;
+        data.targetPlaybackCount = targetCount;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, appearance);
+        assert(game.setup_game());
+        assert(game.setStageDaysForCheat(1));
+        const int savesBefore = data.saves;
+        for (uint8_t index = 0; index < sourceCount; ++index)
+        {
+            assert(pet.speciesSlot() == 1 && data.saves == savesBefore);
+            game.loop_game();
+        }
+        assert(data.sourceDraws == sourceCount && pet.speciesSlot() == 2);
+        assert(data.saves == savesBefore + 1 && data.targetDraws == 0);
+        for (uint8_t index = 0; index < targetCount; ++index)
+            game.loop_game();
+        assert(data.targetDraws == targetCount && !game.hasTransientAnimation());
+        assert(data.reloads == 1 && data.saves == savesBefore + 1);
+    }
+}
+
 } // namespace
 
 bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
@@ -1103,6 +1142,7 @@ SdFat *Renderer::sdCard() const { return SD; }
 
 int main()
 {
+    testExportedEvolutionPlaybackCounts();
     testAppearanceChanges();
     testUnlockRefreshAndSaveCadence();
     testFreshStartup();

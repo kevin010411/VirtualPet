@@ -190,6 +190,54 @@ std::vector<uint8_t> actionModesFixture(const std::vector<uint8_t> &base)
 
 uint16_t selectLastOutcome(uint16_t upperExclusive) { return upperExclusive - 1; }
 
+void testEvolutionPlaybackRecords(const std::vector<uint8_t> &exported)
+{
+    size_t evolutionOffset = 0;
+    const uint16_t sectionCount = exported[24] | (static_cast<uint16_t>(exported[25]) << 8);
+    for (uint16_t index = 0; index < sectionCount; ++index)
+    {
+        const size_t entry = 64 + index * 16;
+        if (exported[entry] == 33 && exported[entry + 1] == 0)
+            evolutionOffset = readFixtureU32(exported, entry + 4);
+    }
+    assert(evolutionOffset != 0);
+    for (uint8_t variant = 0; variant < 5; ++variant)
+    {
+        auto fixture = exported;
+        putFixtureU32(fixture, 12, readFixtureU32(fixture, 12) | (1UL << 12));
+        putFixtureU16(fixture, evolutionOffset + 8, 0);
+        putFixtureU16(fixture, evolutionOffset + 10, 0);
+        fixture[evolutionOffset + 12] = 2;
+        fixture[evolutionOffset + 13] = variant == 1 ? 1 : 3;
+        fixture[evolutionOffset + 14] = 5;
+        if (variant == 2) fixture[evolutionOffset + 13] = 0;
+        if (variant == 3) fixture[evolutionOffset + 14] = 6;
+        if (variant == 4)
+            putFixtureU32(fixture, 12, readFixtureU32(fixture, 12) & ~(1UL << 12));
+        SdFat sd(fixture.data(), fixture.size());
+        uint8_t scratch[AssetData::kIoScratchBytes] = {};
+        BundleReader reader(&sd, scratch, sizeof(scratch));
+        PetBehaviorConfig config = {};
+        const auto manifest = releaseFixtureManifest(fixture);
+        assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
+        ActivePetBehaviorStatSlots activeSlots(config);
+        PetStatSnapshot stats = {};
+        stats.speciesSlot = 1;
+        stats.outfitSlot = 1;
+        stats.stage_days = 100;
+        AppearanceSelection selection = {};
+        const bool accepted = findRuntimeTableEvolutionTarget(
+            &sd, manifest, reader, activeSlots, stats, selection);
+        assert(accepted == (variant < 2));
+        if (accepted)
+        {
+            assert(selection.speciesSlot == 2 && selection.outfitSlot == 1);
+            assert(selection.sourceEvolutionPlaybackCount == (variant == 1 ? 1 : 3));
+            assert(selection.targetEvolutionPlaybackCount == 5);
+        }
+    }
+}
+
 void testDecodedActionRanges(const std::vector<uint8_t> &exported)
 {
     auto fixture = actionModesFixture(exported);
@@ -591,6 +639,7 @@ int main(int argc, char **argv)
     const std::vector<uint8_t> legacy = readFixture(argv[2]);
     const std::vector<uint8_t> startup = readFixture(argv[3]);
     testRuntimeSnapshotLifecycle(startup);
+    testEvolutionPlaybackRecords(startup);
     PetBehaviorConfig config = {};
     assert(parseRuntimeTableBehavior(valid.data(), valid.size(),
                                      releaseFixtureManifest(valid), 1, 1, config));

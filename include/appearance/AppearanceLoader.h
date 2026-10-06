@@ -29,6 +29,8 @@ struct AppearanceSelection
     EvolutionAnimationMode evolutionMode;
     AssetData::AnimationRef sourceEvolutionAnimation;
     AssetData::AnimationRef targetEvolutionAnimation;
+    uint8_t sourceEvolutionPlaybackCount;
+    uint8_t targetEvolutionPlaybackCount;
 };
 
 struct OutfitPreview

@@ -4,11 +4,6 @@
 #include "pet/Pet.h"
 #include "display/Renderer.h"
 
-namespace
-{
-constexpr uint8_t kEvolutionPlaybackCount = 2;
-}
-
 EvolutionController::EvolutionController(Pet &petRef,
                                          AnimationController &animationsRef,
                                          AppearanceLoader &appearanceLoaderRef,
@@ -57,9 +52,10 @@ bool EvolutionController::begin(const AppearanceSelection &selection)
     targetSpeciesSlot = selection.speciesSlot;
     targetOutfitSlot = selection.outfitSlot;
     targetAnimation = selection.targetEvolutionAnimation;
+    targetPlaybackCount = selection.targetEvolutionPlaybackCount;
     phase = Phase::SourceSegment;
     const Animation animation = Animation::complete(
-        selection.sourceEvolutionAnimation, kEvolutionPlaybackCount,
+        selection.sourceEvolutionAnimation, selection.sourceEvolutionPlaybackCount,
         FirmwarePlaybackRole::Evolution);
     if (animations.replace(AnimationSequence(&animation, 1)) != PlaybackResult::Accepted)
     {
@@ -107,7 +103,7 @@ bool EvolutionController::advance()
     if (phase == Phase::ApplyingTarget && targetAnimation.valid())
     {
         const Animation animation = Animation::complete(
-            targetAnimation, kEvolutionPlaybackCount, FirmwarePlaybackRole::Evolution);
+            targetAnimation, targetPlaybackCount, FirmwarePlaybackRole::Evolution);
         if (animations.replace(AnimationSequence(&animation, 1)) == PlaybackResult::Accepted)
         {
             phase = Phase::TargetSegment;
@@ -134,6 +130,7 @@ void EvolutionController::cancel()
     targetSpeciesSlot = 0;
     targetOutfitSlot = 0;
     targetAnimation = {};
+    targetPlaybackCount = 0;
 }
 
 bool EvolutionController::isActive() const

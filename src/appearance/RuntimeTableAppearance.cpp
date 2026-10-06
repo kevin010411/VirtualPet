@@ -21,6 +21,8 @@ struct EvolutionRecord
     uint16_t sourceAnimationRef = kNone16;
     uint16_t targetAnimationRef = kNone16;
     EvolutionAnimationMode mode = EvolutionAnimationMode::Disabled;
+    uint8_t sourcePlaybackCount = 0;
+    uint8_t targetPlaybackCount = 0;
 };
 
 bool readEvolutionRecord(const Source &source, const Section &evolutions,
@@ -38,6 +40,13 @@ bool readEvolutionRecord(const Source &source, const Section &evolutions,
     decoded.sourceAnimationRef = readU16(record + 8);
     decoded.targetAnimationRef = readU16(record + 10);
     decoded.mode = static_cast<EvolutionAnimationMode>(record[12]);
+    decoded.sourcePlaybackCount = record[13];
+    decoded.targetPlaybackCount = record[14];
+    const bool playbackCountsValid =
+        (decoded.sourceAnimationRef == kNone16 ? decoded.sourcePlaybackCount == 0
+            : decoded.sourcePlaybackCount >= 1 && decoded.sourcePlaybackCount <= 5) &&
+        (decoded.targetAnimationRef == kNone16 ? decoded.targetPlaybackCount == 0
+            : decoded.targetPlaybackCount >= 1 && decoded.targetPlaybackCount <= 5);
     const bool referencesMatchMode =
         (decoded.mode == EvolutionAnimationMode::Disabled &&
          decoded.sourceAnimationRef == kNone16 && decoded.targetAnimationRef == kNone16) ||
@@ -50,7 +59,7 @@ bool readEvolutionRecord(const Source &source, const Section &evolutions,
                (conditions == nullptr ? 0 : conditions->count) &&
            (decoded.sourceAnimationRef == kNone16 || decoded.sourceAnimationRef < animations.count) &&
            (decoded.targetAnimationRef == kNone16 || decoded.targetAnimationRef < animations.count) &&
-           referencesMatchMode && record[13] == 0 && record[14] == 0 && record[15] == 0;
+           referencesMatchMode && playbackCountsValid && record[15] == 0;
 }
 
 RuntimeValueContext runtimeValueContext(const PetStatSnapshot &stats,
@@ -120,6 +129,9 @@ bool decodeEvolutionQuery(const RuntimeTable &table, BundleReader &bundleReader,
         if (!readEvolutionRecord(source, *evolutions, conditions, *animations,
                                  index, nextCondition, evolution))
             return false;
+        if (evolution.mode != EvolutionAnimationMode::Disabled &&
+            (table.featureFlags & kEvolutionPlaybackCountsFeature) == 0)
+            return false;
         bool matched = stats.speciesSlot == evolution.sourceSpecies;
         for (uint8_t offset = 0; offset < evolution.conditionCount; ++offset)
         {
@@ -174,6 +186,8 @@ bool decodeEvolutionQuery(const RuntimeTable &table, BundleReader &bundleReader,
             selection.evolutionMode = evolution.mode;
             selection.sourceEvolutionAnimation = sourceAnimation;
             selection.targetEvolutionAnimation = targetAnimation;
+            selection.sourceEvolutionPlaybackCount = evolution.sourcePlaybackCount;
+            selection.targetEvolutionPlaybackCount = evolution.targetPlaybackCount;
         }
     }
     return true;

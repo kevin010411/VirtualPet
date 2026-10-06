@@ -52,6 +52,7 @@ private:
     uint8_t targetSpeciesSlot = 0;
     uint8_t targetOutfitSlot = 0;
     AssetData::AnimationRef targetAnimation = {};
+    uint8_t targetPlaybackCount = 0;
 
     bool begin(const AppearanceSelection &selection);
     bool advance();
