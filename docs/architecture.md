@@ -8,7 +8,7 @@
 
 | 模組 | 目前責任 |
 | --- | --- |
-| `pet/` | Pet 狀態、Pet Stat/Action 規則、每日推進、執行期數值解析及存檔 |
+| `pet/` | Pet 狀態、Session 新建／恢復／重置政策、Pet Stat/Action 規則、每日推進、執行期數值解析及存檔 |
 | `appearance/` | 外觀選擇流程、Evolution 查詢／播放與轉換生命週期、Outfit 查詢及 SD adapter |
 | `controller/` | 電子雞總控制：Game 啟動與流程、System Command、Status Sets、小遊戲接入 |
 | `game/` | 可獨立遊玩的遊戲：GuessItemGame 的回合、輸入與勝負規則 |
@@ -20,7 +20,7 @@
 
 2026-10-06 已將 `src` 與 `include` 按上述九個責任分類，移除重複的 `application/domain/adapters/ports` 資料夾分層；只有共用解碼器的內部標頭保留 `detail/`。電子雞總控制放在 `controller`，可獨立遊玩的遊戲放在 `game`；既有 `Game` 類別位於 `controller/Game.h`。這次調整只移動檔案並更新引用路徑，沒有改變類別、介面或執行流程。完整分類與歸檔規則見 [程式碼目錄](source-layout.md)。
 
-正式韌體只讀目前的 `/runtime.bin` v9。啟動時先讀 manifest，再由同一次完整表讀取取得初始外觀及其設定；Game 保存已驗證的初始外觀。恢復不同外觀、重置及日後切換外觀仍走既定的重新載入流程。錯誤保留第一個資源名稱，失敗後需重新開機。這些行為不能因移動檔案或收斂介面而改變。
+正式韌體只讀目前的 `/runtime.bin` v9。啟動時先讀 manifest，再由同一次完整表讀取取得初始外觀及其設定；`PetSession` 保存已驗證的初始外觀。恢復不同外觀、重置及日後切換外觀仍走既定的重新載入流程。錯誤保留第一個資源名稱，失敗後需重新開機。這些行為不能因移動檔案或收斂介面而改變。
 
 ## Proposed Architecture：以責任收斂取代層數增加
 
@@ -70,7 +70,17 @@
 
 2026-10-06 將畫面同步細節集中於既有 `display/LayoutRenderer`：契約設定時清除舊動畫區域、掃描 SCREEN_BLOCKS、設定動畫矩形及數值 fallback；`syncPlayback(snapshot)` 取得目前 layout ID、更新數值並驗證／繪製版面。Game 只保留準備播放、同步畫面、播放的順序與失敗分流，不再扫描 screen blocks 或持有畫面同步 helper。初始版面與外觀預覽仍使用既有 `updatePlayback(layoutId)`；未增加控制器或配置。驗證見 [畫面同步驗證](../.agent/display-sync-verification.md)。
 
+2026-10-06 將建立可執行 Pet 狀態的政策集中於 `pet/PetSession`：`prepare(sd)` 載入初始契約、保存初始 Species／Outfit、驗證存檔及預覽、必要時重載恢復外觀，最後處理解鎖與存檔。新建重用已啟用契約並初始化解鎖／立即存檔；恢復保留存檔外觀，只在解鎖遮罩變動時存檔；`reset()` 不讀存檔，回到初始選擇後重載契約、初始化解鎖及存檔。失敗保留已發生的變更。Session 以值成員持有於 Game，沒有新增 heap 配置。
+
+`PetSession::State` 表示準備結果並區分契約、初始外觀、Pet 狀態、恢復外觀及解鎖階段失敗；它不表示 TFT 或播放已就緒，reset 的每次成敗則直接回傳。`PetSessionHost` 只提供載入後啟用與既有外觀契約重載；Game 將契約分配給 Renderer、播放、命令及版面。Game 不再持有初始選擇或恢復／新建分支，保留 `prepare_game()`／`finish_setup_game()` 的平台初始化順序、畫面／輸入／播放協調及最終執行開關。Session 不持有輸入、LayoutRenderer、CommandController 或小遊戲控制器。驗證與容量差異見 [PetSession 驗證](../.agent/pet-session-verification.md)。
+
+2026-10-06 外觀與 Evolution 失敗結果收斂：`configureActiveAppearance`／`activateLoadedAppearance` 的失敗只記錄資源並回傳，不再於回呼內改寫 Failed 或 fatal flow。`EvolutionHost::enterSpecies` 保留 `AppearanceChangeResult`；`EvolutionController::check`／`update` 回報 `NoChange`、`InProgress`、`Completed`、`Failed`、`FatalFailure`，Game 依結果決定是否繼續每日推進、顯示錯誤或執行 `enterRuntimeFatal`。無動畫的進化完成、一般失敗或致命失敗皆結束當次 Pet tick，避免同一回合繼續推進或重新查詢。已提交目標後的非資源逐幀失敗仍沿用靜默回到基礎動畫，回報生命週期 `Completed`。準備失敗由 Game 讀取 Session State；Session reset 保留外觀變更結果，使重置契約失敗也由 Game 處理。保留第一錯誤資源及失敗不回復已提交狀態的規則。驗證見 [結果介面驗證](../.agent/appearance-result-verification.md)。
+
 ## 驗證與回退
+
+2026-10-06 fatal 收尾集中於 `Game::enterFatalState()`：關閉 initialized、標記 RuntimeLoadState::Failed、取消播放／Evolution、清除 FirstStart／cheat 待辦並退出選單／小遊戲。此操作不顯示畫面；prepare 失敗只更新狀態，finish 在顯示初始化後依 Session 結果呈現既有診斷，執行期由 `enterRuntimeFatal()` 收尾後顯示。fatal 後輸入、重繪、播放與存檔皆受阻擋，Ready Session 不能透過再次 finish 恢復；reset 啟動 fatal 時回傳 false。Host 回歸與同設定建置證據見 [fatal 收尾驗證](../.agent/fatal-cleanup-verification.md)，實機驗收仍未完成。
+
+2026-10-06 移除沒有現行呼叫者的 `Game::setRendererAssetAppearance`，外觀契約重載與 Pet 變更繼續使用 Session／AppearanceChangeController 的既有流程。初始外觀已由 SD 契約指定，移除固定不會進入的 FirstLaunch 選擇 gate、AppFlowController 的 FirstLaunch stage／完成操作及相關 profile 設定；Startup 結束或不播放時直接進入 Command。FirstStart 是獨立的動畫完成紀錄：播放成功後存檔、存檔失敗清除完成旗標、播放失敗進入 fatal，以及新建／重置後重新播放的行為均保留。Pet 的既有 flowFlags 及存檔版本未改動。驗證見 [FirstLaunch 清理驗證](../.agent/first-launch-cleanup-verification.md)。
 
 畫面版面目前以 Runtime Table v9 的必要 SCREEN_BLOCKS／SCREEN_RULES 載入，
 `.data` v2 Layout 產品包含完整背景、積木矩形及數值圖案。後端預合成素材，
