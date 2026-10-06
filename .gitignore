@@ -6,5 +6,6 @@
 .archify/*
 .scratch/*
 
+output
 *.ini
 !platform.ini
