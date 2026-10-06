@@ -374,23 +374,6 @@ bool decodeConsumableOutfitUnlock(const RuntimeTable &table,
     return true;
 }
 
-bool decodeSpeciesQuery(const RuntimeTable &table, uint8_t *slots,
-                        size_t capacity, size_t &count)
-{
-    const Section *species = table.find(Species);
-    if (species == nullptr)
-        return false;
-    for (uint16_t index = 0; index < species->count; ++index)
-    {
-        uint8_t record[8] = {};
-        if (count >= capacity ||
-            !readRecord(table.source, *species, index, record))
-            return false;
-        slots[count++] = record[0];
-    }
-    return true;
-}
-
 } // namespace
 
 namespace RuntimeTableInternal
@@ -461,19 +444,6 @@ bool findRuntimeTableEvolutionTarget(SdFat *sd,
         return false;
     return (tableFile.table().featureFlags & (1UL << 3)) == 0 ||
            decodeEvolutionQuery(tableFile.table(), bundleReader, activeSlots, stats, selection);
-}
-
-bool loadRuntimeTableSpecies(SdFat *sd, const AssetData::RuntimeManifest &manifest,
-                             uint8_t *species,
-                             size_t maxSpecies, size_t &speciesCount)
-{
-    speciesCount = 0;
-    if (species == nullptr || maxSpecies == 0)
-        return false;
-    RuntimeTableFile tableFile;
-    return openAppearanceSnapshot(sd, manifest, tableFile) &&
-           decodeSpeciesQuery(tableFile.table(), species, maxSpecies, speciesCount) &&
-           speciesCount != 0;
 }
 
 bool loadRuntimeTableOutfits(SdFat *sd, const AssetData::RuntimeManifest &manifest,

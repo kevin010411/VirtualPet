@@ -4,6 +4,15 @@
 #include "pet/Pet.h"
 #include "display/Renderer.h"
 
+namespace
+{
+EvolutionResult playbackFailure(const Renderer &renderer)
+{
+    return renderer.firstAssetDataError() == AssetData::BundleError::None
+        ? EvolutionResult::Failed : EvolutionResult::FatalFailure;
+}
+}
+
 EvolutionController::EvolutionController(Pet &petRef,
                                          AnimationController &animationsRef,
                                          AppearanceLoader &appearanceLoaderRef,
@@ -13,10 +22,10 @@ EvolutionController::EvolutionController(Pet &petRef,
 {
 }
 
-bool EvolutionController::check()
+EvolutionResult EvolutionController::check()
 {
     if (isActive())
-        return true;
+        return EvolutionResult::InProgress;
 
     AppearanceSelection selection = {};
     const EvolutionLookupResult result =
@@ -24,24 +33,22 @@ bool EvolutionController::check()
     if (result == EvolutionLookupResult::LoadFailed)
     {
         renderer.recordAssetDataErrorResource(appearanceLoader.firstAssetDataErrorResource());
-        renderer.showResourceError();
-        return false;
+        return EvolutionResult::FatalFailure;
     }
     if (result != EvolutionLookupResult::Found || selection.speciesSlot == pet.speciesSlot())
-        return true;
+        return EvolutionResult::NoChange;
 
     if (selection.evolutionMode == EvolutionAnimationMode::Disabled)
     {
-        if (host.enterSpecies(selection.speciesSlot, selection.outfitSlot))
-            finish();
-        else
-            renderer.showResourceError();
-        return true;
+        const AppearanceChangeResult applied = host.enterSpecies(selection.speciesSlot, selection.outfitSlot);
+        if (applied != AppearanceChangeResult::Applied)
+            return applied == AppearanceChangeResult::ConfigurationFailed
+                ? EvolutionResult::FatalFailure : EvolutionResult::Failed;
+        finish();
+        return EvolutionResult::Completed;
     }
 
-    if (!begin(selection))
-        renderer.showResourceError();
-    return true;
+    return begin(selection) ? EvolutionResult::InProgress : playbackFailure(renderer);
 }
 
 bool EvolutionController::begin(const AppearanceSelection &selection)
@@ -65,39 +72,49 @@ bool EvolutionController::begin(const AppearanceSelection &selection)
     return true;
 }
 
-bool EvolutionController::update(PlaybackResult result)
+EvolutionResult EvolutionController::update(PlaybackResult result)
 {
     if (!isActive())
-        return false;
+        return EvolutionResult::NoChange;
     if (result == PlaybackResult::PlaybackFailed)
     {
         animations.cancelAll();
+        if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+        {
+            cancel();
+            return EvolutionResult::FatalFailure;
+        }
         if (phase == Phase::SourceSegment || phase == Phase::ApplyingTarget)
         {
             cancel();
-            renderer.showResourceError();
+            return EvolutionResult::Failed;
         }
         else
             finish();
-        return true;
+        // The target appearance is already committed. Preserve the existing
+        // silent recovery to its base animation on a non-resource frame failure.
+        return EvolutionResult::Completed;
     }
-    return result == PlaybackResult::Accepted && advance();
+    return result == PlaybackResult::Accepted ? advance() : EvolutionResult::InProgress;
 }
 
-bool EvolutionController::advance()
+EvolutionResult EvolutionController::advance()
 {
     if (animations.isBusy())
-        return false;
+        return EvolutionResult::InProgress;
 
     if (phase == Phase::SourceSegment)
         phase = Phase::ApplyingTarget;
 
-    if (phase == Phase::ApplyingTarget &&
-        !host.enterSpecies(targetSpeciesSlot, targetOutfitSlot))
+    if (phase == Phase::ApplyingTarget)
     {
-        renderer.showResourceError();
-        cancel();
-        return false;
+        const AppearanceChangeResult applied = host.enterSpecies(targetSpeciesSlot, targetOutfitSlot);
+        if (applied != AppearanceChangeResult::Applied)
+        {
+            cancel();
+            return applied == AppearanceChangeResult::ConfigurationFailed
+                ? EvolutionResult::FatalFailure : EvolutionResult::Failed;
+        }
     }
 
     if (phase == Phase::ApplyingTarget && targetAnimation.valid())
@@ -107,12 +124,13 @@ bool EvolutionController::advance()
         if (animations.replace(AnimationSequence(&animation, 1)) == PlaybackResult::Accepted)
         {
             phase = Phase::TargetSegment;
-            return true;
+            return EvolutionResult::InProgress;
         }
-        renderer.showResourceError();
+        finish();
+        return playbackFailure(renderer);
     }
     finish();
-    return true;
+    return EvolutionResult::Completed;
 }
 
 void EvolutionController::finish()

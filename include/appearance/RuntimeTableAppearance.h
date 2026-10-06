@@ -15,9 +15,6 @@ bool findRuntimeTableEvolutionTarget(SdFat *sd,
                                      const ActivePetBehaviorStatSlots &activeSlots,
                                      const PetStatSnapshot &stats,
                                      AppearanceSelection &selection);
-bool loadRuntimeTableSpecies(SdFat *sd, const AssetData::RuntimeManifest &manifest,
-                             uint8_t *species,
-                             size_t maxSpecies, size_t &speciesCount);
 bool loadRuntimeTableOutfits(SdFat *sd, const AssetData::RuntimeManifest &manifest,
                              uint8_t speciesSlot,
                              uint8_t unlockMask, uint8_t *outfits, size_t maxOutfits, size_t &outfitCount);

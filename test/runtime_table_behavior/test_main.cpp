@@ -404,11 +404,6 @@ void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
     PetBehaviorConfig config = {};
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
 
-    uint8_t species[8] = {};
-    size_t speciesCount = 0;
-    assert(loadRuntimeTableSpecies(&sd, manifest, species, 8, speciesCount));
-    assert(speciesCount == 2 && species[0] == 1 && species[1] == 2);
-
     ActivePetBehaviorStatSlots activeSlots(config);
     PetStatSnapshot stats = {};
     stats.speciesSlot = 1;
@@ -516,12 +511,6 @@ void testAppearanceQueryAdapter(const std::vector<uint8_t> &fixture)
     SdAppearanceLoader loader(&sd);
     loader.configureRuntimeContract(config);
 
-    uint8_t species[8] = {};
-    size_t speciesCount = 0;
-    HostSd::openCount = 0;
-    assert(loader.loadSpecies(species, 8, speciesCount));
-    assert(speciesCount == 2 && HostSd::openCount == 1);
-
     uint8_t outfits[8] = {};
     size_t outfitCount = 0;
     HostSd::openCount = 0;
@@ -548,8 +537,9 @@ void testAppearanceQueryAdapter(const std::vector<uint8_t> &fixture)
     SdAppearanceLoader invalidLoader(&sd);
     invalidLoader.configureRuntimeContract(mismatched);
     HostSd::openCount = 0;
-    speciesCount = 0;
-    assert(!invalidLoader.loadSpecies(species, 8, speciesCount));
+    outfitCount = 0;
+    assert(!invalidLoader.loadOutfits(1, 0xE3U, outfits, 8, outfitCount));
+    assert(outfitCount == 0);
     assert(HostSd::openCount == 1);
     assert(strcmp(invalidLoader.firstAssetDataErrorResource(), "runtime") == 0);
 }
@@ -586,17 +576,15 @@ void testRuntimeSnapshotLifecycle(const std::vector<uint8_t> &fixture)
     assert(manifest.fileCrc32 == readFixtureU32(fixture, 48));
     assert(HostSd::openCount == 1 && HostSd::closeCount == 1);
 
-    uint8_t species[8] = {};
-    size_t count = 0;
     HostSd::openCount = HostSd::closeCount = 0;
-    assert(loadRuntimeTableSpecies(&sd, manifest, species, 8, count));
-    assert(count != 0 && HostSd::openCount == 1 && HostSd::closeCount == 1);
+    assert(validateRuntimeTableAppearance(&sd, manifest));
+    assert(HostSd::openCount == 1 && HostSd::closeCount == 1);
 
     auto mismatched = manifest;
     ++mismatched.schemaFingerprint;
     HostSd::openCount = HostSd::closeCount = 0;
-    assert(!loadRuntimeTableSpecies(&sd, mismatched, species, 8, count));
-    assert(count == 0 && HostSd::openCount == 1 && HostSd::closeCount == 1);
+    assert(!validateRuntimeTableAppearance(&sd, mismatched));
+    assert(HostSd::openCount == 1 && HostSd::closeCount == 1);
 
     // Repeated queries must read the current snapshot, even after a valid load.
     for (size_t length : {size_t(0), size_t(63), fixture.size() - 1})
@@ -607,11 +595,11 @@ void testRuntimeSnapshotLifecycle(const std::vector<uint8_t> &fixture)
         assert(!loadRuntimeManifest(&sd, rejected));
         assert(rejected.fileSize == 0 && rejected.schemaFingerprint == 0);
         assert(HostSd::openCount == 1 && HostSd::closeCount == 1);
-        assert(!loadRuntimeTableSpecies(&sd, manifest, species, 8, count));
-        assert(count == 0 && HostSd::openCount == 2 && HostSd::closeCount == 2);
+        assert(!validateRuntimeTableAppearance(&sd, manifest));
+        assert(HostSd::openCount == 2 && HostSd::closeCount == 2);
     }
     HostSd::mountedSize = fixture.size();
-    assert(loadRuntimeTableSpecies(&sd, manifest, species, 8, count));
+    assert(validateRuntimeTableAppearance(&sd, manifest));
 
     HostSd::mountedData = nullptr;
     HostSd::openCount = HostSd::closeCount = 0;

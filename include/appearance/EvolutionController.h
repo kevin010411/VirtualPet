@@ -3,6 +3,7 @@
 
 #include "animation/Animation.h"
 #include "appearance/AppearanceLoader.h"
+#include "appearance/AppearanceChangeController.h"
 
 class AnimationController;
 class Pet;
@@ -12,11 +13,22 @@ class Renderer;
 class EvolutionHost
 {
 public:
-    virtual bool enterSpecies(uint8_t speciesSlot, uint8_t outfitSlot) = 0;
+    virtual AppearanceChangeResult enterSpecies(uint8_t speciesSlot, uint8_t outfitSlot) = 0;
     virtual void refreshBaseAnimation() = 0;
 
 protected:
     ~EvolutionHost() = default;
+};
+
+// NoChange permits normal ticking; every other result consumes this turn.
+// Failed requests a resource message, FatalFailure additionally stops the game.
+enum class EvolutionResult : uint8_t
+{
+    NoChange,
+    InProgress,
+    Completed,
+    Failed,
+    FatalFailure,
 };
 
 class EvolutionController
@@ -26,10 +38,8 @@ public:
                         AppearanceLoader &appearanceLoader, Renderer &renderer,
                         EvolutionHost &host);
 
-    // False means a required contract lookup failed; the game must enter fatal.
-    bool check();
-    // Returns whether Evolution advanced or consumed a playback failure.
-    bool update(PlaybackResult result);
+    EvolutionResult check();
+    EvolutionResult update(PlaybackResult result);
     // Forget an interrupted Evolution. Playback cancellation belongs to its owner.
     void cancel();
     bool isActive() const;
@@ -55,7 +65,7 @@ private:
     uint8_t targetPlaybackCount = 0;
 
     bool begin(const AppearanceSelection &selection);
-    bool advance();
+    EvolutionResult advance();
     void finish();
 };
 

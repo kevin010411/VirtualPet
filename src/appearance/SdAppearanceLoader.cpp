@@ -46,12 +46,6 @@ EvolutionLookupResult SdAppearanceLoader::findEvolutionTarget(const PetStatSnaps
                                       : EvolutionLookupResult::NoTarget;
 }
 
-bool SdAppearanceLoader::loadSpecies(uint8_t *species, size_t maxSpecies, size_t &speciesCount)
-{
-    return recordQueryResult(loadRuntimeTableSpecies(
-        sd, assetManifest, species, maxSpecies, speciesCount));
-}
-
 bool SdAppearanceLoader::loadOutfits(uint8_t speciesSlot, uint8_t unlockMask, uint8_t *outfits,
                                      size_t maxOutfits, size_t &outfitCount)
 {

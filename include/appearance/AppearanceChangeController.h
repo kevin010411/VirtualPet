@@ -10,6 +10,8 @@ class Renderer;
 class AppearanceLoader;
 
 // Game distributes the loaded contract to its playback, commands and layout.
+// False is a required contract failure. Record its resource, but leave global
+// fatal policy to the caller receiving ConfigurationFailed.
 class AppearanceChangeHost
 {
 public:
@@ -21,7 +23,7 @@ protected:
 enum class AppearanceChangeResult : uint8_t
 {
     Applied,
-    ConfigurationFailed,
+    ConfigurationFailed, // Fatal: required runtime configuration is unavailable.
     PetStateRejected,
     UnlockFailed,
     SaveFailed,

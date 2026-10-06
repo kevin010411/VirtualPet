@@ -10,6 +10,7 @@
 #include "appearance/AppearanceChangeController.h"
 #include "pet/PetSaveController.h"
 #include "resources/RuntimeContractLoader.h"
+#include "pet/PetSession.h"
 
 class AnimationController;
 class CommandController;
@@ -23,7 +24,7 @@ class PetBehaviorRuntime;
 class PetStorage;
 class Renderer;
 
-class Game : private EvolutionHost, private AppearanceChangeHost
+class Game : private EvolutionHost, private PetSessionHost
 {
 public:
     Game(Pet &pet, PetStorage &petStorage, Renderer &renderer, AppearanceLoader &appearanceLoader);
@@ -38,7 +39,6 @@ public:
     void loop_game();
     void requestFullRedraw();
     void redrawAllNow();
-    void setRendererAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     bool saveNow();
     bool startStartupAnimation();
     bool hasTransientAnimation() const;
@@ -53,11 +53,10 @@ public:
     bool setStageDaysForCheat(uint32_t value);
 
 private:
-    enum class InitialPetStateResult : uint8_t
+    enum class KeyDirection : uint8_t
     {
-        Failed,
-        Fresh,
-        Restored,
+        Left,
+        Right,
     };
 
     enum class RuntimeLoadState : uint8_t
@@ -67,19 +66,9 @@ private:
         Failed,
     };
 
-    // Result of prepare_game(), consumed after platform/display setup finishes.
-    enum class PreparationState : uint8_t
-    {
-        NotPrepared,
-        Ready,
-        RuntimeFailed,
-        PetStateFailed,
-    };
-
     static constexpr unsigned long gameTick = 2000;
 
     Pet &pet;
-    PetStorage &petStorage;
     Renderer &renderer;
     AppearanceLoader &appearanceLoader;
     AppFlowController flow;
@@ -89,6 +78,7 @@ private:
     std::unique_ptr<AnimationController> animations;
     std::unique_ptr<EvolutionController> evolution;
     std::unique_ptr<PetBehaviorRuntime> petBehaviorRuntime;
+    PetSession petSession;
     std::unique_ptr<CommandExecutor> commandExecutor;
     std::unique_ptr<CommandController> commands;
     std::unique_ptr<LayoutRenderer> layout;
@@ -105,33 +95,24 @@ private:
     bool pendingFirstStartCompletion = false;
     bool initialized = false;
     RuntimeLoadState runtimeLoadState = RuntimeLoadState::Unloaded;
-    PreparationState preparationState = PreparationState::NotPrepared;
-#if ENABLE_DEBUG
-    const char *startupDebugStage = nullptr;
-#endif
-    // Keep the validated startup selection for fresh state and in-session reset.
-    uint8_t initialSpeciesSlot = 0;
-    uint8_t initialOutfitSlot = 0;
-
     bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot) override;
-    bool activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
+    bool activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot) override;
     bool refreshOutfitUnlockMask(bool initialize);
-    bool enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot) override;
-    bool reportSpeciesChangeResult(AppearanceChangeResult result);
+    AppearanceChangeResult enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot) override;
     void refreshBaseAnimation() override;
     PlaybackTickResult tickPlayback(unsigned long now);
+    bool completePlaybackTick(const PlaybackTickResult &playbackResult);
+    void routeDirectionKey(KeyDirection direction);
     void handleCommandResult(const CommandResult &result);
-    void completeFirstLaunchIfNeeded(AppCommandId commandId);
-    InitialPetStateResult loadInitialPetState(bool allowSavedState,
-                                               bool showError = true);
     void maybeTickPet();
-    void handleEvolution();
-    bool isFirstLaunchSelectionPending() const;
-    bool startFirstLaunchRequiredCommand();
+    EvolutionResult handleEvolution();
+    void handleEvolutionResult(EvolutionResult result);
+    // State-only: prepare runs before display initialization.
+    void enterFatalState();
+    void enterRuntimeFatal();
     bool beginStartupAnimation();
     void handlePlaybackResult(PlaybackResult playbackResult);
     void completeFirstStartIfReady(const PlaybackTickResult &playbackResult);
-    void enterFirstLaunch();
     void enterCommand();
 };
 

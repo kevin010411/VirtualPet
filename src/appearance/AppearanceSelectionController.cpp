@@ -1,7 +1,5 @@
 #include "appearance/AppearanceSelectionController.h"
 
-#include <string.h>
-#include "common/AppProfile.h"
 #include "display/Renderer.h"
 #include "display/LayoutRenderer.h"
 
@@ -15,7 +13,6 @@ AppearanceSelectionController::AppearanceSelectionController(Renderer &rendererR
 bool AppearanceSelectionController::start(uint8_t sourceSpeciesSlot, uint8_t currentOutfitSlot,
                                           uint8_t sourceUnlockMask)
 {
-    selectingSpecies = false;
     speciesSlot = sourceSpeciesSlot;
     unlockMask = sourceUnlockMask;
     outfitOptionCount = 0;
@@ -45,60 +42,9 @@ bool AppearanceSelectionController::start(uint8_t sourceSpeciesSlot, uint8_t cur
     return true;
 }
 
-bool AppearanceSelectionController::startSpecies(uint8_t currentSpeciesSlot, const PetStatSnapshot &stats)
-{
-    selectingOutfit = false;
-    speciesOptionCount = 0;
-    selectedSpeciesIndex = 0;
-    hasSelectedOutfitPreview = false;
-
-    if (!appearanceLoader.loadSpecies(speciesOptions, maxSpeciesOptions, speciesOptionCount))
-        return false;
-
-    for (size_t i = 0; i < speciesOptionCount; ++i)
-    {
-        size_t defaultOutfitCount = 0;
-        uint8_t resolvedMask = 0;
-        speciesDefaultOutfits[i] = 0;
-        PetStatSnapshot targetStats = stats;
-        if (speciesOptions[i] != currentSpeciesSlot)
-            targetStats.stage_days = 0;
-        uint8_t choices[maxOutfitOptions] = {};
-        if (appearanceLoader.resolveOutfitUnlockMask(
-                speciesOptions[i], targetStats, 0, true, resolvedMask) &&
-            appearanceLoader.loadOutfits(speciesOptions[i], resolvedMask,
-                                         choices, maxOutfitOptions, defaultOutfitCount))
-        {
-            for (size_t choice = 0; choice < defaultOutfitCount; ++choice)
-                if ((resolvedMask & (1U << (choices[choice] - 1U))) != 0)
-                {
-                    speciesDefaultOutfits[i] = choices[choice];
-                    break;
-                }
-        }
-        if (speciesOptions[i] == currentSpeciesSlot)
-            selectedSpeciesIndex = i;
-    }
-
-    if (speciesOptionCount == 0)
-        return false;
-
-    selectingSpecies = true;
-    outfitPreviewFrame = 1;
-    lastOutfitPreviewFrameTime = 0;
-    dirtyOutfitPreview = true;
-    loadSelectedSpeciesPreview();
-    return true;
-}
-
 bool AppearanceSelectionController::isActive() const
 {
-    return selectingOutfit || selectingSpecies;
-}
-
-bool AppearanceSelectionController::isSelectingSpecies() const
-{
-    return selectingSpecies;
+    return selectingOutfit;
 }
 
 void AppearanceSelectionController::onLeft()
@@ -128,30 +74,10 @@ bool AppearanceSelectionController::onConfirm(uint8_t &selectedOutfitSlot, bool 
     return true;
 }
 
-bool AppearanceSelectionController::onConfirmSpecies(uint8_t &selectedSpeciesSlot,
-                                                     uint8_t &selectedOutfitSlot)
-{
-    if (speciesOptionCount == 0 || selectedSpeciesIndex >= speciesOptionCount ||
-        speciesDefaultOutfits[selectedSpeciesIndex] == 0)
-    {
-        exit();
-        return false;
-    }
-
-    selectedSpeciesSlot = speciesOptions[selectedSpeciesIndex];
-    selectedOutfitSlot = speciesDefaultOutfits[selectedSpeciesIndex];
-    playSelectedChooseAnimation();
-    exit();
-    return true;
-}
-
 void AppearanceSelectionController::exit()
 {
     selectingOutfit = false;
-    selectingSpecies = false;
-    speciesOptionCount = 0;
     outfitOptionCount = 0;
-    selectedSpeciesIndex = 0;
     selectedOutfitIndex = 0;
     hasSelectedOutfitPreview = false;
     selectedOutfitPreview = {};
@@ -223,73 +149,10 @@ bool AppearanceSelectionController::loadSelectedOutfitPreview()
     return hasSelectedOutfitPreview;
 }
 
-bool AppearanceSelectionController::loadSelectedSpeciesPreview()
-{
-    hasSelectedOutfitPreview = false;
-    selectedOutfitPreview = {};
-    outfitPreviewFrame = 1;
-    if (selectedSpeciesIndex >= speciesOptionCount || speciesDefaultOutfits[selectedSpeciesIndex] == 0)
-        return false;
-
-    hasSelectedOutfitPreview = appearanceLoader.findOutfitPreview(
-        speciesOptions[selectedSpeciesIndex],
-        speciesDefaultOutfits[selectedSpeciesIndex], false,
-        selectedOutfitPreview);
-    if (hasSelectedOutfitPreview)
-    {
-        selectedOutfitPreview.frameCount = renderer.frameCountFor(selectedOutfitPreview.animation);
-        outfitPreviewInterval = renderer.frameIntervalFor(
-            selectedOutfitPreview.animation, 0, frameIntervalSlow);
-        hasSelectedOutfitPreview = selectedOutfitPreview.frameCount > 0;
-    }
-    else
-    {
-        outfitPreviewInterval = frameIntervalSlow;
-    }
-    dirtyOutfitPreview = true;
-    return hasSelectedOutfitPreview;
-}
-
-void AppearanceSelectionController::playSelectedChooseAnimation()
-{
-#if ENABLE_OUTFIT_CHOOSE_ANIMATION
-    if (!hasSelectedOutfitPreview)
-        return;
-
-    if (!preparePreviewLayout())
-        return;
-
-    const unsigned long interval = renderer.frameIntervalFor(
-        selectedOutfitPreview.animation, 0, frameIntervalSlow);
-    const uint16_t frameCount = renderer.frameCountFor(selectedOutfitPreview.animation);
-    for (uint16_t frame = 1; frame <= frameCount; ++frame)
-    {
-        renderer.ShowAnimationFrame(selectedOutfitPreview.animation, 0, frame);
-        if (frame < frameCount)
-            delay(interval);
-    }
-#endif
-}
-
 void AppearanceSelectionController::changeSelection(int delta)
 {
     if (!isActive())
         return;
-
-    if (selectingSpecies)
-    {
-        if (speciesOptionCount == 0)
-            return;
-
-        if (delta < 0)
-            selectedSpeciesIndex = (selectedSpeciesIndex == 0) ? (speciesOptionCount - 1) : (selectedSpeciesIndex - 1);
-        else
-            selectedSpeciesIndex = (selectedSpeciesIndex + 1) % speciesOptionCount;
-
-        loadSelectedSpeciesPreview();
-        lastOutfitPreviewFrameTime = 0;
-        return;
-    }
 
     if (outfitOptionCount == 0)
         return;

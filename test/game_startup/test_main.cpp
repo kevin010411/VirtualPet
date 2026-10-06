@@ -19,7 +19,14 @@ namespace
 {
 struct Scenario
 {
+    bool firstStartAvailable = true;
+    bool rejectFirstStartQueue = false;
+    int firstStartFrameQueries = 0;
     bool commandAction = false;
+    bool commandOutfit = false;
+    int previewQueries = 0;
+    int playbackDraws = 0;
+    bool layoutSucceeds = true;
     bool initialLoadSucceeds = true;
     bool initialAppearanceResolved = false;
     bool reloadSucceeds = true;
@@ -70,6 +77,7 @@ struct Scenario
 };
 
 Scenario *scenario = nullptr;
+void assertFatalBlocksPublicEntries(Game &game, Pet &pet, Scenario &data);
 
 void copyName(char *destination, size_t capacity, const char *source)
 {
@@ -106,12 +114,18 @@ public:
         }
         return scenario->evolutionResult;
     }
-    bool loadSpecies(uint8_t *, size_t, size_t &count) override { count = 0; return true; }
-    bool loadOutfits(uint8_t, uint8_t, uint8_t *, size_t, size_t &count) override { count = 0; return true; }
+    bool loadOutfits(uint8_t, uint8_t, uint8_t *outfits, size_t, size_t &count) override
+    {
+        count = scenario->commandOutfit ? 2 : 0;
+        if (count) { outfits[0] = 1; outfits[1] = 2; }
+        return true;
+    }
     bool findOutfitPreview(uint8_t species, uint8_t outfit, bool, OutfitPreview &preview) override
     {
+        ++scenario->previewQueries;
         preview.speciesSlot = species;
         preview.outfitSlot = outfit;
+        preview.animation = {species, outfit, 5};
         return scenario->previewSucceeds;
     }
     bool resolveOutfitUnlockMask(uint8_t, const PetStatSnapshot &stats, uint8_t current,
@@ -150,6 +164,238 @@ public:
 private:
     Renderer &renderer;
 };
+
+class SessionHost : public PetSessionHost
+{
+public:
+    SessionHost(PetBehaviorConfig &configRef, Renderer &rendererRef,
+                AnimationController &animationsRef, AppearanceLoader &loaderRef)
+        : config(configRef), renderer(rendererRef), animations(animationsRef), loader(loaderRef) {}
+    bool activateLoadedAppearance(uint8_t species, uint8_t outfit) override
+    {
+        if (!renderer.configureAssetBundle(config.assetManifest.bundleId)) return false;
+        renderer.setAssetAppearance(species, outfit);
+        loader.configureRuntimeContract(config);
+        animations.configureRuntimeContract(config);
+        return true;
+    }
+    bool configureActiveAppearance(uint8_t species, uint8_t outfit) override
+    {
+        return loadRuntimeContract(renderer.sdCard(), species, outfit, config) &&
+               activateLoadedAppearance(species, outfit);
+    }
+private:
+    PetBehaviorConfig &config;
+    Renderer &renderer;
+    AnimationController &animations;
+    AppearanceLoader &loader;
+};
+
+void testPetSession()
+{
+    // Exercise the data-flow interface without Game, layout or input setup.
+    // Fresh, same/different restore, schema rejection, preview rejection and
+    // changed unlock mask all finish with a coherent state, then reset to initial.
+    for (int mode = 0; mode < 6; ++mode)
+    {
+        Scenario data;
+        scenario = &data;
+        data.commandAction = true;
+        data.hasSave = mode != 0;
+        data.savedPet.setSchemaFingerprint(mode == 3 ? 456 : 123);
+        data.savedPet.setSpeciesSlot(mode == 2 ? 2 : 1);
+        data.savedPet.setStageDays(9);
+        data.savedPet.setCustomStat(0, 8);
+        data.previewSucceeds = mode != 4;
+        data.replaceUnlockMask = mode == 5;
+        data.resolvedUnlockMask = 3;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader loader;
+        AnimationController animations(renderer);
+        PetBehaviorConfig config = {};
+        PetBehaviorRuntime runtime(config, pet, animations, renderer);
+        PetSaveController saves(pet, storage, renderer);
+        SessionHost host(config, renderer, animations, loader);
+        AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
+        PetSession session(pet, storage, renderer, loader, config, runtime, changes, host);
+        assert(session.state() == PetSession::State::NotPrepared &&
+               session.reset() == AppearanceChangeResult::PetStateRejected);
+        assert(data.initialLoads == 0 && data.saves == 0);
+        assert(session.prepare(&sd) && session.state() == PetSession::State::Ready);
+        const bool restored = mode == 1 || mode == 2 || mode == 5;
+        assert(pet.stageDays() == (restored ? 9u : 0u));
+        assert(pet.customStat(0) == (restored ? 8 : 2));
+        assert(data.lastUnlockInitialize == !restored);
+        assert(data.reloads == (mode == 2 ? 1 : 0));
+        assert(data.saves == (!restored || mode == 5 ? 1 : 0));
+        assert(data.discards == (mode == 4 ? 1 : 0));
+        const int reloads = data.reloads;
+        const int saveCount = data.saves;
+        assert(session.reset() == AppearanceChangeResult::Applied);
+        assert(pet.speciesSlot() == 1 && pet.outfitSlot() == 1);
+        assert(pet.stageDays() == 0 && pet.customStat(0) == 2);
+        assert(pet.persistentState().schemaFingerprint == 123);
+        assert(data.reloads == reloads + 1 && data.saves == saveCount + 1);
+        assert(data.lastUnlockInitialize);
+        data.reloadSucceeds = false;
+        const int messages = data.resourceShows;
+        assert(session.reset() == AppearanceChangeResult::ConfigurationFailed);
+        assert(data.resourceShows == messages); // Game owns fatal presentation.
+    }
+    const PetSession::State expected[] = {
+        PetSession::State::ContractFailed, PetSession::State::ActiveAppearanceFailed,
+        PetSession::State::ActiveAppearanceFailed, PetSession::State::PetStateFailed,
+        PetSession::State::RestoredAppearanceFailed, PetSession::State::UnlockFailed,
+        PetSession::State::UnlockFailed,
+    };
+    for (int mode = 0; mode < 7; ++mode)
+    {
+        Scenario data;
+        scenario = &data;
+        data.initialLoadSucceeds = mode > 1;
+        data.initialAppearanceResolved = mode == 1;
+        data.bundleSucceeds = mode != 2;
+        data.initialSpecies = mode == 3 ? 0 : 1;
+        data.hasSave = mode == 4;
+        data.savedPet.setSchemaFingerprint(123);
+        data.savedPet.setSpeciesSlot(2);
+        data.reloadSucceeds = mode != 4;
+        data.unlockSucceeds = mode != 5;
+        data.saveSucceeds = mode != 6;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader loader;
+        AnimationController animations(renderer);
+        PetBehaviorConfig config = {};
+        PetBehaviorRuntime runtime(config, pet, animations, renderer);
+        PetSaveController saves(pet, storage, renderer);
+        SessionHost host(config, renderer, animations, loader);
+        AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
+        PetSession session(pet, storage, renderer, loader, config, runtime, changes, host);
+        assert(!session.prepare(&sd) && session.state() == expected[mode]);
+        assert(session.errorStage() != nullptr &&
+               session.reset() == AppearanceChangeResult::PetStateRejected);
+        const int loads = data.initialLoads;
+        if (mode != 3)
+        {
+            assert(!session.prepare(&sd));
+            assert(data.initialLoads == loads); // Terminal runtime failure.
+        }
+        else
+        {
+            data.initialSpecies = 1;
+            assert(session.prepare(&sd)); // Pet-state failure remains retryable.
+        }
+    }
+}
+
+class EvolutionTestHost : public EvolutionHost
+{
+public:
+    AppearanceChangeResult result = AppearanceChangeResult::Applied;
+    int entries = 0;
+    int refreshes = 0;
+    AppearanceChangeResult enterSpecies(uint8_t, uint8_t) override
+    {
+        ++entries;
+        return result;
+    }
+    void refreshBaseAnimation() override { ++refreshes; }
+};
+
+void testExportedEvolutionPlaybackCounts()
+{
+    for (const uint8_t sourceCount : {1, 3, 5})
+    for (const uint8_t targetCount : {1, 4, 5})
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.evolutionResult = EvolutionLookupResult::Found;
+        data.evolutionMode = EvolutionAnimationMode::TwoPhase;
+        data.sourcePlaybackCount = sourceCount;
+        data.targetPlaybackCount = targetCount;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, appearance);
+        assert(game.setup_game());
+        assert(game.setStageDaysForCheat(1));
+        const int savesBefore = data.saves;
+        for (uint8_t index = 0; index < sourceCount; ++index)
+        {
+            assert(pet.speciesSlot() == 1 && data.saves == savesBefore);
+            game.loop_game();
+        }
+        assert(data.sourceDraws == sourceCount && pet.speciesSlot() == 2);
+        assert(data.saves == savesBefore + 1 && data.targetDraws == 0);
+        for (uint8_t index = 0; index < targetCount; ++index)
+            game.loop_game();
+        assert(data.targetDraws == targetCount && !game.hasTransientAnimation());
+        assert(data.reloads == 1 && data.saves == savesBefore + 1);
+    }
+}
+
+void testEvolutionResults()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    pet.setSpeciesSlot(1);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader loader;
+    AnimationController animations(renderer);
+    EvolutionTestHost host;
+    EvolutionController evolution(pet, animations, loader, renderer, host);
+    assert(evolution.check() == EvolutionResult::NoChange);
+    assert(evolution.update(PlaybackResult::Accepted) == EvolutionResult::NoChange);
+    data.evolutionResult = EvolutionLookupResult::LoadFailed;
+    assert(evolution.check() == EvolutionResult::FatalFailure);
+    assert(host.entries == 0 && data.resourceShows == 0);
+    data.evolutionResult = EvolutionLookupResult::Found;
+    data.evolutionSpecies = 1;
+    assert(evolution.check() == EvolutionResult::NoChange);
+    data.evolutionSpecies = 2;
+    for (const auto result : {AppearanceChangeResult::PetStateRejected,
+                             AppearanceChangeResult::UnlockFailed,
+                             AppearanceChangeResult::SaveFailed,
+                             AppearanceChangeResult::ConfigurationFailed,
+                             AppearanceChangeResult::Applied})
+    {
+        host.result = result;
+        const EvolutionResult expected = result == AppearanceChangeResult::Applied
+            ? EvolutionResult::Completed : result == AppearanceChangeResult::ConfigurationFailed
+            ? EvolutionResult::FatalFailure : EvolutionResult::Failed;
+        assert(evolution.check() == expected);
+        assert(!evolution.isActive() && data.resourceShows == 0);
+    }
+    assert(host.refreshes == 1);
+    data.evolutionMode = EvolutionAnimationMode::Single;
+    data.sourceAvailable = false;
+    assert(evolution.check() == EvolutionResult::Failed && !evolution.isActive());
+    data.sourceAvailable = true;
+    assert(evolution.check() == EvolutionResult::InProgress && evolution.isActive());
+    const int entries = host.entries;
+    assert(evolution.check() == EvolutionResult::InProgress);
+    assert(evolution.update(PlaybackResult::Accepted) == EvolutionResult::InProgress);
+    assert(host.entries == entries);
+    assert(evolution.update(PlaybackResult::PlaybackFailed) == EvolutionResult::Failed);
+    assert(!evolution.isActive() && data.resourceShows == 0);
+    // Contract failure after the source segment is returned to Game unchanged.
+    assert(evolution.check() == EvolutionResult::InProgress);
+    animations.cancelAll();
+    host.result = AppearanceChangeResult::ConfigurationFailed;
+    assert(evolution.update(PlaybackResult::Accepted) == EvolutionResult::FatalFailure);
+    assert(!evolution.isActive() && data.resourceShows == 0);
+}
 
 void testAppearanceChanges()
 {
@@ -436,10 +682,12 @@ void testInitialLoadFailure(bool appearanceResolved)
     Game game(pet, storage, renderer, appearance);
 
     assert(!game.prepare_game());
+    assert(data.resourceShows == 0); // TFT is initialized between prepare and finish.
     // A failed contract cannot be retried even before finish displays the error.
     data.initialLoadSucceeds = true;
     assert(!game.prepare_game());
     assert(data.initialLoads == 1);
+    assert(data.resourceShows == 0);
     assert(!game.finish_setup_game());
     assert(strcmp(data.lastShownResource,
                   appearanceResolved ? "behavior" : "runtime.bin") == 0);
@@ -746,7 +994,10 @@ void testEvolutionInterrupted(bool battery, bool afterCommit)
     {
         assert(game.resetPet());
         game.redrawAllNow();
-        assert(pet.speciesSlot() == 1 && data.saves == savesBefore + 1);
+        // FirstStart completes on this redraw and persists its separate record.
+        assert(pet.speciesSlot() == 1 &&
+               data.saves == savesBefore + 1 + ENABLE_FIRST_START_ANIMATION);
+        assert(pet.isFirstStartCompleted() == static_cast<bool>(ENABLE_FIRST_START_ANIMATION));
     }
     assert(data.targetDraws == 0);
     assert(game.setStageDaysForCheat(1));
@@ -953,18 +1204,132 @@ void testStatusReadsActionCommittedPet()
     assert(animations.currentVersionIndex() == 1);
     assert(data.saves == 0);
 }
-void testExportedEvolutionPlaybackCounts()
+#if ENABLE_FIRST_START_ANIMATION
+void testFirstStartRecord()
 {
-    for (const uint8_t sourceCount : {1, 3, 5})
-    for (const uint8_t targetCount : {1, 4, 5})
+    // Completion, failed save, failed playback and missing animation remain
+    // distinct from the retired FirstLaunch selection gate.
+    for (int mode = 0; mode < 5; ++mode)
     {
-        hostMillis = 0;
         Scenario data;
         scenario = &data;
-        data.evolutionResult = EvolutionLookupResult::Found;
-        data.evolutionMode = EvolutionAnimationMode::TwoPhase;
-        data.sourcePlaybackCount = sourceCount;
-        data.targetPlaybackCount = targetCount;
+        data.commandAction = true;
+        hostMillis = 0;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, appearance);
+        assert(game.prepare_game() && game.finish_setup_game());
+        assert(!pet.isFirstStartCompleted());
+        assert(!pet.isFirstLaunchComplete());
+        const int initialSaves = data.saves;
+        data.saveSucceeds = mode != 1;
+        data.failedAnimationId = mode == 2 ? 6 : 0;
+        data.firstStartAvailable = mode != 3;
+        data.rejectFirstStartQueue = mode == 4;
+        assert(game.startStartupAnimation() == (mode < 3));
+        if (mode < 3)
+        {
+            game.loop_game();
+            assert(pet.isFirstStartCompleted() == (mode == 0));
+            assert(data.saves == initialSaves + (mode < 2 ? 1 : 0));
+            assert(data.savedPet.isFirstStartCompleted() == (mode == 0));
+        }
+        else
+        {
+            assert(data.saves == initialSaves);
+            assert(!pet.isFirstStartCompleted());
+        }
+        if (mode >= 2)
+            assertFatalBlocksPublicEntries(game, pet, data);
+        assert(!pet.isFirstLaunchComplete());
+        if (mode == 0)
+        {
+            // After startup, input reaches commands without a selection gate.
+            hostMillis = 2000;
+            game.loop_game();
+            game.OnConfirmKey();
+            assert(pet.customStat(0) == 8);
+            // Restore keeps the completion record, while reset starts a new life.
+            Game restored(pet, storage, renderer, appearance);
+            assert(restored.prepare_game() && restored.finish_setup_game());
+            assert(pet.isFirstStartCompleted());
+            assert(!restored.startStartupAnimation());
+            const int completedSaves = data.saves;
+            assert(restored.resetPet());
+            assert(!pet.isFirstStartCompleted());
+            restored.loop_game();
+            assert(pet.isFirstStartCompleted());
+            assert(data.saves == completedSaves + 2);
+        }
+    }
+}
+
+void testResetStartupFatal()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    assert(game.setup_game());
+    data.firstStartAvailable = false;
+    assert(!game.resetPet());
+    assert(!pet.isFirstStartCompleted());
+    assertFatalBlocksPublicEntries(game, pet, data);
+}
+#endif
+void assertFatalBlocksPublicEntries(Game &game, Pet &pet, Scenario &data)
+{
+    assert(!game.hasTransientAnimation());
+    const int draws = data.playbackDraws;
+    const int previews = data.previewQueries;
+    const int saves = data.saves;
+    const int reloads = data.reloads;
+    const int lookups = data.evolutionLookups;
+    const uint32_t days = pet.stageDays();
+    const uint8_t outfit = pet.outfitSlot();
+    game.OnLeftKey();
+    game.OnRightKey();
+    game.OnConfirmKey();
+    game.requestFullRedraw();
+    game.redrawAllNow();
+    game.startBatteryAnimation();
+    game.updateBatteryAnimation(9000);
+    game.endBatteryAnimation();
+    hostMillis = 9000;
+    game.loop_game();
+    assert(!game.startStartupAnimation());
+    assert(!game.saveNow());
+    assert(!game.resetPet());
+    assert(!game.setStageDaysForCheat(days + 1));
+    assert(!game.prepare_game());
+    assert(!game.finish_setup_game()); // A Ready Session must not reopen a fatal Game.
+    assert(!game.hasTransientAnimation());
+    assert(data.playbackDraws == draws && data.previewQueries == previews);
+    assert(data.saves == saves && data.reloads == reloads && data.evolutionLookups == lookups);
+    assert(pet.stageDays() == days && pet.outfitSlot() == outfit);
+}
+
+void testFatalPublicEntries()
+{
+    // Both loop's pre-existing resource error and playback's resource error
+    // must stop queued playback. Also cover an active appearance menu.
+    for (int mode = 0; mode < 3; ++mode)
+    {
+#if !ENABLE_COMMAND_OUTFIT
+        if (mode == 2) continue;
+#endif
+        Scenario data;
+        scenario = &data;
+        hostMillis = 0;
+        data.commandAction = mode != 2;
+        data.commandOutfit = mode == 2;
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
@@ -972,22 +1337,49 @@ void testExportedEvolutionPlaybackCounts()
         FakeAppearanceLoader appearance;
         Game game(pet, storage, renderer, appearance);
         assert(game.setup_game());
-        assert(game.setStageDaysForCheat(1));
-        const int savesBefore = data.saves;
-        for (uint8_t index = 0; index < sourceCount; ++index)
+        game.OnConfirmKey();
+        if (mode == 2)
         {
-            assert(pet.speciesSlot() == 1 && data.saves == savesBefore);
+            const int previews = data.previewQueries;
+            game.OnRightKey();
+            assert(data.previewQueries == previews + 1); // Menu is actually active.
+        }
+        else
+            assert(game.hasTransientAnimation());
+        data.assetError = true;
+        if (mode == 1)
+        {
+            data.failedAnimationId = 1;
+            game.redrawAllNow();
+        }
+        else
+        {
+            data.frameFailed = true;
+            renderer.recordAssetDataErrorResource("shared.data");
             game.loop_game();
         }
-        assert(data.sourceDraws == sourceCount && pet.speciesSlot() == 2);
-        assert(data.saves == savesBefore + 1 && data.targetDraws == 0);
-        for (uint8_t index = 0; index < targetCount; ++index)
-            game.loop_game();
-        assert(data.targetDraws == targetCount && !game.hasTransientAnimation());
-        assert(data.reloads == 1 && data.saves == savesBefore + 1);
+        assertFatalBlocksPublicEntries(game, pet, data);
     }
 }
 
+void testFinishLayoutFailure()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    assert(game.prepare_game());
+    assert(data.resourceShows == 0);
+    data.layoutSucceeds = false;
+    assert(!game.finish_setup_game());
+    assert(data.resourceShows == 1);
+    data.layoutSucceeds = true;
+    assertFatalBlocksPublicEntries(game, pet, data);
+}
 } // namespace
 
 bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
@@ -1008,6 +1400,8 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
     config.activeSpeciesSlot = selection.speciesSlot;
     config.activeOutfitSlot = selection.outfitSlot;
     config.idleAnimation = {selection.speciesSlot, selection.outfitSlot, 5};
+    config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::FirstStart)] =
+        {selection.speciesSlot, selection.outfitSlot, 6};
     if (scenario->commandAction)
     {
         config.stats[0] = {true, 2, 0, 10, 0};
@@ -1020,6 +1414,13 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
         config.actionEffectCount = 1;
         config.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
         config.buttons[0] = {true, PetBehaviorButtonKind::UserAction, 0, RuntimeSystemCommandId::Status};
+        config.screenBlockCount = 1;
+        config.screenBlocks[0].kind = ScreenBlockKind::Button;
+        config.screenBlocks[0].source = 1;
+    }
+    if (scenario->commandOutfit)
+    {
+        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::ChangeOutfit};
         config.screenBlockCount = 1;
         config.screenBlocks[0].kind = ScreenBlockKind::Button;
         config.screenBlocks[0].source = 1;
@@ -1080,14 +1481,19 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation, uint8_t, b
     scenario->displayedAnimation = animation;
     return true;
 }
-bool Renderer::currentLayoutId(uint8_t &layout) const { layout = 0; return true; }
+bool Renderer::currentLayoutId(uint8_t &layout) const { layout = 0; return scenario->layoutSucceeds; }
 bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &,
                                      const AssetData::AnimationRef &, uint8_t, uint8_t, uint16_t) { return true; }
 bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &, uint8_t,
-                                  uint16_t, int, int, int, uint16_t, uint16_t) { return true; }
+                                  uint16_t, int, int, int, uint16_t, uint16_t)
+{
+    ++scenario->playbackDraws;
+    return true;
+}
 bool Renderer::willRestartAnimationLoop() const { return false; }
 bool Renderer::advanceAnimationFrame()
 {
+    ++scenario->playbackDraws;
     const uint8_t id = scenario->displayedAnimation.animationId;
     if (id == 3) ++scenario->sourceDraws;
     if (id == 4) ++scenario->targetDraws;
@@ -1100,6 +1506,12 @@ bool Renderer::advanceAnimationFrame()
 bool Renderer::animationFrameFailed() const { return scenario->frameFailed; }
 uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &animation, uint8_t)
 {
+    if (animation.animationId == 6)
+    {
+        ++scenario->firstStartFrameQueries;
+        if (!scenario->firstStartAvailable ||
+            (scenario->rejectFirstStartQueue && scenario->firstStartFrameQueries >= 2)) return 0;
+    }
     if (animation.animationId == 3)
     {
         ++scenario->sourceFrameQueries;
@@ -1142,6 +1554,14 @@ SdFat *Renderer::sdCard() const { return SD; }
 
 int main()
 {
+    testFatalPublicEntries();
+    testFinishLayoutFailure();
+#if ENABLE_FIRST_START_ANIMATION
+    testFirstStartRecord();
+    testResetStartupFatal();
+#endif
+    testPetSession();
+    testEvolutionResults();
     testExportedEvolutionPlaybackCounts();
     testAppearanceChanges();
     testUnlockRefreshAndSaveCadence();

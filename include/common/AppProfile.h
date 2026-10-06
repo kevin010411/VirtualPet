@@ -86,14 +86,6 @@
 #define APP_MAX_PET_STATS 6
 #endif
 
-#ifndef APP_FIRST_LAUNCH_REQUIRED_COMMAND
-#define APP_FIRST_LAUNCH_REQUIRED_COMMAND APP_COMMAND_CHANGE_OUTFIT
-#endif
-
-#if APP_FIRST_LAUNCH_REQUIRED_COMMAND == APP_COMMAND_CHANGE_SPECIES
-#error "First Launch cannot use retired direct Species switching; select an Outfit on the Initial Species."
-#endif
-
 #if ENABLE_COMMAND_OUTFIT && !ENABLE_APPEARANCE_SELECTION
 #error "Appearance selection must be enabled when an appearance command is enabled."
 #endif

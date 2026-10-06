@@ -17,16 +17,17 @@
 
 Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AppearanceLoader &appearanceLoaderRef)
     : pet(petRef),
-      petStorage(petStorageRef),
       renderer(rendererRef),
       appearanceLoader(appearanceLoaderRef),
-      petSaves(pet, petStorage, renderer),
-      appearanceChanges(pet, petSaves, petStorage, renderer, appearanceLoader,
+      petSaves(pet, petStorageRef, renderer),
+      appearanceChanges(pet, petSaves, petStorageRef, renderer, appearanceLoader,
                         static_cast<AppearanceChangeHost &>(*this)),
       animations(std::make_unique<AnimationController>(renderer)),
       evolution(std::make_unique<EvolutionController>(
           pet, *animations, appearanceLoader, renderer, static_cast<EvolutionHost &>(*this))),
       petBehaviorRuntime(std::make_unique<PetBehaviorRuntime>(petBehaviorConfig, pet, *animations, renderer)),
+      petSession(pet, petStorageRef, renderer, appearanceLoader, petBehaviorConfig,
+                 *petBehaviorRuntime, appearanceChanges, static_cast<PetSessionHost &>(*this)),
       commandExecutor(std::make_unique<CommandExecutor>(
           pet, *animations, *petBehaviorRuntime)),
       commands(std::make_unique<CommandController>()),
@@ -51,11 +52,8 @@ void Game::loop_game()
         return;
 
     if (renderer.firstAssetDataError() != AssetData::BundleError::None)
-        flow.enterFatalError();
-
-    if (flow.isFatalError())
     {
-        renderer.showResourceError();
+        enterRuntimeFatal();
         return;
     }
 
@@ -81,12 +79,7 @@ void Game::loop_game()
             return;
 
         if (flow.isStartup() && !animations->isBusy())
-        {
-            if (isFirstLaunchSelectionPending())
-                enterFirstLaunch();
-            else
-                enterCommand();
-        }
+            enterCommand();
     }
 
 #if ENABLE_GUESS_GAME
@@ -120,16 +113,8 @@ void Game::loop_game()
 #endif
 
     const PlaybackTickResult playbackResult = tickPlayback(now);
-    handlePlaybackResult(playbackResult.result);
-    completeFirstStartIfReady(playbackResult);
-    if (playbackResult.result == PlaybackResult::Accepted)
-        evolution->update(PlaybackResult::Accepted);
-
-    if (flow.isFatalError())
-    {
-        renderer.showResourceError();
+    if (!completePlaybackTick(playbackResult))
         return;
-    }
 
     layout->updateValues(pet.statSnapshot());
     if (dirtySelect)
@@ -144,6 +129,8 @@ void Game::loop_game()
 
 void Game::requestFullRedraw()
 {
+    if (!initialized)
+        return;
     dirtySelect = true;
     animations->requestFullRedraw();
 #if ENABLE_APPEARANCE_SELECTION
@@ -163,11 +150,7 @@ void Game::redrawAllNow()
     // considered current before STOP mode.
     animations->requestFullRedraw();
     const PlaybackTickResult playbackResult = tickPlayback(now);
-    handlePlaybackResult(playbackResult.result);
-    completeFirstStartIfReady(playbackResult);
-    if (playbackResult.result == PlaybackResult::Accepted)
-        evolution->update(PlaybackResult::Accepted);
-    if (flow.isFatalError())
+    if (!completePlaybackTick(playbackResult))
         return;
 
 #if ENABLE_APPEARANCE_SELECTION
@@ -186,24 +169,6 @@ void Game::redrawAllNow()
 #endif
 }
 
-void Game::setRendererAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
-{
-    if (runtimeLoadState == RuntimeLoadState::Failed)
-    {
-        renderer.showResourceError();
-        return;
-    }
-    if (!configureActiveAppearance(speciesSlot, outfitSlot) ||
-        !pet.setSpeciesSlot(speciesSlot) || !pet.setOutfitSlot(outfitSlot))
-    {
-        initialized = false;
-        renderer.showResourceError();
-        return;
-    }
-
-    refreshBaseAnimation();
-}
-
 bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
     char errorResource[20] = {};
@@ -211,8 +176,6 @@ bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
                              petBehaviorConfig, errorResource, sizeof(errorResource)))
     {
         renderer.recordAssetDataErrorResource(errorResource);
-        runtimeLoadState = RuntimeLoadState::Failed;
-        flow.enterFatalError();
         return false;
     }
     return activateLoadedAppearance(speciesSlot, outfitSlot);
@@ -222,8 +185,6 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
     if (!renderer.configureAssetBundle(petBehaviorConfig.assetManifest.bundleId))
     {
-        runtimeLoadState = RuntimeLoadState::Failed;
-        flow.enterFatalError();
         return false;
     }
 
@@ -242,24 +203,9 @@ bool Game::refreshOutfitUnlockMask(bool initialize)
     return appearanceChanges.refreshUnlockState(initialize);
 }
 
-bool Game::enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot)
+AppearanceChangeResult Game::enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot)
 {
-    return reportSpeciesChangeResult(appearanceChanges.changeSpecies(speciesSlot, entryOutfitSlot));
-}
-
-bool Game::reportSpeciesChangeResult(AppearanceChangeResult result)
-{
-#if ENABLE_DEBUG
-    switch (result)
-    {
-    case AppearanceChangeResult::ConfigurationFailed: startupDebugStage = "enter configure"; break;
-    case AppearanceChangeResult::PetStateRejected: startupDebugStage = "stage appearance"; break;
-    case AppearanceChangeResult::UnlockFailed: startupDebugStage = "outfit unlock"; break;
-    case AppearanceChangeResult::SaveFailed: startupDebugStage = "pet state save"; break;
-    default: break;
-    }
-#endif
-    return result == AppearanceChangeResult::Applied;
+    return appearanceChanges.changeSpecies(speciesSlot, entryOutfitSlot);
 }
 
 bool Game::saveNow()
@@ -312,39 +258,15 @@ void Game::updateBatteryAnimation(unsigned long now)
 
 void Game::OnLeftKey()
 {
-    if (!initialized)
-        return;
-    if (evolution->isActive())
-        return;
-#if ENABLE_APPEARANCE_SELECTION
-    if (appearanceSelection->isActive())
-    {
-        appearanceSelection->onLeft();
-        return;
-    }
-#endif
-
-    if (flow.isFirstLaunch())
-    {
-        return;
-    }
-
-#if ENABLE_GUESS_GAME
-    if (flow.isMinigame())
-    {
-        minigame->onLeft();
-        return;
-    }
-#endif
-
-    if (flow.isCommand())
-    {
-        commands->prev();
-        dirtySelect = true;
-    }
+    routeDirectionKey(KeyDirection::Left);
 }
 
 void Game::OnRightKey()
+{
+    routeDirectionKey(KeyDirection::Right);
+}
+
+void Game::routeDirectionKey(KeyDirection direction)
 {
     if (!initialized)
         return;
@@ -353,27 +275,31 @@ void Game::OnRightKey()
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
-        appearanceSelection->onRight();
+        if (direction == KeyDirection::Left)
+            appearanceSelection->onLeft();
+        else
+            appearanceSelection->onRight();
         return;
     }
 #endif
 
-    if (flow.isFirstLaunch())
-    {
-        return;
-    }
-
 #if ENABLE_GUESS_GAME
     if (flow.isMinigame())
     {
-        minigame->onRight();
+        if (direction == KeyDirection::Left)
+            minigame->onLeft();
+        else
+            minigame->onRight();
         return;
     }
 #endif
 
     if (flow.isCommand())
     {
-        commands->next();
+        if (direction == KeyDirection::Left)
+            commands->prev();
+        else
+            commands->next();
         dirtySelect = true;
     }
 }
@@ -387,26 +313,6 @@ void Game::OnConfirmKey()
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
     {
-        if (appearanceSelection->isSelectingSpecies())
-        {
-            uint8_t selectedSpecies = 0;
-            uint8_t selectedOutfit = 0;
-            const bool confirmed = appearanceSelection->onConfirmSpecies(
-                selectedSpecies, selectedOutfit);
-            if (confirmed)
-            {
-                if (enterSpecies(selectedSpecies, selectedOutfit))
-                {
-                    refreshBaseAnimation();
-                }
-                else
-                    renderer.showResourceError();
-            }
-            animations->requestFullRedraw();
-            completeFirstLaunchIfNeeded(AppCommandId::ChangeSpecies);
-            return;
-        }
-
         uint8_t selectedOutfit = 0;
         bool requiresUnlock = false;
         const bool confirmed = appearanceSelection->onConfirm(selectedOutfit, requiresUnlock);
@@ -420,10 +326,12 @@ void Game::OnConfirmKey()
                 refreshBaseAnimation();
             }
             else if (result == AppearanceChangeResult::ConfigurationFailed)
-                renderer.showResourceError();
+            {
+                enterRuntimeFatal();
+                return;
+            }
         }
         animations->requestFullRedraw();
-        completeFirstLaunchIfNeeded(AppCommandId::ChangeOutfit);
         return;
     }
 #endif
@@ -436,13 +344,7 @@ void Game::OnConfirmKey()
     }
 #endif
 
-    if (flow.isFirstLaunch())
-    {
-        startFirstLaunchRequiredCommand();
-        return;
-    }
-
-    if (!flow.isFirstLaunch() && !flow.isCommand())
+    if (!flow.isCommand())
         return;
 
     handleCommandResult(commandExecutor->execute(*commands));
@@ -486,6 +388,20 @@ PlaybackTickResult Game::tickPlayback(unsigned long now)
     return animations->tick(now);
 }
 
+bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
+{
+    // Keep failure handling before completion records and evolution progression.
+    handlePlaybackResult(playbackResult.result);
+    if (flow.isFatalError())
+        return false;
+    completeFirstStartIfReady(playbackResult);
+    if (flow.isFatalError())
+        return false;
+    if (playbackResult.result == PlaybackResult::Accepted)
+        handleEvolutionResult(evolution->update(PlaybackResult::Accepted));
+    return !flow.isFatalError();
+}
+
 void Game::handleCommandResult(const CommandResult &result)
 {
     if (!result.executed)
@@ -516,7 +432,7 @@ void Game::handleCommandResult(const CommandResult &result)
 #endif
 
 #if ENABLE_GUESS_GAME
-    if (result.requestedMinigame && !flow.isFirstLaunch())
+    if (result.requestedMinigame)
     {
         minigame->startGuessItem();
         flow.enterMinigame();
@@ -524,69 +440,18 @@ void Game::handleCommandResult(const CommandResult &result)
     }
 #endif
 
-    completeFirstLaunchIfNeeded(result.commandId);
-}
-
-void Game::completeFirstLaunchIfNeeded(AppCommandId commandId)
-{
-    if (!flow.isFirstLaunch())
-        return;
-
-    const bool shouldStart = flow.completeFirstLaunch(commandId);
-    if (!flow.isFirstLaunch())
-    {
-        pet.markFirstLaunchComplete();
-        petSaves.saveNow();
-    }
-
-    if (shouldStart)
-        beginStartupAnimation();
-    else if (!flow.isFirstLaunch())
-        enterCommand();
-}
-
-bool Game::isFirstLaunchSelectionPending() const
-{
-    return false;
-}
-
-bool Game::startFirstLaunchRequiredCommand()
-{
-#if ENABLE_APPEARANCE_SELECTION
-    switch (flow.firstLaunchRequiredCommand())
-    {
-    case AppCommandId::ChangeOutfit:
-        if (appearanceSelection->start(pet.speciesSlot(), pet.outfitSlot(),
-                                       pet.outfitUnlockMask()))
-        {
-            animations->cancelAll();
-            animations->requestFullRedraw();
-            return true;
-        }
-        break;
-    default:
-        break;
-    }
-#endif
-
-    completeFirstLaunchIfNeeded(flow.firstLaunchRequiredCommand());
-    return false;
 }
 
 void Game::maybeTickPet()
 {
-    if (evolution->update(PlaybackResult::Accepted))
-        return;
-
-    if (evolution->isActive())
+    const EvolutionResult progress = evolution->update(PlaybackResult::Accepted);
+    handleEvolutionResult(progress);
+    if (progress != EvolutionResult::NoChange)
         return;
 
     if (!animations->isBusy())
     {
-        handleEvolution();
-        if (flow.isFatalError())
-            return;
-        if (evolution->isActive())
+        if (handleEvolution() != EvolutionResult::NoChange)
             return;
     }
 
@@ -599,10 +464,7 @@ void Game::maybeTickPet()
             renderer.showResourceError();
             return;
         }
-        handleEvolution();
-        if (flow.isFatalError())
-            return;
-        if (evolution->isActive())
+        if (handleEvolution() != EvolutionResult::NoChange)
             return;
 
     }
@@ -611,13 +473,42 @@ void Game::maybeTickPet()
     petSaves.maybeSave();
 }
 
-void Game::handleEvolution()
+EvolutionResult Game::handleEvolution()
 {
-    if (!evolution->check())
-    {
-        runtimeLoadState = RuntimeLoadState::Failed;
-        flow.enterFatalError();
-    }
+    const EvolutionResult result = evolution->check();
+    handleEvolutionResult(result);
+    return result;
+}
+
+void Game::handleEvolutionResult(EvolutionResult result)
+{
+    if (result == EvolutionResult::FatalFailure)
+        enterRuntimeFatal();
+    else if (result == EvolutionResult::Failed)
+        renderer.showResourceError();
+}
+
+void Game::enterFatalState()
+{
+    initialized = false;
+    runtimeLoadState = RuntimeLoadState::Failed;
+    pendingFirstStartCompletion = false;
+    cheatEvolutionPending = false;
+    animations->cancelAll();
+    evolution->cancel();
+#if ENABLE_APPEARANCE_SELECTION
+    appearanceSelection->exit();
+#endif
+#if ENABLE_GUESS_GAME
+    minigame->reset();
+#endif
+    flow.enterFatalError();
+}
+
+void Game::enterRuntimeFatal()
+{
+    enterFatalState();
+    renderer.showResourceError();
 }
 
 bool Game::beginStartupAnimation()
@@ -629,19 +520,12 @@ bool Game::beginStartupAnimation()
     const bool hasFirstStart = animations->hasAnimation(FirmwarePlaybackRole::FirstStart);
     if (needsFirstStart && !hasFirstStart)
     {
-        flow.requestStartup();
-        animations->cancelAll();
-        pendingFirstStartCompletion = false;
-        flow.enterFatalError();
-        renderer.showResourceError();
+        enterRuntimeFatal();
         return false;
     }
     if (!hasIntro && !hasSpeciesStart && !needsFirstStart)
     {
-        if (isFirstLaunchSelectionPending())
-            enterFirstLaunch();
-        else
-            enterCommand();
+        enterCommand();
         return false;
     }
 
@@ -680,18 +564,12 @@ bool Game::beginStartupAnimation()
     if (animations->replace(AnimationSequence(sequence, sequenceCount)) !=
         PlaybackResult::Accepted)
     {
-        pendingFirstStartCompletion = false;
-        animations->cancelAll();
-        flow.enterFatalError();
-        renderer.showResourceError();
+        enterRuntimeFatal();
         return false;
     }
     return true;
 #else
-    if (isFirstLaunchSelectionPending())
-        enterFirstLaunch();
-    else
-        enterCommand();
+    enterCommand();
     return false;
 #endif
 }
@@ -705,9 +583,7 @@ void Game::completeFirstStartIfReady(const PlaybackTickResult &playbackResult)
     if (playbackResult.result == PlaybackResult::PlaybackFailed &&
         playbackResult.playbackRole == FirmwarePlaybackRole::FirstStart)
     {
-        pendingFirstStartCompletion = false;
-        animations->cancelAll();
-        flow.enterFatalError();
+        enterRuntimeFatal();
         return;
     }
 
@@ -732,14 +608,13 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
 
     if (renderer.firstAssetDataError() != AssetData::BundleError::None)
     {
-        animations->cancelAll();
-        evolution->cancel();
-        flow.enterFatalError();
-        renderer.showResourceError();
+        enterRuntimeFatal();
         return;
     }
 
-    if (evolution->update(playbackResult))
+    const EvolutionResult evolutionResult = evolution->update(playbackResult);
+    handleEvolutionResult(evolutionResult);
+    if (evolutionResult != EvolutionResult::NoChange)
         return;
 
 #if ENABLE_GUESS_GAME
@@ -755,18 +630,6 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
         animations->cancelAll();
         renderer.showResourceError();
     }
-}
-
-void Game::enterFirstLaunch()
-{
-    flow.beginFirstLaunch();
-#if ENABLE_GUESS_GAME
-    minigame->reset();
-#endif
-    animations->cancelAll();
-    dirtySelect = true;
-    startFirstLaunchRequiredCommand();
-    animations->requestFullRedraw();
 }
 
 void Game::enterCommand()

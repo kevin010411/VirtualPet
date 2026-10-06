@@ -1,10 +1,14 @@
 [CmdletBinding()]
-param()
+param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$outputPath = Join-Path $repoRoot '.pio\game_startup_host.exe'
+$outputName = if ($EnableFirstStartAnimation) { 'game_startup_first_start_host.exe' } else { 'game_startup_host.exe' }
+if ($EnableAppearanceSelection) { $outputName = $outputName.Replace('_host', '_appearance_host') }
+$outputPath = Join-Path $repoRoot (Join-Path '.pio' $outputName)
+$startupEnabled = [int]$EnableFirstStartAnimation.IsPresent
+$appearanceEnabled = [int]$EnableAppearanceSelection.IsPresent
 $sources = @(
     'test/game_startup/test_main.cpp',
     'src/controller/Game.cpp',
@@ -20,6 +24,7 @@ $sources = @(
     'src/controller/StatusSetContract.cpp',
     'src/controller/StatusSetSelection.cpp',
     'src/pet/PetSaveController.cpp',
+    'src/pet/PetSession.cpp',
     'src/appearance/AppearanceChangeController.cpp',
     'src/pet/Pet.cpp',
     'src/pet/PetBehaviorRuntime.cpp',
@@ -28,19 +33,20 @@ $sources = @(
     'src/pet/RuntimeValueResolver.cpp',
     'src/common/FirmwareRandom.cpp'
 )
+if ($EnableAppearanceSelection) { $sources += 'src/appearance/AppearanceSelectionController.cpp' }
 
 Push-Location $repoRoot
 try {
     & g++ -std=c++17 -O1 -ffunction-sections -fdata-sections '-Wl,--gc-sections' `
-        -DENABLE_DEBUG=0 -DENABLE_GUESS_GAME=0 -DENABLE_COMMAND_OUTFIT=0 `
-        -DENABLE_COMMAND_PREDICT=0 -DENABLE_APPEARANCE_SELECTION=0 `
-        -DENABLE_STARTUP_ANIMATION=0 -DENABLE_FIRST_START_ANIMATION=0 `
+        -DENABLE_DEBUG=0 -DENABLE_GUESS_GAME=0 "-DENABLE_COMMAND_OUTFIT=$appearanceEnabled" `
+        -DENABLE_COMMAND_PREDICT=0 "-DENABLE_APPEARANCE_SELECTION=$appearanceEnabled" `
+        "-DENABLE_STARTUP_ANIMATION=$startupEnabled" "-DENABLE_FIRST_START_ANIMATION=$startupEnabled" `
         -Itest/game_startup -Itest/host_stubs -Iinclude `
         @sources -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] Game startup, restore, reset, evolution, fatal routing, Pet transactions, Status, appearance failure order and save cadence'
+    Write-Host '[PASS] PetSession data flow; Game startup, restore, reset, evolution, fatal routing, Pet transactions, Status, appearance failure order and save cadence'
     exit 0
 }
 finally {

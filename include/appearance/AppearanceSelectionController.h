@@ -14,35 +14,26 @@ public:
                                   LayoutRenderer &layout);
 
     bool start(uint8_t speciesSlot, uint8_t currentOutfitSlot, uint8_t unlockMask);
-    bool startSpecies(uint8_t currentSpeciesSlot, const PetStatSnapshot &stats);
     bool isActive() const;
-    bool isSelectingSpecies() const;
     void onLeft();
     void onRight();
     bool onConfirm(uint8_t &selectedOutfitSlot, bool &requiresUnlock);
-    bool onConfirmSpecies(uint8_t &selectedSpeciesSlot, uint8_t &selectedOutfitSlot);
     void exit();
     void requestFullRedraw();
     void render(unsigned long now);
 
 private:
     static constexpr size_t maxOutfitOptions = 8;
-    static constexpr size_t maxSpeciesOptions = 8;
     static constexpr unsigned long frameIntervalSlow = 600;
 
     Renderer &renderer;
     AppearanceLoader &appearanceLoader;
     LayoutRenderer &layout;
     bool selectingOutfit = false;
-    bool selectingSpecies = false;
     uint8_t speciesSlot = 1;
     uint8_t unlockMask = 0;
-    uint8_t speciesOptions[maxSpeciesOptions] = {};
     uint8_t outfitOptions[maxOutfitOptions] = {};
-    uint8_t speciesDefaultOutfits[maxSpeciesOptions] = {};
-    size_t speciesOptionCount = 0;
     size_t outfitOptionCount = 0;
-    size_t selectedSpeciesIndex = 0;
     size_t selectedOutfitIndex = 0;
     OutfitPreview selectedOutfitPreview = {};
     bool hasSelectedOutfitPreview = false;
@@ -53,8 +44,6 @@ private:
 
     bool loadSelectedOutfitPreview();
     bool preparePreviewLayout();
-    bool loadSelectedSpeciesPreview();
-    void playSelectedChooseAnimation();
     void changeSelection(int delta);
 };
 

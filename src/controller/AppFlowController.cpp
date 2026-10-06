@@ -5,16 +5,6 @@ AppStage AppFlowController::stage() const
     return currentStage;
 }
 
-AppCommandId AppFlowController::firstLaunchRequiredCommand() const
-{
-    return requiredCommand;
-}
-
-bool AppFlowController::isFirstLaunch() const
-{
-    return currentStage == AppStage::FirstLaunch;
-}
-
 bool AppFlowController::isStartup() const
 {
     return currentStage == AppStage::Startup;
@@ -38,11 +28,6 @@ bool AppFlowController::isBattery() const
 bool AppFlowController::isFatalError() const
 {
     return currentStage == AppStage::FatalError;
-}
-
-void AppFlowController::beginFirstLaunch()
-{
-    currentStage = AppStage::FirstLaunch;
 }
 
 void AppFlowController::enterCommand()
@@ -85,13 +70,4 @@ bool AppFlowController::requestStartup()
         return false;
     currentStage = AppStage::Startup;
     return true;
-}
-
-bool AppFlowController::completeFirstLaunch(AppCommandId completedCommand)
-{
-    if (currentStage != AppStage::FirstLaunch || completedCommand != requiredCommand)
-        return false;
-
-    enterCommand();
-    return false;
 }
