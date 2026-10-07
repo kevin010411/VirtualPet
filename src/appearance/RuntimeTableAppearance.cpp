@@ -54,7 +54,9 @@ bool readEvolutionRecord(const Source &source, const Section &evolutions,
          decoded.sourceAnimationRef != kNone16 && decoded.targetAnimationRef == kNone16) ||
         (decoded.mode == EvolutionAnimationMode::TwoPhase &&
          decoded.sourceAnimationRef != kNone16 && decoded.targetAnimationRef != kNone16);
-    return decoded.conditionCount <= 4 && readU16(record + 6) == expectedFirstCondition &&
+    // Evolution predicates are streamed from the section; their wire count is
+    // uint8, independent of the four-condition Outfit unlock limit.
+    return readU16(record + 6) == expectedFirstCondition &&
            static_cast<uint32_t>(expectedFirstCondition) + decoded.conditionCount <=
                (conditions == nullptr ? 0 : conditions->count) &&
            (decoded.sourceAnimationRef == kNone16 || decoded.sourceAnimationRef < animations.count) &&

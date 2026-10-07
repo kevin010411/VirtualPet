@@ -238,6 +238,65 @@ void testEvolutionPlaybackRecords(const std::vector<uint8_t> &exported)
     }
 }
 
+void testEvolutionConditionRanges(const std::vector<uint8_t> &exported)
+{
+    size_t evolutionOffset = 0;
+    size_t conditionEntry = 0;
+    const uint16_t sectionCount = exported[24] | (static_cast<uint16_t>(exported[25]) << 8);
+    for (uint16_t index = 0; index < sectionCount; ++index)
+    {
+        const size_t entry = 64 + index * 16;
+        if (exported[entry] == 33 && exported[entry + 1] == 0)
+            evolutionOffset = readFixtureU32(exported, entry + 4);
+        if (exported[entry] == 34 && exported[entry + 1] == 0)
+            conditionEntry = entry;
+    }
+    assert(evolutionOffset != 0 && conditionEntry != 0);
+    for (uint8_t variant = 0; variant < 5; ++variant)
+    {
+        auto fixture = exported;
+        const uint8_t conditionCount = variant == 0 ? 5 : variant == 4 ? 255 : 6;
+        const uint16_t storedCount = variant == 3 ? conditionCount - 1 : conditionCount;
+        fixture.resize((fixture.size() + 3) & ~size_t(3));
+        const size_t conditionOffset = fixture.size();
+        fixture.resize(conditionOffset + storedCount * 12, 0);
+        for (uint16_t index = 0; index < storedCount; ++index)
+        {
+            const size_t offset = conditionOffset + index * 12;
+            // stage_days AND all five Pet Stats, as in project_26. Extra wire
+            // predicates exercise the uint8 count boundary without new storage.
+            const RuntimeValueId valueId = index == 0 || index > 5
+                ? kRuntimeValueStageDays : runtimeValueIdForPetStat(index - 1);
+            putFixtureU16(fixture, offset, valueId);
+            putFixtureU32(fixture, offset + 2, variant == 2 && index == 5 ? 1 : 0);
+            putFixtureU32(fixture, offset + 6, 864000);
+        }
+        putFixtureU32(fixture, conditionEntry + 4, static_cast<uint32_t>(conditionOffset));
+        putFixtureU16(fixture, conditionEntry + 8, storedCount);
+        putFixtureU32(fixture, conditionEntry + 12, storedCount * 12);
+        fixture[evolutionOffset + 5] = conditionCount;
+        putFixtureU16(fixture, evolutionOffset + 6, 0);
+        putFixtureU32(fixture, 16, static_cast<uint32_t>(fixture.size()));
+        SdFat sd(fixture.data(), fixture.size());
+        PetBehaviorConfig config = {};
+        const auto manifest = releaseFixtureManifest(fixture);
+        assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
+        SdAppearanceLoader loader(&sd);
+        loader.configureRuntimeContract(config);
+        PetStatSnapshot stats = {};
+        stats.speciesSlot = 1;
+        stats.outfitSlot = 1;
+        AppearanceSelection selection = {};
+        const auto result = loader.findEvolutionTarget(stats, selection);
+        assert(result == (variant == 3 ? EvolutionLookupResult::LoadFailed
+            : variant == 2 ? EvolutionLookupResult::NoTarget : EvolutionLookupResult::Found));
+        if (result == EvolutionLookupResult::Found)
+            assert(selection.speciesSlot == 2 && selection.outfitSlot == 1);
+        if (result == EvolutionLookupResult::LoadFailed)
+            assert(std::strcmp(loader.firstAssetDataErrorResource(), "runtime") == 0);
+    }
+}
+
 void testDecodedActionRanges(const std::vector<uint8_t> &exported)
 {
     auto fixture = actionModesFixture(exported);
@@ -628,6 +687,7 @@ int main(int argc, char **argv)
     const std::vector<uint8_t> startup = readFixture(argv[3]);
     testRuntimeSnapshotLifecycle(startup);
     testEvolutionPlaybackRecords(startup);
+    testEvolutionConditionRanges(startup);
     PetBehaviorConfig config = {};
     assert(parseRuntimeTableBehavior(valid.data(), valid.size(),
                                      releaseFixtureManifest(valid), 1, 1, config));
