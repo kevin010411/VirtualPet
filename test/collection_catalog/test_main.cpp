@@ -12,6 +12,15 @@
 
 unsigned long hostMillis = 0;
 
+static void tick(Game &game, unsigned long now)
+{
+    hostMillis = now;
+#if COLLECTION_USE_RTC
+    game.synchronizeTime(static_cast<uint32_t>(now / 1000));
+#endif
+    game.loop_game();
+}
+
 int main(int argc, char **argv)
 {
     assert(argc == 2);
@@ -32,8 +41,7 @@ int main(int argc, char **argv)
     Game game(pet, storage, renderer, loader);
     assert(game.setup_game());
     assert(!pet.isCollectionOwned(0));
-    hostMillis = 750;
-    game.loop_game();
+    tick(game, 1000);
     game.OnConfirmKey();
     assert(game.isCollectionCatalogActive());
     const auto grid = display.screen;
@@ -46,8 +54,7 @@ int main(int argc, char **argv)
     assert(hint != grid);
     game.OnLeftKey();
     assert(display.screen == hint);
-    hostMillis = 100750;
-    game.loop_game();
+    tick(game, 101000);
     assert(pet.stageDays() == 0);
     game.redrawAllNow();
     assert(display.screen == hint);
@@ -55,14 +62,11 @@ int main(int argc, char **argv)
     game.OnLeftKey();
     game.OnConfirmKey();
     assert(!game.isCollectionCatalogActive());
-    hostMillis = 101999;
-    game.loop_game();
+    tick(game, 101999);
     assert(pet.stageDays() == 0);
-    hostMillis = 102000;
-    game.loop_game();
+    tick(game, 102000);
     assert(pet.stageDays() == 1);
-    hostMillis = 104000;
-    game.loop_game();
+    tick(game, 104000);
     assert(pet.stageDays() == 2);
     assert(pet.isCollectionOwned(0));
     game.OnConfirmKey();
