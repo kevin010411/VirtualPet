@@ -6,6 +6,9 @@
 #include "pet/RuntimeValueResolver.h"
 #include "resources/detail/RuntimeTableFile.h"
 #include "appearance/detail/RuntimeTableAppearanceDecoder.h"
+#if ENABLE_COLLECTION_CATALOG
+#include "collection/CollectionCatalog.h"
+#endif
 
 using namespace RuntimeTableInternal;
 
@@ -438,6 +441,13 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     config.activeSpeciesSlot = speciesSlot;
     config.activeOutfitSlot = outfitSlot;
     config.schemaFingerprint = table.schemaFingerprint;
+#if ENABLE_COLLECTION_CATALOG
+    if (!validateCollectionCatalog(table, static_cast<uint8_t>(stats->count), config.collectionFingerprint))
+        return false;
+#else
+    if ((table.featureFlags & kCollectionFeature) != 0 || table.find(CollectionConfig) != nullptr ||
+        table.find(CollectionItems) != nullptr || table.find(CollectionConditions) != nullptr) return false;
+#endif
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
     if (!decodeStats(source, *stats, config) ||
         !decodePetStates(source, petStates, defaultPetState,
@@ -703,6 +713,9 @@ bool loadCompleteRuntimeTable(SdFat *sd,
         decoded = decodeInitialAppearance(table, bundleReader, decodedInitial);
     if (decoded)
         decoded = AssetData::animationReferenceExists(bundleReader, config.idleAnimation);
+#if ENABLE_COLLECTION_CATALOG
+    if (decoded) decoded = validateCollectionProducts(table, bundleReader);
+#endif
     // The former second /runtime.bin read only checked these required
     // appearance sections. Keep that check after used asset references.
     if (decoded)

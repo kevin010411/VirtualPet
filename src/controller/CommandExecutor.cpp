@@ -70,6 +70,11 @@ CommandResult CommandExecutor::execute(const CommandController &commands)
         result.executed = true;
         result.resourceError = !queueStatusSetsAnimation();
         break;
+#if ENABLE_COLLECTION_CATALOG
+    case AppCommandId::CollectionCatalog:
+        result.executed = result.requestedCollection = true;
+        break;
+#endif
 #if ENABLE_COMMAND_PREDICT
     case AppCommandId::Predict:
         if (canPredict())

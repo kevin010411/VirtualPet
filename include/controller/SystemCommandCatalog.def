@@ -5,6 +5,9 @@ SYSTEM_COMMAND(Predict, "predict", Predict, COMMAND_SLOT_PREDICT)
 SYSTEM_COMMAND(GuessGame, "guess_game", GuessGame, COMMAND_SLOT_GUESS_GAME)
 #endif
 SYSTEM_COMMAND(Status, "status", Status, COMMAND_SLOT_STATUS)
+#if ENABLE_COLLECTION_CATALOG
+SYSTEM_COMMAND(CollectionCatalog, "collection_catalog", CollectionCatalog, COMMAND_SLOT_COLLECTION_CATALOG)
+#endif
 #if ENABLE_COMMAND_OUTFIT
 SYSTEM_COMMAND(ChangeOutfit, "change_outfit", ChangeOutfit, COMMAND_SLOT_CHANGE_OUTFIT)
 #endif

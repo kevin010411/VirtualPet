@@ -41,6 +41,25 @@ Pet::Pet()
     setDefaultState();
 }
 
+bool Pet::configureCollection(uint32_t fingerprint)
+{
+    if (st.collectionFingerprint == fingerprint)
+        return false;
+    st.collectionFingerprint = fingerprint;
+    st.collectionMask = 0;
+    return true;
+}
+
+bool Pet::isCollectionOwned(uint8_t slot) const
+{
+    return slot < 64 && (st.collectionMask & (uint64_t(1) << slot)) != 0;
+}
+
+void Pet::acquireCollection(uint8_t slot)
+{
+    if (slot < 64) st.collectionMask |= uint64_t(1) << slot;
+}
+
 bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount)
 {
     if (customStats == nullptr || customStatCount == 0 || customStatCount > kPetCustomStatCount)

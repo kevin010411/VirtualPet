@@ -17,6 +17,7 @@ struct CommandResult
     AppCommandId commandId = AppCommandId::None;
     PetBehaviorActionResult actionResult = PetBehaviorActionResult::Rejected;
     bool requestedOutfit = false;
+    bool requestedCollection = false;
     bool requestedMinigame = false;
     bool resourceError = false;
 };

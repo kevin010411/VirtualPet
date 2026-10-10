@@ -27,6 +27,7 @@ bool showDataFrame(BundleReader &bundleReader,
                    int batchLines,
                    uint16_t expectedWidth = 0,
                    uint16_t expectedHeight = 0);
+// A null tft decodes and validates without writing pixels, using caller buffers.
 } // namespace FrameDecoder
 
 #endif

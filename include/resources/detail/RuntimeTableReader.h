@@ -20,7 +20,8 @@ constexpr uint32_t kFirstStartAnimationFeature = 1UL << 7;
 constexpr uint32_t kSequentialStatusFeature = 1UL << 9;
 constexpr uint32_t kOutfitChooseAnimationFeature = 1UL << 11;
 constexpr uint32_t kEvolutionPlaybackCountsFeature = 1UL << 12;
-constexpr uint32_t kKnownFeatures = ((1UL << 13) - 1UL) & ~(1UL << 8);
+constexpr uint32_t kCollectionFeature = 1UL << 13;
+constexpr uint32_t kKnownFeatures = ((1UL << 14) - 1UL) & ~(1UL << 8);
 
 enum SectionType : uint16_t
 {
@@ -51,6 +52,9 @@ enum SectionType : uint16_t
     FlowRoles = 43,
     ScreenBlocks = 50,
     ScreenRules = 51,
+    CollectionConfig = 60,
+    CollectionItems = 61,
+    CollectionConditions = 62,
 };
 
 struct Section

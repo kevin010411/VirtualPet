@@ -14,6 +14,9 @@
 #include "display/Renderer.h"
 #include "pet/PetStorage.h"
 #include "common/AppProfile.h"
+#if ENABLE_COLLECTION_CATALOG
+#include "collection/CollectionCatalog.h"
+#endif
 
 Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AppearanceLoader &appearanceLoaderRef)
     : pet(petRef),
@@ -32,6 +35,9 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
           pet, *animations, *petBehaviorRuntime)),
       commands(std::make_unique<CommandController>()),
       layout(std::make_unique<LayoutRenderer>(renderer, *commands))
+#if ENABLE_COLLECTION_CATALOG
+      , collectionCatalog(std::make_unique<CollectionCatalog>(pet, renderer, petBehaviorConfig))
+#endif
 #if ENABLE_APPEARANCE_SELECTION
       ,
       appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader, *layout))
@@ -56,6 +62,9 @@ void Game::loop_game()
         enterRuntimeFatal();
         return;
     }
+#if ENABLE_COLLECTION_CATALOG
+    if (collectionCatalog->active()) return;
+#endif
 
     if (cheatEvolutionPending && !animations->isBusy() &&
         (flow.isCommand() || flow.isMinigame()))
@@ -132,6 +141,13 @@ void Game::requestFullRedraw()
     if (!initialized)
         return;
     dirtySelect = true;
+#if ENABLE_COLLECTION_CATALOG
+    if (collectionCatalog->active())
+    {
+        if (!collectionCatalog->redraw()) enterRuntimeFatal();
+        return;
+    }
+#endif
     animations->requestFullRedraw();
 #if ENABLE_APPEARANCE_SELECTION
     if (appearanceSelection->isActive())
@@ -143,6 +159,13 @@ void Game::redrawAllNow()
 {
     if (!initialized)
         return;
+#if ENABLE_COLLECTION_CATALOG
+    if (collectionCatalog->active())
+    {
+        if (!collectionCatalog->redraw()) enterRuntimeFatal();
+        return;
+    }
+#endif
 
     const unsigned long now = millis();
 
@@ -228,6 +251,35 @@ bool Game::hasTransientAnimation() const
     return animations->isBusy();
 }
 
+bool Game::isCollectionCatalogActive() const
+{
+#if ENABLE_COLLECTION_CATALOG
+    return collectionCatalog->active();
+#else
+    return false;
+#endif
+}
+
+bool Game::updateCollectionProgress()
+{
+#if ENABLE_COLLECTION_CATALOG
+    bool changed = false;
+    if (!evaluateCollectionCatalog(animations->sdCard(), petBehaviorConfig, pet, changed))
+    {
+        renderer.recordAssetDataErrorResource("runtime.bin");
+        enterRuntimeFatal();
+        return false;
+    }
+    collectionSavePending |= changed;
+    if (collectionSavePending)
+    {
+        if (!petSaves.saveNow()) { renderer.showResourceError("pet state"); return false; }
+        collectionSavePending = false;
+    }
+#endif
+    return true;
+}
+
 void Game::startBatteryAnimation()
 {
     if (!initialized)
@@ -270,6 +322,13 @@ void Game::routeDirectionKey(KeyDirection direction)
 {
     if (!initialized)
         return;
+#if ENABLE_COLLECTION_CATALOG
+    if (collectionCatalog->active())
+    {
+        if (!collectionCatalog->move(direction == KeyDirection::Right)) enterRuntimeFatal();
+        return;
+    }
+#endif
     if (evolution->isActive())
         return;
 #if ENABLE_APPEARANCE_SELECTION
@@ -308,6 +367,18 @@ void Game::OnConfirmKey()
 {
     if (!initialized)
         return;
+#if ENABLE_COLLECTION_CATALOG
+    if (collectionCatalog->active())
+    {
+        if (!collectionCatalog->confirm()) { enterRuntimeFatal(); return; }
+        if (!collectionCatalog->active())
+        {
+            last_tick_time += millis() - collectionEnteredAt;
+            requestFullRedraw();
+        }
+        return;
+    }
+#endif
     if (evolution->isActive())
         return;
 #if ENABLE_APPEARANCE_SELECTION
@@ -412,11 +483,21 @@ void Game::handleCommandResult(const CommandResult &result)
 
     if (result.actionResult != PetBehaviorActionResult::Rejected)
     {
+        if (!updateCollectionProgress()) return;
         if (!refreshOutfitUnlockMask(false))
             renderer.showResourceError();
         refreshBaseAnimation();
         return;
     }
+#if ENABLE_COLLECTION_CATALOG
+    if (result.requestedCollection)
+    {
+        collectionEnteredAt = millis();
+        animations->cancelAll();
+        if (!collectionCatalog->start()) enterRuntimeFatal();
+        return;
+    }
+#endif
 
 #if ENABLE_COMMAND_OUTFIT
     if (result.requestedOutfit)
@@ -459,6 +540,7 @@ void Game::maybeTickPet()
     {
         if (!petBehaviorRuntime->advancePetDay())
             return;
+        if (!updateCollectionProgress()) return;
         if (!refreshOutfitUnlockMask(false))
         {
             renderer.showResourceError();

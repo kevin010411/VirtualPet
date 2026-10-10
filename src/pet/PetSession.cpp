@@ -6,6 +6,9 @@
 #include "pet/PetStorage.h"
 #include "pet/PetBehaviorRuntime.h"
 #include "resources/RuntimeContractLoader.h"
+#if ENABLE_COLLECTION_CATALOG
+#include "collection/CollectionCatalog.h"
+#endif
 
 PetSession::PetSession(Pet &petRef, PetStorage &storageRef, Renderer &rendererRef,
                        AppearanceLoader &loaderRef, PetBehaviorConfig &configRef,
@@ -59,12 +62,19 @@ bool PetSession::prepare(SdFat *sd)
         return false;
 
     preparationState = State::UnlockFailed;
+#if ENABLE_COLLECTION_CATALOG
+    bool collectionChanged = false;
+    if (!evaluateCollectionCatalog(sd, config, pet, collectionChanged)) return false;
+#endif
     const bool ready = initialState == InitialState::Restored
         ? changes.refreshUnlockState(false)
         : changes.changeSpecies(pet.speciesSlot(), pet.outfitSlot(),
               AppearanceChangeController::ContractState::AlreadyActivated) == AppearanceChangeResult::Applied;
     if (!ready)
         return false;
+#if ENABLE_COLLECTION_CATALOG
+    if (collectionChanged && !storage.save(pet)) return false;
+#endif
     preparationState = State::Ready;
     return true;
 }
@@ -78,6 +88,11 @@ AppearanceChangeResult PetSession::reset()
         return AppearanceChangeResult::PetStateRejected;
     }
     pet.resetFirstStartCompleted();
+#if ENABLE_COLLECTION_CATALOG
+    bool changed = false;
+    if (!evaluateCollectionCatalog(renderer.sdCard(), config, pet, changed))
+        return AppearanceChangeResult::ConfigurationFailed;
+#endif
     return changes.changeSpecies(pet.speciesSlot(), pet.outfitSlot());
 }
 

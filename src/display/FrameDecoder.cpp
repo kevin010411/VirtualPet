@@ -132,7 +132,8 @@ bool showDataFrame(BundleReader &bundleReader,
                    int ymin,
                    int batchLines, uint16_t expectedWidth, uint16_t expectedHeight)
 {
-    if (tft == nullptr || readBuffer == nullptr ||
+    // A null display uses the same streaming decoder for contract validation.
+    if (readBuffer == nullptr ||
         readBufferSize < kDataReadBufferBytes || lineBuffer == nullptr)
     {
         bundleReader.rejectDecodedFrame(address);
@@ -174,7 +175,7 @@ bool showDataFrame(BundleReader &bundleReader,
     else if (descriptor.codec != AssetData::kCodecRgb565RunLiteral)
         return rejectDataFrame(bundleReader, address, frame);
 
-    const bool frameFullyVisible = xmin >= 0 && ymin >= 0 &&
+    const bool frameFullyVisible = tft != nullptr && xmin >= 0 && ymin >= 0 &&
                                    static_cast<uint32_t>(xmin) + descriptor.width <= static_cast<uint32_t>(tft->width()) &&
                                    static_cast<uint32_t>(ymin) + descriptor.height <= static_cast<uint32_t>(tft->height());
     TftFrameWriteSession writeSession(tft, frameFullyVisible, xmin, ymin,
@@ -252,7 +253,7 @@ bool showDataFrame(BundleReader &bundleReader,
 
         if (writeSession.active())
             tft->writePixels(lineBuffer, static_cast<uint32_t>(descriptor.width) * actualLines);
-        else
+        else if (tft != nullptr)
             tft->drawRGBBitmap(xmin, ymin + batchStartRow, lineBuffer, descriptor.width, actualLines);
     }
 
