@@ -238,6 +238,10 @@ int main(int argc, char **argv)
         game.OnConfirmKey();
         assert(pet.actionCount(0) == 2 && !pet.isCollectionOwned(0));
         for (unsigned long now = 1050; now <= 2000; now += 50) tick(game, now);
+        // At the RTC boundary, the animation may finish after synchronizeTime
+        // attempts the day. Drain that pending complete day before dispatching
+        // the next command; production input intentionally waits for catch-up.
+        tick(game, 2050);
         game.OnRightKey();
         game.OnConfirmKey();
         assert(pet.actionCount(1) == 1 && pet.isCollectionOwned(0));
