@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock)
+param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock, [switch]$Grid64)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -31,6 +31,6 @@ try {
   -DENABLE_APPEARANCE_SELECTION=0 -DENABLE_COMMAND_OUTFIT=0 -DENABLE_COMMAND_PREDICT=0 `
   -Itest/collection_catalog -Itest/host_stubs -Iinclude @sources -o .pio/collection_catalog_host.exe
  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
- & .pio/collection_catalog_host.exe ([IO.Path]::GetFullPath($FixtureRoot))
+ & .pio/collection_catalog_host.exe ([IO.Path]::GetFullPath($FixtureRoot)) $(if ($Grid64) { 'grid64' } else { 'single' })
  exit $LASTEXITCODE
 } finally { Pop-Location }

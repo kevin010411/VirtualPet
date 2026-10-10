@@ -4,6 +4,7 @@
 #include <iterator>
 #include <vector>
 #include <stdio.h>
+#include <string.h>
 #include "controller/Game.h"
 #include "appearance/SdAppearanceLoader.h"
 #include "display/Renderer.h"
@@ -21,9 +22,59 @@ static void tick(Game &game, unsigned long now)
     game.loop_game();
 }
 
+static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display)
+{
+    const auto pixel = [&](int x, int y) { return display.screen[y * 128 + x]; };
+    game.OnConfirmKey();
+    assert(game.isCollectionCatalogActive());
+    assert(pixel(0,0) == 0x07ff); // Author-supplied selected return image.
+    const size_t before = display.windows.size();
+    game.OnRightKey();
+    assert(display.windows.size() == before + 2);
+    assert(pixel(0,0) == 0xffe0 && pixel(32,0) == 0xffff);
+    assert(pixel(48,16) == 0x001f); // Shared unknown image, opaque blue center.
+    assert(pixel(36,4) == 0x0820); // Transparency composed against this cell's background.
+    game.OnLeftKey();
+    assert(pixel(32,0) == 0x0820); // Removing selection restores the original background.
+    game.OnLeftKey(); // First return wraps to item64, fifth page, cell4.
+    assert(display.windows.back().x == 0 && display.windows.back().y == 32);
+    assert(pixel(0,32) == 0xffff && pixel(16,48) == 0x001f);
+    assert(pixel(32,32) == 0x28a0); // Empty cell5 stays background, never an item.
+    const auto fifthFocused = display.screen;
+    game.OnConfirmKey();
+    assert(pixel(0,0) == 0xf800 && pixel(127,159) == 0xf800);
+    game.OnConfirmKey();
+    assert(display.screen == fifthFocused); // Detail close restores exact page/focus.
+    const size_t beforeWrap = display.windows.size();
+    game.OnRightKey();
+    assert(display.windows.size() == beforeWrap + 17); // Full background +16 cells.
+    assert(pixel(0,0) == 0x07ff); // Last item skips all empty cells and wraps.
+    // Each page has its own return cell and every return exits the production caller.
+    for (int page = 0; page < 5; ++page)
+    {
+        if (page != 0) game.OnConfirmKey();
+        for (int step = 0; step < page * 16; ++step) game.OnRightKey();
+        assert(pixel(0,0) == 0x07ff);
+        const size_t beforeBack = display.windows.size();
+        game.OnConfirmKey();
+        assert(!game.isCollectionCatalogActive());
+        tick(game, hostMillis); // Production redraw is requested and serviced by the loop.
+        assert(display.windows.size() > beforeBack);
+    }
+    for (uint8_t slot = 0; slot < 64; ++slot) pet.acquireCollection(slot);
+    game.OnConfirmKey();
+    game.OnLeftKey();
+    assert(pixel(16,48) == 0xf800); // Slot63 owned product uses final tile frame254/255.
+    game.OnConfirmKey();
+    assert(pixel(0,0) == 0x07e0 && pixel(127,159) == 0x07e0); // Story descriptor63.
+    game.OnConfirmKey();
+    assert(pixel(0,32) == 0xffff && pixel(16,48) == 0xf800);
+    puts("[PASS] Real64 bundle: five pages, cyclic navigation, blank skipping, all returns, transparent per-cell composition, final tile/story frames, exact detail focus and two-cell redraw");
+}
+
 int main(int argc, char **argv)
 {
-    assert(argc == 2);
+    assert(argc == 2 || argc == 3);
     SdFat sd;
     for (const auto &entry : std::filesystem::recursive_directory_iterator(argv[1]))
     {
@@ -41,6 +92,11 @@ int main(int argc, char **argv)
     Game game(pet, storage, renderer, loader);
     assert(game.setup_game());
     assert(!pet.isCollectionOwned(0));
+    if (argc == 3 && strcmp(argv[2], "grid64") == 0)
+    {
+        verify64Grid(game, pet, display);
+        return 0;
+    }
     tick(game, 1000);
     game.OnConfirmKey();
     assert(game.isCollectionCatalogActive());
