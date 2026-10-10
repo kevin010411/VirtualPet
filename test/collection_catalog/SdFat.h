@@ -160,6 +160,11 @@ public:
         errorCode_ = code;
         errorData_ = data;
     }
+    void corrupt(const char *path, size_t offset)
+    {
+        auto entry = files_.at(path);
+        entry->bytes.at(offset) ^= 0x80;
+    }
 
 private:
     std::map<std::string, std::shared_ptr<HostFileEntry>> files_;
