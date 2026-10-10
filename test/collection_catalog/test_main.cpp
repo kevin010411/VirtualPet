@@ -13,6 +13,7 @@
 #include "pet/PetBehaviorRuntime.h"
 #include "animation/AnimationController.h"
 #include "resources/RuntimeContractLoader.h"
+#include "common/FirmwareRandom.h"
 
 unsigned long hostMillis = 0;
 
@@ -163,6 +164,39 @@ int main(int argc, char **argv)
     SdAppearanceLoader loader(&sd);
     Game game(pet, storage, renderer, loader);
     assert(game.setup_game());
+    if (argc == 3 && std::string(argv[2]) == "guess")
+    {
+        assert(!pet.isCollectionOwned(0) && !pet.isCollectionOwned(1));
+        assert(!pet.isOutfitUnlocked(3) && !pet.isOutfitUnlocked(4));
+        game.OnRightKey();
+        FirmwareRandom::seed(1); // First item-side sample is Right.
+        game.OnConfirmKey();
+        tick(game, 51); // The real MinigameController enters WaitingInput.
+        const uint32_t before = storage.lastSaveSequence();
+        game.OnRightKey(); // Round=10, then final=20 in the same dispatch.
+        assert(pet.customStat(0) == 20);
+        assert(pet.isCollectionOwned(0) && pet.isCollectionOwned(1));
+        assert(pet.isOutfitUnlocked(3) && pet.isOutfitUnlocked(4));
+        assert(storage.lastSaveSequence() == before + 2);
+        assert(game.hasTransientAnimation()); // Both snapshots precede playback completion.
+        Pet restored; PetStorage rebootStorage(&sd);
+        assert(rebootStorage.load(restored, pet.persistentState().schemaFingerprint));
+        assert(restored.customStat(0) == 20 && restored.isCollectionOwned(0) && restored.isCollectionOwned(1));
+        assert(restored.isOutfitUnlocked(3) && restored.isOutfitUnlocked(4));
+        // Reset and fail the final snapshot after a successful round snapshot.
+        assert(game.resetPet());
+        FirmwareRandom::seed(1);
+        game.OnConfirmKey(); // reset preserves the Guess command selection
+        tick(game, 102);
+        sd.limitWriteAfter(1, 12);
+        game.OnRightKey();
+        Pet recovered; PetStorage recovery(&sd);
+        assert(recovery.load(recovered, pet.persistentState().schemaFingerprint));
+        assert(recovered.customStat(0) == 10 && recovered.isCollectionOwned(0));
+        assert(!recovered.isCollectionOwned(1) && recovered.isOutfitUnlocked(3) && !recovered.isOutfitUnlocked(4));
+        puts("[PASS] Public Guess export: real round and final settlements save transient acquisition and outfit grants before animation, reboot restores final state, interrupted final save restores complete round snapshot");
+        return 0;
+    }
     if (recoveryMode)
     {
         verifyTransactions();

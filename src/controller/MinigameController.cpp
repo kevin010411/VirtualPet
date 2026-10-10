@@ -4,9 +4,11 @@
 #if ENABLE_GUESS_GAME
 
 MinigameController::MinigameController(AnimationController &animationsRef,
-                                       PetBehaviorRuntime &petBehaviorRef)
+                                       PetBehaviorRuntime &petBehaviorRef,
+                                       MinigameOutcomeHost &outcomeHostRef)
     : animations(animationsRef),
       petBehavior(petBehaviorRef),
+      outcomeHost(outcomeHostRef),
       guessItem(*this)
 {
 }
@@ -93,7 +95,8 @@ void MinigameController::settleOutcome(GuessItemOutcome outcome)
     default:
         break;
     }
-    petBehavior.applyGuessOutcome(behaviorOutcome);
+    if (petBehavior.applyGuessOutcome(behaviorOutcome))
+        outcomeHost.onGuessOutcomeApplied();
 }
 
 #endif // ENABLE_GUESS_GAME

@@ -13,6 +13,7 @@ class PetSaveController
 public:
     PetSaveController(Pet &pet, PetStorage &storage, Renderer &renderer);
     bool saveNow();
+    bool saveCollectionProgress(bool forceSave);
     bool applyCollectionGrants();
     void configureRuntimeContract(const PetBehaviorConfig &value) { config = &value; }
     void maybeSave();
@@ -24,6 +25,7 @@ private:
     Renderer &renderer;
     uint8_t saveCounter = 0;
     const PetBehaviorConfig *config = nullptr;
+    bool saveSnapshot();
 };
 
 #endif

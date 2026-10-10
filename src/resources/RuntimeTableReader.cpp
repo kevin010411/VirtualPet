@@ -1,4 +1,5 @@
 #include "resources/detail/RuntimeTableReader.h"
+#include "common/Crc32.h"
 #include <limits.h>
 #include <string.h>
 
@@ -127,10 +128,39 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         uint32_t end = 0;
         if (expectedRecordSize == 0 ||
             section.recordSize != expectedRecordSize || section.length != expectedLength ||
+            section.offset < directoryEnd ||
             !addU32(section.offset, section.length, end) || end > source.size)
             return false;
+        for (uint16_t previous = 0; previous < index; ++previous)
+        {
+            const Section &other = sections[previous];
+            if (section.type == other.type ||
+                (section.length != 0 && other.length != 0 &&
+                 section.offset < other.offset + other.length && other.offset < end))
+                return false;
+        }
     }
     return true;
+}
+
+bool validateFileCrc(const Source &source, uint32_t expected)
+{
+    // Validate once while loading the startup manifest. Subsequent record reads
+    // use that manifest without rescanning the whole SD file on navigation.
+    uint8_t bytes[256];
+    uint32_t crc = 0xFFFFFFFFUL;
+    for (uint32_t offset = 0; offset < source.size;)
+    {
+        const size_t count = source.size - offset < sizeof(bytes)
+                                 ? source.size - offset : sizeof(bytes);
+        if (!source.readAt(source.context, offset, bytes, count))
+            return false;
+        if (offset <= 48 && offset + count > 48)
+            memset(bytes + (48 - offset), 0, 4);
+        crc = Integrity::crc32Update(crc, bytes, count);
+        offset += count;
+    }
+    return ~crc == expected;
 }
 
 } // namespace
@@ -178,7 +208,8 @@ bool readRuntimeManifest(const Source &source, AssetData::RuntimeManifest &manif
     uint32_t fileCrc32 = 0;
     AssetData::BundleId bundleId = {};
     if (!readEnvelope(source, sections, sectionCount, featureFlags,
-                      schemaFingerprint, bundleId, fileCrc32))
+                      schemaFingerprint, bundleId, fileCrc32) ||
+        !validateFileCrc(source, fileCrc32))
         return false;
     manifest.bundleId = bundleId;
     manifest.schemaFingerprint = schemaFingerprint;

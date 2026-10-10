@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock, [switch]$ActionCounts, [switch]$Grid64, [switch]$Activation, [switch]$Recovery, [switch]$ActivationEvolution, [switch]$InvalidContracts)
+param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock, [switch]$ActionCounts, [switch]$Grid64, [switch]$Activation, [switch]$Recovery, [switch]$ActivationEvolution, [switch]$InvalidContracts, [switch]$GuessGame)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -27,10 +27,10 @@ try {
  New-Item -ItemType Directory -Force .pio | Out-Null
  & g++ -std=c++17 -O1 -ffunction-sections -fdata-sections '-Wl,--gc-sections' `
   "-DCOLLECTION_USE_RTC=$([int]$UseRtcClock.IsPresent)" `
-  -DENABLE_DEBUG=0 -DENABLE_COLLECTION_CATALOG=1 -DENABLE_GUESS_GAME=0 `
+  -DENABLE_DEBUG=0 -DENABLE_COLLECTION_CATALOG=1 "-DENABLE_GUESS_GAME=$([int]$GuessGame.IsPresent)" -DENABLE_GUESS_GAME_SINGLE_ROUND=1 -DENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT=1 `
   "-DENABLE_APPEARANCE_SELECTION=$([int]($Activation.IsPresent -or $ActivationEvolution.IsPresent))" "-DENABLE_COMMAND_OUTFIT=$([int]($Activation.IsPresent -or $ActivationEvolution.IsPresent))" -DENABLE_COMMAND_PREDICT=0 `
-  -Itest/collection_catalog -Itest/host_stubs -Iinclude @sources $(if ($Activation -or $ActivationEvolution) { 'src/appearance/AppearanceSelectionController.cpp' }) -o .pio/collection_catalog_host.exe
+  -Itest/collection_catalog -Itest/host_stubs -Iinclude @sources $(if ($Activation -or $ActivationEvolution) { 'src/appearance/AppearanceSelectionController.cpp' }) $(if ($GuessGame) { 'src/controller/MinigameController.cpp'; 'src/game/GuessItemGame.cpp' }) -o .pio/collection_catalog_host.exe
  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
- & .pio/collection_catalog_host.exe ([IO.Path]::GetFullPath($FixtureRoot)) $(if ($InvalidContracts) { 'invalid' } elseif ($Recovery) { 'recovery' } elseif ($ActivationEvolution) { 'activation-evolution' } elseif ($Activation) { 'activation' } elseif ($ActionCounts) { 'counts' } elseif ($Grid64) { 'grid64' } else { 'single' })
+ & .pio/collection_catalog_host.exe ([IO.Path]::GetFullPath($FixtureRoot)) $(if ($GuessGame) { 'guess' } elseif ($InvalidContracts) { 'invalid' } elseif ($Recovery) { 'recovery' } elseif ($ActivationEvolution) { 'activation-evolution' } elseif ($Activation) { 'activation' } elseif ($ActionCounts) { 'counts' } elseif ($Grid64) { 'grid64' } else { 'single' })
  exit $LASTEXITCODE
 } finally { Pop-Location }

@@ -11,6 +11,9 @@
 #include "pet/PetSaveController.h"
 #include "resources/RuntimeContractLoader.h"
 #include "pet/PetSession.h"
+#if ENABLE_GUESS_GAME
+#include "controller/MinigameController.h"
+#endif
 
 class AnimationController;
 class CommandController;
@@ -26,6 +29,9 @@ class Renderer;
 class CollectionCatalog;
 
 class Game : private EvolutionHost, private PetSessionHost
+#if ENABLE_GUESS_GAME
+           , private MinigameOutcomeHost
+#endif
 {
 public:
     Game(Pet &pet, PetStorage &petStorage, Renderer &renderer, AppearanceLoader &appearanceLoader);
@@ -122,6 +128,9 @@ private:
     void completeFirstStartIfReady(const PlaybackTickResult &playbackResult);
     void enterCommand();
     bool updateCollectionProgress();
+#if ENABLE_GUESS_GAME
+    void onGuessOutcomeApplied() override;
+#endif
 };
 
 #endif // GAME_H

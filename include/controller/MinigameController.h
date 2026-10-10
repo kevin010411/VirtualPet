@@ -10,10 +10,18 @@
 
 class PetBehaviorRuntime;
 
+class MinigameOutcomeHost
+{
+public:
+    virtual ~MinigameOutcomeHost() = default;
+    virtual void onGuessOutcomeApplied() = 0;
+};
+
 class MinigameController : public GuessItemGameHost
 {
 public:
-    MinigameController(AnimationController &animations, PetBehaviorRuntime &petBehavior);
+    MinigameController(AnimationController &animations, PetBehaviorRuntime &petBehavior,
+                       MinigameOutcomeHost &outcomeHost);
 
     void startGuessItem();
     void reset();
@@ -27,6 +35,7 @@ public:
 private:
     AnimationController &animations;
     PetBehaviorRuntime &petBehavior;
+    MinigameOutcomeHost &outcomeHost;
     GuessItemGame guessItem;
 
     PlaybackResult replace(const AnimationSequence &sequence) override;
