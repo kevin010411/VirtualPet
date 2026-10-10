@@ -13,8 +13,9 @@ class PetBehaviorRuntime;
 class MinigameOutcomeHost
 {
 public:
-    virtual ~MinigameOutcomeHost() = default;
     virtual void onGuessOutcomeApplied() = 0;
+protected:
+    ~MinigameOutcomeHost() = default;
 };
 
 class MinigameController : public GuessItemGameHost
