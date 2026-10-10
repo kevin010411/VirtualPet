@@ -53,14 +53,15 @@ static void verifyClassicGuess(const std::filesystem::path &root)
         game.OnRightKey(); FirmwareRandom::seed(1); game.OnConfirmKey();
         tick(game, 51);
         game.OnRightKey(); // Round result plays for five seconds; final is deferred.
+        tick(game, 52); // Start the queued result before advancing the RTC snapshot.
         assert(pet.customStat(0) == 10 && pet.isCollectionOwned(0) && !pet.isCollectionOwned(1));
         assert(pet.isOutfitUnlocked(3) && !pet.isOutfitUnlocked(4));
         const uint32_t roundSequence = storage.lastSaveSequence();
-        tick(game, 6051); // Three RTC days become pending while result playback finishes.
+        tick(game, 8052); // Four RTC days become pending while result playback finishes.
         assert(game.hasPendingTime() && pet.stageDays() == 0);
         assert(storage.lastSaveSequence() == roundSequence);
         if (interrupted) sd.limitWrite(12, 0, 0);
-        tick(game, 6051); // One daily mutation, then automatic final settlement.
+        tick(game, 8052); // One daily mutation, then automatic final settlement.
         assert(game.hasPendingTime() && pet.stageDays() == 1);
         assert(pet.customStat(0) == 20 && pet.isCollectionOwned(1) && pet.isOutfitUnlocked(4));
         Pet recovered; PetStorage recovery(&sd);
