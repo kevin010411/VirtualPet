@@ -61,7 +61,10 @@ static void verifyClassicGuess(const std::filesystem::path &root)
         assert(game.hasPendingTime() && pet.stageDays() == 0);
         assert(storage.lastSaveSequence() == roundSequence);
         if (interrupted) sd.limitWrite(12, 0, 0);
-        tick(game, 8052); // One daily mutation, then automatic final settlement.
+        // Classic mode queues both item and correctness result animations.
+        // Advance each queued duration while retaining overdue RTC days.
+        for (unsigned int step = 0; step < 16 && pet.customStat(0) != 20; ++step)
+            tick(game, 8052 + step * 8000);
         assert(game.hasPendingTime() && pet.stageDays() == 1);
         assert(pet.customStat(0) == 20 && pet.isCollectionOwned(1) && pet.isOutfitUnlocked(4));
         Pet recovered; PetStorage recovery(&sd);
