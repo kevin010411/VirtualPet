@@ -10,6 +10,9 @@
 #include "display/Renderer.h"
 #include "pet/Pet.h"
 #include "pet/PetStorage.h"
+#include "pet/PetBehaviorRuntime.h"
+#include "animation/AnimationController.h"
+#include "resources/RuntimeContractLoader.h"
 
 unsigned long hostMillis = 0;
 
@@ -20,6 +23,63 @@ static void tick(Game &game, unsigned long now)
     game.synchronizeTime(static_cast<uint32_t>(now / 1000));
 #endif
     game.loop_game();
+}
+
+static void mountBundle(SdFat &sd, const std::filesystem::path &root)
+{
+    for (const auto &entry : std::filesystem::recursive_directory_iterator(root))
+    {
+        if (!entry.is_regular_file()) continue;
+        std::ifstream input(entry.path(), std::ios::binary);
+        std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+        const auto path = "/" + std::filesystem::relative(entry.path(), root).generic_string();
+        sd.seedReadOnly(path.c_str(), bytes);
+    }
+}
+
+static void verifyTransactions()
+{
+    // Every possible interrupted byte boundary of the actual v16 writer.
+    for (size_t boundary = 0; boundary <= sizeof(PersistedPetState); ++boundary)
+    {
+        SdFat sd;
+        Pet pet;
+        pet.setSchemaFingerprint(123);
+        pet.setCustomStat(0, 17); pet.setStageDays(9);
+        pet.configureCollection(456); pet.acquireCollection(63);
+        pet.configureTrackedActions(789); pet.incrementActionCount(7);
+        pet.unlockOutfit(3);
+        PetStorage storage(&sd);
+        assert(storage.save(pet));
+        Pet baseline; PetStorage baselineStorage(&sd);
+        assert(baselineStorage.load(baseline, 123));
+        const PersistedPetState committed = baseline.persistentState();
+        pet.setSpeciesSlot(2); pet.setOutfitSlot(2);
+        pet.setCustomStat(0, 88); pet.setStageDays(20); pet.acquireCollection(0);
+        pet.incrementActionCount(0); pet.unlockOutfit(2);
+        sd.limitWrite(boundary, 0, 0);
+        if (boundary == sizeof(PersistedPetState)) sd.failSync(0, 0);
+        assert(!storage.save(pet));
+        Pet recovered; PetStorage recovery(&sd);
+        assert(recovery.load(recovered, 123));
+        assert(memcmp(&committed, &recovered.persistentState(), sizeof(committed)) == 0);
+    }
+    SdFat sd;
+    Pet pet; pet.setSchemaFingerprint(123); pet.configureCollection(456);
+    pet.configureTrackedActions(789); pet.acquireCollection(0);
+    pet.setCustomStat(0, 17); pet.incrementActionCount(0);
+    PetStorage storage(&sd); assert(storage.save(pet));
+    Pet baseline; PetStorage baselineStorage(&sd); assert(baselineStorage.load(baseline, 123));
+    const PersistedPetState committed = baseline.persistentState();
+    pet.setCustomStat(0, 88); pet.acquireCollection(63); pet.incrementActionCount(0);
+    assert(storage.save(pet));
+    sd.corrupt("/state_b.bin", 30);
+    Pet recovered; PetStorage recovery(&sd); assert(recovery.load(recovered, 123));
+    assert(memcmp(&committed, &recovered.persistentState(), sizeof(committed)) == 0);
+    sd.corrupt("/state_a.bin", 40);
+    Pet rejected; PetStorage noValidSlot(&sd); assert(!noValidSlot.load(rejected, 123));
+    assert(!sd.exists("/state_a.bin") && !sd.exists("/state_b.bin"));
+    puts("[PASS] Production v16 A/B writer: all 96 truncation boundaries, complete failed sync, newest CRC fallback and both-corrupt discard recover whole snapshots");
 }
 
 static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display)
@@ -75,15 +135,27 @@ static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display)
 int main(int argc, char **argv)
 {
     assert(argc == 2 || argc == 3);
-    SdFat sd;
-    for (const auto &entry : std::filesystem::recursive_directory_iterator(argv[1]))
+    if (argc == 3 && std::string(argv[2]) == "invalid")
     {
-        if (!entry.is_regular_file()) continue;
-        std::ifstream input(entry.path(), std::ios::binary);
-        std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
-        const auto path = "/" + std::filesystem::relative(entry.path(), argv[1]).generic_string();
-        sd.seedReadOnly(path.c_str(), bytes);
+        unsigned rejected = 0;
+        for (const auto &fixture : std::filesystem::directory_iterator(argv[1]))
+        {
+            if (!fixture.is_directory()) continue;
+            SdFat damaged; mountBundle(damaged, fixture.path());
+            Adafruit_ST7735 display; Pet pet; PetStorage storage(&damaged);
+            Renderer renderer(&display, &damaged); SdAppearanceLoader loader(&damaged);
+            Game game(pet, storage, renderer, loader);
+            assert(!game.setup_game());
+            assert(!damaged.exists("/state_a.bin") && !damaged.exists("/state_b.bin"));
+            printf("[PASS] Production startup rejects %s before creating Pet state\n", fixture.path().filename().string().c_str());
+            ++rejected;
+        }
+        assert(rejected > 0);
+        return 0;
     }
+    SdFat sd;
+    const bool recoveryMode = argc == 3 && std::string(argv[2]) == "recovery";
+    mountBundle(sd, recoveryMode ? std::filesystem::path(argv[1]) / "base" : std::filesystem::path(argv[1]));
     Adafruit_ST7735 display;
     Pet pet;
     PetStorage storage(&sd);
@@ -91,6 +163,31 @@ int main(int argc, char **argv)
     SdAppearanceLoader loader(&sd);
     Game game(pet, storage, renderer, loader);
     assert(game.setup_game());
+    if (recoveryMode)
+    {
+        verifyTransactions();
+        CollectionHost::mounted = &sd;
+        pet.setCustomStat(0, 17); pet.setStageDays(9);
+        pet.acquireCollection(0); pet.incrementActionCount(0);
+        assert(game.saveNow());
+        const auto boot = [&](const char *variant, bool owned, uint16_t count, int16_t stat, uint32_t days) {
+            mountBundle(sd, std::filesystem::path(argv[1]) / variant);
+            Pet restored; PetStorage rebootStorage(&sd);
+            Renderer rebootRenderer(&display, &sd); SdAppearanceLoader rebootLoader(&sd);
+            Game reboot(restored, rebootStorage, rebootRenderer, rebootLoader);
+            assert(reboot.setup_game());
+            assert(restored.isCollectionOwned(0) == owned && restored.actionCount(0) == count);
+            assert(restored.customStat(0) == stat && restored.stageDays() == days);
+        };
+        boot("base", true, 1, 17, 9);
+        boot("content-only", true, 1, 17, 9);
+        boot("quantity", false, 1, 17, 9);
+        boot("reorder", false, 1, 17, 9);
+        boot("action-map", false, 0, 17, 9);
+        boot("schema", false, 0, 0, 0);
+        puts("[PASS] Public replacement bundles: reboot and content edits preserve progress; ordered identities clear ownership independently; action mapping clears counts; schema resets Pet without migration");
+        return 0;
+    }
     if (argc == 3 && std::string(argv[2]) == "counts")
     {
         // Real button dispatch commits effects + counts + acquisition together.
@@ -120,10 +217,11 @@ int main(int argc, char **argv)
         pet.setCustomStat(0, 42);
         pet.incrementActionCount(1);
         sd.limitWrite(12, 0, 0);
-        assert(!game.saveNow() && storage.lastSaveSequence() == sequence);
+        assert(!game.saveNow() && storage.lastSaveSequence() == sequence + 1);
         Pet recovered;
         PetStorage recovery(&sd);
         assert(recovery.load(recovered, pet.persistentState().schemaFingerprint));
+        assert(recovered.persistentState().sequence == sequence);
         assert(recovered.actionCount(0) == 65535 && recovered.actionCount(1) == 1 && recovered.customStat(0) != 42);
         recovered.configureCollection(recovered.persistentState().collectionFingerprint + 1);
         assert(!recovered.isCollectionOwned(0) && recovered.actionCount(0) == 65535);
@@ -134,9 +232,54 @@ int main(int argc, char **argv)
         pet.incrementActionCount(0);
         pet.setSpeciesSlot(2);
         assert(pet.actionCount(0) == 0);
+        // All eight compiled mappings use the production action dispatcher,
+        // including a valid action whose optional playback is absent.
+        PetBehaviorConfig config = {}; char resource[20] = {};
+        assert(loadRuntimeContract(&sd, 1, 1, config, resource, sizeof(resource)));
+        AnimationController animations(renderer);
+        animations.configureRuntimeContract(config);
+        Pet isolated;
+        PetBehaviorRuntime runtime(config, isolated, animations, renderer);
+        runtime.initializeStats();
+        for (uint8_t slot = 0; slot < 8; ++slot)
+        {
+            assert(runtime.executeAction(config.trackedActions[slot]) != PetBehaviorActionResult::Rejected);
+            assert(isolated.actionCount(slot) == 1);
+        }
+        const auto beforeUnknown = isolated.persistentState();
+        assert(runtime.executeAction(255) == PetBehaviorActionResult::Rejected);
+        assert(memcmp(&beforeUnknown, &isolated.persistentState(), sizeof(beforeUnknown)) == 0);
+        config.actionOutcomes[config.actions[0].firstOutcome].animationPlayback = {};
+        assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+        assert(isolated.actionCount(0) == 2); // absent optional playback still dispatches once
+        config.trackedActionCount = 0;
+        assert(runtime.executeAction(0) != PetBehaviorActionResult::Rejected);
+        assert(isolated.actionCount(0) == 2); // valid untracked dispatch
         pet.setDefaultState();
         assert(pet.actionCount(1) == 0 && !pet.isCollectionOwned(0));
         puts("[PASS] Public six-AND/eight-action export: production dispatch/replays, saturation, atomic storage, identity resets and independent fingerprints");
+        return 0;
+    }
+    if (argc == 3 && std::string(argv[2]) == "activation-evolution")
+    {
+        pet.setCustomStat(0, 1); assert(game.saveNow());
+        game.OnConfirmKey(); game.OnRightKey(); game.OnConfirmKey();
+        assert(pet.speciesSlot() == 2 && pet.stageDays() == 0);
+        pet.incrementActionCount(0);
+        tick(game, 1000);
+        assert(pet.speciesSlot() == 2); // no synchronous/early evolution
+        tick(game, 2000);
+        // Daily stage advance makes the real relationship eligible, and normal
+        // Evolution entry resets counts instead of resurrecting old counters.
+        assert(pet.speciesSlot() == 3 && pet.outfitSlot() == 1 && pet.stageDays() == 0 && pet.actionCount(0) == 0);
+        assert(pet.isCollectionOwned(0));
+        assert(game.resetPet());
+        assert(pet.speciesSlot() == 1 && pet.outfitSlot() == 1 && pet.stageDays() == 0);
+        assert(pet.customStat(0) == 0 && pet.actionCount(0) == 0 && !pet.isCollectionOwned(0));
+        Pet restored; PetStorage rebootStorage(&sd);
+        assert(rebootStorage.load(restored, pet.persistentState().schemaFingerprint));
+        assert(restored.customStat(0) == 0 && !restored.isCollectionOwned(0) && restored.actionCount(0) == 0);
+        puts("[PASS] Public Evolution bundle: collection target waits for normal Pet day; real Evolution resets identity counts; production whole reset persists fresh state");
         return 0;
     }
     if (argc == 3 && std::string(argv[2]) == "activation")
@@ -177,6 +320,16 @@ int main(int argc, char **argv)
         activate(0);
         assert(pet.speciesSlot() == 2 && pet.isOutfitUnlocked(2)); // grant derived on revisit
         activate(1);
+        pet.setStageDays(5); pet.incrementActionCount(0);
+        game.OnRightKey(); game.OnRightKey(); game.OnConfirmKey();
+        game.OnLeftKey(); game.OnConfirmKey(); // ordinary Outfit2 -> Outfit1
+        assert(pet.speciesSlot() == 2 && pet.outfitSlot() == 1);
+        assert(pet.stageDays() == 5 && pet.actionCount(0) == 0 && pet.isCollectionOwned(1));
+        pet.incrementActionCount(0);
+        game.OnConfirmKey(); game.OnConfirmKey(); // same ordinary target
+        assert(pet.actionCount(0) == 1 && pet.stageDays() == 5);
+        game.OnLeftKey(); game.OnLeftKey(); activate(1);
+        assert(pet.outfitSlot() == 2 && pet.actionCount(0) == 0);
         Pet restored;
         PetStorage rebootStorage(&sd);
         Renderer rebootRenderer(&display, &sd);
@@ -185,15 +338,16 @@ int main(int argc, char **argv)
         assert(reboot.setup_game());
         assert(restored.speciesSlot() == 2 && restored.outfitSlot() == 2 && restored.isOutfitUnlocked(2));
         assert(restored.customStat(0) == 1 && restored.isCollectionOwned(0));
-        const uint32_t previousSequence = rebootStorage.lastSaveSequence();
+        const uint32_t previousSequence = restored.persistentState().sequence;
         sd.limitWrite(12, 0, 0);
         reboot.OnConfirmKey();
         for (uint8_t step = 0; step < 3; ++step) reboot.OnRightKey();
         reboot.OnConfirmKey();
-        assert(rebootStorage.lastSaveSequence() == previousSequence);
+        assert(rebootStorage.lastSaveSequence() == previousSequence + 1);
         Pet recovered;
         PetStorage recovery(&sd);
         assert(recovery.load(recovered, restored.persistentState().schemaFingerprint));
+        assert(recovered.persistentState().sequence == previousSequence);
         assert(recovered.speciesSlot() == 2 && recovered.outfitSlot() == 2 && recovered.isCollectionOwned(1));
         puts("[PASS] Public activation export: unowned hint, species/outfit targets, identity semantics, reusable grants, single atomic save, reboot and interrupted switching");
         return 0;
