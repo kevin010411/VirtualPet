@@ -91,6 +91,54 @@ int main(int argc, char **argv)
     SdAppearanceLoader loader(&sd);
     Game game(pet, storage, renderer, loader);
     assert(game.setup_game());
+    if (argc == 3 && std::string(argv[2]) == "counts")
+    {
+        // Real button dispatch commits effects + counts + acquisition together.
+        game.OnRightKey();
+        game.OnConfirmKey();
+        assert(pet.actionCount(0) == 1 && pet.customStat(0) == 1 && !pet.isCollectionOwned(0));
+        for (unsigned long now = 50; now <= 1000; now += 50) tick(game, now);
+        assert(pet.actionCount(0) == 1); // five repeats do not count again
+        game.OnConfirmKey();
+        assert(pet.actionCount(0) == 2 && !pet.isCollectionOwned(0));
+        for (unsigned long now = 1050; now <= 2000; now += 50) tick(game, now);
+        game.OnRightKey();
+        game.OnConfirmKey();
+        assert(pet.actionCount(1) == 1 && pet.isCollectionOwned(0));
+        Pet committed;
+        PetStorage restoredStorage(&sd);
+        assert(restoredStorage.load(committed, pet.persistentState().schemaFingerprint));
+        assert(committed.actionCount(0) == 2 && committed.actionCount(1) == 1 && committed.isCollectionOwned(0));
+        assert(committed.customStat(0) == pet.customStat(0));
+        pet.setSpeciesSlot(pet.speciesSlot());
+        pet.setOutfitSlot(pet.outfitSlot());
+        assert(pet.actionCount(0) == 2);
+        for (unsigned index = 2; index < 65540; ++index) pet.incrementActionCount(0);
+        assert(pet.actionCount(0) == 65535);
+        assert(game.saveNow());
+        const uint32_t sequence = storage.lastSaveSequence();
+        pet.setCustomStat(0, 42);
+        pet.incrementActionCount(1);
+        sd.limitWrite(12, 0, 0);
+        assert(!game.saveNow() && storage.lastSaveSequence() == sequence);
+        Pet recovered;
+        PetStorage recovery(&sd);
+        assert(recovery.load(recovered, pet.persistentState().schemaFingerprint));
+        assert(recovered.actionCount(0) == 65535 && recovered.actionCount(1) == 1 && recovered.customStat(0) != 42);
+        recovered.configureCollection(recovered.persistentState().collectionFingerprint + 1);
+        assert(!recovered.isCollectionOwned(0) && recovered.actionCount(0) == 65535);
+        recovered.configureTrackedActions(recovered.persistentState().trackedActionFingerprint + 1);
+        assert(recovered.actionCount(0) == 0);
+        pet.setOutfitSlot(2);
+        assert(pet.actionCount(0) == 0 && pet.isCollectionOwned(0));
+        pet.incrementActionCount(0);
+        pet.setSpeciesSlot(2);
+        assert(pet.actionCount(0) == 0);
+        pet.setDefaultState();
+        assert(pet.actionCount(1) == 0 && !pet.isCollectionOwned(0));
+        puts("[PASS] Public six-AND/eight-action export: production dispatch/replays, saturation, atomic storage, identity resets and independent fingerprints");
+        return 0;
+    }
     assert(!pet.isCollectionOwned(0));
     if (argc == 3 && strcmp(argv[2], "grid64") == 0)
     {

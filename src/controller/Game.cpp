@@ -215,15 +215,19 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     appearanceLoader.configureRuntimeContract(petBehaviorConfig);
     animations->configureRuntimeContract(petBehaviorConfig);
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
+    petSaves.configureRuntimeContract(petBehaviorConfig);
     commands->configure(petBehaviorConfig);
     layout->configureRuntimeContract(petBehaviorConfig);
     runtimeLoadState = RuntimeLoadState::Ready;
     return true;
 }
 
-bool Game::refreshOutfitUnlockMask(bool initialize)
+bool Game::refreshOutfitUnlockMask(bool initialize, bool persist)
 {
-    return appearanceChanges.refreshUnlockState(initialize);
+#if !ENABLE_COLLECTION_CATALOG
+    persist = true;
+#endif
+    return appearanceChanges.refreshUnlockState(initialize, persist);
 }
 
 AppearanceChangeResult Game::enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot)
@@ -483,9 +487,12 @@ void Game::handleCommandResult(const CommandResult &result)
 
     if (result.actionResult != PetBehaviorActionResult::Rejected)
     {
-        if (!updateCollectionProgress()) return;
-        if (!refreshOutfitUnlockMask(false))
+        if (!refreshOutfitUnlockMask(false, false))
             renderer.showResourceError();
+#if ENABLE_COLLECTION_CATALOG
+        collectionSavePending = true;
+#endif
+        if (!updateCollectionProgress()) return;
         refreshBaseAnimation();
         return;
     }
@@ -540,12 +547,15 @@ void Game::maybeTickPet()
     {
         if (!petBehaviorRuntime->advancePetDay())
             return;
-        if (!updateCollectionProgress()) return;
-        if (!refreshOutfitUnlockMask(false))
+        if (!refreshOutfitUnlockMask(false, false))
         {
             renderer.showResourceError();
             return;
         }
+#if ENABLE_COLLECTION_CATALOG
+        collectionSavePending = true;
+#endif
+        if (!updateCollectionProgress()) return;
         if (handleEvolution() != EvolutionResult::NoChange)
             return;
 

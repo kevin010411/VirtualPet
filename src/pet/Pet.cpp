@@ -41,6 +41,21 @@ Pet::Pet()
     setDefaultState();
 }
 
+bool Pet::configureTrackedActions(uint32_t fingerprint)
+{
+    if (st.trackedActionFingerprint == fingerprint) return false;
+    st.trackedActionFingerprint = fingerprint;
+    resetActionCounts();
+    return true;
+}
+
+void Pet::resetActionCounts() { memset(st.actionCounts, 0, sizeof(st.actionCounts)); }
+uint16_t Pet::actionCount(uint8_t slot) const { return slot < kTrackedActionCount ? st.actionCounts[slot] : 0; }
+void Pet::incrementActionCount(uint8_t slot)
+{
+    if (slot < kTrackedActionCount && st.actionCounts[slot] < UINT16_MAX) ++st.actionCounts[slot];
+}
+
 bool Pet::configureCollection(uint32_t fingerprint)
 {
     if (st.collectionFingerprint == fingerprint)
@@ -183,6 +198,7 @@ bool Pet::setSpeciesSlot(uint8_t slot)
     if (strcmp(st.speciesSlotText, text) != 0)
     {
         strcpy(st.speciesSlotText, text);
+        resetActionCounts();
         st.stage_days = 0;
         st.outfitUnlockMask = 0;
     }
@@ -194,6 +210,7 @@ bool Pet::setOutfitSlot(uint8_t slot)
     char text[sizeof(st.outfitSlotText)] = {};
     if (!writeAppearanceSlot(text, sizeof(text), slot))
         return false;
+    if (strcmp(st.outfitSlotText, text) != 0) resetActionCounts();
     strcpy(st.outfitSlotText, text);
     return true;
 }

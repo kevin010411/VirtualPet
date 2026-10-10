@@ -109,6 +109,9 @@ struct PetBehaviorConfig
     AssetData::AnimationRef layoutSelected;
     uint32_t schemaFingerprint;
     uint32_t collectionFingerprint;
+    uint32_t trackedActionFingerprint;
+    uint8_t trackedActionCount;
+    uint8_t trackedActions[8];
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     RuntimePetStateConfig petStates[kMaxRuntimePetStates];
     PetBehaviorActionConfig actions[kMaxPetBehaviorActions];

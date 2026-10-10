@@ -8,7 +8,7 @@ class Renderer;
 // Runtime records stay on SD. Only the active page/focus and a bounded record
 // buffer live in RAM; no framebuffer or array of 64 resolved image references.
 bool validateCollectionCatalog(const RuntimeTableInternal::RuntimeTable &table,
-                               uint8_t statCount, uint32_t &fingerprint);
+                               uint8_t statCount, PetBehaviorConfig &config);
 bool validateCollectionProducts(const RuntimeTableInternal::RuntimeTable &table, BundleReader &reader);
 bool evaluateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &pet,
                                bool &changed);

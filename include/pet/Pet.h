@@ -7,6 +7,7 @@ template <typename T>
 static inline T clampValue(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 static constexpr size_t kPetCustomStatCount = 8;
+static constexpr size_t kTrackedActionCount = 8;
 
 struct PersistedPetState
 {
@@ -22,6 +23,8 @@ struct PersistedPetState
     char outfitSlotText[9];
     uint32_t collectionFingerprint;
     uint64_t collectionMask;
+    uint32_t trackedActionFingerprint;
+    uint16_t actionCounts[kTrackedActionCount];
     uint32_t crc32;
 };
 
@@ -39,7 +42,7 @@ class Pet
 {
 public:
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 15;
+    static constexpr uint16_t kPetStateVersion = 16;
     static constexpr uint32_t kStageDaysMax = 864000UL;
 
     Pet();
@@ -77,6 +80,10 @@ public:
     bool configureCollection(uint32_t fingerprint);
     bool isCollectionOwned(uint8_t slot) const;
     void acquireCollection(uint8_t slot);
+    bool configureTrackedActions(uint32_t fingerprint);
+    uint16_t actionCount(uint8_t slot) const;
+    void incrementActionCount(uint8_t slot);
+    void resetActionCounts();
 
 private:
     PersistedPetState st = {};

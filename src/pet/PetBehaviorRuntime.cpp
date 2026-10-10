@@ -90,6 +90,8 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     if (!writeStats(state, pet))
         return PetBehaviorActionResult::Rejected;
     dailyChangePauses = nextPauses;
+    for (uint8_t index = 0; index < config.trackedActionCount; ++index)
+        if (config.trackedActions[index] == actionSlot) { pet.incrementActionCount(index); break; }
 
     Animation animation;
     const PlaybackResult buildResult = resolveActionAnimation(playback, renderer, animation);

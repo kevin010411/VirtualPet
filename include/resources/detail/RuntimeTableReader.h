@@ -55,6 +55,7 @@ enum SectionType : uint16_t
     CollectionConfig = 60,
     CollectionItems = 61,
     CollectionConditions = 62,
+    CollectionTrackedActions = 63,
 };
 
 struct Section

@@ -104,7 +104,7 @@ private:
     RuntimeLoadState runtimeLoadState = RuntimeLoadState::Unloaded;
     bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot) override;
     bool activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot) override;
-    bool refreshOutfitUnlockMask(bool initialize);
+    bool refreshOutfitUnlockMask(bool initialize, bool persist = true);
     AppearanceChangeResult enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot) override;
     void refreshBaseAnimation() override;
     PlaybackTickResult tickPlayback(unsigned long now);
