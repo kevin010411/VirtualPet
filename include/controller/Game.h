@@ -127,7 +127,7 @@ private:
     void handlePlaybackResult(PlaybackResult playbackResult);
     void completeFirstStartIfReady(const PlaybackTickResult &playbackResult);
     void enterCommand();
-    bool updateCollectionProgress();
+    bool updateCollectionProgress(bool immediate = false);
 #if ENABLE_GUESS_GAME
     void onGuessOutcomeApplied() override;
 #endif

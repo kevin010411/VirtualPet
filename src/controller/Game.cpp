@@ -265,10 +265,10 @@ bool Game::isCollectionCatalogActive() const
 #endif
 }
 
-bool Game::updateCollectionProgress()
+bool Game::updateCollectionProgress(bool immediate)
 {
 #if ENABLE_COLLECTION_CATALOG
-    if (!petSaves.saveCollectionProgress(collectionSavePending))
+    if (!petSaves.saveCollectionProgress(collectionSavePending, immediate))
     {
         // A failed commit keeps pending progress for the next complete mutation.
         // Contract failure remains terminal, distinct from storage failure.
@@ -296,9 +296,9 @@ void Game::onGuessOutcomeApplied()
     }
 #if ENABLE_COLLECTION_CATALOG
     collectionSavePending = true;
-    updateCollectionProgress();
+    updateCollectionProgress(true);
 #else
-    if (!petSaves.saveNow()) renderer.showResourceError("pet state");
+    if (!petSaves.saveCollectionProgress(true, true)) renderer.showResourceError("pet state");
 #endif
 }
 #endif

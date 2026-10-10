@@ -38,6 +38,51 @@ static void mountBundle(SdFat &sd, const std::filesystem::path &root)
     }
 }
 
+#if COLLECTION_USE_RTC
+static void verifyClassicGuess(const std::filesystem::path &root)
+{
+    for (bool interrupted : {false, true})
+    {
+        hostMillis = 0;
+        SdFat sd; mountBundle(sd, root);
+        Adafruit_ST7735 display; Pet pet; PetStorage storage(&sd);
+        Renderer renderer(&display, &sd); SdAppearanceLoader loader(&sd);
+        Game game(pet, storage, renderer, loader);
+        game.synchronizeTime(0);
+        assert(game.setup_game());
+        game.OnRightKey(); FirmwareRandom::seed(1); game.OnConfirmKey();
+        tick(game, 51);
+        game.OnRightKey(); // Round result plays for five seconds; final is deferred.
+        assert(pet.customStat(0) == 10 && pet.isCollectionOwned(0) && !pet.isCollectionOwned(1));
+        assert(pet.isOutfitUnlocked(3) && !pet.isOutfitUnlocked(4));
+        const uint32_t roundSequence = storage.lastSaveSequence();
+        tick(game, 6051); // Three RTC days become pending while result playback finishes.
+        assert(game.hasPendingTime() && pet.stageDays() == 0);
+        assert(storage.lastSaveSequence() == roundSequence);
+        if (interrupted) sd.limitWrite(12, 0, 0);
+        tick(game, 6051); // One daily mutation, then automatic final settlement.
+        assert(game.hasPendingTime() && pet.stageDays() == 1);
+        assert(pet.customStat(0) == 20 && pet.isCollectionOwned(1) && pet.isOutfitUnlocked(4));
+        Pet recovered; PetStorage recovery(&sd);
+        assert(recovery.load(recovered, pet.persistentState().schemaFingerprint));
+        if (interrupted)
+        {
+            assert(recovered.customStat(0) == 10 && recovered.stageDays() == 0);
+            assert(recovered.isCollectionOwned(0) && !recovered.isCollectionOwned(1));
+            assert(recovered.isOutfitUnlocked(3) && !recovered.isOutfitUnlocked(4));
+        }
+        else
+        {
+            assert(storage.lastSaveSequence() == roundSequence + 1);
+            assert(recovered.customStat(0) == 20 && recovered.stageDays() == 1);
+            assert(recovered.isCollectionOwned(0) && recovered.isCollectionOwned(1));
+            assert(recovered.isOutfitUnlocked(3) && recovered.isOutfitUnlocked(4));
+        }
+    }
+    puts("[PASS] Classic Guess RTC batch: automatic final settlement commits acquisition and grants before catch-up drains; interrupted final write restores complete prior round snapshot");
+}
+#endif
+
 static void verifyTransactions()
 {
     // Every possible interrupted byte boundary of the actual v16 writer.
@@ -136,6 +181,13 @@ static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display)
 int main(int argc, char **argv)
 {
     assert(argc == 2 || argc == 3);
+#if COLLECTION_USE_RTC
+    if (argc == 3 && std::string(argv[2]) == "guess-classic")
+    {
+        verifyClassicGuess(argv[1]);
+        return 0;
+    }
+#endif
     if (argc == 3 && std::string(argv[2]) == "invalid")
     {
         unsigned rejected = 0;

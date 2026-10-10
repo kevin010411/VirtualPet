@@ -21,7 +21,7 @@ bool PetSaveController::saveNow()
     return saveCollectionProgress(true);
 }
 
-bool PetSaveController::saveCollectionProgress(bool forceSave)
+bool PetSaveController::saveCollectionProgress(bool forceSave, bool immediate)
 {
 #if ENABLE_COLLECTION_CATALOG
     // Evaluate against the complete mutation before committing one A/B snapshot.
@@ -36,11 +36,13 @@ bool PetSaveController::saveCollectionProgress(bool forceSave)
 #else
     if (!forceSave) return true;
 #endif
-    return saveSnapshot();
+    return saveSnapshot(immediate);
 }
 
-bool PetSaveController::saveSnapshot()
+bool PetSaveController::saveSnapshot(bool immediate)
 {
+    // Without RTC batch deferral every snapshot is already immediate.
+    (void)immediate;
     const bool saved = petStorage.save(pet);
 #if ENABLE_DEBUG
     char title[21] = {};
