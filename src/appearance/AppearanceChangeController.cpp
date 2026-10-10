@@ -66,7 +66,7 @@ bool AppearanceChangeController::resolveUnlockState(bool initialize)
             pet.speciesSlot(), pet.statSnapshot(), pet.outfitUnlockMask(), initialize, mask))
         return false;
     pet.initializeOutfitUnlockMask(mask);
-    return true;
+    return saves.applyCollectionGrants();
 }
 
 bool AppearanceChangeController::refreshUnlockState(bool initialize, bool persist)
@@ -74,4 +74,16 @@ bool AppearanceChangeController::refreshUnlockState(bool initialize, bool persis
     const uint8_t previousMask = pet.outfitUnlockMask();
     return resolveUnlockState(initialize) &&
            (!persist || pet.outfitUnlockMask() == previousMask || saves.saveNow());
+}
+
+AppearanceChangeResult AppearanceChangeController::applyCollectionTarget(uint8_t speciesSlot, uint8_t outfitSlot)
+{
+    const bool changedSpecies = speciesSlot != pet.speciesSlot();
+    if (!host.configureActiveAppearance(speciesSlot, outfitSlot))
+        return AppearanceChangeResult::ConfigurationFailed;
+    if (!pet.setSpeciesSlot(speciesSlot) || !pet.setOutfitSlot(outfitSlot))
+        return AppearanceChangeResult::PetStateRejected;
+    if (!resolveUnlockState(changedSpecies)) return AppearanceChangeResult::UnlockFailed;
+    pet.unlockOutfit(outfitSlot);
+    return saves.saveNow() ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;
 }

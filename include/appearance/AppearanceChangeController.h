@@ -43,6 +43,7 @@ public:
     AppearanceChangeResult changeSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot,
                                         ContractState contract = ContractState::Reload);
     AppearanceChangeResult applyOutfit(uint8_t outfitSlot, bool requiresUnlock);
+    AppearanceChangeResult applyCollectionTarget(uint8_t speciesSlot, uint8_t outfitSlot);
     bool refreshUnlockState(bool initialize, bool persist = true);
 
 private:

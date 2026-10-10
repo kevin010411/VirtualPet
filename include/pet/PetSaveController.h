@@ -13,6 +13,7 @@ class PetSaveController
 public:
     PetSaveController(Pet &pet, PetStorage &storage, Renderer &renderer);
     bool saveNow();
+    bool applyCollectionGrants();
     void configureRuntimeContract(const PetBehaviorConfig &value) { config = &value; }
     void maybeSave();
 
