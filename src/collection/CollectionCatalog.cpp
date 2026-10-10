@@ -36,21 +36,23 @@ bool header(const RuntimeTable &table, uint8_t *record)
 }
 
 bool validateCollectionCatalog(const RuntimeTable &table, uint8_t statCount,
-                               uint32_t &fingerprint)
+                               PetBehaviorConfig &config)
 {
-    fingerprint = 0;
+    config.collectionFingerprint = 0;
+    config.trackedActionFingerprint = 0;
+    config.trackedActionCount = 0;
     const bool enabled = (table.featureFlags & kCollectionFeature) != 0;
     const Section *items = table.find(CollectionItems);
     const Section *conditions = table.find(CollectionConditions);
     if (!enabled)
-        return table.find(CollectionConfig) == nullptr && items == nullptr && conditions == nullptr;
+        return table.find(CollectionConfig) == nullptr && items == nullptr && conditions == nullptr && table.find(CollectionTrackedActions) == nullptr;
 #if !ENABLE_COLLECTION_CATALOG
     return false;
 #else
-    uint8_t cfg[20] = {};
+    uint8_t cfg[24] = {};
     if (!header(table, cfg) || items == nullptr || conditions == nullptr ||
         items->count == 0 || items->count > 64 || conditions->count > 384 ||
-        readU16(cfg + 16) != items->count || readU16(cfg + 18) != 0 || readU32(cfg) == 0)
+        readU16(cfg + 16) != items->count || readU16(cfg + 18) > 8 || readU32(cfg) == 0)
         return false;
     for (uint8_t index = 0; index < 3; ++index)
     {
@@ -58,6 +60,28 @@ bool validateCollectionCatalog(const RuntimeTable &table, uint8_t statCount,
         uint16_t frame = 0;
         if (!product(table, cfg + 4 + index * 4, ref, frame)) return false;
     }
+    const Section *tracked = table.find(CollectionTrackedActions);
+    const Section *actions = table.find(Actions);
+    if (tracked == nullptr || actions == nullptr || tracked->count != readU16(cfg + 18) ||
+        (tracked->count == 0) != (readU32(cfg + 20) == 0)) return false;
+    uint8_t actionMask = 0;
+    for (uint8_t index = 0; index < tracked->count; ++index)
+    {
+        uint8_t row[4] = {};
+        if (!readRecord(table.source, *tracked, index, row) || row[0] != index ||
+            row[1] >= 8 || readU16(row + 2) != 0 || (actionMask & (1U << row[1]))) return false;
+        bool found = false;
+        for (uint16_t action = 0; action < actions->count; ++action)
+        {
+            uint8_t record[16] = {};
+            if (!readRecord(table.source, *actions, action, record)) return false;
+            found |= record[0] == row[1];
+        }
+        if (!found) return false;
+        config.trackedActions[index] = row[1];
+        actionMask |= 1U << row[1];
+    }
+    uint8_t usedTracked = 0;
     uint16_t consumed = 0;
     for (uint16_t index = 0; index < items->count; ++index)
     {
@@ -76,18 +100,50 @@ bool validateCollectionCatalog(const RuntimeTable &table, uint8_t statCount,
         {
             uint8_t condition[10] = {};
             if (!readRecord(table.source, *conditions, consumed++, condition) ||
-                condition[0] >= statCount || condition[0] >= kPetCustomStatCount || condition[1] != 0 ||
                 readI32(condition + 2) > readI32(condition + 6)) return false;
+            const int32_t minimum = readI32(condition + 2), maximum = readI32(condition + 6);
+            if (condition[1] == 0)
+            {
+                if (condition[0] >= statCount || condition[0] >= kPetCustomStatCount) return false;
+                uint8_t stat[12] = {};
+                const Section *stats = table.find(PetStats);
+                if (stats == nullptr || !readRecord(table.source, *stats, condition[0], stat) ||
+                    minimum < readI16(stat + 4) || maximum > readI16(stat + 6)) return false;
+            }
+            else if (condition[1] == 1 || condition[1] == 2)
+            {
+                if (condition[0] != 0 || minimum != maximum || minimum <= 0 || minimum > 65535) return false;
+                const Section *identities = table.find(condition[1] == 1 ? Species : Outfits);
+                bool found = false;
+                if (identities == nullptr) return false;
+                for (uint16_t identity = 0; identity < identities->count; ++identity)
+                {
+                    uint8_t record[8] = {};
+                    if (!readRecord(table.source, *identities, identity, record)) return false;
+                    const int32_t target = condition[1] == 1 ? record[0] : record[0] * 256 + record[1];
+                    found |= target == minimum;
+                }
+                if (!found) return false;
+            }
+            else if (condition[1] == 3)
+            {
+                if (condition[0] >= tracked->count || minimum < 1 || maximum != 65535) return false;
+                usedTracked |= 1U << condition[0];
+            }
+            else return false;
         }
     }
-    fingerprint = readU32(cfg);
-    return consumed == conditions->count;
+    config.collectionFingerprint = readU32(cfg);
+    config.trackedActionFingerprint = readU32(cfg + 20);
+    config.trackedActionCount = tracked->count;
+    return consumed == conditions->count && usedTracked == ((1U << tracked->count) - 1U);
 #endif
 }
 
 bool evaluateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &pet, bool &changed)
 {
     changed = pet.configureCollection(config.collectionFingerprint);
+    changed |= pet.configureTrackedActions(config.trackedActionFingerprint);
     if (config.collectionFingerprint == 0) return true;
     RuntimeTableFile file;
     if (!file.open(sd, config.assetManifest)) return false;
@@ -96,6 +152,8 @@ bool evaluateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &
     const Section *conditions = table.find(CollectionConditions);
     if (items == nullptr || conditions == nullptr) return false;
     const PetStatSnapshot snapshot = pet.statSnapshot();
+    uint16_t counts[8] = {};
+    for (uint8_t index = 0; index < 8; ++index) counts[index] = pet.actionCount(index);
     for (uint16_t index = 0; index < items->count; ++index)
     {
         if (pet.isCollectionOwned(index)) continue;
@@ -106,8 +164,20 @@ bool evaluateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &
         {
             uint8_t condition[10] = {};
             if (!readRecord(table.source, *conditions, readU16(item + 2) + clause, condition) ||
-                condition[0] >= config.statCount || condition[0] >= kPetCustomStatCount) return false;
-            const int32_t value = snapshot.customStats[condition[0]];
+                condition[1] > 3) return false;
+            int32_t value = 0;
+            if (condition[1] == 0)
+            {
+                if (condition[0] >= config.statCount || condition[0] >= kPetCustomStatCount) return false;
+                value = snapshot.customStats[condition[0]];
+            }
+            else if (condition[1] == 1) value = snapshot.speciesSlot;
+            else if (condition[1] == 2) value = snapshot.speciesSlot * 256 + snapshot.outfitSlot;
+            else
+            {
+                if (condition[0] >= config.trackedActionCount) return false;
+                value = counts[condition[0]];
+            }
             matches &= value >= readI32(condition + 2) && value <= readI32(condition + 6);
         }
         if (matches) { pet.acquireCollection(index); changed = true; }
@@ -127,7 +197,7 @@ bool validateCollectionProducts(const RuntimeTable &table, BundleReader &reader)
             {ref.speciesSlot, ref.outfitSlot, ref.animationId, 0, index}, nullptr,
             buffer, sizeof(buffer), line, 128, 0, 0, 1, width, height);
     };
-    uint8_t cfg[20] = {};
+    uint8_t cfg[24] = {};
     if (!header(table, cfg) || !valid(cfg + 4, 128, 160) ||
         !valid(cfg + 8, 32, 32) || !valid(cfg + 12, 32, 32)) return false;
     const Section *items = table.find(CollectionItems);
@@ -149,7 +219,7 @@ bool CollectionCatalog::start()
 {
     if (config.collectionFingerprint == 0) return false;
     RuntimeTableFile file;
-    uint8_t cfg[20] = {};
+    uint8_t cfg[24] = {};
     if (!file.open(renderer.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
     count = static_cast<uint8_t>(readU16(cfg + 16));
     opened = true;
@@ -165,7 +235,7 @@ bool CollectionCatalog::drawCell(const RuntimeTable &table, uint8_t cell, bool s
     const uint8_t y = (cell / 4) * 32;
     if (cell == 0)
     {
-        uint8_t cfg[20] = {};
+        uint8_t cfg[24] = {};
         return header(table, cfg) && show(renderer, table, cfg + (selected ? 12 : 8), x, y, 32, 32);
     }
     const uint8_t slot = page * 15 + cell - 1;
@@ -181,7 +251,7 @@ bool CollectionCatalog::redraw()
 {
     if (!opened) return true;
     RuntimeTableFile file;
-    uint8_t cfg[20] = {};
+    uint8_t cfg[24] = {};
     if (!file.open(renderer.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
     if (detail)
     {

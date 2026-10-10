@@ -69,9 +69,9 @@ bool AppearanceChangeController::resolveUnlockState(bool initialize)
     return true;
 }
 
-bool AppearanceChangeController::refreshUnlockState(bool initialize)
+bool AppearanceChangeController::refreshUnlockState(bool initialize, bool persist)
 {
     const uint8_t previousMask = pet.outfitUnlockMask();
     return resolveUnlockState(initialize) &&
-           (pet.outfitUnlockMask() == previousMask || saves.saveNow());
+           (!persist || pet.outfitUnlockMask() == previousMask || saves.saveNow());
 }

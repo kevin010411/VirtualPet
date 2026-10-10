@@ -442,11 +442,11 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     config.activeOutfitSlot = outfitSlot;
     config.schemaFingerprint = table.schemaFingerprint;
 #if ENABLE_COLLECTION_CATALOG
-    if (!validateCollectionCatalog(table, static_cast<uint8_t>(stats->count), config.collectionFingerprint))
+    if (!validateCollectionCatalog(table, static_cast<uint8_t>(stats->count), config))
         return false;
 #else
     if ((table.featureFlags & kCollectionFeature) != 0 || table.find(CollectionConfig) != nullptr ||
-        table.find(CollectionItems) != nullptr || table.find(CollectionConditions) != nullptr) return false;
+        table.find(CollectionItems) != nullptr || table.find(CollectionConditions) != nullptr || table.find(CollectionTrackedActions) != nullptr) return false;
 #endif
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
     if (!decodeStats(source, *stats, config) ||

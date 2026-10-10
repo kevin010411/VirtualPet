@@ -11,7 +11,7 @@ namespace
 {
 constexpr const char *kStateSlotAPath = "/state_a.bin";
 constexpr const char *kStateSlotBPath = "/state_b.bin";
-static_assert(sizeof(PersistedPetState) == 80, "Unexpected v15 pet state layout");
+static_assert(sizeof(PersistedPetState) == 96, "Unexpected v16 pet state layout");
 
 uint32_t calculateStateCrc(const PersistedPetState &state)
 {
