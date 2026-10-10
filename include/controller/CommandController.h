@@ -16,6 +16,7 @@ enum class AppCommandId : uint8_t
     Status = APP_COMMAND_STATUS,
     ChangeSpecies = APP_COMMAND_CHANGE_SPECIES,
     UserAction = APP_COMMAND_USER_ACTION,
+    CollectionCatalog = APP_COMMAND_COLLECTION_CATALOG,
 };
 
 class CommandController

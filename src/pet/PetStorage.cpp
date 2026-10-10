@@ -11,7 +11,7 @@ namespace
 {
 constexpr const char *kStateSlotAPath = "/state_a.bin";
 constexpr const char *kStateSlotBPath = "/state_b.bin";
-static_assert(sizeof(PersistedPetState) == 64, "Unexpected v12 pet state layout");
+static_assert(sizeof(PersistedPetState) == 80, "Unexpected v15 pet state layout");
 
 uint32_t calculateStateCrc(const PersistedPetState &state)
 {
@@ -134,7 +134,13 @@ bool PetStorage::save(const Pet &pet)
 
     const char *path = writeSlotA ? kStateSlotAPath : kStateSlotBPath;
     if (!writeStateSlot(sd, path, state))
+    {
+        // A complete buffered write followed by failed sync must not become a
+        // valid newer commit on the next boot. The other slot is the last
+        // successful transaction; remove only this attempted candidate.
+        sd->remove(path);
         return false;
+    }
 
     ++nextSequence;
     writeSlotA = !writeSlotA;

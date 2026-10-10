@@ -25,6 +25,7 @@ namespace
 #define COMMAND_SLOT_GUESS_GAME CommandController::emptySlot()
 #endif
 #define COMMAND_SLOT_STATUS COMMAND_SLOT(AppCommandId::Status, "STATUS")
+#define COMMAND_SLOT_COLLECTION_CATALOG COMMAND_SLOT(AppCommandId::CollectionCatalog, "COLLECTION")
 } // namespace
 
 constexpr CommandController::CommandSlot CommandController::emptySlot()

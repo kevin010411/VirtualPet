@@ -39,9 +39,18 @@ int main()
     }
     {
         SdFat sd;
-        sd.failSync(0x55, 0x66);
         PetStorage storage(&sd);
+        assert(storage.save(pet));
+        pet.setCustomStat(0, 123);
+        pet.configureCollection(17);
+        pet.acquireCollection(0);
+        sd.failSync(0x55, 0x66);
         assert(!storage.save(pet));
+        Pet restored;
+        PetStorage reboot(&sd);
+        assert(reboot.load(restored, pet.persistentState().schemaFingerprint));
+        assert(restored.customStat(0) == 0);
+        assert(!restored.isCollectionOwned(0));
     }
     return 0;
 }

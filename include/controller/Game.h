@@ -23,6 +23,7 @@ class Pet;
 class PetBehaviorRuntime;
 class PetStorage;
 class Renderer;
+class CollectionCatalog;
 
 class Game : private EvolutionHost, private PetSessionHost
 {
@@ -42,6 +43,7 @@ public:
     bool saveNow();
     bool startStartupAnimation();
     bool hasTransientAnimation() const;
+    bool isCollectionCatalogActive() const;
     void startBatteryAnimation();
     void endBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
@@ -82,6 +84,11 @@ private:
     std::unique_ptr<CommandExecutor> commandExecutor;
     std::unique_ptr<CommandController> commands;
     std::unique_ptr<LayoutRenderer> layout;
+#if ENABLE_COLLECTION_CATALOG
+    std::unique_ptr<CollectionCatalog> collectionCatalog;
+    unsigned long collectionEnteredAt = 0;
+    bool collectionSavePending = false;
+#endif
 #if ENABLE_APPEARANCE_SELECTION
     std::unique_ptr<AppearanceSelectionController> appearanceSelection;
 #endif
@@ -114,6 +121,7 @@ private:
     void handlePlaybackResult(PlaybackResult playbackResult);
     void completeFirstStartIfReady(const PlaybackTickResult &playbackResult);
     void enterCommand();
+    bool updateCollectionProgress();
 };
 
 #endif // GAME_H

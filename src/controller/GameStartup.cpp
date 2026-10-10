@@ -11,6 +11,9 @@
 #include "pet/Pet.h"
 #include "display/Renderer.h"
 #include "common/AppProfile.h"
+#if ENABLE_COLLECTION_CATALOG
+#include "collection/CollectionCatalog.h"
+#endif
 
 bool Game::setup_game()
 {
@@ -31,6 +34,9 @@ bool Game::prepare_game()
         return false;
     }
     commands->resetSelection();
+#if ENABLE_COLLECTION_CATALOG
+    collectionCatalog->exit();
+#endif
     layout->begin();
 
     dirtySelect = true;
@@ -112,6 +118,9 @@ bool Game::resetPet()
     if (runtimeLoadState != RuntimeLoadState::Ready || flow.isFatalError())
         return false;
     initialized = false;
+#if ENABLE_COLLECTION_CATALOG
+    collectionCatalog->exit();
+#endif
     cheatEvolutionPending = false;
     evolution->cancel();
     pendingFirstStartCompletion = false;
