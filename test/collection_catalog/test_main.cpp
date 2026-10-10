@@ -183,7 +183,12 @@ int main(int argc, char **argv)
         boot("content-only", true, 1, 17, 9);
         boot("quantity", false, 1, 17, 9);
         boot("reorder", false, 1, 17, 9);
-        boot("action-map", false, 0, 17, 9);
+        Pet owned; PetStorage ownershipCommit(&sd);
+        assert(ownershipCommit.load(owned, pet.persistentState().schemaFingerprint));
+        owned.acquireCollection(0);
+        assert(ownershipCommit.save(owned));
+        boot("action-map", true, 0, 17, 9);
+        boot("disabled", false, 0, 17, 9);
         boot("schema", false, 0, 0, 0);
         puts("[PASS] Public replacement bundles: reboot and content edits preserve progress; ordered identities clear ownership independently; action mapping clears counts; schema resets Pet without migration");
         return 0;
