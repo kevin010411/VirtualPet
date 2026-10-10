@@ -52,3 +52,12 @@ void PetSaveController::maybeSave()
 
     saveNow();
 }
+
+bool PetSaveController::applyCollectionGrants()
+{
+#if ENABLE_COLLECTION_CATALOG
+    return config == nullptr || applyCollectionOutfitGrants(renderer.sdCard(), *config, pet);
+#else
+    return true;
+#endif
+}

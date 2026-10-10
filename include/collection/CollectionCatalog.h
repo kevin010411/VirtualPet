@@ -12,6 +12,7 @@ bool validateCollectionCatalog(const RuntimeTableInternal::RuntimeTable &table,
 bool validateCollectionProducts(const RuntimeTableInternal::RuntimeTable &table, BundleReader &reader);
 bool evaluateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &pet,
                                bool &changed);
+bool applyCollectionOutfitGrants(SdFat *sd, const PetBehaviorConfig &config, Pet &pet);
 
 class CollectionCatalog
 {
@@ -22,6 +23,7 @@ public:
     bool move(bool right);
     bool confirm();
     bool redraw();
+    bool takeActivation(uint8_t &species, uint8_t &outfit);
     void exit() { opened = false; detail = false; }
 private:
     Pet &pet;
@@ -32,5 +34,7 @@ private:
     uint8_t page = 0;
     bool opened = false;
     bool detail = false;
+    uint8_t targetSpecies = 0;
+    uint8_t targetOutfit = 0;
     bool drawCell(const RuntimeTableInternal::RuntimeTable &table, uint8_t cell, bool selected);
 };

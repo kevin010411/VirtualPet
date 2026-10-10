@@ -27,6 +27,46 @@ bool show(Renderer &renderer, const RuntimeTable &table, const uint8_t *pair,
                                x, y, 12, width, height);
 }
 
+bool activationTarget(const RuntimeTable &table, const uint8_t *item,
+                      uint8_t &speciesSlot, uint8_t &outfitSlot)
+{
+    const uint16_t target = readU16(item + 30);
+    if (item[1] == 0) return target == 0;
+    if (item[1] > 2 || target == 0 || (item[1] == 1 && target > 255)) return false;
+    speciesSlot = item[1] == 1 ? target : target >> 8;
+    outfitSlot = item[1] == 2 ? target & 255 : 0;
+    const Section *species = table.find(Species), *outfits = table.find(Outfits);
+    uint8_t row[8] = {};
+    if (species == nullptr || outfits == nullptr || speciesSlot == 0 ||
+        speciesSlot > species->count ||
+        !readRecord(table.source, *species, speciesSlot - 1U, row) || row[0] != speciesSlot)
+        return false;
+    if (item[1] == 1) outfitSlot = row[1];
+    const uint16_t first = readU16(row + 2), count = readU16(row + 4);
+    if (outfitSlot == 0 || outfitSlot > 8 || first + count > outfits->count) return false;
+    for (uint16_t index = first; index < first + count; ++index)
+    {
+        if (!readRecord(table.source, *outfits, index, row)) return false;
+        if (row[0] == speciesSlot && row[1] == outfitSlot) return true;
+    }
+    return false;
+}
+
+bool applyGrants(const RuntimeTable &table, Pet &pet)
+{
+    const Section *items = table.find(CollectionItems);
+    if (items == nullptr) return false;
+    for (uint16_t index = 0; index < items->count; ++index)
+    {
+        if (!pet.isCollectionOwned(index)) continue;
+        uint8_t item[32] = {}, species = 0, outfit = 0;
+        if (!readRecord(table.source, *items, index, item) ||
+            !activationTarget(table, item, species, outfit)) return false;
+        if (item[1] != 0 && species == pet.speciesSlot()) pet.unlockOutfit(outfit);
+    }
+    return true;
+}
+
 bool header(const RuntimeTable &table, uint8_t *record)
 {
     const Section *section = table.find(CollectionConfig);
@@ -85,11 +125,13 @@ bool validateCollectionCatalog(const RuntimeTable &table, uint8_t statCount,
     uint16_t consumed = 0;
     for (uint16_t index = 0; index < items->count; ++index)
     {
-        uint8_t item[30] = {};
-        if (!readRecord(table.source, *items, index, item) || item[0] != index || item[1] != 0 ||
+        uint8_t item[32] = {};
+        if (!readRecord(table.source, *items, index, item) || item[0] != index || item[1] > 2 ||
             readU16(item + 2) != consumed || readU16(item + 4) == 0 || readU16(item + 4) > 6 ||
             consumed + readU16(item + 4) > conditions->count)
             return false;
+        uint8_t targetSpecies = 0, targetOutfit = 0;
+        if (!activationTarget(table, item, targetSpecies, targetOutfit)) return false;
         for (uint8_t image = 0; image < 6; ++image)
         {
             AssetData::AnimationRef ref = {};
@@ -157,7 +199,7 @@ bool evaluateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &
     for (uint16_t index = 0; index < items->count; ++index)
     {
         if (pet.isCollectionOwned(index)) continue;
-        uint8_t item[30] = {};
+        uint8_t item[32] = {};
         if (!readRecord(table.source, *items, index, item)) return false;
         bool matches = true;
         for (uint16_t clause = 0; clause < readU16(item + 4); ++clause)
@@ -182,7 +224,18 @@ bool evaluateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &
         }
         if (matches) { pet.acquireCollection(index); changed = true; }
     }
+    const uint8_t previousMask = pet.outfitUnlockMask();
+    if (!applyGrants(table, pet)) return false;
+    changed |= pet.outfitUnlockMask() != previousMask;
     return true;
+}
+
+bool applyCollectionOutfitGrants(SdFat *sd, const PetBehaviorConfig &config, Pet &pet)
+{
+    if (config.collectionFingerprint == 0) return true;
+    RuntimeTableFile file;
+    if (!file.open(sd, config.assetManifest)) return false;
+    return applyGrants(file.table(), pet);
 }
 
 bool validateCollectionProducts(const RuntimeTable &table, BundleReader &reader)
@@ -204,7 +257,7 @@ bool validateCollectionProducts(const RuntimeTable &table, BundleReader &reader)
     if (items == nullptr) return false;
     for (uint16_t index = 0; index < items->count; ++index)
     {
-        uint8_t item[30] = {};
+        uint8_t item[32] = {};
         if (!readRecord(table.source, *items, index, item)) return false;
         for (uint8_t image = 0; image < 6; ++image)
             if (!valid(item + 6 + image * 4, image < 4 ? 32 : 128, image < 4 ? 32 : 160)) return false;
@@ -223,6 +276,7 @@ bool CollectionCatalog::start()
     if (!file.open(renderer.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
     count = static_cast<uint8_t>(readU16(cfg + 16));
     opened = true;
+    targetSpecies = targetOutfit = 0;
     detail = false;
     focus = 0;
     page = 0;
@@ -240,7 +294,7 @@ bool CollectionCatalog::drawCell(const RuntimeTable &table, uint8_t cell, bool s
     }
     const uint8_t slot = page * 15 + cell - 1;
     if (slot >= count) return true;
-    uint8_t item[30] = {};
+    uint8_t item[32] = {};
     const Section *items = table.find(CollectionItems);
     return items != nullptr && readRecord(table.source, *items, slot, item) &&
         show(renderer, table, item + 6 + (pet.isCollectionOwned(slot) ? 8 : 0) +
@@ -255,7 +309,7 @@ bool CollectionCatalog::redraw()
     if (!file.open(renderer.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
     if (detail)
     {
-        uint8_t item[30] = {};
+        uint8_t item[32] = {};
         const uint8_t slot = page * 15 + focus - 1;
         const Section *items = file.table().find(CollectionItems);
         return items != nullptr && readRecord(file.table().source, *items, slot, item) &&
@@ -292,6 +346,30 @@ bool CollectionCatalog::confirm()
 {
     if (detail) { detail = false; return redraw(); }
     if (focus == 0) { exit(); return true; }
+    const uint8_t slot = page * 15 + focus - 1;
+    if (pet.isCollectionOwned(slot))
+    {
+        RuntimeTableFile file;
+        uint8_t item[32] = {};
+        if (!file.open(renderer.sdCard(), config.assetManifest)) return false;
+        const Section *items = file.table().find(CollectionItems);
+        if (items == nullptr || !readRecord(file.table().source, *items, slot, item)) return false;
+        if (item[1] != 0)
+        {
+            if (!activationTarget(file.table(), item, targetSpecies, targetOutfit)) return false;
+            exit();
+            return true;
+        }
+    }
     detail = true;
     return redraw();
+}
+
+bool CollectionCatalog::takeActivation(uint8_t &species, uint8_t &outfit)
+{
+    if (targetSpecies == 0) return false;
+    species = targetSpecies;
+    outfit = targetOutfit;
+    targetSpecies = targetOutfit = 0;
+    return true;
 }

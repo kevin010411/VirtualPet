@@ -139,6 +139,65 @@ int main(int argc, char **argv)
         puts("[PASS] Public six-AND/eight-action export: production dispatch/replays, saturation, atomic storage, identity resets and independent fingerprints");
         return 0;
     }
+    if (argc == 3 && std::string(argv[2]) == "activation")
+    {
+        const auto activate = [&](uint8_t slot) {
+            game.OnConfirmKey();
+            assert(game.isCollectionCatalogActive());
+            for (uint8_t step = 0; step <= slot; ++step) game.OnRightKey();
+            game.OnConfirmKey();
+        };
+        pet.setCustomStat(0, 1);
+        assert(game.saveNow());
+        assert(pet.isCollectionOwned(0) && pet.isCollectionOwned(1) && pet.isCollectionOwned(2));
+        assert(!pet.isCollectionOwned(3));
+        activate(3);
+        assert(game.isCollectionCatalogActive() && pet.speciesSlot() == 1); // hint only
+        game.OnConfirmKey();
+        for (uint8_t step = 0; step < 4; ++step) game.OnLeftKey();
+        game.OnConfirmKey();
+        pet.setStageDays(7);
+        pet.incrementActionCount(0);
+        const uint32_t beforeSpecies = storage.lastSaveSequence();
+        activate(0);
+        assert(!game.isCollectionCatalogActive() && pet.speciesSlot() == 2 && pet.outfitSlot() == 1);
+        assert(pet.stageDays() == 0 && pet.customStat(0) == 1 && pet.actionCount(0) == 0);
+        assert(storage.lastSaveSequence() == beforeSpecies + 1);
+        assert(pet.isOutfitUnlocked(2)); // owned collection overrides unmet original predicate
+        pet.setStageDays(9);
+        pet.incrementActionCount(0);
+        activate(1);
+        assert(pet.speciesSlot() == 2 && pet.outfitSlot() == 2 && pet.stageDays() == 9);
+        assert(pet.actionCount(0) == 0 && pet.customStat(0) == 1);
+        pet.incrementActionCount(0);
+        activate(1);
+        assert(pet.actionCount(0) == 1 && pet.stageDays() == 9); // same target never resets
+        activate(2);
+        assert(pet.speciesSlot() == 1 && pet.stageDays() == 0 && pet.actionCount(0) == 0);
+        activate(0);
+        assert(pet.speciesSlot() == 2 && pet.isOutfitUnlocked(2)); // grant derived on revisit
+        activate(1);
+        Pet restored;
+        PetStorage rebootStorage(&sd);
+        Renderer rebootRenderer(&display, &sd);
+        SdAppearanceLoader rebootLoader(&sd);
+        Game reboot(restored, rebootStorage, rebootRenderer, rebootLoader);
+        assert(reboot.setup_game());
+        assert(restored.speciesSlot() == 2 && restored.outfitSlot() == 2 && restored.isOutfitUnlocked(2));
+        assert(restored.customStat(0) == 1 && restored.isCollectionOwned(0));
+        const uint32_t previousSequence = rebootStorage.lastSaveSequence();
+        sd.limitWrite(12, 0, 0);
+        reboot.OnConfirmKey();
+        for (uint8_t step = 0; step < 3; ++step) reboot.OnRightKey();
+        reboot.OnConfirmKey();
+        assert(rebootStorage.lastSaveSequence() == previousSequence);
+        Pet recovered;
+        PetStorage recovery(&sd);
+        assert(recovery.load(recovered, restored.persistentState().schemaFingerprint));
+        assert(recovered.speciesSlot() == 2 && recovered.outfitSlot() == 2 && recovered.isCollectionOwned(1));
+        puts("[PASS] Public activation export: unowned hint, species/outfit targets, identity semantics, reusable grants, single atomic save, reboot and interrupted switching");
+        return 0;
+    }
     assert(!pet.isCollectionOwned(0));
     if (argc == 3 && strcmp(argv[2], "grid64") == 0)
     {

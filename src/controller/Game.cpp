@@ -377,6 +377,19 @@ void Game::OnConfirmKey()
         if (!collectionCatalog->confirm()) { enterRuntimeFatal(); return; }
         if (!collectionCatalog->active())
         {
+            uint8_t species = 0, outfit = 0;
+            if (collectionCatalog->takeActivation(species, outfit))
+            {
+                const AppearanceChangeResult result = appearanceChanges.applyCollectionTarget(species, outfit);
+                if (result == AppearanceChangeResult::ConfigurationFailed ||
+                    result == AppearanceChangeResult::UnlockFailed ||
+                    result == AppearanceChangeResult::PetStateRejected)
+                { enterRuntimeFatal(); return; }
+                if (result == AppearanceChangeResult::SaveFailed) renderer.showResourceError("pet state");
+                cheatEvolutionPending = false;
+                refreshBaseAnimation();
+                enterCommand();
+            }
             last_tick_time += millis() - collectionEnteredAt;
             requestFullRedraw();
         }
