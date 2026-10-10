@@ -116,6 +116,11 @@ public:
             if ((flags & O_TRUNC) != 0)
                 entry->bytes.clear();
             files_[key] = entry;
+            if (successfulWritesBeforeLimit_ != 0)
+            {
+                --successfulWritesBeforeLimit_;
+                return File(entry);
+            }
             return File(entry, writeLimit_, syncOk_);
         }
         return found == files_.end() ? File() : File(found->second);
@@ -160,6 +165,11 @@ public:
         errorCode_ = code;
         errorData_ = data;
     }
+    void limitWriteAfter(size_t successfulWrites, size_t limit)
+    {
+        successfulWritesBeforeLimit_ = successfulWrites;
+        writeLimit_ = limit;
+    }
     void corrupt(const char *path, size_t offset)
     {
         auto entry = files_.at(path);
@@ -170,6 +180,7 @@ private:
     std::map<std::string, std::shared_ptr<HostFileEntry>> files_;
     bool failOpen_ = false;
     size_t writeLimit_ = static_cast<size_t>(-1);
+    size_t successfulWritesBeforeLimit_ = 0;
     bool syncOk_ = true;
     uint8_t errorCode_ = 0;
     uint8_t errorData_ = 0;

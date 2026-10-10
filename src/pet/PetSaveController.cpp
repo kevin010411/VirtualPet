@@ -18,13 +18,29 @@ PetSaveController::PetSaveController(Pet &petRef, PetStorage &petStorageRef, Ren
 
 bool PetSaveController::saveNow()
 {
+    return saveCollectionProgress(true);
+}
+
+bool PetSaveController::saveCollectionProgress(bool forceSave)
+{
 #if ENABLE_COLLECTION_CATALOG
     // Evaluate against the complete mutation before committing one A/B snapshot.
     // Appearance, effects, counters, acquisition and unlock bits travel together.
     bool changed = false;
     if (config != nullptr && !evaluateCollectionCatalog(renderer.sdCard(), *config, pet, changed))
+    {
+        renderer.recordAssetDataErrorResource("runtime.bin");
         return false;
+    }
+    if (!forceSave && !changed) return true;
+#else
+    if (!forceSave) return true;
 #endif
+    return saveSnapshot();
+}
+
+bool PetSaveController::saveSnapshot()
+{
     const bool saved = petStorage.save(pet);
 #if ENABLE_DEBUG
     char title[21] = {};

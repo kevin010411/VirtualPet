@@ -44,7 +44,8 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
 #endif
 #if ENABLE_GUESS_GAME
       ,
-      minigame(std::make_unique<MinigameController>(*animations, *petBehaviorRuntime))
+      minigame(std::make_unique<MinigameController>(*animations, *petBehaviorRuntime,
+                  static_cast<MinigameOutcomeHost &>(*this)))
 #endif
 {
 }
@@ -267,22 +268,40 @@ bool Game::isCollectionCatalogActive() const
 bool Game::updateCollectionProgress()
 {
 #if ENABLE_COLLECTION_CATALOG
-    bool changed = false;
-    if (!evaluateCollectionCatalog(animations->sdCard(), petBehaviorConfig, pet, changed))
+    if (!petSaves.saveCollectionProgress(collectionSavePending))
     {
-        renderer.recordAssetDataErrorResource("runtime.bin");
-        enterRuntimeFatal();
+        // A failed commit keeps pending progress for the next complete mutation.
+        // Contract failure remains terminal, distinct from storage failure.
+        collectionSavePending = true;
+        if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+            enterRuntimeFatal();
+        else
+            renderer.showResourceError("pet state");
         return false;
     }
-    collectionSavePending |= changed;
-    if (collectionSavePending)
-    {
-        if (!petSaves.saveNow()) { renderer.showResourceError("pet state"); return false; }
-        collectionSavePending = false;
-    }
+    collectionSavePending = false;
 #endif
     return true;
 }
+
+#if ENABLE_GUESS_GAME
+void Game::onGuessOutcomeApplied()
+{
+    // Round and final outcomes are separate complete mutations. Commit each
+    // before a following outcome or its animation can change the same stat.
+    if (!refreshOutfitUnlockMask(false, false))
+    {
+        renderer.showResourceError();
+        return;
+    }
+#if ENABLE_COLLECTION_CATALOG
+    collectionSavePending = true;
+    updateCollectionProgress();
+#else
+    if (!petSaves.saveNow()) renderer.showResourceError("pet state");
+#endif
+}
+#endif
 
 void Game::startBatteryAnimation()
 {
