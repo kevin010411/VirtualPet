@@ -28,6 +28,9 @@ Pet Stat、Status 與 Evolution runtime table 請由 Web exporter 產生；權�
 
 ## 維護與歷史資料
 
+- [硬體原理圖与電源策略評估（2026-10-09）](hardware/power-strategy-2026-10-09.md)
+- [RTC、STOP 與無操作背光設計草案](hardware/rtc-stop-backlight-design.md)
+
 - [Flash 最佳化紀錄](flash_optimization_report.md)
 - [待辦事項](Todo.md)
 - `legacy/`：舊版硬體與 PlatformIO 設定，僅供參考。
