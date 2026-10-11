@@ -171,25 +171,6 @@ bool Pet::setCustomStat(uint8_t index, int16_t value)
     return true;
 }
 
-bool Pet::changeCustomStat(uint8_t index, int16_t delta)
-{
-    if (index >= PetStatSnapshot::kCustomStatCount)
-        return false;
-
-    st.customStats[index] = static_cast<int16_t>(st.customStats[index] + delta);
-    return true;
-}
-
-bool Pet::changeCustomStatClamped(uint8_t index, int16_t delta, int16_t minValue, int16_t maxValue)
-{
-    if (index >= PetStatSnapshot::kCustomStatCount || minValue > maxValue)
-        return false;
-
-    const int32_t next = static_cast<int32_t>(st.customStats[index]) + delta;
-    st.customStats[index] = static_cast<int16_t>(clampValue<int32_t>(next, minValue, maxValue));
-    return true;
-}
-
 bool Pet::setSpeciesSlot(uint8_t slot)
 {
     char text[sizeof(st.speciesSlotText)] = {};
@@ -254,16 +235,6 @@ bool Pet::commitConsumableOutfitUnlock(uint8_t outfitSlot,
 bool Pet::isFirstLaunchComplete() const
 {
     return (st.flowFlags & kFirstLaunchCompleteFlag) != 0;
-}
-
-void Pet::markFirstLaunchComplete()
-{
-    st.flowFlags |= kFirstLaunchCompleteFlag;
-}
-
-void Pet::resetFirstLaunch()
-{
-    st.flowFlags &= ~kFirstLaunchCompleteFlag;
 }
 
 bool Pet::isFirstStartCompleted() const

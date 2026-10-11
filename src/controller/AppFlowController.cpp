@@ -1,10 +1,5 @@
 #include "controller/AppFlowController.h"
 
-AppStage AppFlowController::stage() const
-{
-    return currentStage;
-}
-
 bool AppFlowController::isStartup() const
 {
     return currentStage == AppStage::Startup;
@@ -18,11 +13,6 @@ bool AppFlowController::isCommand() const
 bool AppFlowController::isMinigame() const
 {
     return currentStage == AppStage::Minigame;
-}
-
-bool AppFlowController::isBattery() const
-{
-    return currentStage == AppStage::Battery;
 }
 
 bool AppFlowController::isFatalError() const

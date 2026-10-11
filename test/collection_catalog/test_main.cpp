@@ -192,22 +192,24 @@ int main(int argc, char **argv)
         return 0;
     }
 #endif
-    if (argc == 3 && std::string(argv[2]) == "invalid")
+    if (argc == 3 && std::string(argv[2]) == "capacity")
     {
         unsigned rejected = 0;
-        for (const auto &fixture : std::filesystem::directory_iterator(argv[1]))
+        // Product validation belongs to the exporter. Firmware retains only
+        // the limits required by its 64-bit ownership mask and eight counters.
+        for (const char *name : {"quantity", "action-capacity"})
         {
-            if (!fixture.is_directory()) continue;
-            SdFat damaged; mountBundle(damaged, fixture.path());
+            const auto fixture = std::filesystem::path(argv[1]) / name;
+            SdFat damaged; mountBundle(damaged, fixture);
             Adafruit_ST7735 display; Pet pet; PetStorage storage(&damaged);
             Renderer renderer(&display, &damaged); SdAppearanceLoader loader(&damaged);
             Game game(pet, storage, renderer, loader);
             assert(!game.setup_game());
             assert(!damaged.exists("/state_a.bin") && !damaged.exists("/state_b.bin"));
-            printf("[PASS] Production startup rejects %s before creating Pet state\n", fixture.path().filename().string().c_str());
+            printf("[PASS] Production startup rejects compiled capacity overflow: %s\n", name);
             ++rejected;
         }
-        assert(rejected > 0);
+        assert(rejected == 2);
         return 0;
     }
     SdFat sd;

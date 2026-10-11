@@ -18,6 +18,8 @@ constexpr uint16_t kMaxRuntimeAnimationId = 96;
 constexpr uint16_t kMaxAnimationRecords = 4096;
 constexpr uint16_t kMaxFrameDescriptors = 65535;
 constexpr uint16_t kMaxFramesPerAnimation = 256;
+// Shared Layout products include one image for every numeric segment.
+constexpr uint16_t kMaxSharedFramesPerAnimation = 1633;
 constexpr uint16_t kMaxVersions = 256;
 constexpr uint8_t kMaxOutfitsPerSpecies = 8;
 constexpr uint16_t kSpeciesSlotCount = 256;

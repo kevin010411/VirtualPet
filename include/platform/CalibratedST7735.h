@@ -12,7 +12,6 @@ public:
     void beginStartup(unsigned long now);
     bool advanceStartup(unsigned long now);
     bool startupWorkWindowOpen() const;
-    bool startupReady() const;
 
 private:
     enum class StartupPhase : uint8_t

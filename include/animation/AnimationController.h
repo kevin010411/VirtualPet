@@ -17,7 +17,6 @@ public:
     void configureRuntimeContract(const PetBehaviorConfig &config);
     void setup(const AssetData::AnimationRef &baseAnimation);
     void setBaseAnimation(const AssetData::AnimationRef &baseAnimation);
-    AssetData::AnimationRef baseAnimation() const;
     bool hasAnimation(FirmwarePlaybackRole id) const;
     bool hasAnimation(const AssetData::AnimationRef &animation) const;
     bool hasActionAnimation(FirmwarePlaybackRole id) const;
@@ -27,7 +26,6 @@ public:
     bool isBusy() const;
     bool hasAnimationPending(FirmwarePlaybackRole id) const;
     FirmwarePlaybackRole currentPlaybackRole() const;
-    AssetData::AnimationRef currentAnimation() const;
     uint8_t currentVersionIndex() const;
     void requestFullRedraw();
     bool takeFullRedrawRequest();
@@ -52,7 +50,6 @@ private:
     const PetBehaviorConfig *runtimeContract = nullptr;
     bool hasActiveAnimation = false;
     uint8_t activeRepeatsRemaining = 0;
-    AssetData::AnimationRef baseAnimationRef = {};
     BaseAnimationRotation baseRotation;
     long displayDuration = 0;
     bool dirtyAnimation = true;

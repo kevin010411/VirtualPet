@@ -382,7 +382,9 @@ bool BundleReader::readAnimation(SdBaseFile &file,
            validOutfit &&
            animation.versionIndex < AssetData::kMaxVersions &&
            animation.frameCount > 0 &&
-           animation.frameCount <= AssetData::kMaxFramesPerAnimation &&
+           animation.frameCount <= (header.packKind == AssetData::kPackKindShared
+                                        ? AssetData::kMaxSharedFramesPerAnimation
+                                        : AssetData::kMaxFramesPerAnimation) &&
            animation.frameMs > 0 && animation.frameMs <= 60000 &&
            animation.firstFrame <= header.frameCount &&
            animation.frameCount <= header.frameCount - animation.firstFrame;

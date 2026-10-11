@@ -56,11 +56,6 @@ bool CalibratedST7735::advanceStartup(unsigned long now)
     return startupPhase == StartupPhase::Ready;
 }
 
-bool CalibratedST7735::startupReady() const
-{
-    return startupPhase == StartupPhase::Ready;
-}
-
 bool CalibratedST7735::startupWorkWindowOpen() const
 {
     return startupPhase == StartupPhase::SleepOut;

@@ -5,32 +5,32 @@
 
 namespace
 {
-#define COMMAND_SLOT(commandId, label) \
-    { commandId, label, 0, true }
+#define COMMAND_SLOT(commandId) \
+    { commandId, 0, true }
 #if ENABLE_COMMAND_PREDICT
-#define COMMAND_SLOT_PREDICT COMMAND_SLOT(AppCommandId::Predict, "PREDICT")
+#define COMMAND_SLOT_PREDICT COMMAND_SLOT(AppCommandId::Predict)
 #else
 #define COMMAND_SLOT_PREDICT CommandController::emptySlot()
 #endif
 
 #if ENABLE_COMMAND_OUTFIT
-#define COMMAND_SLOT_CHANGE_OUTFIT COMMAND_SLOT(AppCommandId::ChangeOutfit, "CHANGE_OUTFIT")
+#define COMMAND_SLOT_CHANGE_OUTFIT COMMAND_SLOT(AppCommandId::ChangeOutfit)
 #else
 #define COMMAND_SLOT_CHANGE_OUTFIT CommandController::emptySlot()
 #endif
 
 #if ENABLE_GUESS_GAME
-#define COMMAND_SLOT_GUESS_GAME COMMAND_SLOT(AppCommandId::GuessGame, "GUESS_GAME")
+#define COMMAND_SLOT_GUESS_GAME COMMAND_SLOT(AppCommandId::GuessGame)
 #else
 #define COMMAND_SLOT_GUESS_GAME CommandController::emptySlot()
 #endif
-#define COMMAND_SLOT_STATUS COMMAND_SLOT(AppCommandId::Status, "STATUS")
-#define COMMAND_SLOT_COLLECTION_CATALOG COMMAND_SLOT(AppCommandId::CollectionCatalog, "COLLECTION")
+#define COMMAND_SLOT_STATUS COMMAND_SLOT(AppCommandId::Status)
+#define COMMAND_SLOT_COLLECTION_CATALOG COMMAND_SLOT(AppCommandId::CollectionCatalog)
 } // namespace
 
 constexpr CommandController::CommandSlot CommandController::emptySlot()
 {
-    return {AppCommandId::None, "NO_OP", 0, false};
+    return {AppCommandId::None, 0, false};
 }
 
 CommandController::CommandSlot CommandController::systemCommandSlot(RuntimeSystemCommandId runtimeId)
@@ -41,7 +41,7 @@ CommandController::CommandSlot CommandController::systemCommandSlot(RuntimeSyste
 
     switch (command->handler)
     {
-#define SYSTEM_COMMAND(handler, token, runtimeId, slot) \
+#define SYSTEM_COMMAND(handler, runtimeId, slot) \
     case SystemCommandHandler::handler:      \
         return slot;
 #include "controller/SystemCommandCatalog.def"
@@ -55,7 +55,7 @@ CommandController::CommandSlot CommandController::buttonSlot(const PetBehaviorBu
     if (!button.active || button.kind == PetBehaviorButtonKind::Empty)
         return emptySlot();
     if (button.kind == PetBehaviorButtonKind::UserAction)
-        return {AppCommandId::UserAction, "USER_ACTION", button.actionSlot, true};
+        return {AppCommandId::UserAction, button.actionSlot, true};
     if (button.kind == PetBehaviorButtonKind::SystemCommand)
         return systemCommandSlot(button.systemCommandId);
     return emptySlot();
@@ -117,30 +117,9 @@ uint8_t CommandController::currentActionSlot() const
     return slotAt(selected).actionSlot;
 }
 
-const char *CommandController::currentLabel() const
-{
-    return slotAt(selected).label;
-}
-
 AppCommandId CommandController::currentCommandId() const
 {
     return slotAt(selected).id;
-}
-
-bool CommandController::selectCommand(AppCommandId commandId)
-{
-    for (int i = 0; i < commandCount(); ++i)
-    {
-        const CommandSlot &slot = slotAt(i);
-        if (slot.visible && slot.id == commandId)
-        {
-            previous = selected;
-            selected = i;
-            return true;
-        }
-    }
-
-    return false;
 }
 
 int CommandController::commandCount() const

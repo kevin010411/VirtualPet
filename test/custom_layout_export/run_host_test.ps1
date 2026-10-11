@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Numeric)
+param([switch]$Numeric, [switch]$RejectRuleCapacity)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -34,7 +34,9 @@ $sources = @(
 Push-Location $repoRoot
 try {
     New-Item -ItemType Directory -Path (Split-Path -Parent $outputPath) -Force | Out-Null
-    & g++ -std=c++17 -DENABLE_DEBUG=0 -DAPP_MAX_PET_STATS=10 -DENABLE_COMMAND_OUTFIT=1 `
+    $ruleCapacity = if ($RejectRuleCapacity) { 64 } else { 200 }
+    $rejectCapacity = [int][bool]$RejectRuleCapacity
+    & g++ -std=c++17 -DENABLE_DEBUG=0 -DAPP_MAX_PET_STATS=10 "-DAPP_MAX_SCREEN_RULES=$ruleCapacity" "-DEXPECT_RULE_CAPACITY_REJECTION=$rejectCapacity" -DENABLE_COMMAND_OUTFIT=1 `
         -DENABLE_COMMAND_PREDICT=1 -DENABLE_GUESS_GAME=1 `
         -DENABLE_STARTUP_ANIMATION=1 -DENABLE_FIRST_START_ANIMATION=1 -DENABLE_OUTFIT_CHOOSE_ANIMATION=1 `
         -Itest/custom_layout_export -Itest/host_stubs -Iinclude @sources -o $outputPath

@@ -71,7 +71,12 @@ void verify(const std::string &root)
     assert(loadRuntimeManifest(&sd, manifest));
     assert(reader.configureBundle(manifest.bundleId));
     PetBehaviorConfig config = {};
+#if EXPECT_RULE_CAPACITY_REJECTION
+    assert(!loadCompleteRuntimeTable(&sd, manifest, reader, 1, 1, config));
+    return;
+#else
     assert(loadCompleteRuntimeTable(&sd, manifest, reader, 1, 1, config));
+#endif
     Adafruit_ST7735 display;
     Renderer renderer(&display, &sd);
     assert(renderer.configureAssetBundle(manifest.bundleId));
@@ -146,8 +151,14 @@ void verify(const std::string &root)
     assert(display.screen == expectedScreen());
     if (config.screenRuleCount)
     {
-        // Both inclusive ends, crossing ranges, null-image fallback, and blank restoration.
-        for (int value : {9, 10, 20, 21, 30, 40, 41, 50, 60, 70, 80, 81})
+        // Exercise every exported segment endpoint across all numeric blocks.
+        std::vector<int32_t> values{9, 10, 20, 21, 30, 40, 41, 50, 60, 70, 80, 81};
+        for (uint16_t index = 0; index < config.screenRuleCount; ++index)
+        {
+            values.push_back(config.screenRules[index].minimum);
+            values.push_back(config.screenRules[index].maximum);
+        }
+        for (int32_t value : values)
         {
             snapshot.stage_days = value;
             for (auto &stat : snapshot.customStats) stat = value;
@@ -170,6 +181,16 @@ void verify(const std::string &root)
             assert(display.windows.empty());
         }
         // Distinct intervals mapped to the same image must also skip TFT writes.
+        const std::vector<ScreenRuleConfig> originalRules(
+            config.screenRules, config.screenRules + config.screenRuleCount);
+        for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+        {
+            const auto &block = config.screenBlocks[index];
+            if (block.kind != ScreenBlockKind::Stat || !block.ruleCount) continue;
+            const uint16_t frame = config.screenRules[block.firstRule].frame;
+            for (uint8_t child = 0; child < block.ruleCount; ++child)
+                config.screenRules[block.firstRule + child].frame = frame;
+        }
         for (auto &stat : snapshot.customStats) stat = 10;
         snapshot.stage_days = 10;
         layout.updateValues(snapshot);
@@ -178,6 +199,7 @@ void verify(const std::string &root)
         display.windows.clear();
         layout.updateValues(snapshot);
         assert(display.windows.empty());
+        std::copy(originalRules.begin(), originalRules.end(), config.screenRules);
         // Different source values catch accidental Stage Days/Pet Stat aliasing.
         snapshot.stage_days = 30;
         for (auto &stat : snapshot.customStats) stat = 10;

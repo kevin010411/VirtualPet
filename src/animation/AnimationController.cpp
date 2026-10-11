@@ -45,7 +45,6 @@ void AnimationController::resetPlaybackState()
     activeAnimation = {};
     hasActiveAnimation = false;
     activeRepeatsRemaining = 0;
-    baseAnimationRef = {};
     baseRotation.reset();
     displayDuration = 0;
     dirtyAnimation = true;
@@ -68,15 +67,9 @@ void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAn
 {
     if (baseRotation.setBaseAnimation(baseAnimation, renderer))
     {
-        baseAnimationRef = baseAnimation;
         dirtyAnimation = true;
         playbackPrepared = false;
     }
-}
-
-AssetData::AnimationRef AnimationController::baseAnimation() const
-{
-    return baseAnimationRef;
 }
 
 bool AnimationController::hasAnimation(FirmwarePlaybackRole id) const
@@ -158,11 +151,6 @@ bool AnimationController::isBusy() const
 FirmwarePlaybackRole AnimationController::currentPlaybackRole() const
 {
     return hasActiveAnimation ? activeAnimation.playbackRole : showPlaybackRole;
-}
-
-AssetData::AnimationRef AnimationController::currentAnimation() const
-{
-    return showAnimation;
 }
 
 uint8_t AnimationController::currentVersionIndex() const

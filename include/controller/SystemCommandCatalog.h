@@ -6,7 +6,7 @@
 
 enum class SystemCommandHandler : uint8_t
 {
-#define SYSTEM_COMMAND(handler, token, runtimeId, slot) handler,
+#define SYSTEM_COMMAND(handler, runtimeId, slot) handler,
 #include "controller/SystemCommandCatalog.def"
 #undef SYSTEM_COMMAND
 };
@@ -23,14 +23,11 @@ enum class RuntimeSystemCommandId : uint16_t
 
 struct CompiledSystemCommand
 {
-    const char *token;
     SystemCommandHandler handler;
     RuntimeSystemCommandId runtimeId;
 };
 
-// Returns null when SD content names a command without a compiled handler.
-const CompiledSystemCommand *findCompiledSystemCommand(const char *token);
+// Returns null when the runtime ID has no compiled handler.
 const CompiledSystemCommand *findCompiledSystemCommand(RuntimeSystemCommandId id);
-bool runtimeSystemCommandIdForToken(const char *token, RuntimeSystemCommandId &id);
 
 #endif // SYSTEM_COMMAND_CATALOG_H

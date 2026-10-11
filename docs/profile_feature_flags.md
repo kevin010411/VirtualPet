@@ -11,11 +11,7 @@
 | `ENABLE_STARTUP_ANIMATION` | `1` | 編入啟動動畫流程 |
 | `ENABLE_FIRST_START_ANIMATION` | `0` | 不播放首次啟動專用動畫 |
 | `ENABLE_COMMAND_OUTFIT` | `0` | 不編入直接換裝 System Command |
-| `ENABLE_DYNAMIC_ACTION_LAYOUT` | `0` | 不編入動態 Action Layout 路徑 |
 | `ENABLE_COMMAND_PREDICT` | `0` | 不編入 Predict System Command |
 | `ENABLE_SEQUENTIAL_STATUS_SET_SELECTION` | `0` | Status Set 使用隨機選擇 |
-| `APP_MAX_LOADED_ANIMATIONS` | `11` | 載入動畫容量上限 |
-| `APP_MAX_NAMED_ANIMATIONS` | `1` | 命名動畫容量上限 |
-| `APP_MAX_ANIMATION_VARIANTS` | `11` | 動畫版本容量上限 |
 
 尺寸以 linked ELF 計算：Flash 為 `text + data`，靜態 RAM 為 `data + bss`。調整 flags 或容量時，記錄同一環境前後數字；Flash 減少不能替代功能與資源驗證。第三方圖形與 SdFat 依賴仍需保留。

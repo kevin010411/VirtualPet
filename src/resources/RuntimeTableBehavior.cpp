@@ -442,11 +442,10 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     config.activeOutfitSlot = outfitSlot;
     config.schemaFingerprint = table.schemaFingerprint;
 #if ENABLE_COLLECTION_CATALOG
-    if (!validateCollectionCatalog(table, static_cast<uint8_t>(stats->count), config))
+    if (!loadCollectionCatalog(table, config))
         return false;
 #else
-    if ((table.featureFlags & kCollectionFeature) != 0 || table.find(CollectionConfig) != nullptr ||
-        table.find(CollectionItems) != nullptr || table.find(CollectionConditions) != nullptr || table.find(CollectionTrackedActions) != nullptr) return false;
+    if ((table.featureFlags & kCollectionFeature) != 0) return false;
 #endif
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
     if (!decodeStats(source, *stats, config) ||
@@ -536,11 +535,11 @@ bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
             if (block.source != kUnboundScreenSource && block.source != kRuntimeValueStageDays &&
                 (!isRuntimeValueIdPetStat(block.source) || runtimePetStatSlot(block.source) >= config.statCount))
                 return false;
-            if (firstRule != nextRule || ruleCount > 32 || firstRule + ruleCount > rules->count)
+            if (firstRule != nextRule || ruleCount > kMaxScreenRulesPerBlock || firstRule + ruleCount > rules->count)
                 return false;
-            block.firstRule = static_cast<uint8_t>(firstRule);
+            block.firstRule = firstRule;
             block.ruleCount = static_cast<uint8_t>(ruleCount);
-            uint16_t localFrames[33] = {};
+            uint16_t localFrames[kMaxScreenRulesPerBlock + 1] = {};
             uint8_t localCount = 0;
             for (uint16_t child = 0; child <= ruleCount; ++child)
             {
@@ -588,7 +587,7 @@ bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
     // Publish the count only after the entire section has passed validation.
     if (nextRule != rules->count)
         return false;
-    config.screenRuleCount = static_cast<uint8_t>(rules->count);
+    config.screenRuleCount = rules->count;
     config.screenProductFrameCount = nextFrame - 1;
     config.screenBlockCount = static_cast<uint8_t>(blocks->count);
     return true;
@@ -713,9 +712,6 @@ bool loadCompleteRuntimeTable(SdFat *sd,
         decoded = decodeInitialAppearance(table, bundleReader, decodedInitial);
     if (decoded)
         decoded = AssetData::animationReferenceExists(bundleReader, config.idleAnimation);
-#if ENABLE_COLLECTION_CATALOG
-    if (decoded) decoded = validateCollectionProducts(table, bundleReader);
-#endif
     // The former second /runtime.bin read only checked these required
     // appearance sections. Keep that check after used asset references.
     if (decoded)

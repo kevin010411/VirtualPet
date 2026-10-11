@@ -3,9 +3,6 @@
 
 #include <Arduino.h>
 
-template <typename T>
-static inline T clampValue(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi : v); }
-
 static constexpr size_t kPetCustomStatCount = 8;
 static constexpr size_t kTrackedActionCount = 8;
 
@@ -59,8 +56,6 @@ public:
     PetStatSnapshot statSnapshot() const;
     int16_t customStat(uint8_t index) const;
     bool setCustomStat(uint8_t index, int16_t value);
-    bool changeCustomStat(uint8_t index, int16_t delta);
-    bool changeCustomStatClamped(uint8_t index, int16_t delta, int16_t minValue, int16_t maxValue);
     bool setSpeciesSlot(uint8_t slot);
     bool setOutfitSlot(uint8_t slot);
     uint8_t outfitUnlockMask() const;
@@ -70,8 +65,6 @@ public:
     bool commitConsumableOutfitUnlock(uint8_t outfitSlot,
                                       const PetStatSnapshot &consumedStats);
     bool isFirstLaunchComplete() const;
-    void markFirstLaunchComplete();
-    void resetFirstLaunch();
     bool isFirstStartCompleted() const;
     void markFirstStartCompleted();
     void resetFirstStartCompleted();

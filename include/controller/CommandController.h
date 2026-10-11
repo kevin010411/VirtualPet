@@ -30,9 +30,7 @@ public:
     void prev();
     uint8_t currentActionSlot() const;
 
-    const char *currentLabel() const;
     AppCommandId currentCommandId() const;
-    bool selectCommand(AppCommandId commandId);
     int commandCount() const;
     int selectedSlot() const;
     int previousSlot() const;
@@ -42,7 +40,6 @@ private:
     struct CommandSlot
     {
         AppCommandId id;
-        const char *label;
         uint8_t actionSlot;
         bool visible;
     };

@@ -44,10 +44,6 @@
 #define ENABLE_OUTFIT_CHOOSE_ANIMATION 0
 #endif
 
-#ifndef ENABLE_DYNAMIC_ACTION_LAYOUT
-#define ENABLE_DYNAMIC_ACTION_LAYOUT 0
-#endif
-
 #ifndef ENABLE_APPEARANCE_SELECTION
 #define ENABLE_APPEARANCE_SELECTION 1
 #endif
@@ -74,21 +70,13 @@
 #error "ENABLE_SEQUENTIAL_STATUS_SET_SELECTION must be 0 or 1."
 #endif
 
-#ifndef APP_MAX_LOADED_ANIMATIONS
-#define APP_MAX_LOADED_ANIMATIONS 48
-#endif
-
-#ifndef APP_MAX_NAMED_ANIMATIONS
-#define APP_MAX_NAMED_ANIMATIONS 5
-#endif
-
-#ifndef APP_MAX_ANIMATION_VARIANTS
-#define APP_MAX_ANIMATION_VARIANTS 16
-#endif
-
-
 #ifndef APP_MAX_PET_STATS
 #define APP_MAX_PET_STATS 6
+#endif
+
+// Generated per Project; do not reserve the maximum for every firmware build.
+#ifndef APP_MAX_SCREEN_RULES
+#define APP_MAX_SCREEN_RULES 64
 #endif
 
 #if ENABLE_COMMAND_OUTFIT && !ENABLE_APPEARANCE_SELECTION

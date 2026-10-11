@@ -16,11 +16,9 @@ enum class AppStage : uint8_t
 class AppFlowController
 {
 public:
-    AppStage stage() const;
     bool isStartup() const;
     bool isCommand() const;
     bool isMinigame() const;
-    bool isBattery() const;
     bool isFatalError() const;
 
     void enterCommand();
