@@ -12,6 +12,9 @@
 #include "pet/PetBehaviorRuntime.h"
 #include "animation/AnimationController.h"
 #include "controller/CommandExecutor.h"
+#if ENABLE_COLLECTION_CATALOG
+#include "collection/CollectionCatalog.h"
+#endif
 
 unsigned long hostMillis = 0;
 
@@ -29,6 +32,8 @@ struct Scenario
     bool rejectFirstStartQueue = false;
     int firstStartFrameQueries = 0;
     bool commandAction = false;
+    bool navigationButtons = false;
+    uint16_t selectedButtonFrame = 0;
     bool commandOutfit = false;
     int previewQueries = 0;
     int playbackDraws = 0;
@@ -1084,7 +1089,8 @@ void testGameRoutesUserActionResult()
         assert(data.unlocks == unlocks + 1);
         assert(data.unlockInput.customStats[0] == 8);
         assert(data.resourceShows == errors + (missing ? 1 : 0));
-        assert(data.saves == saves);
+        // Catalog builds commit the completed action immediately.
+        assert(data.saves == saves + ENABLE_COLLECTION_CATALOG);
         assert(game.hasTransientAnimation() == !missing);
     }
 }
@@ -1416,7 +1422,13 @@ void testRtcCatchUp()
             game.loop_game();
         }
         assert(pet.stageDays() == 1800 && !game.hasPendingTime());
+#if ENABLE_COLLECTION_CATALOG
+        // Failed unlock evaluation never reaches a complete daily mutation.
+        // Do not commit collection progress until that evaluation succeeds.
+        assert(data.saves == savesBefore + (failure == 2 ? 0 : 1));
+#else
         assert(data.saves == savesBefore + 1); // One periodic batch write.
+#endif
         game.synchronizeTime(3611);
         assert(pet.stageDays() == 1800);
         game.synchronizeTime(3612);
@@ -1471,7 +1483,134 @@ void testRtcSnapshotAndReset()
     assert(pet.stageDays() == 1);
 #endif
 }
+
+void testNavigationDuringRtcCatchUp()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = data.navigationButtons = true;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    game.synchronizeTime(10);
+    assert(game.setup_game());
+    game.synchronizeTime(30);
+    assert(game.hasPendingTime());
+    game.OnRightKey();
+    game.loop_game();
+    assert(data.selectedButtonFrame == 3); // Selection paints on this loop, not after catch-up.
+    assert(pet.stageDays() == 1 && pet.customStat(0) == 2);
+    game.OnLeftKey();
+    game.loop_game();
+    assert(data.selectedButtonFrame == 2);
+}
+
+void testFourSecondPeriodicSave()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = true;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    game.synchronizeTime(0);
+    assert(game.setup_game());
+    const int initialSaves = data.saves;
+    for (uint32_t seconds = 1; seconds <= 8; ++seconds)
+    {
+        hostMillis = seconds * 1000;
+        game.synchronizeTime(seconds);
+        game.loop_game();
+        assert(data.saves == initialSaves + static_cast<int>(seconds / 4));
+    }
+    assert(pet.stageDays() == 4);
+}
+
+void testDailyPostProcessingDisabled()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = true;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    game.synchronizeTime(0);
+    assert(game.setup_game());
+    const int initialSaves = data.saves;
+    const int initialUnlocks = data.unlocks;
+    const int initialLookups = data.evolutionLookups;
+    data.unlockSucceeds = false;
+    data.evolutionResult = EvolutionLookupResult::LoadFailed;
+    for (uint32_t seconds = 1; seconds <= 8; ++seconds)
+    {
+        hostMillis = seconds * 1000;
+        game.synchronizeTime(seconds);
+        game.loop_game();
+    }
+    assert(pet.stageDays() == 4);
+    assert(data.saves == initialSaves && data.unlocks == initialUnlocks);
+    assert(data.evolutionLookups == initialLookups && data.resourceShows == 0);
+    assert(game.isReady());
+    data.unlockSucceeds = true;
+    game.OnConfirmKey();
+    assert(pet.customStat(0) == 8);
+    assert(data.saves == initialSaves + ENABLE_COLLECTION_CATALOG);
+}
+
+void testDailySaveRetry()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    PetSaveController saves(pet, storage, renderer);
+    assert(saves.saveDailyProgress() && data.saves == 0);
+    data.saveSucceeds = false;
+    assert(!saves.saveDailyProgress() && data.saves == 1);
+    data.saveSucceeds = true;
+    // Retry on the next day; a failed write must not reset the interval.
+    assert(saves.saveDailyProgress() && data.saves == 2);
+    assert(saves.saveDailyProgress() && data.saves == 2);
+    assert(saves.saveDailyProgress() && data.saves == 3);
+    data.saveSucceeds = false;
+    assert(!saves.saveNow() && data.saves == 4);
+    data.saveSucceeds = true;
+    // Pending event commits retry even before the ordinary two-day threshold.
+    assert(saves.saveDailyProgress(true) && data.saves == 5);
+}
 } // namespace
+
+#if ENABLE_COLLECTION_CATALOG
+// No collection conditions in these fixtures. Exercise the production Game
+// and save controller with catalog support without requiring SD artwork.
+bool evaluateCollectionCatalog(SdFat *, const PetBehaviorConfig &, Pet &, bool &changed)
+{
+    changed = false;
+    return true;
+}
+bool applyCollectionOutfitGrants(SdFat *, const PetBehaviorConfig &, Pet &) { return true; }
+CollectionCatalog::CollectionCatalog(Pet &p, Renderer &r, const PetBehaviorConfig &c)
+    : pet(p), renderer(r), config(c) {}
+bool CollectionCatalog::start() { return false; }
+bool CollectionCatalog::move(bool) { return false; }
+bool CollectionCatalog::confirm() { return false; }
+bool CollectionCatalog::redraw() { return false; }
+bool CollectionCatalog::takeActivation(uint8_t &, uint8_t &) { return false; }
+#endif
 
 bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
                                 PetBehaviorConfig &config, bool &resolved,
@@ -1515,6 +1654,15 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
         config.screenBlockCount = 1;
         config.screenBlocks[0].kind = ScreenBlockKind::Button;
         config.screenBlocks[0].source = 1;
+    }
+    if (scenario->navigationButtons)
+    {
+        config.buttons[1] = config.buttons[0];
+        config.screenBlockCount = 2;
+        config.screenBlocks[1] = config.screenBlocks[0];
+        config.screenBlocks[1].source = 2;
+        config.layoutUnselected = {1, 1, 7};
+        config.layoutSelected = {1, 1, 8};
     }
     return true;
 }
@@ -1575,9 +1723,10 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation, uint8_t, b
 bool Renderer::currentLayoutId(uint8_t &layout) const { layout = 0; return scenario->layoutSucceeds; }
 bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &,
                                      const AssetData::AnimationRef &, uint8_t, uint8_t, uint16_t) { return true; }
-bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &, uint8_t,
-                                  uint16_t, int, int, int, uint16_t, uint16_t)
+bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation, uint8_t,
+                                  uint16_t frame, int, int, int, uint16_t, uint16_t)
 {
+    if (animation.animationId == 8) scenario->selectedButtonFrame = frame;
     ++scenario->playbackDraws;
     return true;
 }
@@ -1645,6 +1794,15 @@ SdFat *Renderer::sdCard() const { return SD; }
 
 int main()
 {
+#if !ENABLE_DAILY_POST_PROCESSING
+    testDailyPostProcessingDisabled();
+    testNavigationDuringRtcCatchUp();
+    testGameRoutesUserActionResult();
+    return 0;
+#endif
+    testFourSecondPeriodicSave();
+    testDailySaveRetry();
+    testNavigationDuringRtcCatchUp();
     testRtcCatchUp();
     testRtcSnapshotAndReset();
     testFatalPublicEntries();

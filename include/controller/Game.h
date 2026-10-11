@@ -134,6 +134,9 @@ private:
     void completeFirstStartIfReady(const PlaybackTickResult &playbackResult);
     void enterCommand();
     bool updateCollectionProgress(bool immediate = false);
+#if ENABLE_COLLECTION_CATALOG
+    bool finishCollectionSave(bool saved);
+#endif
 #if ENABLE_GUESS_GAME
     void onGuessOutcomeApplied() override;
 #endif

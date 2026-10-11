@@ -10,6 +10,11 @@
 #define APP_COMMAND_USER_ACTION 11
 #define APP_COMMAND_COLLECTION_CATALOG 12
 
+// Daily unlock/catalog/save/evolution processing is enabled by default.
+#ifndef ENABLE_DAILY_POST_PROCESSING
+#define ENABLE_DAILY_POST_PROCESSING 1
+#endif
+
 #ifndef ENABLE_COLLECTION_CATALOG
 #define ENABLE_COLLECTION_CATALOG 0
 #endif

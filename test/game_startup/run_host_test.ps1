@@ -1,11 +1,13 @@
 [CmdletBinding()]
-param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection)
+param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection, [switch]$EnableCollectionCatalog, [switch]$DisableDailyPostProcessing)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $outputName = if ($EnableFirstStartAnimation) { 'game_startup_first_start_host.exe' } else { 'game_startup_host.exe' }
 if ($EnableAppearanceSelection) { $outputName = $outputName.Replace('_host', '_appearance_host') }
+if ($EnableCollectionCatalog) { $outputName = $outputName.Replace('_host', '_collection_host') }
+if ($DisableDailyPostProcessing) { $outputName = $outputName.Replace('_host', '_no_daily_post_host') }
 $outputPath = Join-Path $repoRoot (Join-Path '.pio' $outputName)
 $startupEnabled = [int]$EnableFirstStartAnimation.IsPresent
 $appearanceEnabled = [int]$EnableAppearanceSelection.IsPresent
@@ -38,7 +40,8 @@ if ($EnableAppearanceSelection) { $sources += 'src/appearance/AppearanceSelectio
 Push-Location $repoRoot
 try {
     & g++ -std=c++17 -O1 -ffunction-sections -fdata-sections '-Wl,--gc-sections' `
-        -DENABLE_DEBUG=0 -DENABLE_GUESS_GAME=0 "-DENABLE_COMMAND_OUTFIT=$appearanceEnabled" `
+        "-DENABLE_DAILY_POST_PROCESSING=$([int](-not $DisableDailyPostProcessing.IsPresent))" `
+        -DENABLE_DEBUG=0 -DENABLE_GUESS_GAME=0 "-DENABLE_COLLECTION_CATALOG=$([int]$EnableCollectionCatalog.IsPresent)" "-DENABLE_COMMAND_OUTFIT=$appearanceEnabled" `
         -DENABLE_COMMAND_PREDICT=0 "-DENABLE_APPEARANCE_SELECTION=$appearanceEnabled" `
         "-DENABLE_STARTUP_ANIMATION=$startupEnabled" "-DENABLE_FIRST_START_ANIMATION=$startupEnabled" `
         -Itest/game_startup -Itest/host_stubs -Iinclude `

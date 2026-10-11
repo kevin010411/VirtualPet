@@ -68,6 +68,15 @@ bool PetSaveController::saveSnapshot(bool immediate)
     return saved;
 }
 
+bool PetSaveController::saveDailyProgress(bool forceSave)
+{
+    // One call per completed two-second pet day. Evaluate acquisitions every
+    // day, but ordinary progress writes only after two days (four seconds).
+    if (saveCounter < savePeriodTicks) ++saveCounter;
+    if (batching) batchDirty = true;
+    return saveCollectionProgress(forceSave || saveCounter >= savePeriodTicks);
+}
+
 void PetSaveController::maybeSave()
 {
     if (saveCounter < savePeriodTicks) ++saveCounter;

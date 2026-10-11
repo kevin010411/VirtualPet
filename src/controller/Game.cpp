@@ -256,7 +256,16 @@ bool Game::isCollectionCatalogActive() const
 bool Game::updateCollectionProgress(bool immediate)
 {
 #if ENABLE_COLLECTION_CATALOG
-    if (!petSaves.saveCollectionProgress(collectionSavePending, immediate))
+    return finishCollectionSave(petSaves.saveCollectionProgress(collectionSavePending, immediate));
+#else
+    return true;
+#endif
+}
+
+#if ENABLE_COLLECTION_CATALOG
+bool Game::finishCollectionSave(bool saved)
+{
+    if (!saved)
     {
         // A failed commit keeps pending progress for the next complete mutation.
         // Contract failure remains terminal, distinct from storage failure.
@@ -268,9 +277,9 @@ bool Game::updateCollectionProgress(bool immediate)
         return false;
     }
     collectionSavePending = false;
-#endif
     return true;
 }
+#endif
 
 #if ENABLE_GUESS_GAME
 void Game::onGuessOutcomeApplied()
@@ -331,7 +340,9 @@ void Game::OnRightKey()
 
 void Game::routeDirectionKey(KeyDirection direction)
 {
-    if (!initialized || hasPendingTime())
+    // Menu selection does not mutate pet values. Keep it responsive while
+    // historical days settle; minigame decisions still wait for catch-up.
+    if (!initialized || (hasPendingTime() && !flow.isCommand()))
         return;
 #if ENABLE_COLLECTION_CATALOG
     if (collectionCatalog->active())
@@ -595,11 +606,13 @@ Game::DayResult Game::maybeTickPet()
     if (progress != EvolutionResult::NoChange)
         return flow.isFatalError() ? DayResult::Fatal : DayResult::Blocked;
 
+#if ENABLE_DAILY_POST_PROCESSING
     if (!animations->isBusy())
     {
         if (handleEvolution() != EvolutionResult::NoChange)
             return flow.isFatalError() ? DayResult::Fatal : DayResult::Blocked;
     }
+#endif
 
     if (!animations->isBusy())
     {
@@ -608,6 +621,7 @@ Game::DayResult Game::maybeTickPet()
             renderer.showResourceError();
             return DayResult::ConsumedWithError;
         }
+#if ENABLE_DAILY_POST_PROCESSING
 #if !ENABLE_COLLECTION_CATALOG
         petSaves.maybeSave();
 #endif
@@ -617,14 +631,12 @@ Game::DayResult Game::maybeTickPet()
             return DayResult::ConsumedWithError;
         }
 #if ENABLE_COLLECTION_CATALOG
-        collectionSavePending = true;
-#endif
-        if (!updateCollectionProgress()) return DayResult::ConsumedWithError;
-#if ENABLE_COLLECTION_CATALOG
-        petSaves.maybeSave();
+        if (!finishCollectionSave(petSaves.saveDailyProgress(collectionSavePending)))
+            return DayResult::ConsumedWithError;
 #endif
         if (handleEvolution() != EvolutionResult::NoChange)
             return flow.isFatalError() ? DayResult::Fatal : DayResult::Consumed;
+#endif
         refreshBaseAnimation();
         return DayResult::Consumed;
     }
