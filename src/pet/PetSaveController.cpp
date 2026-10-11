@@ -41,8 +41,11 @@ bool PetSaveController::saveCollectionProgress(bool forceSave, bool immediate)
 
 bool PetSaveController::saveSnapshot(bool immediate)
 {
-    // Without RTC batch deferral every snapshot is already immediate.
-    (void)immediate;
+    if (batching && !immediate)
+    {
+        batchDirty = true;
+        return true;
+    }
     const bool saved = petStorage.save(pet);
 #if ENABLE_DEBUG
     char title[21] = {};
@@ -58,13 +61,21 @@ bool PetSaveController::saveSnapshot(bool immediate)
     renderer.debugDisplay().showMessage(title, detail);
 #endif
     if (saved)
+    {
         saveCounter = 0;
+        batchDirty = false;
+    }
     return saved;
 }
 
 void PetSaveController::maybeSave()
 {
-    saveCounter += 1;
+    if (saveCounter < savePeriodTicks) ++saveCounter;
+    if (batching)
+    {
+        batchDirty = true;
+        return;
+    }
     if (saveCounter < savePeriodTicks)
         return;
 
@@ -78,4 +89,11 @@ bool PetSaveController::applyCollectionGrants()
 #else
     return true;
 #endif
+}
+
+void PetSaveController::endBatch()
+{
+    const bool flush = batching && batchDirty;
+    batching = false;
+    if (flush) saveSnapshot();
 }

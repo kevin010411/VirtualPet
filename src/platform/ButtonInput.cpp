@@ -149,4 +149,5 @@ CheatButtonEvent ButtonInput::handleStableInput(unsigned long now,
 }
 
 // The interrupt wakes STOP mode; update() owns all button interpretation.
-void ButtonInput::handleWakeInterrupt() {}
+volatile uint32_t ButtonInput::wakeCount = 0;
+void ButtonInput::handleWakeInterrupt() { ++wakeCount; }

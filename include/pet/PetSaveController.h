@@ -18,6 +18,8 @@ public:
     bool applyCollectionGrants();
     void configureRuntimeContract(const PetBehaviorConfig &value) { config = &value; }
     void maybeSave();
+    void beginBatch() { batching = true; }
+    void endBatch();
 
 private:
     static constexpr uint8_t savePeriodTicks = 2;
@@ -27,6 +29,8 @@ private:
     uint8_t saveCounter = 0;
     const PetBehaviorConfig *config = nullptr;
     bool saveSnapshot(bool immediate = false);
+    bool batching = false;
+    bool batchDirty = false;
 };
 
 #endif

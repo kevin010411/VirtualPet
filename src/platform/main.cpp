@@ -1,6 +1,8 @@
 #include "platform/BoardConfig.h"
 #include "platform/ButtonInput.h"
 #include "platform/CalibratedST7735.h"
+#include "platform/RtcClock.h"
+#include "platform/PowerController.h"
 #include "controller/Game.h"
 #include "appearance/SdAppearanceLoader.h"
 #include "pet/Pet.h"
@@ -71,6 +73,8 @@ ButtonInput buttons(
 static bool g_sdReady = false;
 static bool g_gameReady = false;
 static bool g_lowBatteryMode = false;
+static bool g_clockFault = false;
+static PowerController powerController;
 enum class VoltageState : uint8_t
 {
   Normal = 0,
@@ -257,6 +261,8 @@ static VoltageState sampleVoltageState()
   return VoltageState::Normal;
 }
 
+static uint8_t desiredBacklight(unsigned long now);
+
 static void showSdInitError()
 {
   tft.fillScreen(ST77XX_BLACK);
@@ -265,11 +271,9 @@ static void showSdInitError()
   tft.setTextSize(1);
   tft.setCursor(0, 0);
   tft.print("SD init error");
-  setBacklightImmediate(kBacklightNormal);
+  setBacklightTarget(desiredBacklight(millis()));
 }
 
-const unsigned long kSleepTimeoutMs = 1UL * 60UL * 1000UL; // 1分鐘會自動休眠
-unsigned long g_lastInteractionMs = 0;
 bool g_isSleeping = false;
 
 void playButtonBeep()
@@ -277,6 +281,11 @@ void playButtonBeep()
   digitalWrite(BoardConfig::buzzerPin, HIGH);
   delay(35);
   digitalWrite(BoardConfig::buzzerPin, LOW);
+}
+
+static uint8_t desiredBacklight(unsigned long now)
+{
+  return powerController.brightness(now, brightnessForVoltageState(g_voltageState));
 }
 
 void playCheatStageDaysBeep()
@@ -288,7 +297,32 @@ void playCheatStageDaysBeep()
 
 void noteInteraction(unsigned long now = millis())
 {
-  g_lastInteractionMs = now;
+  powerController.interact(now);
+}
+
+static void showClockError()
+{
+  g_clockFault = true;
+  g_gameReady = false;
+  tft.fillScreen(ST77XX_BLACK);
+  tft.setTextColor(ST77XX_RED);
+  tft.setTextSize(1);
+  tft.setCursor(0, 0);
+  tft.print("RTC clock error");
+  noteInteraction();
+  setBacklightTarget(desiredBacklight(millis()));
+}
+
+static bool synchronizeGameTime()
+{
+  uint32_t seconds = 0;
+  if (!RtcClock::readSeconds(seconds))
+  {
+    showClockError();
+    return false;
+  }
+  game.synchronizeTime(seconds);
+  return true;
 }
 
 static bool confirmVoltageRecoveredFromCritical()
@@ -306,6 +340,7 @@ static bool confirmVoltageRecoveredFromCritical()
 
 void enterSleep()
 {
+  uint32_t lastWake = buttons.wakeGeneration();
   if (g_isSleeping)
     return;
 
@@ -316,6 +351,8 @@ void enterSleep()
 
   tft.enableDisplay(false);
   tft.enableSleep(true);
+  delay(120);
+  digitalWrite(PA3, HIGH); // Active-low board indicator off.
   digitalWrite(BoardConfig::TftCsPin, HIGH);
   digitalWrite(BoardConfig::SdCsPin, HIGH);
 
@@ -324,10 +361,18 @@ void enterSleep()
     // The display is already dark, so PVD is not needed while all clocks stop.
     PWR->CR &= ~PWR_CR_PVDE;
     HAL_SuspendTick();
-    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    // A pending EXTI wakes WFI even with PRIMASK set. Do not clear a late edge.
+    __disable_irq();
+    if (!buttons.isHeld() && buttons.wakeGeneration() == lastWake)
+      HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    __enable_irq();
     SystemClock_Config();
     HAL_ResumeTick();
     PWR->CR |= PWR_CR_PVDE;
+    const uint32_t currentWake = buttons.wakeGeneration();
+    const bool buttonWake = currentWake != lastWake || buttons.isHeld();
+    lastWake = currentWake;
+    if (!buttonWake) continue; // Pending non-button IRQs must not reveal the screen.
 
     // Consume the button that woke the MCU. It must not execute a game action.
     buttons.clearFlags();
@@ -339,6 +384,7 @@ void enterSleep()
       g_voltageState = VoltageState::Critical;
       g_lowBatteryMode = true;
       g_voltageRecoverySince = 0;
+      if (buttons.isHeld()) delay(kVoltageSampleIntervalMs);
       continue;
     }
 
@@ -369,13 +415,27 @@ void enterSleep()
 
   tft.enableSleep(false);
   delay(120);
+  if (!g_clockFault && !RtcClock::synchronize())
+    showClockError();
+  if (g_gameReady && !g_clockFault)
+    synchronizeGameTime();
 
   // ST7735 GRAM is not guaranteed to remain intact while sleeping, especially
   // near the low-voltage threshold. Clear every pixel and synchronously redraw
   // the current animation/preview plus all layout slots before display-on and
   // before restoring the backlight.
   tft.fillScreen(ST77XX_BLACK);
-  game.redrawAllNow();
+  if (g_clockFault)
+    showClockError();
+  else if (!g_sdReady)
+    showSdInitError();
+  else if (!g_gameReady)
+    game.finish_setup_game(); // Repaint the original Session/startup diagnostic.
+  else if (!game.isReady())
+    renderer.showResourceError();
+  else
+    game.redrawAllNow();
+  setBacklightImmediate(0);
   tft.enableDisplay(true);
 
   noteInteraction(millis());
@@ -464,8 +524,9 @@ static void restartTftFromCheatMode()
 {
   noteInteraction();
   initializeTftDisplay();
-  g_gameReady = game.setup_game();
-  setBacklightTarget(brightnessForVoltageState(g_voltageState));
+  game.redrawAllNow();
+  synchronizeGameTime();
+  setBacklightTarget(desiredBacklight(millis()));
 }
 
 static void resetPetFromCheatMode()
@@ -474,7 +535,8 @@ static void resetPetFromCheatMode()
   setBacklightImmediate(0);
   g_gameReady = game.resetPet();
   delay(1000);
-  setBacklightTarget(brightnessForVoltageState(g_voltageState));
+  synchronizeGameTime();
+  setBacklightTarget(desiredBacklight(millis()));
 }
 
 static void enterLowBatteryMode(unsigned long now)
@@ -485,8 +547,11 @@ static void enterLowBatteryMode(unsigned long now)
   g_lowBatteryMode = true;
   buttons.clearFlags();
   setBacklightTarget(kBacklightCritical);
-  game.saveNow();
-  game.startBatteryAnimation();
+  if (g_gameReady && game.isReady())
+  {
+    game.saveNow();
+    game.startBatteryAnimation();
+  }
 }
 
 static void leaveLowBatteryMode(unsigned long now)
@@ -496,7 +561,7 @@ static void leaveLowBatteryMode(unsigned long now)
   game.endBatteryAnimation();
   noteInteraction(now);
   if (!g_restoreBacklightAfterRender)
-    setBacklightTarget(brightnessForVoltageState(g_voltageState));
+    setBacklightTarget(desiredBacklight(now));
 }
 
 static void applyVoltageState(VoltageState nextState, unsigned long now)
@@ -506,7 +571,8 @@ static void applyVoltageState(VoltageState nextState, unsigned long now)
     return;
 
   g_voltageState = nextState;
-  setBacklightTarget(brightnessForVoltageState(nextState));
+  if (!g_restoreBacklightAfterRender)
+    setBacklightTarget(desiredBacklight(now));
 
   if (nextState == VoltageState::Critical)
   {
@@ -602,6 +668,8 @@ void setup()
   pinMode(BoardConfig::buzzerPin, OUTPUT);
   digitalWrite(BoardConfig::buzzerPin, LOW);
   beginTftStartupReset();
+  pinMode(PA3, OUTPUT);
+  digitalWrite(PA3, HIGH);
   const unsigned long tftResetLowStartedAt = millis();
 
   // 初始化 low battery 偵測
@@ -627,6 +695,22 @@ void setup()
 #if ENABLE_DEBUG
   const unsigned long sdInitStartedAt = millis();
 #endif
+  if (!RtcClock::begin())
+  {
+    while (!tft.advanceStartup(millis())) delay(1);
+    finishPhasedTftStartup();
+    showClockError();
+    return;
+  }
+  uint32_t bootSeconds = 0;
+  if (!RtcClock::readSeconds(bootSeconds))
+  {
+    while (!tft.advanceStartup(millis())) delay(1);
+    finishPhasedTftStartup();
+    showClockError();
+    return;
+  }
+  game.synchronizeTime(bootSeconds);
   if (!SD.begin(BoardConfig::SdCsPin, SD_SCK_MHZ(BoardConfig::SdSpiMhz)))
   {
 #if ENABLE_DEBUG
@@ -636,6 +720,7 @@ void setup()
       delay(1);
     finishPhasedTftStartup();
     showSdInitError();
+    noteInteraction();
     return;
   }
 #if ENABLE_DEBUG
@@ -662,6 +747,8 @@ void setup()
   g_startupTiming.tftInitMs = millis() - tftInitStartedAt;
   const unsigned long gameFinishStartedAt = millis();
 #endif
+  // Capture the Session baseline after SD preparation, immediately before ready.
+  if (!synchronizeGameTime()) return;
   g_gameReady = gamePrepared && game.finish_setup_game();
 #if ENABLE_DEBUG
   g_startupTiming.gameRenderMs = millis() - gameFinishStartedAt;
@@ -675,6 +762,7 @@ void setup()
     // runtime load, but the normal backlight target is only applied after a
     // successful boot.  Reveal that error instead of leaving a black screen.
     setBacklightImmediate(kBacklightNormal);
+    noteInteraction();
     return;
   }
   if (kStartupPostSetupMs > 0)
@@ -699,20 +787,19 @@ void setup()
 void loop()
 {
   const unsigned long now = millis();
-  updateBacklightRamp(now);
-
-  if (!g_sdReady)
-    return;
-
-  if (!g_gameReady)
-    return;
-
   updateVoltageState(now);
   if (g_lowBatteryMode)
     return;
 
-  const CheatButtonEvent buttonEvent = buttons.update(
-      onPreviousButton, onNextButton, onConfirmButton, playButtonBeep);
+  const bool ready = g_sdReady && g_gameReady && game.isReady() && !g_clockFault;
+  if (ready) synchronizeGameTime();
+  const bool acceptingInput = ready && g_gameReady && game.isReady() && !game.hasPendingTime();
+  CheatButtonEvent buttonEvent = CheatButtonEvent::None;
+  if (acceptingInput)
+    buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton, playButtonBeep);
+  else
+    buttons.clearFlags(); // Discard gestures during catch-up or fatal screens.
+  if (buttons.isDebouncedHeld()) noteInteraction();
   switch (buttonEvent)
   {
   case CheatButtonEvent::Entered:
@@ -736,26 +823,27 @@ void loop()
   }
 
   const unsigned long sleepCheckNow = millis();
-  // Idle/base animation remains eligible for sleep.  A queued or active
-  // one-shot animation pauses the inactivity clock instead.
-  if (game.hasTransientAnimation())
-    g_lastInteractionMs = sleepCheckNow;
-  if (sleepCheckNow - g_lastInteractionMs >= kSleepTimeoutMs)
+  const bool busy = buttons.isHeld() ||
+      (g_sdReady && SD.card()->isBusy()) ||
+      (g_gameReady && game.isReady() && (game.hasTransientAnimation() || game.hasPendingTime()));
+  if (powerController.shouldSleep(sleepCheckNow, busy))
   {
     enterSleep();
     return;
   }
 
-  game.loop_game();
+  if (g_gameReady && game.isReady()) game.loop_game();
 
 #if ENABLE_DEBUG
   if (renderer.hasRenderedFrame() && !g_startupTiming.written)
     writeStartupTiming(millis() - g_startupTiming.startedAt);
 #endif
 
-  if (g_restoreBacklightAfterRender)
+  if (g_restoreBacklightAfterRender &&
+      (!g_gameReady || !game.isReady() || !game.hasPendingTime() || game.hasTransientAnimation()))
   {
     g_restoreBacklightAfterRender = false;
-    setBacklightTarget(brightnessForVoltageState(g_voltageState));
   }
+  setBacklightTarget(g_restoreBacklightAfterRender ? 0 : desiredBacklight(millis()));
+  updateBacklightRamp(millis());
 }

@@ -77,20 +77,8 @@ void Game::loop_game()
     }
 
     const unsigned long now = millis();
-    const unsigned long elapsed = now - last_tick_time;
-
-    if (elapsed >= gameTick)
-    {
-        last_tick_time = now;
-
-        if (flow.isCommand() || flow.isMinigame())
-            maybeTickPet();
-        if (flow.isFatalError())
-            return;
-
-        if (flow.isStartup() && !animations->isBusy())
-            enterCommand();
-    }
+    if (flow.isStartup() && !animations->isBusy())
+        enterCommand();
 
 #if ENABLE_GUESS_GAME
     if (flow.isMinigame())
@@ -343,7 +331,7 @@ void Game::OnRightKey()
 
 void Game::routeDirectionKey(KeyDirection direction)
 {
-    if (!initialized)
+    if (!initialized || hasPendingTime())
         return;
 #if ENABLE_COLLECTION_CATALOG
     if (collectionCatalog->active())
@@ -388,7 +376,7 @@ void Game::routeDirectionKey(KeyDirection direction)
 
 void Game::OnConfirmKey()
 {
-    if (!initialized)
+    if (!initialized || hasPendingTime())
         return;
 #if ENABLE_COLLECTION_CATALOG
     if (collectionCatalog->active())
@@ -409,7 +397,7 @@ void Game::OnConfirmKey()
                 refreshBaseAnimation();
                 enterCommand();
             }
-            last_tick_time += millis() - collectionEnteredAt;
+            petClock.resume(latestRtcSeconds);
             requestFullRedraw();
         }
         return;
@@ -531,7 +519,7 @@ void Game::handleCommandResult(const CommandResult &result)
 #if ENABLE_COLLECTION_CATALOG
     if (result.requestedCollection)
     {
-        collectionEnteredAt = millis();
+        petClock.pause(latestRtcSeconds);
         animations->cancelAll();
         if (!collectionCatalog->start()) enterRuntimeFatal();
         return;
@@ -562,39 +550,85 @@ void Game::handleCommandResult(const CommandResult &result)
 
 }
 
-void Game::maybeTickPet()
+void Game::synchronizeTime(uint32_t rtcSeconds)
+{
+    latestRtcSeconds = rtcSeconds;
+    if (!initialized) return;
+    if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+    {
+        enterRuntimeFatal();
+        return;
+    }
+    if (isCollectionCatalogActive())
+    {
+        petClock.pause(rtcSeconds);
+        return;
+    }
+    if (!(flow.isCommand() || flow.isMinigame()))
+    {
+        clockStarted = false;
+        return;
+    }
+    if (!clockStarted)
+    {
+        petClock.reset(rtcSeconds);
+        clockStarted = true;
+    }
+    petClock.observe(rtcSeconds);
+    if (petClock.due() > 1) petSaves.beginBatch();
+    if (petClock.pending())
+    {
+        // One attempted boundary per loop keeps playback and voltage sampling live.
+        const DayResult result = maybeTickPet();
+        if (result == DayResult::Consumed || result == DayResult::ConsumedWithError)
+            petClock.consume();
+    }
+    // Time spent draining the snapshot must precede new input too.
+    if (initialized && !petClock.pending()) petClock.observe(rtcSeconds);
+    if (initialized && !petClock.pending()) petSaves.endBatch();
+}
+
+Game::DayResult Game::maybeTickPet()
 {
     const EvolutionResult progress = evolution->update(PlaybackResult::Accepted);
     handleEvolutionResult(progress);
     if (progress != EvolutionResult::NoChange)
-        return;
+        return flow.isFatalError() ? DayResult::Fatal : DayResult::Blocked;
 
     if (!animations->isBusy())
     {
         if (handleEvolution() != EvolutionResult::NoChange)
-            return;
+            return flow.isFatalError() ? DayResult::Fatal : DayResult::Blocked;
     }
 
     if (!animations->isBusy())
     {
         if (!petBehaviorRuntime->advancePetDay())
-            return;
+        {
+            renderer.showResourceError();
+            return DayResult::ConsumedWithError;
+        }
+#if !ENABLE_COLLECTION_CATALOG
+        petSaves.maybeSave();
+#endif
         if (!refreshOutfitUnlockMask(false, false))
         {
             renderer.showResourceError();
-            return;
+            return DayResult::ConsumedWithError;
         }
 #if ENABLE_COLLECTION_CATALOG
         collectionSavePending = true;
 #endif
-        if (!updateCollectionProgress()) return;
+        if (!updateCollectionProgress()) return DayResult::ConsumedWithError;
+#if ENABLE_COLLECTION_CATALOG
+        petSaves.maybeSave();
+#endif
         if (handleEvolution() != EvolutionResult::NoChange)
-            return;
-
+            return flow.isFatalError() ? DayResult::Fatal : DayResult::Consumed;
+        refreshBaseAnimation();
+        return DayResult::Consumed;
     }
-
-    refreshBaseAnimation();
-    petSaves.maybeSave();
+    return DayResult::Blocked;
 }
 
 EvolutionResult Game::handleEvolution()
@@ -661,7 +695,7 @@ bool Game::beginStartupAnimation()
     if (hasIntro)
     {
         const unsigned long introDuration = max(
-            gameTick,
+            startupSegmentMs,
             static_cast<unsigned long>(animations->frameCountFor(FirmwarePlaybackRole::StartIntro)) *
                 animations->frameIntervalFor(FirmwarePlaybackRole::StartIntro));
         sequence[sequenceCount++] = Animation(FirmwarePlaybackRole::StartIntro, introDuration, true);
@@ -670,7 +704,7 @@ bool Game::beginStartupAnimation()
     if (needsFirstStart)
     {
         const unsigned long firstStartDuration = max(
-            gameTick,
+            startupSegmentMs,
             static_cast<unsigned long>(animations->frameCountFor(FirmwarePlaybackRole::FirstStart)) *
                 animations->frameIntervalFor(FirmwarePlaybackRole::FirstStart));
         sequence[sequenceCount++] = Animation(FirmwarePlaybackRole::FirstStart, firstStartDuration, true);
@@ -679,7 +713,7 @@ bool Game::beginStartupAnimation()
     if (hasSpeciesStart)
     {
         const unsigned long startupDuration = max(
-            gameTick,
+            startupSegmentMs,
             static_cast<unsigned long>(animations->frameCountFor(FirmwarePlaybackRole::Start)) *
                 animations->frameIntervalFor(FirmwarePlaybackRole::Start));
         sequence[sequenceCount++] = Animation(FirmwarePlaybackRole::Start, startupDuration, true);

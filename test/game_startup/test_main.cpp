@@ -15,6 +15,12 @@
 
 unsigned long hostMillis = 0;
 
+void rtcLoop(Game &game)
+{
+    game.synchronizeTime(static_cast<uint32_t>(hostMillis / 1000));
+    game.loop_game();
+}
+
 namespace
 {
 struct Scenario
@@ -332,12 +338,12 @@ void testExportedEvolutionPlaybackCounts()
         for (uint8_t index = 0; index < sourceCount; ++index)
         {
             assert(pet.speciesSlot() == 1 && data.saves == savesBefore);
-            game.loop_game();
+            rtcLoop(game);
         }
         assert(data.sourceDraws == sourceCount && pet.speciesSlot() == 2);
         assert(data.saves == savesBefore + 1 && data.targetDraws == 0);
         for (uint8_t index = 0; index < targetCount; ++index)
-            game.loop_game();
+            rtcLoop(game);
         assert(data.targetDraws == targetCount && !game.hasTransientAnimation());
         assert(data.reloads == 1 && data.saves == savesBefore + 1);
     }
@@ -547,7 +553,7 @@ void testFreshStartup()
     // Preparation loads state but does not enable input or normal ticking.
     assert(!game.setStageDaysForCheat(1));
     hostMillis = 2000;
-    game.loop_game();
+    rtcLoop(game);
     assert(pet.stageDays() == 0 && data.evolutionLookups == 0);
     hostMillis = 0;
     assert(game.finish_setup_game());
@@ -800,7 +806,7 @@ void testEvolutionLookup(EvolutionLookupResult result, uint8_t targetSpecies)
     assert(game.setStageDaysForCheat(1));
     if (result == EvolutionLookupResult::LoadFailed)
         hostMillis = 2000;
-    game.loop_game();
+    rtcLoop(game);
 
     if (result == EvolutionLookupResult::LoadFailed)
     {
@@ -841,12 +847,12 @@ void testEvolutionLoadFailureDuringPetTick()
     assert(game.prepare_game());
     assert(game.finish_setup_game());
     hostMillis = 2000;
-    game.loop_game();
+    rtcLoop(game);
     assert(data.evolutionLookups == 1);
     assert(strcmp(data.firstRecordedResource, "appearance") == 0);
     assert(strcmp(data.lastShownResource, "appearance") == 0);
     assert(pet.stageDays() == 0);
-    game.loop_game();
+    rtcLoop(game);
     assert(strcmp(data.lastShownResource, "appearance") == 0);
     assert(!game.setStageDaysForCheat(1));
     hostMillis = 0;
@@ -887,7 +893,7 @@ void testAnimatedEvolution(EvolutionAnimationMode mode, EvolutionFailure failure
         data.failedAnimationId = 4;
 
     // Starts and renders the first source repetition, without advancing a day.
-    game.loop_game();
+    rtcLoop(game);
     if (failure == EvolutionFailure::MissingSource || failure == EvolutionFailure::RejectedSource ||
         failure == EvolutionFailure::SourceFrame)
     {
@@ -913,7 +919,7 @@ void testAnimatedEvolution(EvolutionAnimationMode mode, EvolutionFailure failure
     game.OnRightKey();
     game.OnConfirmKey();
     assert(data.saves == savesBefore && data.evolutionLookups == 1);
-    game.loop_game();
+    rtcLoop(game);
     assert(data.sourceDraws == 2 && data.reloads == 1);
     if (failure == EvolutionFailure::Contract)
     {
@@ -939,7 +945,7 @@ void testAnimatedEvolution(EvolutionAnimationMode mode, EvolutionFailure failure
         if (redraw)
             game.redrawAllNow();
         else
-            game.loop_game();
+            rtcLoop(game);
         assert(data.targetDraws == 1);
         if (failure == EvolutionFailure::TargetAsset)
         {
@@ -952,7 +958,7 @@ void testAnimatedEvolution(EvolutionAnimationMode mode, EvolutionFailure failure
         if (failure != EvolutionFailure::TargetFrame)
         {
             assert(game.hasTransientAnimation());
-            game.loop_game();
+            rtcLoop(game);
             assert(data.targetDraws == 2);
         }
     }
@@ -979,8 +985,8 @@ void testEvolutionInterrupted(bool battery, bool afterCommit)
     FakeAppearanceLoader appearance;
     Game game(pet, storage, renderer, appearance);
     assert(game.setup_game() && game.setStageDaysForCheat(1));
-    game.loop_game();
-    if (afterCommit) game.loop_game();
+    rtcLoop(game);
+    if (afterCommit) rtcLoop(game);
     const int savesBefore = data.saves;
     if (battery)
     {
@@ -1232,7 +1238,7 @@ void testFirstStartRecord()
         assert(game.startStartupAnimation() == (mode < 3));
         if (mode < 3)
         {
-            game.loop_game();
+            rtcLoop(game);
             assert(pet.isFirstStartCompleted() == (mode == 0));
             assert(data.saves == initialSaves + (mode < 2 ? 1 : 0));
             assert(data.savedPet.isFirstStartCompleted() == (mode == 0));
@@ -1249,7 +1255,7 @@ void testFirstStartRecord()
         {
             // After startup, input reaches commands without a selection gate.
             hostMillis = 2000;
-            game.loop_game();
+            rtcLoop(game);
             game.OnConfirmKey();
             assert(pet.customStat(0) == 8);
             // Restore keeps the completion record, while reset starts a new life.
@@ -1260,7 +1266,7 @@ void testFirstStartRecord()
             const int completedSaves = data.saves;
             assert(restored.resetPet());
             assert(!pet.isFirstStartCompleted());
-            restored.loop_game();
+            rtcLoop(restored);
             assert(pet.isFirstStartCompleted());
             assert(data.saves == completedSaves + 2);
         }
@@ -1303,7 +1309,7 @@ void assertFatalBlocksPublicEntries(Game &game, Pet &pet, Scenario &data)
     game.updateBatteryAnimation(9000);
     game.endBatteryAnimation();
     hostMillis = 9000;
-    game.loop_game();
+    rtcLoop(game);
     assert(!game.startStartupAnimation());
     assert(!game.saveNow());
     assert(!game.resetPet());
@@ -1356,7 +1362,7 @@ void testFatalPublicEntries()
         {
             data.frameFailed = true;
             renderer.recordAssetDataErrorResource("shared.data");
-            game.loop_game();
+            rtcLoop(game);
         }
         assertFatalBlocksPublicEntries(game, pet, data);
     }
@@ -1379,6 +1385,91 @@ void testFinishLayoutFailure()
     assert(data.resourceShows == 1);
     data.layoutSucceeds = true;
     assertFatalBlocksPublicEntries(game, pet, data);
+}
+
+void testRtcCatchUp()
+{
+    for (int failure = 0; failure < 3; ++failure)
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.commandAction = true;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, appearance);
+        game.synchronizeTime(10);
+        assert(game.setup_game());
+        const int savesBefore = data.saves;
+        data.saveSucceeds = failure != 1;
+        data.unlockSucceeds = failure != 2;
+        game.synchronizeTime(3611); // 1800 days plus one second of remainder.
+        assert(pet.stageDays() == 1 && game.hasPendingTime());
+        game.OnConfirmKey();
+        assert(pet.customStat(0) == 2); // Historical days precede feeding.
+        for (int day = 1; day < 1800; ++day)
+        {
+            game.synchronizeTime(3611);
+            game.loop_game();
+        }
+        assert(pet.stageDays() == 1800 && !game.hasPendingTime());
+        assert(data.saves == savesBefore + 1); // One periodic batch write.
+        game.synchronizeTime(3611);
+        assert(pet.stageDays() == 1800);
+        game.synchronizeTime(3612);
+        assert(pet.stageDays() == 1801); // Preserve the partial day.
+        if (failure == 1) assert(data.saves == savesBefore + 2);
+        if (failure == 0)
+        {
+            game.OnConfirmKey();
+            assert(pet.customStat(0) == 8);
+            game.synchronizeTime(3614);
+            assert(pet.stageDays() == 1801 && game.hasPendingTime());
+            game.loop_game();
+            game.synchronizeTime(3614);
+            assert(pet.stageDays() == 1802); // Busy action retained its boundary.
+        }
+    }
+}
+
+void testRtcSnapshotAndReset()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = true;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    game.synchronizeTime(10);
+    assert(game.setup_game());
+    game.synchronizeTime(14);
+    assert(pet.stageDays() == 1 && game.hasPendingTime());
+    game.synchronizeTime(18); // Catch-up itself crossed two more boundaries.
+    assert(pet.stageDays() == 2 && game.hasPendingTime());
+    game.OnConfirmKey();
+    assert(pet.customStat(0) == 2);
+    game.synchronizeTime(18);
+    game.synchronizeTime(18);
+    assert(pet.stageDays() == 4 && !game.hasPendingTime());
+    game.redrawAllNow();
+    game.synchronizeTime(19);
+    assert(pet.stageDays() == 4); // Redraw does not reset the partial day.
+    game.synchronizeTime(20);
+    assert(pet.stageDays() == 5);
+    assert(game.resetPet());
+    game.synchronizeTime(21);
+    assert(pet.stageDays() == 0);
+    game.synchronizeTime(22);
+#if !ENABLE_STARTUP_ANIMATION
+    assert(pet.stageDays() == 1);
+#endif
 }
 } // namespace
 
@@ -1554,6 +1645,8 @@ SdFat *Renderer::sdCard() const { return SD; }
 
 int main()
 {
+    testRtcCatchUp();
+    testRtcSnapshotAndReset();
     testFatalPublicEntries();
     testFinishLayoutFailure();
 #if ENABLE_FIRST_START_ANIMATION

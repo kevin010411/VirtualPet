@@ -42,7 +42,7 @@ bool Game::prepare_game()
     dirtySelect = true;
     evolution->cancel();
     pendingFirstStartCompletion = false;
-    last_tick_time = millis();
+    clockStarted = false;
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
 #endif
@@ -110,6 +110,8 @@ bool Game::finish_setup_game()
 
     initialized = true;
     enterCommand();
+    petClock.reset(latestRtcSeconds);
+    clockStarted = true;
     return true;
 }
 
@@ -143,6 +145,8 @@ bool Game::resetPet()
     // ready.  A left+right reset must therefore re-enable the game before it
     // queues FirstStart.
     initialized = true;
+    petClock.reset(latestRtcSeconds);
+    clockStarted = true;
     if (ENABLE_STARTUP_ANIMATION)
         startStartupAnimation();
     else

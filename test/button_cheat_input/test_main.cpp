@@ -5,12 +5,13 @@ static unsigned long clockMs = 1000;
 static int pins[3] = {HIGH, HIGH, HIGH};
 static int shorts[3] = {};
 static int beeps = 0;
+static void (*wakeInterrupt)() = nullptr;
 
 unsigned long millis() { return clockMs; }
 int digitalRead(int pin) { return pins[pin]; }
 void pinMode(int, int) {}
 int digitalPinToInterrupt(int pin) { return pin; }
-void attachInterrupt(int, void (*)(), int) {}
+void attachInterrupt(int, void (*callback)(), int) { wakeInterrupt = callback; }
 
 void previous() { ++shorts[0]; }
 void next() { ++shorts[1]; }
@@ -41,10 +42,17 @@ int main()
 {
     ButtonInput input(0, 1, 2, 250);
     input.begin();
+    assert(wakeInterrupt != nullptr && input.wakeGeneration() == 0);
+    wakeInterrupt();
+    assert(input.wakeGeneration() == 1);
+    input.clearFlags();
+    assert(input.wakeGeneration() == 1); // A gesture reset never discards an edge.
 
     press(input, 2);
+    assert(input.isHeld() && input.isDebouncedHeld());
     assert(shorts[2] == 0);
     releaseAll(input);
+    assert(!input.isHeld() && !input.isDebouncedHeld());
     assert(shorts[2] == 1 && beeps == 1);
 
     press(input, 0);

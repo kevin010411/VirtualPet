@@ -16,11 +16,15 @@ public:
     ButtonInput(int previousPin, int nextPin, int confirmPin, unsigned long cooldownMs);
     void begin();
     void clearFlags();
+    bool isHeld() const { return readMask() != 0; }
+    bool isDebouncedHeld() const { return stableMask != 0; }
+    uint32_t wakeGeneration() const { return wakeCount; }
     CheatButtonEvent update(ButtonCallback onPrevious, ButtonCallback onNext,
                             ButtonCallback onConfirm, ButtonCallback onAnyPress);
 
 private:
     static void handleWakeInterrupt();
+    static volatile uint32_t wakeCount;
     uint8_t readMask() const;
     CheatButtonEvent handleStableInput(unsigned long now, ButtonCallback onPrevious,
                                        ButtonCallback onNext, ButtonCallback onConfirm,

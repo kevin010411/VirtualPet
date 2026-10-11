@@ -14,6 +14,7 @@
 #if ENABLE_GUESS_GAME
 #include "controller/MinigameController.h"
 #endif
+#include "pet/PetClock.h"
 
 class AnimationController;
 class CommandController;
@@ -44,6 +45,9 @@ public:
     bool prepare_game();
     bool finish_setup_game();
     void loop_game();
+    void synchronizeTime(uint32_t rtcSeconds);
+    bool hasPendingTime() const { return petClock.pending() && initialized; }
+    bool isReady() const { return initialized; }
     void requestFullRedraw();
     void redrawAllNow();
     bool saveNow();
@@ -74,7 +78,7 @@ private:
         Failed,
     };
 
-    static constexpr unsigned long gameTick = 2000;
+    static constexpr unsigned long startupSegmentMs = 2000;
 
     Pet &pet;
     Renderer &renderer;
@@ -92,7 +96,6 @@ private:
     std::unique_ptr<LayoutRenderer> layout;
 #if ENABLE_COLLECTION_CATALOG
     std::unique_ptr<CollectionCatalog> collectionCatalog;
-    unsigned long collectionEnteredAt = 0;
     bool collectionSavePending = false;
 #endif
 #if ENABLE_APPEARANCE_SELECTION
@@ -102,7 +105,9 @@ private:
     std::unique_ptr<MinigameController> minigame;
 #endif
 
-    unsigned long last_tick_time = 0;
+    PetClock petClock;
+    uint32_t latestRtcSeconds = 0;
+    bool clockStarted = false;
     bool dirtySelect = true;
     bool cheatEvolutionPending = false;
     bool pendingFirstStartCompletion = false;
@@ -117,7 +122,8 @@ private:
     bool completePlaybackTick(const PlaybackTickResult &playbackResult);
     void routeDirectionKey(KeyDirection direction);
     void handleCommandResult(const CommandResult &result);
-    void maybeTickPet();
+    enum class DayResult : uint8_t { Blocked, Consumed, ConsumedWithError, Fatal };
+    DayResult maybeTickPet();
     EvolutionResult handleEvolution();
     void handleEvolutionResult(EvolutionResult result);
     // State-only: prepare runs before display initialization.
