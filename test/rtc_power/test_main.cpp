@@ -2,9 +2,30 @@
 #include <cstdio>
 #include "pet/PetClock.h"
 #include "platform/PowerController.h"
+#include "platform/SessionClock.h"
 
 int main()
 {
+    SessionClock session;
+    assert(session.update(0, true, 100, 1) == 0);
+    assert(session.update(1000, true, 101, 1) == 1);
+    assert(session.update(1001, true, 1901, 1) == 1801); // STOP: millis barely advances.
+    assert(session.update(1500, false, 0, 0) == 1801);
+    assert(session.update(4001, false, 0, 0) == 1804);
+    assert(session.update(6001, true, 1906, 1) == 1806); // No double count of fallback time.
+    assert(session.update(8001, false, 0, 0) == 1808);
+    assert(session.update(8002, true, 0, 2) == 1808); // Backup loss: no huge unsigned catch-up.
+    assert(session.update(9002, true, 1, 2) == 1809);
+    SessionClock missingAtBoot;
+    assert(missingAtBoot.update(100, false, 0, 0) == 0);
+    assert(missingAtBoot.update(2100, false, 0, 0) == 2);
+    assert(missingAtBoot.update(2101, true, 0, 1) == 2);
+    assert(missingAtBoot.update(3101, true, 1, 1) == 3);
+    SessionClock wrapped;
+    assert(wrapped.update(UINT32_MAX - 500, true, UINT32_MAX, 1) == 0);
+    assert(wrapped.update(499, false, 0, 0) == 1);
+    assert(wrapped.update(500, true, 0, 1) == 1);
+    assert(wrapped.update(1500, true, 1, 1) == 2);
     PetClock clock;
     clock.reset(100);
     clock.observe(101);
@@ -72,5 +93,5 @@ int main()
     power.interact(UINT32_MAX - 100);
     assert(power.brightness(29900, 255) == 64);
     assert(power.shouldSleep(119900, false));
-    puts("[PASS] RTC boundaries, remainder, rollover; idle/voltage brightness and sleep guards");
+    puts("[PASS] RTC/awake fallback without double count, counter loss, rollover; pet-day boundaries and sleep guards");
 }
