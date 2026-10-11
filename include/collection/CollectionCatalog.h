@@ -33,6 +33,7 @@ private:
     uint8_t page = 0;
     bool opened = false;
     bool detail = false;
+    uint8_t detailPage = 0;
     uint8_t targetSpecies = 0;
     uint8_t targetOutfit = 0;
     bool drawCell(const RuntimeTableInternal::RuntimeTable &table, uint8_t cell, bool selected);

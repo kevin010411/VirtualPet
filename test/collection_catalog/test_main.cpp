@@ -132,7 +132,7 @@ static void verifyTransactions()
     puts("[PASS] Production v16 A/B writer: all 96 truncation boundaries, complete failed sync, newest CRC fallback and both-corrupt discard recover whole snapshots");
 }
 
-static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display)
+static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display, bool twoPages = false)
 {
     const auto pixel = [&](int x, int y) { return display.screen[y * 128 + x]; };
     game.OnConfirmKey();
@@ -152,7 +152,16 @@ static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display)
     assert(pixel(32,32) == 0x28a0); // Empty cell5 stays background, never an item.
     const auto fifthFocused = display.screen;
     game.OnConfirmKey();
-    assert(pixel(0,0) == 0xf800 && pixel(127,159) == 0xf800);
+    assert(pixel(0,0) == fifthFocused[0] && pixel(0,112) == 0xf800 && pixel(127,159) == 0xf800);
+    if (twoPages)
+    {
+        game.OnConfirmKey();
+        assert(pixel(0,0) == fifthFocused[0] && pixel(0,112) == 0x07e0);
+        game.redrawAllNow();
+        assert(pixel(0,112) == 0x07e0);
+        game.OnLeftKey();
+        assert(pixel(0,112) == 0x07e0);
+    }
     game.OnConfirmKey();
     assert(display.screen == fifthFocused); // Detail close restores exact page/focus.
     const size_t beforeWrap = display.windows.size();
@@ -176,7 +185,12 @@ static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display)
     game.OnLeftKey();
     assert(pixel(16,48) == 0xf800); // Slot63 owned product uses final tile frame254/255.
     game.OnConfirmKey();
-    assert(pixel(0,0) == 0x07e0 && pixel(127,159) == 0x07e0); // Story descriptor63.
+    assert(pixel(0,0) == 0xffe0 && pixel(0,112) == 0x07e0 && pixel(127,159) == 0x07e0); // Story descriptor63.
+    if (twoPages)
+    {
+        game.OnConfirmKey();
+        assert(pixel(0,0) == 0xffe0 && pixel(0,112) == 0xf800);
+    }
     game.OnConfirmKey();
     assert(pixel(0,32) == 0xffff && pixel(16,48) == 0xf800);
     puts("[PASS] Real64 bundle: five pages, cyclic navigation, blank skipping, all returns, transparent per-cell composition, final tile/story frames, exact detail focus and two-cell redraw");
@@ -454,9 +468,9 @@ int main(int argc, char **argv)
         return 0;
     }
     assert(!pet.isCollectionOwned(0));
-    if (argc == 3 && strcmp(argv[2], "grid64") == 0)
+    if (argc == 3 && (strcmp(argv[2], "grid64") == 0 || strcmp(argv[2], "pages64") == 0))
     {
-        verify64Grid(game, pet, display);
+        verify64Grid(game, pet, display, strcmp(argv[2], "pages64") == 0);
         return 0;
     }
     tick(game, 1000);

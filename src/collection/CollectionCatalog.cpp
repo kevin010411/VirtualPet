@@ -52,7 +52,7 @@ __attribute__((noinline)) bool applyGrants(const RuntimeTable &table, Pet &pet)
     for (uint16_t index = 0; index < items->count; ++index)
     {
         if (!pet.isCollectionOwned(index)) continue;
-        uint8_t item[32], species = 0, outfit = 0;
+        uint8_t item[36], species = 0, outfit = 0;
         if (!readItem(table, index, item)) return false;
         if (item[1] == 0) continue;
         activationTarget(item, species, outfit);
@@ -124,7 +124,7 @@ __attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const PetBehav
     for (uint16_t index = 0; index < items->count; ++index)
     {
         if (pet.isCollectionOwned(index)) continue;
-        uint8_t item[32];
+        uint8_t item[36];
         if (!readItem(table, index, item)) return false;
         bool matches = true;
         for (uint16_t clause = 0; clause < readU16(item + 4); ++clause)
@@ -169,6 +169,7 @@ bool CollectionCatalog::start()
     opened = true;
     targetSpecies = targetOutfit = 0;
     detail = false;
+    detailPage = 0;
     focus = 0;
     page = 0;
     return redraw();
@@ -185,7 +186,7 @@ __attribute__((noinline)) bool CollectionCatalog::drawCell(const RuntimeTable &t
     }
     const uint8_t slot = page * 15 + cell - 1;
     if (slot >= count) return true;
-    uint8_t item[32];
+    uint8_t item[36];
     return readItem(table, slot, item) &&
         show(renderer, table, item + 6 + (pet.isCollectionOwned(slot) ? 8 : 0) +
              (selected ? 4 : 0), x, y, 32, 32);
@@ -197,16 +198,19 @@ bool CollectionCatalog::redraw()
     RuntimeTableFile file;
     uint8_t cfg[24];
     if (!file.open(renderer.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
-    if (detail)
-    {
-        uint8_t item[32];
-        const uint8_t slot = page * 15 + focus - 1;
-        return readItem(file.table(), slot, item) &&
-            show(renderer, file.table(), item + (pet.isCollectionOwned(slot) ? 26 : 22), 0, 0, 128, 160);
-    }
     if (!show(renderer, file.table(), cfg + 4, 0, 0, 128, 160)) return false;
     for (uint8_t cell = 0; cell < 16; ++cell)
         if (!drawCell(file.table(), cell, cell == focus)) return false;
+    if (detail)
+    {
+        uint8_t item[36];
+        const uint8_t slot = page * 15 + focus - 1;
+        if (!readItem(file.table(), slot, item)) return false;
+        uint8_t *pair = item + (pet.isCollectionOwned(slot) ? 26 : 22);
+        const uint16_t frame = readU16(pair + 2) + detailPage;
+        pair[2] = frame & 255; pair[3] = frame >> 8;
+        return show(renderer, file.table(), pair, 0, 112, 128, 48);
+    }
     return true;
 }
 
@@ -233,15 +237,25 @@ bool CollectionCatalog::move(bool right)
 
 bool CollectionCatalog::confirm()
 {
-    if (detail) { detail = false; return redraw(); }
-    if (focus == 0) { exit(); return true; }
-    const uint8_t slot = page * 15 + focus - 1;
-    if (pet.isCollectionOwned(slot))
+    if (detail)
     {
         RuntimeTableFile file;
-        uint8_t item[32];
-        if (!file.open(renderer.sdCard(), config.assetManifest)) return false;
-        if (!readItem(file.table(), slot, item)) return false;
+        uint8_t item[36];
+        if (!file.open(renderer.sdCard(), config.assetManifest) ||
+            !readItem(file.table(), page * 15 + focus - 1, item)) return false;
+        const uint16_t pages = readU16(item + (pet.isCollectionOwned(page * 15 + focus - 1) ? 34 : 32));
+        if (++detailPage < pages) return redraw();
+        detail = false; detailPage = 0;
+        return redraw();
+    }
+    if (focus == 0) { exit(); return true; }
+    const uint8_t slot = page * 15 + focus - 1;
+    RuntimeTableFile file;
+    uint8_t item[36];
+    if (!file.open(renderer.sdCard(), config.assetManifest) ||
+        !readItem(file.table(), slot, item)) return false;
+    if (pet.isCollectionOwned(slot))
+    {
         if (item[1] != 0)
         {
             activationTarget(item, targetSpecies, targetOutfit);
@@ -249,6 +263,8 @@ bool CollectionCatalog::confirm()
             return true;
         }
     }
+    if (readU16(item + (pet.isCollectionOwned(slot) ? 34 : 32)) == 0) return true;
+    detailPage = 0;
     detail = true;
     return redraw();
 }

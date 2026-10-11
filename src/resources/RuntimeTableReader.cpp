@@ -7,9 +7,9 @@ namespace RuntimeTableInternal
 namespace
 {
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// v13 exports resolved collection targets and unified condition source slots.
+// v14 adds bounded hint/story page ranges to collection items.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 13;
+constexpr uint16_t kVersion = 14;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -54,7 +54,7 @@ uint16_t recordSizeFor(uint16_t type)
     case ScreenBlocks: return 16;
     case ScreenRules: return 12;
     case CollectionConfig: return 24;
-    case CollectionItems: return 32;
+    case CollectionItems: return 36;
     case CollectionConditions: return 10;
     case CollectionTrackedActions: return 4;
     default: return 0;

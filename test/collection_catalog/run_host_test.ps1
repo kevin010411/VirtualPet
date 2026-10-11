@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock, [switch]$ActionCounts, [switch]$Grid64, [switch]$Activation, [switch]$Recovery, [switch]$ActivationEvolution, [Alias('InvalidContracts')][switch]$CapacityLimits, [switch]$GuessGame, [switch]$GuessClassic)
+param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock, [switch]$ActionCounts, [switch]$Grid64, [switch]$Pages64, [switch]$Activation, [switch]$Recovery, [switch]$ActivationEvolution, [Alias('InvalidContracts')][switch]$CapacityLimits, [switch]$GuessGame, [switch]$GuessClassic)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($GuessClassic -and -not $UseRtcClock) { throw 'GuessClassic requires the production RTC clock.' }
@@ -32,6 +32,6 @@ try {
   "-DENABLE_APPEARANCE_SELECTION=$([int]($Activation.IsPresent -or $ActivationEvolution.IsPresent))" "-DENABLE_COMMAND_OUTFIT=$([int]($Activation.IsPresent -or $ActivationEvolution.IsPresent))" -DENABLE_COMMAND_PREDICT=0 `
   -Itest/collection_catalog -Itest/host_stubs -Iinclude @sources $(if ($Activation -or $ActivationEvolution) { 'src/appearance/AppearanceSelectionController.cpp' }) $(if ($GuessGame -or $GuessClassic) { 'src/controller/MinigameController.cpp'; 'src/game/GuessItemGame.cpp' }) -o .pio/collection_catalog_host.exe
  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
- & .pio/collection_catalog_host.exe ([IO.Path]::GetFullPath($FixtureRoot)) $(if ($GuessClassic) { 'guess-classic' } elseif ($GuessGame) { 'guess' } elseif ($CapacityLimits) { 'capacity' } elseif ($Recovery) { 'recovery' } elseif ($ActivationEvolution) { 'activation-evolution' } elseif ($Activation) { 'activation' } elseif ($ActionCounts) { 'counts' } elseif ($Grid64) { 'grid64' } else { 'single' })
+ & .pio/collection_catalog_host.exe ([IO.Path]::GetFullPath($FixtureRoot)) $(if ($GuessClassic) { 'guess-classic' } elseif ($GuessGame) { 'guess' } elseif ($CapacityLimits) { 'capacity' } elseif ($Recovery) { 'recovery' } elseif ($ActivationEvolution) { 'activation-evolution' } elseif ($Activation) { 'activation' } elseif ($ActionCounts) { 'counts' } elseif ($Pages64) { 'pages64' } elseif ($Grid64) { 'grid64' } else { 'single' })
  exit $LASTEXITCODE
 } finally { Pop-Location }
