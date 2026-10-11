@@ -2,6 +2,7 @@
 #include "platform/ButtonInput.h"
 #include "platform/CalibratedST7735.h"
 #include "platform/RtcClock.h"
+#include "platform/SessionClock.h"
 #include "platform/PowerController.h"
 #include "controller/Game.h"
 #include "appearance/SdAppearanceLoader.h"
@@ -64,8 +65,7 @@ Game game(pet, petStorage, renderer, appearanceLoader);
 ButtonInput buttons(
     BoardConfig::PreviousCommandButtonPin,
     BoardConfig::NextCommandButtonPin,
-    BoardConfig::ConfirmCommandButtonPin,
-    250);
+    BoardConfig::ConfirmCommandButtonPin);
 
 // =========================
 // Low battery / PVD 設定
@@ -73,7 +73,8 @@ ButtonInput buttons(
 static bool g_sdReady = false;
 static bool g_gameReady = false;
 static bool g_lowBatteryMode = false;
-static bool g_clockFault = false;
+static bool g_rtcReady = false;
+static SessionClock sessionClock;
 static PowerController powerController;
 enum class VoltageState : uint8_t
 {
@@ -275,12 +276,23 @@ static void showSdInitError()
 }
 
 bool g_isSleeping = false;
+static bool g_buttonBeepActive = false;
+static unsigned long g_buttonBeepStartedAt = 0;
+
+static void updateButtonBeep(unsigned long now)
+{
+  if (g_buttonBeepActive && now - g_buttonBeepStartedAt >= 35)
+  {
+    digitalWrite(BoardConfig::buzzerPin, LOW);
+    g_buttonBeepActive = false;
+  }
+}
 
 void playButtonBeep()
 {
   digitalWrite(BoardConfig::buzzerPin, HIGH);
-  delay(35);
-  digitalWrite(BoardConfig::buzzerPin, LOW);
+  g_buttonBeepStartedAt = millis();
+  g_buttonBeepActive = true;
 }
 
 static uint8_t desiredBacklight(unsigned long now)
@@ -291,6 +303,8 @@ static uint8_t desiredBacklight(unsigned long now)
 void playCheatStageDaysBeep()
 {
   playButtonBeep();
+  delay(35);
+  updateButtonBeep(millis());
   delay(65);
   playButtonBeep();
 }
@@ -300,29 +314,12 @@ void noteInteraction(unsigned long now = millis())
   powerController.interact(now);
 }
 
-static void showClockError()
+static void synchronizeGameTime()
 {
-  g_clockFault = true;
-  g_gameReady = false;
-  tft.fillScreen(ST77XX_BLACK);
-  tft.setTextColor(ST77XX_RED);
-  tft.setTextSize(1);
-  tft.setCursor(0, 0);
-  tft.print("RTC clock error");
-  noteInteraction();
-  setBacklightTarget(desiredBacklight(millis()));
-}
-
-static bool synchronizeGameTime()
-{
-  uint32_t seconds = 0;
-  if (!RtcClock::readSeconds(seconds))
-  {
-    showClockError();
-    return false;
-  }
-  game.synchronizeTime(seconds);
-  return true;
+  uint32_t rtcSeconds = 0, epoch = 0;
+  g_rtcReady = RtcClock::pollSeconds(rtcSeconds, epoch);
+  const uint32_t seconds = sessionClock.update(millis(), g_rtcReady, rtcSeconds, epoch);
+  if (!g_lowBatteryMode) game.synchronizeTime(seconds);
 }
 
 static bool confirmVoltageRecoveredFromCritical()
@@ -341,13 +338,14 @@ static bool confirmVoltageRecoveredFromCritical()
 void enterSleep()
 {
   uint32_t lastWake = buttons.wakeGeneration();
-  if (g_isSleeping)
+  if (g_isSleeping || !g_rtcReady)
     return;
 
   g_isSleeping = true;
   buttons.clearFlags();
   setBacklightImmediate(0);
   digitalWrite(BoardConfig::buzzerPin, LOW);
+  g_buttonBeepActive = false;
 
   tft.enableDisplay(false);
   tft.enableSleep(true);
@@ -415,9 +413,8 @@ void enterSleep()
 
   tft.enableSleep(false);
   delay(120);
-  if (!g_clockFault && !RtcClock::synchronize())
-    showClockError();
-  if (g_gameReady && !g_clockFault)
+  RtcClock::requestSynchronization();
+  if (g_gameReady)
     synchronizeGameTime();
 
   // ST7735 GRAM is not guaranteed to remain intact while sleeping, especially
@@ -425,9 +422,7 @@ void enterSleep()
   // the current animation/preview plus all layout slots before display-on and
   // before restoring the backlight.
   tft.fillScreen(ST77XX_BLACK);
-  if (g_clockFault)
-    showClockError();
-  else if (!g_sdReady)
+  if (!g_sdReady)
     showSdInitError();
   else if (!g_gameReady)
     game.finish_setup_game(); // Repaint the original Session/startup diagnostic.
@@ -695,22 +690,10 @@ void setup()
 #if ENABLE_DEBUG
   const unsigned long sdInitStartedAt = millis();
 #endif
-  if (!RtcClock::begin())
-  {
-    while (!tft.advanceStartup(millis())) delay(1);
-    finishPhasedTftStartup();
-    showClockError();
-    return;
-  }
-  uint32_t bootSeconds = 0;
-  if (!RtcClock::readSeconds(bootSeconds))
-  {
-    while (!tft.advanceStartup(millis())) delay(1);
-    finishPhasedTftStartup();
-    showClockError();
-    return;
-  }
-  game.synchronizeTime(bootSeconds);
+  // Startup may wait for LSE once. A failed clock must not prevent SD/session
+  // startup; subsequent recovery is polled without blocking input.
+  RtcClock::begin();
+  synchronizeGameTime();
   if (!SD.begin(BoardConfig::SdCsPin, SD_SCK_MHZ(BoardConfig::SdSpiMhz)))
   {
 #if ENABLE_DEBUG
@@ -748,7 +731,7 @@ void setup()
   const unsigned long gameFinishStartedAt = millis();
 #endif
   // Capture the Session baseline after SD preparation, immediately before ready.
-  if (!synchronizeGameTime()) return;
+  synchronizeGameTime();
   g_gameReady = gamePrepared && game.finish_setup_game();
 #if ENABLE_DEBUG
   g_startupTiming.gameRenderMs = millis() - gameFinishStartedAt;
@@ -787,18 +770,20 @@ void setup()
 void loop()
 {
   const unsigned long now = millis();
+  updateButtonBeep(now);
   updateVoltageState(now);
+  const bool ready = g_sdReady && g_gameReady && game.isReady();
   if (g_lowBatteryMode)
+  {
+    if (ready) synchronizeGameTime();
     return;
-
-  const bool ready = g_sdReady && g_gameReady && game.isReady() && !g_clockFault;
-  if (ready) synchronizeGameTime();
-  const bool acceptingInput = ready && g_gameReady && game.isReady() && !game.hasPendingTime();
+  }
   CheatButtonEvent buttonEvent = CheatButtonEvent::None;
-  if (acceptingInput)
-    buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton, playButtonBeep);
+  if (ready && g_gameReady && game.isReady())
+    buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton,
+                                playButtonBeep);
   else
-    buttons.clearFlags(); // Discard gestures during catch-up or fatal screens.
+    buttons.clearFlags(); // Fatal screens discard gestures.
   if (buttons.isDebouncedHeld()) noteInteraction();
   switch (buttonEvent)
   {
@@ -822,8 +807,11 @@ void loop()
     break;
   }
 
+  // As in the pre-RTC loop, dispatch buttons before pet/game updates.
+  if (g_sdReady && g_gameReady && game.isReady()) synchronizeGameTime();
+
   const unsigned long sleepCheckNow = millis();
-  const bool busy = buttons.isHeld() ||
+  const bool busy = !g_rtcReady || buttons.isHeld() ||
       (g_sdReady && SD.card()->isBusy()) ||
       (g_gameReady && game.isReady() && (game.hasTransientAnimation() || game.hasPendingTime()));
   if (powerController.shouldSleep(sleepCheckNow, busy))
@@ -833,6 +821,7 @@ void loop()
   }
 
   if (g_gameReady && game.isReady()) game.loop_game();
+  updateButtonBeep(millis());
 
 #if ENABLE_DEBUG
   if (renderer.hasRenderedFrame() && !g_startupTiming.written)

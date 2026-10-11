@@ -6,7 +6,6 @@ constexpr uint8_t kPrevious = 1;
 constexpr uint8_t kNext = 2;
 constexpr uint8_t kConfirm = 4;
 constexpr uint8_t kAll = kPrevious | kNext | kConfirm;
-constexpr unsigned long kDebounceMs = 30;
 constexpr unsigned long kLongPressMs = 2000;
 constexpr unsigned long kModeTimeoutMs = 30000;
 }
@@ -29,12 +28,11 @@ void ButtonInput::begin()
 
 void ButtonInput::clearFlags()
 {
-    rawMask = readMask();
-    stableMask = rawMask;
+    stableMask = readMask();
     gestureMask = 0;
     holdStartedAt = 0;
     gestureStartedAt = 0;
-    waitForRelease = rawMask != 0;
+    waitForRelease = stableMask != 0;
     cheatMode = false;
 }
 
@@ -52,20 +50,31 @@ CheatButtonEvent ButtonInput::update(ButtonCallback onPrevious,
 {
     const unsigned long now = millis();
     const uint8_t observed = readMask();
-    if (observed != rawMask)
+    const uint8_t previousMask = stableMask;
+    if (observed != stableMask)
     {
-        rawMask = observed;
-        rawChangedAt = now;
-    }
-    if (rawMask != stableMask && now - rawChangedAt >= kDebounceMs)
-    {
-        stableMask = rawMask;
+        stableMask = observed;
         holdStartedAt = now;
         if (stableMask != 0)
         {
             if (gestureMask == 0)
                 gestureStartedAt = now;
             gestureMask |= stableMask;
+        }
+    }
+    // Normal single buttons dispatch on the first observed down edge, without
+    // debounce or release delay. Wake presses and cheat holds stay consumed.
+    if (previousMask == 0 && stableMask != 0 && !waitForRelease && !cheatMode &&
+        (lastShortPressAt == 0 || now - lastShortPressAt >= cooldownMs))
+    {
+        ButtonCallback callback = stableMask == kPrevious ? onPrevious :
+                                  stableMask == kNext ? onNext :
+                                  stableMask == kConfirm ? onConfirm : nullptr;
+        if (callback != nullptr)
+        {
+            lastShortPressAt = now;
+            if (onAnyPress != nullptr) onAnyPress();
+            callback();
         }
     }
     return handleStableInput(now, onPrevious, onNext, onConfirm, onAnyPress);
@@ -122,7 +131,9 @@ CheatButtonEvent ButtonInput::handleStableInput(unsigned long now,
         }
         return event;
     }
-    if (gestureMask != 0 && now - gestureStartedAt < kLongPressMs &&
+    // Cheat-mode single keys wait for release to distinguish their long-hold
+    // commands. Normal keys have already dispatched on press, never on release.
+    if (cheatMode && gestureMask != 0 && now - gestureStartedAt < kLongPressMs &&
         (lastShortPressAt == 0 || now - lastShortPressAt >= cooldownMs))
     {
         ButtonCallback callback = nullptr;

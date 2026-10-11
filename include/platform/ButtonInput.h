@@ -13,7 +13,7 @@ enum class CheatButtonEvent : uint8_t
 class ButtonInput
 {
 public:
-    ButtonInput(int previousPin, int nextPin, int confirmPin, unsigned long cooldownMs);
+    ButtonInput(int previousPin, int nextPin, int confirmPin, unsigned long cooldownMs = 250);
     void begin();
     void clearFlags();
     bool isHeld() const { return readMask() != 0; }
@@ -35,11 +35,9 @@ private:
     int confirmPin;
     unsigned long cooldownMs;
     unsigned long lastShortPressAt = 0;
-    unsigned long rawChangedAt = 0;
     unsigned long holdStartedAt = 0;
     unsigned long gestureStartedAt = 0;
     unsigned long modeActivityAt = 0;
-    uint8_t rawMask = 0;
     uint8_t stableMask = 0;
     uint8_t gestureMask = 0;
     bool waitForRelease = false;

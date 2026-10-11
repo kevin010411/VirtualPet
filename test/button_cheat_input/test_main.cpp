@@ -12,30 +12,29 @@ int digitalRead(int pin) { return pins[pin]; }
 void pinMode(int, int) {}
 int digitalPinToInterrupt(int pin) { return pin; }
 void attachInterrupt(int, void (*callback)(), int) { wakeInterrupt = callback; }
-
 void previous() { ++shorts[0]; }
 void next() { ++shorts[1]; }
 void confirm() { ++shorts[2]; }
 void beep() { ++beeps; }
 
-static CheatButtonEvent tick(ButtonInput &input, unsigned long ms = 40)
+static CheatButtonEvent tick(ButtonInput &input, unsigned long ms = 1)
 {
     clockMs += ms;
     return input.update(previous, next, confirm, beep);
-}
-
-static void press(ButtonInput &input, int pin)
-{
-    pins[pin] = LOW;
-    tick(input);
-    tick(input);
 }
 
 static void releaseAll(ButtonInput &input)
 {
     pins[0] = pins[1] = pins[2] = HIGH;
     tick(input);
+}
+
+static void enterCheat(ButtonInput &input)
+{
+    pins[0] = pins[1] = pins[2] = LOW;
     tick(input);
+    assert(tick(input, 2000) == CheatButtonEvent::Entered);
+    releaseAll(input);
 }
 
 int main()
@@ -44,98 +43,69 @@ int main()
     input.begin();
     assert(wakeInterrupt != nullptr && input.wakeGeneration() == 0);
     wakeInterrupt();
-    assert(input.wakeGeneration() == 1);
     input.clearFlags();
-    assert(input.wakeGeneration() == 1); // A gesture reset never discards an edge.
+    assert(input.wakeGeneration() == 1);
 
-    press(input, 2);
-    assert(input.isHeld() && input.isDebouncedHeld());
-    assert(shorts[2] == 0);
-    releaseAll(input);
-    assert(!input.isHeld() && !input.isDebouncedHeld());
-    assert(shorts[2] == 1 && beeps == 1);
+    for (int pin = 0; pin < 3; ++pin)
+    {
+        tick(input, 250);
+        const int before = shorts[pin];
+        const int beepsBefore = beeps;
+        pins[pin] = LOW;
+        tick(input); // Dispatch after 1 ms, before release or a 30 ms wait.
+        assert(shorts[pin] == before + 1 && beeps == beepsBefore + 1);
+        assert(input.isHeld() && input.isDebouncedHeld());
+        tick(input, 2001); // Holding cannot repeat an ordinary command.
+        assert(shorts[pin] == before + 1);
+        releaseAll(input);
+        assert(shorts[pin] == before + 1);
+        assert(!input.isHeld() && !input.isDebouncedHeld());
+    }
 
-    press(input, 0);
-    assert(tick(input, 2010) == CheatButtonEvent::None);
+    const int confirmsBefore = shorts[2];
+    pins[2] = LOW;
+    tick(input);
+    assert(shorts[2] == confirmsBefore + 1);
     releaseAll(input);
-    assert(shorts[0] == 0);
-
-    press(input, 0);
-    press(input, 1);
-    press(input, 2);
-    assert(tick(input, 2010) == CheatButtonEvent::Entered);
+    pins[2] = LOW;
+    tick(input);
     releaseAll(input);
-    assert(shorts[0] == 0 && shorts[1] == 0 && shorts[2] == 1);
-
-    press(input, 1);
-    releaseAll(input);
-    assert(shorts[1] == 1);
-    // A short press exits cheat mode; a later long press has no cheat action.
-    press(input, 1);
-    assert(tick(input, 2010) == CheatButtonEvent::None);
-    releaseAll(input);
-
-    press(input, 0);
-    press(input, 1);
-    press(input, 2);
-    assert(tick(input, 2010) == CheatButtonEvent::Entered);
-    releaseAll(input);
-    // main.cpp routes previousPin to OnRightKey: it is the physical right key.
-    press(input, 0);
-    assert(tick(input, 2010) == CheatButtonEvent::SetStageDays);
-    assert(tick(input, 100) == CheatButtonEvent::None);
-    releaseAll(input);
-    assert(shorts[0] == 0);
-
-    press(input, 0);
-    press(input, 1);
-    press(input, 2);
-    assert(tick(input, 2010) == CheatButtonEvent::Entered);
-    releaseAll(input);
-    // nextPin routes to OnLeftKey: it is the physical left key.
-    press(input, 1);
-    assert(tick(input, 2010) == CheatButtonEvent::ResetPet);
+    assert(shorts[2] == confirmsBefore + 1); // Keep the 250 ms interval.
+    tick(input, 250);
+    pins[2] = LOW;
+    tick(input);
+    assert(shorts[2] == confirmsBefore + 2);
     releaseAll(input);
 
-    press(input, 0);
-    press(input, 1);
-    press(input, 2);
-    assert(tick(input, 2010) == CheatButtonEvent::Entered);
+    pins[2] = LOW;
+    input.clearFlags(); // A wake press is consumed, including its release.
+    tick(input, 250);
     releaseAll(input);
-    press(input, 2);
-    assert(tick(input, 2010) == CheatButtonEvent::RestartTft);
-    releaseAll(input);
+    assert(shorts[2] == confirmsBefore + 2);
 
-    press(input, 0);
-    press(input, 1);
-    press(input, 2);
-    assert(tick(input, 2010) == CheatButtonEvent::Entered);
-    releaseAll(input);
+    const CheatButtonEvent commands[] = {CheatButtonEvent::SetStageDays,
+        CheatButtonEvent::ResetPet, CheatButtonEvent::RestartTft};
+    for (int pin = 0; pin < 3; ++pin)
+    {
+        const int before = shorts[pin];
+        enterCheat(input);
+        pins[pin] = LOW;
+        tick(input);
+        assert(shorts[pin] == before);
+        assert(tick(input, 2000) == commands[pin]);
+        assert(tick(input, 100) == CheatButtonEvent::None);
+        releaseAll(input);
+        assert(shorts[pin] == before);
+    }
+
+    enterCheat(input);
     assert(tick(input, 30001) == CheatButtonEvent::Exited);
-    press(input, 2);
-    assert(tick(input, 2010) == CheatButtonEvent::None);
-    releaseAll(input);
-    assert(shorts[2] == 1);
-
-    press(input, 0);
-    press(input, 1);
-    press(input, 2);
-    assert(tick(input, 2010) == CheatButtonEvent::Entered);
-    releaseAll(input);
-    press(input, 0);
+    enterCheat(input);
+    const int previousBefore = shorts[0];
+    pins[0] = LOW;
+    tick(input);
+    assert(shorts[0] == previousBefore);
     pins[0] = HIGH;
-    tick(input);
     assert(tick(input) == CheatButtonEvent::Exited);
-    assert(shorts[0] == 1);
-
-    press(input, 0);
-    press(input, 1);
-    press(input, 2);
-    assert(tick(input, 2010) == CheatButtonEvent::Entered);
-    releaseAll(input);
-    press(input, 2);
-    pins[2] = HIGH;
-    tick(input);
-    assert(tick(input) == CheatButtonEvent::Exited);
-    assert(shorts[2] == 2);
+    assert(shorts[0] == previousBefore + 1);
 }
