@@ -171,8 +171,9 @@ bool CommandExecutor::queueStatusSetsAnimation()
     if (!resolveStatusSet(set, statusValueFromSnapshot, &valueContext, resolution))
         return false;
 
-    if (!resolution.playOnce ||
-        animations.versionCountFor(resolution.animation) != resolution.requiredVersions)
+    // The exporter guarantees version completeness; only resolve the selected
+    // version when playback accesses its SD resource.
+    if (!resolution.playOnce)
         return false;
     Animation animation = Animation::complete(
         resolution.animation, 1, FirmwarePlaybackRole::Status);

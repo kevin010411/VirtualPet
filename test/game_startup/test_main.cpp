@@ -86,6 +86,7 @@ struct Scenario
     bool hasSave = false;
     uint16_t actionVersions = 1;
     uint16_t statusVersions = 1;
+    int statusVersionQueries = 0;
     Pet savedPet;
 };
 
@@ -1302,6 +1303,7 @@ void testStatusReadsActionCommittedPet()
     CommandController commands;
     commands.configure(config);
     assert(!executor.execute(commands).resourceError);
+    assert(data.statusVersionQueries == 0);
     animations.preparePlayback(0);
     assert(animations.currentVersionIndex() == 0);
 
@@ -1309,6 +1311,7 @@ void testStatusReadsActionCommittedPet()
     assert(runtime.executeAction(0) == PetBehaviorActionResult::AppliedAnimationMissing);
     assert(pet.customStat(0) == 8);
     assert(!executor.execute(commands).resourceError);
+    assert(data.statusVersionQueries == 0);
     animations.preparePlayback(1);
     assert(animations.currentVersionIndex() == 1);
     assert(data.saves == 0);
@@ -1876,6 +1879,7 @@ uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &animation, uint8
 }
 uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &animation)
 {
+    if (animation.animationId == 2) ++scenario->statusVersionQueries;
     return animation.animationId == 1 ? scenario->actionVersions
          : animation.animationId == 2 ? scenario->statusVersions : 1;
 }
@@ -1907,6 +1911,11 @@ SdFat *Renderer::sdCard() const { return SD; }
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && strcmp(argv[1], "--status") == 0)
+    {
+        testStatusReadsActionCommittedPet();
+        return 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--sequence-interruption") == 0)
     {
         testCommandReplacesSequenceAcrossDayBoundary();

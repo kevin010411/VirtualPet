@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection, [switch]$EnableCollectionCatalog, [switch]$DisableDailyPostProcessing, [switch]$SequenceInterruptionOnly)
+param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection, [switch]$EnableCollectionCatalog, [switch]$DisableDailyPostProcessing, [switch]$SequenceInterruptionOnly, [switch]$StatusOnly)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -47,10 +47,13 @@ try {
         -Itest/game_startup -Itest/host_stubs -Iinclude `
         @sources -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    if ($SequenceInterruptionOnly) { & $outputPath --sequence-interruption }
+    if ($StatusOnly) { & $outputPath --status }
+    elseif ($SequenceInterruptionOnly) { & $outputPath --sequence-interruption }
     else { & $outputPath }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    if ($SequenceInterruptionOnly) {
+    if ($StatusOnly) {
+        Write-Host '[PASS] Status selects committed Pet Stat versions without scanning asset version completeness'
+    } elseif ($SequenceInterruptionOnly) {
         Write-Host '[PASS] Command interruption in primary/following segments across day boundaries; RTC catch-up ordering and navigation'
     } else {
         Write-Host '[PASS] PetSession data flow; Game startup, restore, reset, evolution, fatal routing, Pet transactions, Status, appearance failure order and save cadence'
