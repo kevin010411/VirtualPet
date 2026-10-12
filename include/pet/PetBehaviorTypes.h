@@ -118,6 +118,7 @@ struct PetBehaviorConfig
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     RuntimePetStateConfig petStates[kMaxRuntimePetStates];
     PetBehaviorActionConfig actions[kMaxPetBehaviorActions];
+    PetBehaviorAnimationPlaybackConfig followingAnimations[kMaxPetBehaviorFollowingAnimations];
     PetBehaviorActionOutcomeConfig actionOutcomes[kMaxPetBehaviorActionOutcomes];
     PetBehaviorActionConditionConfig actionConditions[kMaxPetBehaviorActionConditions];
     PetBehaviorActionEffectConfig actionEffects[kMaxPetBehaviorActionEffects];

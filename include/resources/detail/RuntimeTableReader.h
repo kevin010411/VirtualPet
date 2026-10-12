@@ -38,6 +38,7 @@ enum SectionType : uint16_t
     Buttons = 16,
     GuessEffects = 17,
     DefaultPetState = 18,
+    ActionPlaybacks = 19,
     StatusSets = 20,
     StatusConditions = 21,
     Appearance = 30,

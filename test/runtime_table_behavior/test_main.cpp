@@ -775,7 +775,23 @@ int main(int argc, char **argv)
         assert(block.x == ((slot - 1) % 4) * 32);
         assert(block.y == (slot <= 4 ? 0 : 128));
     }
-    for (int argument = 5; argument < argc; ++argument)
+    const std::vector<uint8_t> sequence = readFixture(argv[argc - 1]);
+    auto sequenceManifest = fixtureManifest(sequence);
+    std::memcpy(sequenceManifest.bundleId.bytes, sequence.data() + 28, 16);
+    assert(parseRuntimeTableBehavior(sequence.data(), sequence.size(),
+                                     sequenceManifest, 1, 1, config));
+    assert(config.actions[0].followingAnimationCount == 3);
+    const uint8_t start = config.actions[0].firstFollowingAnimation;
+    assert(config.followingAnimations[start].playbackCount == 2);
+    assert(config.followingAnimations[start + 1].playbackCount == 1);
+    assert(config.followingAnimations[start + 2].playbackCount == 5);
+    assert(config.followingAnimations[start].animation.animationId ==
+           config.followingAnimations[start + 2].animation.animationId);
+    assert(config.followingAnimations[start].animation.animationId !=
+           config.followingAnimations[start + 1].animation.animationId);
+    for (uint8_t slot = 1; slot < config.actionCount; ++slot)
+        assert(config.actions[slot].followingAnimationCount == 0);
+    for (int argument = 5; argument < argc - 1; ++argument)
     {
         const std::vector<uint8_t> invalid = readFixture(argv[argument]);
         unpublished.screenBlockCount = 0xAA;

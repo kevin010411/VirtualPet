@@ -7,9 +7,9 @@ namespace RuntimeTableInternal
 namespace
 {
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// v14 adds bounded hint/story page ranges to collection items.
+// v15 adds bounded following-animation records for User Action sequences.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 14;
+constexpr uint16_t kVersion = 15;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -39,6 +39,7 @@ uint16_t recordSizeFor(uint16_t type)
     case Buttons: return 8;
     case GuessEffects: return 8;
     case DefaultPetState: return 4;
+    case ActionPlaybacks: return 6;
     case StatusSets: return 12;
     case StatusConditions: return 12;
     case Appearance: return 8;

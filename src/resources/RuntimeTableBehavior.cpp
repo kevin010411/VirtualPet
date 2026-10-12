@@ -281,6 +281,34 @@ bool decodeActions(const Source &source,
            nextEffect == (effects == nullptr ? 0 : effects->count);
 }
 
+bool decodeFollowingAnimations(const Source &source, const Section *playbacks,
+                               const Section &assets, const Section &animations,
+                               const ActiveAssetScope &scope, PetBehaviorConfig &config)
+{
+    if (playbacks == nullptr) return true;
+    if (playbacks->count > kMaxPetBehaviorFollowingAnimations) return false;
+    // Ordering, ordinal ownership and playback semantics are exporter-owned.
+    // Firmware only bounds the referenced storage and resolves used resources.
+    for (uint16_t index = 0; index < playbacks->count; ++index)
+    {
+        uint8_t record[6] = {};
+        if (!readRecord(source, *playbacks, index, record) || record[0] >= config.actionCount)
+            return false;
+        PetBehaviorActionConfig &action = config.actions[record[0]];
+        if (action.followingAnimationCount >= kMaxPetBehaviorFollowingAnimationsPerAction)
+            return false;
+        if (action.followingAnimationCount == 0)
+            action.firstFollowingAnimation = static_cast<uint8_t>(index);
+        PetBehaviorAnimationPlaybackConfig &playback = config.followingAnimations[index];
+        playback.playbackCount = record[4];
+        if (!resolveAnimation(source, assets, animations, readU16(record + 2), scope,
+                              playback.animation))
+            return false;
+        ++action.followingAnimationCount;
+    }
+    return true;
+}
+
 bool decodeButtons(const Source &source, const Section &buttons, PetBehaviorConfig &config)
 {
     if (buttons.count != kPetBehaviorButtonCount)
@@ -453,6 +481,8 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                          *assets, *animations, scope, config) ||
         !decodeActions(source, *actions, *outcomes, actionConditions, effects,
                        *assets, *animations, scope, config) ||
+        !decodeFollowingAnimations(source, table.find(ActionPlaybacks),
+                                   *assets, *animations, scope, config) ||
         !decodeGuessEffects(source, table.featureFlags, guessEffects, config) ||
         !decodeButtons(source, *buttons, config) ||
         !decodeStatus(source, table.featureFlags,

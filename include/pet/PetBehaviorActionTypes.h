@@ -7,6 +7,9 @@
 #include "pet/RuntimeValueResolver.h"
 
 constexpr uint8_t kMaxPetBehaviorActions = 8;
+constexpr uint8_t kMaxPetBehaviorFollowingAnimationsPerAction = 3;
+constexpr uint8_t kMaxPetBehaviorFollowingAnimations =
+    kMaxPetBehaviorActions * kMaxPetBehaviorFollowingAnimationsPerAction;
 constexpr uint8_t kMaxPetBehaviorActionConditionsPerAction = 4;
 constexpr uint8_t kMaxPetBehaviorActionConditions =
     kMaxPetBehaviorActions * kMaxPetBehaviorActionConditionsPerAction;
@@ -51,6 +54,8 @@ struct PetBehaviorActionConfig
     uint8_t outcomeCount;
     uint8_t firstCondition;
     uint8_t conditionCount;
+    uint8_t firstFollowingAnimation;
+    uint8_t followingAnimationCount;
 };
 
 struct PetBehaviorActionOutcomeConfig

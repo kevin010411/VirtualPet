@@ -1065,6 +1065,58 @@ void testBehaviorTransactionsUseLivePet()
     assert(data.saves == 0);
 }
 
+void testUserActionPlaybackSequence()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    Renderer renderer(nullptr, &sd);
+    AnimationController animations(renderer);
+    PetBehaviorConfig config = {};
+    config.stats[0] = {true, 0, 0, 100, 0};
+    config.idleAnimation = {1, 1, 5};
+    config.actions[0].active = true;
+    config.actions[0].outcomeCount = 1;
+    config.actions[0].followingAnimationCount = 3;
+    config.actionOutcomeCount = 1;
+    config.actionEffectCount = 1;
+    config.actionOutcomes[0].animationPlayback = {{1, 1, 1}, 2};
+    config.actionOutcomes[0].effectCount = 1;
+    config.actionEffects[0] = {0, PetBehaviorEffectOperation::Change, 10};
+    config.followingAnimations[0] = {{1, 1, 2}, 1};
+    config.followingAnimations[1] = {{1, 1, 3}, 2};
+    config.followingAnimations[2] = {{1, 1, 4}, 1};
+    animations.setup(config.idleAnimation);
+    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    runtime.initializeStats();
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+    assert(pet.customStat(0) == 10);
+    // This fake renderer finishes one repetition per tick. No idle segment
+    // may be selected until every requested repetition has completed.
+    const uint8_t expected[] = {1, 1, 2, 3, 3, 4, 5};
+    unsigned long now = 1;
+    for (uint8_t id : expected)
+    {
+        animations.tick(now++);
+        assert(data.displayedAnimation.animationId == id);
+        assert(pet.customStat(0) == 10);
+    }
+    assert(!animations.isBusy());
+
+    // Resolve the whole sequence before replacement; missing later resources
+    // retain committed effects without starting a partial sequence.
+    data.statusVersions = 0;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::AppliedAnimationMissing);
+    assert(pet.customStat(0) == 20 && !animations.isBusy());
+    data.statusVersions = 1;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+    animations.tick(now++);
+    animations.cancelAll();
+    animations.tick(now++);
+    assert(data.displayedAnimation.animationId == 5 && pet.customStat(0) == 30);
+}
+
 void testGameRoutesUserActionResult()
 {
     for (bool missing : {false, true})
@@ -1852,6 +1904,7 @@ int main()
     testEvolutionInterrupted(true, false);
     testEvolutionInterrupted(true, true);
     testBehaviorTransactionsUseLivePet();
+    testUserActionPlaybackSequence();
     testGameRoutesUserActionResult();
     testUnifiedCommandExecution();
     testStatusReadsActionCommittedPet();
