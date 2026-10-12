@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection, [switch]$EnableCollectionCatalog, [switch]$DisableDailyPostProcessing)
+param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection, [switch]$EnableCollectionCatalog, [switch]$DisableDailyPostProcessing, [switch]$SequenceInterruptionOnly)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -47,9 +47,14 @@ try {
         -Itest/game_startup -Itest/host_stubs -Iinclude `
         @sources -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    & $outputPath
+    if ($SequenceInterruptionOnly) { & $outputPath --sequence-interruption }
+    else { & $outputPath }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] PetSession data flow; Game startup, restore, reset, evolution, fatal routing, Pet transactions, Status, appearance failure order and save cadence'
+    if ($SequenceInterruptionOnly) {
+        Write-Host '[PASS] Command interruption in primary/following segments across day boundaries; RTC catch-up ordering and navigation'
+    } else {
+        Write-Host '[PASS] PetSession data flow; Game startup, restore, reset, evolution, fatal routing, Pet transactions, Status, appearance failure order and save cadence'
+    }
     exit 0
 }
 finally {

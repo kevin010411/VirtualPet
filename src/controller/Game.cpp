@@ -401,7 +401,10 @@ void Game::routeDirectionKey(KeyDirection direction)
 void Game::OnConfirmKey()
 {
     if (initialized && pet.isDead()) { OnDeathKey(); return; }
-    if (!initialized || hasPendingTime())
+    // Command playback itself postpones day boundaries. Keep replacement
+    // responsive while it plays; idle RTC catch-up still precedes new actions.
+    if (!initialized || (hasPendingTime() &&
+        !(flow.isCommand() && animations->isBusy())))
         return;
 #if ENABLE_COLLECTION_CATALOG
     if (collectionCatalog->active())

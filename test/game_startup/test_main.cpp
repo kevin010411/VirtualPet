@@ -33,6 +33,8 @@ struct Scenario
     int firstStartFrameQueries = 0;
     bool commandAction = false;
     bool navigationButtons = false;
+    bool commandSequence = false;
+    uint8_t heldAnimationId = 0;
     uint16_t selectedButtonFrame = 0;
     bool commandOutfit = false;
     int previewQueries = 0;
@@ -1117,6 +1119,49 @@ void testUserActionPlaybackSequence()
     assert(data.displayedAnimation.animationId == 5 && pet.customStat(0) == 30);
 }
 
+void testCommandReplacesSequenceAcrossDayBoundary()
+{
+    for (bool secondSegment : {false, true})
+    for (bool dayDue : {false, true})
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.commandAction = data.navigationButtons = data.commandSequence = true;
+        data.heldAnimationId = secondSegment ? 2 : 1;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader loader;
+        Game game(pet, storage, renderer, loader);
+        game.synchronizeTime(10);
+        assert(game.setup_game());
+        game.OnConfirmKey();
+        game.loop_game();
+        if (secondSegment) game.loop_game();
+        assert(data.displayedAnimation.animationId == data.heldAnimationId);
+        assert(game.hasTransientAnimation());
+        game.synchronizeTime(dayDue ? 12 : 11);
+        assert(game.hasPendingTime() == dayDue);
+        game.OnRightKey();
+        game.loop_game();
+        assert(data.selectedButtonFrame == 3);
+        game.OnConfirmKey();
+        // The public input route must replace playback even when the current
+        // sequence is postponing a day boundary. Effects run exactly once.
+        assert(pet.customStat(0) == 4);
+        game.loop_game();
+        assert(data.displayedAnimation.animationId == 4);
+        game.loop_game();
+        assert(data.displayedAnimation.animationId == 5);
+        assert(!game.hasTransientAnimation()); // Old following segments are gone.
+        game.synchronizeTime(dayDue ? 12 : 11);
+        assert(!game.hasPendingTime());
+        assert(pet.stageDays() == (dayDue ? 1u : 0u));
+    }
+}
+
 void testGameRoutesUserActionResult()
 {
     for (bool missing : {false, true})
@@ -1716,6 +1761,22 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
         config.layoutUnselected = {1, 1, 7};
         config.layoutSelected = {1, 1, 8};
     }
+    if (scenario->commandSequence)
+    {
+        config.actions[0].followingAnimationCount = 2;
+        config.followingAnimations[0] = {{1, 1, 2}, 1};
+        config.followingAnimations[1] = {{1, 1, 3}, 1};
+        config.actions[1].active = true;
+        config.actions[1].firstOutcome = 1;
+        config.actions[1].outcomeCount = 1;
+        config.actionOutcomeCount = 2;
+        config.actionOutcomes[1].animationPlayback = {{1, 1, 4}, 1};
+        config.actionOutcomes[1].firstEffect = 1;
+        config.actionOutcomes[1].effectCount = 1;
+        config.actionEffectCount = 2;
+        config.actionEffects[1] = {0, PetBehaviorEffectOperation::Set, 4};
+        config.buttons[1].actionSlot = 1;
+    }
     return true;
 }
 
@@ -1793,7 +1854,7 @@ bool Renderer::advanceAnimationFrame()
     if (scenario->frameFailed && scenario->evolutionMode != EvolutionAnimationMode::Disabled &&
         scenario->assetError)
         recordAssetDataErrorResource(id == 3 ? "source.data" : "target.data");
-    return true;
+    return scenario->heldAnimationId == 0 || id != scenario->heldAnimationId;
 }
 bool Renderer::animationFrameFailed() const { return scenario->frameFailed; }
 uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &animation, uint8_t)
@@ -1844,8 +1905,16 @@ AssetData::BundleError Renderer::firstAssetDataError() const
 const char *Renderer::firstAssetDataErrorResource() const { return scenario->firstRecordedResource; }
 SdFat *Renderer::sdCard() const { return SD; }
 
-int main()
+int main(int argc, char **argv)
 {
+    if (argc == 2 && strcmp(argv[1], "--sequence-interruption") == 0)
+    {
+        testCommandReplacesSequenceAcrossDayBoundary();
+        testRtcCatchUp();
+        testRtcSnapshotAndReset();
+        testNavigationDuringRtcCatchUp();
+        return 0;
+    }
 #if !ENABLE_DAILY_POST_PROCESSING
     testDailyPostProcessingDisabled();
     testNavigationDuringRtcCatchUp();
@@ -1905,6 +1974,7 @@ int main()
     testEvolutionInterrupted(true, true);
     testBehaviorTransactionsUseLivePet();
     testUserActionPlaybackSequence();
+    testCommandReplacesSequenceAcrossDayBoundary();
     testGameRoutesUserActionResult();
     testUnifiedCommandExecution();
     testStatusReadsActionCommittedPet();
