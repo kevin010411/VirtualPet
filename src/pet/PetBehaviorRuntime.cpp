@@ -95,21 +95,27 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
 
     const PetBehaviorActionConfig &action = config.actions[actionSlot];
     Animation sequence[1 + kMaxPetBehaviorFollowingAnimationsPerAction];
-    const uint8_t count = static_cast<uint8_t>(1 + action.followingAnimationCount);
+    uint8_t count = 0;
     if (action.followingAnimationCount > kMaxPetBehaviorFollowingAnimationsPerAction ||
         static_cast<uint16_t>(action.firstFollowingAnimation) + action.followingAnimationCount >
             kMaxPetBehaviorFollowingAnimations)
         return PetBehaviorActionResult::Applied;
-    for (uint8_t index = 0; index < count; ++index)
+    for (uint8_t index = 0; index <= action.followingAnimationCount; ++index)
     {
         const auto &segment = index == 0 ? playback :
             config.followingAnimations[action.firstFollowingAnimation + index - 1];
-        const PlaybackResult buildResult = resolveActionAnimation(segment, renderer, sequence[index]);
+        if (index == 0 && !segment.animation.valid())
+            continue;
+        const PlaybackResult buildResult = resolveActionAnimation(segment, renderer, sequence[count]);
         if (buildResult == PlaybackResult::AnimationMissing)
             return PetBehaviorActionResult::AppliedAnimationMissing;
         if (buildResult != PlaybackResult::Accepted)
             return PetBehaviorActionResult::Applied;
+        ++count;
     }
+
+    if (count == 0)
+        return PetBehaviorActionResult::Applied;
 
     const PlaybackResult replaceResult = animations.replace(AnimationSequence(sequence, count));
     return replaceResult == PlaybackResult::AnimationMissing

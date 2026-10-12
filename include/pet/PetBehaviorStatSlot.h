@@ -5,7 +5,7 @@
 
 #include "pet/PetBehaviorTypes.h"
 
-static_assert(kPetBehaviorSlotCount <= 10, "Pet Stat Slot tokens require one decimal digit.");
+static_assert(kPetBehaviorSlotCount <= 12, "Pet Stat capacity must fit the runtime contract.");
 
 inline uint16_t activePetBehaviorStatMask(const PetBehaviorConfig &config)
 {
@@ -21,13 +21,21 @@ inline bool parsePetBehaviorStatSlot(const char *token, uint8_t &slot)
     if (token == nullptr ||
         token[0] != 'c' || token[1] != 'u' || token[2] != 's' ||
         token[3] != 't' || token[4] != 'o' || token[5] != 'm' ||
-        token[6] < '0' || token[6] >= '0' + kPetBehaviorSlotCount ||
-        token[7] != '\0')
+        token[6] < '0' || token[6] > '9')
     {
         return false;
     }
 
-    slot = static_cast<uint8_t>(token[6] - '0');
+    uint8_t parsed = static_cast<uint8_t>(token[6] - '0');
+    if (token[7] != '\0')
+    {
+        if (token[6] != '1' || (token[7] != '0' && token[7] != '1') || token[8] != '\0')
+            return false;
+        parsed = static_cast<uint8_t>(10 + token[7] - '0');
+    }
+    if (parsed >= kPetBehaviorSlotCount)
+        return false;
+    slot = parsed;
     return true;
 }
 

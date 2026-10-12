@@ -13,7 +13,7 @@
 constexpr uint8_t kPetBehaviorSlotCount = APP_MAX_PET_STATS;
 constexpr uint8_t kMaxPetBehaviorStats = kPetBehaviorSlotCount;
 static_assert(kPetBehaviorSlotCount > 0, "Pet Stat capacity must be positive.");
-static_assert(kPetBehaviorSlotCount <= 10, "Pet Stat Slot tokens require one decimal digit.");
+static_assert(kPetBehaviorSlotCount <= 12, "Pet Stat capacity must fit the runtime contract.");
 constexpr uint8_t kMaxRuntimePetStates = 16;
 #if ENABLE_GUESS_GAME
 constexpr uint8_t kPetBehaviorGuessOutcomeCount = 4;
@@ -139,7 +139,7 @@ struct PetBehaviorConfig
     uint8_t petStateCount;
     uint8_t actionCount;
     uint8_t actionConditionCount;
-    uint8_t actionEffectCount;
+    uint16_t actionEffectCount;
     uint8_t actionOutcomeCount;
 #if ENABLE_GUESS_GAME
     uint8_t guessEffectCount;

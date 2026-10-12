@@ -11,7 +11,7 @@ constexpr RuntimeValueId kRuntimeValueStageDays = 0;
 constexpr RuntimeValueId kRuntimeValueSpeciesSlot = 1;
 constexpr RuntimeValueId kRuntimeValueOutfitSlot = 2;
 constexpr RuntimeValueId kRuntimeValuePetStatBase = 16;
-constexpr uint8_t kRuntimeValuePetStatCapacity = 10;
+constexpr uint8_t kRuntimeValuePetStatCapacity = 12;
 constexpr RuntimeValueId kRuntimeValueIdMin = 0;
 constexpr RuntimeValueId kRuntimeValueIdMax = 65534;
 

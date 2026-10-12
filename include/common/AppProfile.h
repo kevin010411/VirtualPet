@@ -76,7 +76,7 @@
 #endif
 
 #ifndef APP_MAX_PET_STATS
-#define APP_MAX_PET_STATS 6
+#define APP_MAX_PET_STATS 12
 #endif
 
 // Generated per Project; do not reserve the maximum for every firmware build.

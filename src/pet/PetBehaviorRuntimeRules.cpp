@@ -32,7 +32,7 @@ bool applyEffect(const PetBehaviorConfig &config,
 }
 
 // Check both published counts and compiled storage before dereferencing a range.
-bool validRange(uint8_t first, uint8_t count, uint16_t total, uint16_t capacity)
+bool validRange(uint16_t first, uint8_t count, uint16_t total, uint16_t capacity)
 {
     return total <= capacity && static_cast<uint16_t>(first) + count <= total;
 }
@@ -104,9 +104,7 @@ bool selectPlayback(const PetBehaviorConfig &config,
         playback = selected->animationPlayback;
         return true;
     }
-    if (!action.hasFallbackAnimation)
-        return false;
-    playback = outcome.animationPlayback;
+    playback = action.hasFallbackAnimation ? outcome.animationPlayback : PetBehaviorActionPlayback{};
     return true;
 }
 

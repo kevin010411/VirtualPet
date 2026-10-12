@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-static constexpr size_t kPetCustomStatCount = 8;
+static constexpr size_t kPetCustomStatCount = 12;
 static constexpr size_t kTrackedActionCount = 8;
 
 struct PersistedPetState
@@ -39,7 +39,7 @@ class Pet
 {
 public:
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 16;
+    static constexpr uint16_t kPetStateVersion = 17;
     static constexpr uint32_t kStageDaysMax = 864000UL;
 
     Pet();

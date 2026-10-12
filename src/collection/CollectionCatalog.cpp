@@ -131,10 +131,10 @@ __attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const PetBehav
         {
             uint8_t condition[10];
             if (!readRecord(table.source, *conditions, readU16(item + 2) + clause, condition)) return false;
-            if (condition[0] >= 18) return false;
+            if (condition[0] >= kPetCustomStatCount + 2 + kTrackedActionCount) return false;
             const uint8_t source = condition[0];
-            const int32_t value = source < 8 ? state.customStats[source] :
-                source >= 10 ? state.actionCounts[source - 10] : identities[source - 8];
+            const int32_t value = source < kPetCustomStatCount ? state.customStats[source] :
+                source >= kPetCustomStatCount + 2 ? state.actionCounts[source - kPetCustomStatCount - 2] : identities[source - kPetCustomStatCount];
             matches &= value >= readI32(condition + 2) && value <= readI32(condition + 6);
         }
         if (matches) { pet.acquireCollection(index); *changed = true; }

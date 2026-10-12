@@ -775,7 +775,7 @@ int main(int argc, char **argv)
         assert(block.x == ((slot - 1) % 4) * 32);
         assert(block.y == (slot <= 4 ? 0 : 128));
     }
-    const std::vector<uint8_t> sequence = readFixture(argv[argc - 1]);
+    const std::vector<uint8_t> sequence = readFixture(argv[argc - 2]);
     auto sequenceManifest = fixtureManifest(sequence);
     std::memcpy(sequenceManifest.bundleId.bytes, sequence.data() + 28, 16);
     assert(parseRuntimeTableBehavior(sequence.data(), sequence.size(),
@@ -791,7 +791,35 @@ int main(int argc, char **argv)
            config.followingAnimations[start + 1].animation.animationId);
     for (uint8_t slot = 1; slot < config.actionCount; ++slot)
         assert(config.actions[slot].followingAnimationCount == 0);
-    for (int argument = 5; argument < argc - 1; ++argument)
+    const std::vector<uint8_t> optional = readFixture(argv[argc - 1]);
+    auto optionalManifest = fixtureManifest(optional);
+    std::memcpy(optionalManifest.bundleId.bytes, optional.data() + 28, 16);
+    assert(parseRuntimeTableBehavior(optional.data(), optional.size(),
+                                     optionalManifest, 1, 1, config));
+    assert(config.actionCount == 5);
+    assert(config.actions[0].mode == PetBehaviorActionMode::Standard);
+    assert(config.actions[1].mode == PetBehaviorActionMode::ConditionalAnimation);
+    assert(!config.actions[1].hasFallbackAnimation);
+    assert(config.actions[2].mode == PetBehaviorActionMode::RandomOutcome);
+    for (uint8_t slot = 0; slot < 3; ++slot)
+    {
+        const auto &action = config.actions[slot];
+        const auto &primary = config.actionOutcomes[action.firstOutcome].animationPlayback;
+        assert(!primary.animation.valid() && primary.playbackCount == 0);
+        assert(action.followingAnimationCount == 1);
+        const auto &following = config.followingAnimations[action.firstFollowingAnimation];
+        assert(following.animation.valid() && following.playbackCount == 2);
+    }
+    const auto &emptyCondition = config.actionConditions[config.actions[1].firstCondition];
+    assert(!emptyCondition.animationPlayback.animation.valid());
+    assert(emptyCondition.animationPlayback.playbackCount == 0);
+    const auto &animatedCondition = config.actionConditions[config.actions[1].firstCondition + 1];
+    assert(animatedCondition.animationPlayback.animation.valid());
+    assert(animatedCondition.animationPlayback.playbackCount == 2);
+    const auto &animatedOutcome = config.actionOutcomes[config.actions[2].firstOutcome + 1];
+    assert(animatedOutcome.animationPlayback.animation.valid());
+    assert(animatedOutcome.animationPlayback.playbackCount == 3);
+    for (int argument = 5; argument < argc - 2; ++argument)
     {
         const std::vector<uint8_t> invalid = readFixture(argv[argument]);
         unpublished.screenBlockCount = 0xAA;

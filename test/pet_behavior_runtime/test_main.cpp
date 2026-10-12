@@ -140,7 +140,8 @@ void testConditionalUsesOwnedRangePriorityAndPreEffectValues()
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(playback.animation.animationId == 7 && playback.playbackCount == 3);
     assert(state.values[0] == -5);
-    assert(!applyPetBehaviorAction(config, 2, state, pauses, playback));
+    assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
+    assert(!playback.animation.valid() && playback.playbackCount == 0);
     action.hasFallbackAnimation = true;
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(playback.animation.animationId == 4);

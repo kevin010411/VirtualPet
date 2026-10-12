@@ -19,8 +19,8 @@ constexpr uint8_t kMaxPetBehaviorActionOutcomes =
     kMaxPetBehaviorActions * kMaxPetBehaviorRandomOutcomesPerAction;
 constexpr uint16_t kMaxPetBehaviorActionEffects =
     kMaxPetBehaviorActionOutcomes * APP_MAX_PET_STATS;
-static_assert(kMaxPetBehaviorActionEffects <= UINT8_MAX,
-              "Action effect ranges require one-byte indices.");
+static_assert(kMaxPetBehaviorActionEffects <= UINT16_MAX,
+              "Action effect ranges require two-byte indices.");
 
 enum class PetBehaviorEffectOperation : uint8_t
 {
@@ -62,7 +62,7 @@ struct PetBehaviorActionOutcomeConfig
 {
     PetBehaviorAnimationPlaybackConfig animationPlayback;
     uint8_t weight;
-    uint8_t firstEffect;
+    uint16_t firstEffect;
     uint8_t effectCount;
 };
 

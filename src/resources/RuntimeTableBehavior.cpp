@@ -218,8 +218,7 @@ bool decodeActions(const Source &source,
             if (effectCount > kPetBehaviorSlotCount)
                 return false;
             AssetData::AnimationRef animation = {};
-            const bool missingConditionalFallback = mode == 1 && !hasFallback;
-            if (!missingConditionalFallback &&
+            if (animationRef != kNone16 &&
                 !resolveAnimation(source, assets, animations, animationRef, scope, animation))
                 return false;
 
@@ -227,7 +226,7 @@ bool decodeActions(const Source &source,
             outcome.weight = weight;
             outcome.animationPlayback.animation = animation;
             outcome.animationPlayback.playbackCount = playbackCount;
-            outcome.firstEffect = static_cast<uint8_t>(nextEffect);
+            outcome.firstEffect = nextEffect;
             outcome.effectCount = static_cast<uint8_t>(effectCount);
 
             for (uint16_t effectOffset = 0; effectOffset < effectCount; ++effectOffset)
@@ -256,7 +255,7 @@ bool decodeActions(const Source &source,
                 readU16(conditionRecord + 2), readI32(conditionRecord + 8),
                 readI32(conditionRecord + 12)};
             if (conditionRecord[1] != 0 || conditionRecord[5] != 0 ||
-                conditionRecord[4] == 0 || conditionRecord[4] > 5 ||
+                conditionRecord[4] > 5 ||
                 !isRuntimeBehaviorRange(predicate) ||
                 (isRuntimeValueIdPetStat(predicate.valueId) &&
                  runtimePetStatSlot(predicate.valueId) >= config.statCount))
@@ -266,7 +265,8 @@ bool decodeActions(const Source &source,
             condition.priority = conditionRecord[0];
             condition.predicate = predicate;
             condition.animationPlayback.playbackCount = conditionRecord[4];
-            if (!resolveAnimation(source, assets, animations, readU16(conditionRecord + 6), scope,
+            if (readU16(conditionRecord + 6) != kNone16 &&
+                !resolveAnimation(source, assets, animations, readU16(conditionRecord + 6), scope,
                                   condition.animationPlayback.animation))
                 return false;
             ++nextCondition;
@@ -275,7 +275,7 @@ bool decodeActions(const Source &source,
     config.actionCount = static_cast<uint8_t>(actions.count);
     config.actionOutcomeCount = static_cast<uint8_t>(nextOutcome);
     config.actionConditionCount = static_cast<uint8_t>(nextCondition);
-    config.actionEffectCount = static_cast<uint8_t>(nextEffect);
+    config.actionEffectCount = nextEffect;
     return nextOutcome == outcomes.count &&
            nextCondition == (conditions == nullptr ? 0 : conditions->count) &&
            nextEffect == (effects == nullptr ? 0 : effects->count);

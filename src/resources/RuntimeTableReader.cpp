@@ -7,9 +7,9 @@ namespace RuntimeTableInternal
 namespace
 {
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// v15 adds bounded following-animation records for User Action sequences.
+// v16 permits animation-free User Action outcomes and conditional branches.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 15;
+constexpr uint16_t kVersion = 17;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
