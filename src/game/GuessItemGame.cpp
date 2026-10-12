@@ -164,6 +164,7 @@ void GuessItemGame::update()
         {
             const bool won = correctCount > wrongCount;
             host.settleOutcome(won ? GuessItemOutcome::GameWin : GuessItemOutcome::GameLoss);
+            if (state == GuessItemState::Inactive) return;
 #if ENABLE_GUESS_GAME_SINGLE_ROUND && !ENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT
             state = GuessItemState::Inactive;
             lastMoveTime = now;
@@ -259,11 +260,13 @@ void GuessItemGame::handleGuess(GuessItemSide player)
     {
         correctCount++;
         host.settleOutcome(GuessItemOutcome::RoundCorrect);
+        if (state == GuessItemState::Inactive) return;
     }
     else
     {
         wrongCount++;
         host.settleOutcome(GuessItemOutcome::RoundWrong);
+        if (state == GuessItemState::Inactive) return;
     }
 
     Animation sequence[3];
@@ -308,6 +311,7 @@ void GuessItemGame::handleGuess(GuessItemSide player)
             ++sequenceCount;
         }
         host.settleOutcome(won ? GuessItemOutcome::GameWin : GuessItemOutcome::GameLoss);
+        if (state == GuessItemState::Inactive) return;
         nextState = won ? GuessItemState::Win : GuessItemState::Lose;
 #endif
     }

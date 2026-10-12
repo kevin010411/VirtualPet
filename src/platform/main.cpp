@@ -337,6 +337,7 @@ static bool confirmVoltageRecoveredFromCritical()
 
 void enterSleep()
 {
+  const bool deadBeforeSleep = game.isDead();
   uint32_t lastWake = buttons.wakeGeneration();
   if (g_isSleeping || !g_rtcReady)
     return;
@@ -416,6 +417,11 @@ void enterSleep()
   RtcClock::requestSynchronization();
   if (g_gameReady)
     synchronizeGameTime();
+  if (deadBeforeSleep && !g_lowBatteryMode && game.isDead() && game.isReady())
+  {
+    game.OnDeathKey();
+    buttons.clearFlags();
+  }
 
   // ST7735 GRAM is not guaranteed to remain intact while sleeping, especially
   // near the low-voltage threshold. Clear every pixel and synchronously redraw
@@ -761,6 +767,7 @@ void setup()
 
   if (!g_lowBatteryMode)
     game.startStartupAnimation();
+  buttons.clearFlags();
   noteInteraction();
 #if ENABLE_DEBUG
   g_startupTiming.startupReadyMs = millis() - g_startupTiming.startedAt;
@@ -779,9 +786,25 @@ void loop()
     return;
   }
   CheatButtonEvent buttonEvent = CheatButtonEvent::None;
+  const bool deadBeforeTime = game.isDead();
+  if (ready) synchronizeGameTime();
+  if (!deadBeforeTime && game.isDead()) buttons.clearFlags();
   if (ready && g_gameReady && game.isReady())
-    buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton,
-                                playButtonBeep);
+  {
+    if (game.isDead())
+    {
+      if (buttons.takeDeathPress())
+      {
+        noteInteraction();
+        playButtonBeep();
+        game.OnDeathKey();
+        buttons.clearFlags();
+      }
+    }
+    else
+      buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton,
+                                  playButtonBeep);
+  }
   else
     buttons.clearFlags(); // Fatal screens discard gestures.
   if (buttons.isDebouncedHeld()) noteInteraction();
@@ -807,7 +830,8 @@ void loop()
     break;
   }
 
-  // As in the pre-RTC loop, dispatch buttons before pet/game updates.
+  // Complete elapsed progress before input; this second observation includes
+  // time consumed by input handling without giving expired care a late rescue.
   if (g_sdReady && g_gameReady && game.isReady()) synchronizeGameTime();
 
   const unsigned long sleepCheckNow = millis();
@@ -820,7 +844,9 @@ void loop()
     return;
   }
 
+  const bool deadBeforeLoop = game.isDead();
   if (g_gameReady && game.isReady()) game.loop_game();
+  if (!deadBeforeLoop && game.isDead()) buttons.clearFlags();
   updateButtonBeep(millis());
 
 #if ENABLE_DEBUG

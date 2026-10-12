@@ -13,6 +13,8 @@ class PetSaveController
 public:
     PetSaveController(Pet &pet, PetStorage &storage, Renderer &renderer);
     bool saveNow();
+    bool saveLifeState() { return saveSnapshot(true); }
+    void resetTransientState() { saveCounter = 0; batching = batchDirty = false; }
     // Immediate event commits bypass a periodic RTC catch-up save batch.
     bool saveCollectionProgress(bool forceSave, bool immediate = false);
     bool saveDailyProgress(bool forceSave = false);

@@ -16,6 +16,7 @@ public:
 
     void configureRuntimeContract(const PetBehaviorConfig &config);
     void begin();
+    void setCommandsVisible(bool visible) { commandsVisible = visible; }
     void drawAll();
     void drawSelection();
     void updateValues(const PetStatSnapshot &snapshot);
@@ -28,6 +29,7 @@ private:
     const PetBehaviorConfig *runtimeContract = nullptr;
     uint8_t activeLayoutId = 0;
     bool hasActiveLayout = false;
+    bool commandsVisible = true;
     uint16_t numericFrames[32] = {};
 
     bool drawNumeric(uint8_t index);

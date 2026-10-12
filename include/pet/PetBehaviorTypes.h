@@ -106,6 +106,9 @@ struct ScreenRuleConfig
 
 struct PetBehaviorConfig
 {
+    bool deathEnabled;
+    uint16_t deathStatMask;
+    AssetData::AnimationRef deathAnimation;
     AssetData::RuntimeManifest assetManifest;
     AssetData::AnimationRef systemAnimations[kFirmwarePlaybackRoleCount];
     AssetData::AnimationRef layoutUnselected;

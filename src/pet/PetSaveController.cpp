@@ -23,6 +23,7 @@ bool PetSaveController::saveNow()
 
 bool PetSaveController::saveCollectionProgress(bool forceSave, bool immediate)
 {
+    if (pet.isDead()) return saveSnapshot(true);
 #if ENABLE_COLLECTION_CATALOG
     // Evaluate against the complete mutation before committing one A/B snapshot.
     // Appearance, effects, counters, acquisition and unlock bits travel together.

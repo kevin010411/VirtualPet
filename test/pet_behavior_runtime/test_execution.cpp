@@ -67,6 +67,31 @@ void testStandardEffectsOnly()
     assertActionApplied(config);
 }
 
+void testUnchangedEffectRefreshesThroughRuntimeCommit()
+{
+    const PetBehaviorEffectOperation operations[] = {
+        PetBehaviorEffectOperation::Change, PetBehaviorEffectOperation::Set};
+    for (const auto operation : operations)
+    {
+        auto config = effectsOnlyConfig();
+        config.stats[0].initialValue = 100;
+        config.actionEffects[0] = {0, operation,
+            static_cast<int16_t>(operation == PetBehaviorEffectOperation::Set ? 100 : 5)};
+        Pet pet;
+        Renderer renderer(nullptr, nullptr);
+        AnimationController animations(renderer);
+        PetBehaviorRuntime runtime(config, pet, animations, renderer);
+        runtime.initializeStats();
+        assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+        assert(runtime.advancePetDay() && pet.customStat(0) == 100);
+        assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+        assert(pet.actionCount(0) == 2);
+        assert(runtime.advancePetDay() && pet.customStat(0) == 100);
+        assert(runtime.advancePetDay() && pet.customStat(0) == 100);
+        assert(runtime.advancePetDay() && pet.customStat(0) == 99);
+    }
+}
+
 void testMatchedEmptyBranchSuppressesFallback()
 {
     auto config = effectsOnlyConfig();
@@ -156,6 +181,7 @@ SdFat *Renderer::sdCard() const { return nullptr; }
 int main()
 {
     testStandardEffectsOnly();
+    testUnchangedEffectRefreshesThroughRuntimeCommit();
     testMatchedEmptyBranchSuppressesFallback();
     testUnmatchedWithoutFallback();
     testRandomEffectsOnly();

@@ -62,6 +62,11 @@ bool PetSession::prepare(SdFat *sd)
         return false;
 
     preparationState = State::UnlockFailed;
+    if (pet.evaluateDeath())
+    {
+        preparationState = State::Ready;
+        return true;
+    }
 #if ENABLE_COLLECTION_CATALOG
     bool collectionChanged = false;
     if (!evaluateCollectionCatalog(sd, config, pet, collectionChanged)) return false;
@@ -83,17 +88,34 @@ AppearanceChangeResult PetSession::reset()
 {
     if (preparationState != State::Ready)
         return AppearanceChangeResult::PetStateRejected;
-    if (loadPetState(false) == InitialState::Failed)
+    const PersistedPetState previous = pet.persistentState();
+    AppearanceChangeResult result = AppearanceChangeResult::ConfigurationFailed;
+    if (host.configureActiveAppearance(initialSpeciesSlot, initialOutfitSlot))
     {
-        return AppearanceChangeResult::PetStateRejected;
-    }
-    pet.resetFirstStartCompleted();
+        result = AppearanceChangeResult::PetStateRejected;
+        if (loadPetState(false) != InitialState::Failed)
+        {
+            result = AppearanceChangeResult::UnlockFailed;
+            if (changes.initializeUnlocksForReset())
+            {
 #if ENABLE_COLLECTION_CATALOG
-    bool changed = false;
-    if (!evaluateCollectionCatalog(renderer.sdCard(), config, pet, changed))
-        return AppearanceChangeResult::ConfigurationFailed;
+                bool changed = false;
+                if (!evaluateCollectionCatalog(renderer.sdCard(), config, pet, changed))
+                    result = AppearanceChangeResult::ConfigurationFailed;
+                else
 #endif
-    return changes.changeSpecies(pet.speciesSlot(), pet.outfitSlot());
+                    result = storage.save(pet) ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;
+            }
+            else renderer.recordAssetDataErrorResource(loader.firstAssetDataErrorResource());
+        }
+    }
+    if (result != AppearanceChangeResult::Applied)
+    {
+        pet.restoreState(previous);
+        if (!host.configureActiveAppearance(pet.speciesSlot(), pet.outfitSlot()))
+            return AppearanceChangeResult::ConfigurationFailed;
+    }
+    return result;
 }
 
 PetSession::InitialState PetSession::loadPetState(bool allowSavedState)
@@ -107,6 +129,7 @@ PetSession::InitialState PetSession::loadPetState(bool allowSavedState)
         storage.discard();
     }
     pet.setDefaultState();
+    pet.configureDeath(config.deathEnabled, config.deathStatMask);
     pet.setSchemaFingerprint(config.schemaFingerprint);
     runtime.initializeStats();
     return pet.setSpeciesSlot(initialSpeciesSlot) && pet.setOutfitSlot(initialOutfitSlot)

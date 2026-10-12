@@ -16,6 +16,7 @@ public:
     ButtonInput(int previousPin, int nextPin, int confirmPin, unsigned long cooldownMs = 250);
     void begin();
     void clearFlags();
+    bool takeDeathPress();
     bool isHeld() const { return readMask() != 0; }
     bool isDebouncedHeld() const { return stableMask != 0; }
     uint32_t wakeGeneration() const { return wakeCount; }

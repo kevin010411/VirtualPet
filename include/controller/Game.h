@@ -48,6 +48,8 @@ public:
     void synchronizeTime(uint32_t rtcSeconds);
     bool hasPendingTime() const { return petClock.pending() && initialized; }
     bool isReady() const { return initialized; }
+    bool isDead() const;
+    void OnDeathKey();
     void requestFullRedraw();
     void redrawAllNow();
     bool saveNow();
@@ -112,6 +114,11 @@ private:
     bool cheatEvolutionPending = false;
     bool pendingFirstStartCompletion = false;
     bool initialized = false;
+    bool deathPresented = false;
+    bool deathSavePending = false;
+    unsigned long deathSaveRetryAt = 0;
+    bool enterDeathIfNeeded();
+    void retryDeathSave();
     RuntimeLoadState runtimeLoadState = RuntimeLoadState::Unloaded;
     bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot) override;
     bool activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot) override;

@@ -45,6 +45,7 @@ public:
     AppearanceChangeResult applyOutfit(uint8_t outfitSlot, bool requiresUnlock);
     AppearanceChangeResult applyCollectionTarget(uint8_t speciesSlot, uint8_t outfitSlot);
     bool refreshUnlockState(bool initialize, bool persist = true);
+    bool initializeUnlocksForReset() { return resolveUnlockState(true); }
 
 private:
     Pet &pet;

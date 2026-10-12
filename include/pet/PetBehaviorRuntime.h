@@ -27,6 +27,8 @@ public:
 
     bool hasAction(uint8_t actionSlot) const;
     void initializeStats();
+    void resetTransientState() { dailyChangePauses = {}; }
+    bool isDead() const;
     bool advancePetDay();
     PetBehaviorActionResult executeAction(uint8_t actionSlot);
 #if ENABLE_GUESS_GAME

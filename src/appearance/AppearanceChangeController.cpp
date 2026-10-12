@@ -25,6 +25,7 @@ AppearanceChangeResult AppearanceChangeController::changeSpecies(
         renderer.recordAssetDataErrorResource("pet appearance");
         return AppearanceChangeResult::PetStateRejected;
     }
+    if (pet.evaluateDeath()) return AppearanceChangeResult::Applied;
     if (!resolveUnlockState(true))
     {
         renderer.recordAssetDataErrorResource(loader.firstAssetDataErrorResource());
@@ -56,6 +57,7 @@ AppearanceChangeResult AppearanceChangeController::applyOutfit(
     else if (!pet.setSpeciesSlot(pet.speciesSlot()) || !pet.setOutfitSlot(outfitSlot))
         return AppearanceChangeResult::PetStateRejected;
     renderer.setAssetAppearance(pet.speciesSlot(), pet.outfitSlot());
+    if (pet.evaluateDeath()) return AppearanceChangeResult::Applied;
     return saves.saveNow() ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;
 }
 
@@ -83,6 +85,7 @@ AppearanceChangeResult AppearanceChangeController::applyCollectionTarget(uint8_t
         return AppearanceChangeResult::ConfigurationFailed;
     if (!pet.setSpeciesSlot(speciesSlot) || !pet.setOutfitSlot(outfitSlot))
         return AppearanceChangeResult::PetStateRejected;
+    if (pet.evaluateDeath()) return AppearanceChangeResult::Applied;
     if (!resolveUnlockState(changedSpecies)) return AppearanceChangeResult::UnlockFailed;
     pet.unlockOutfit(outfitSlot);
     return saves.saveNow() ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;

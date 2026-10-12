@@ -43,6 +43,18 @@ uint8_t ButtonInput::readMask() const
            (digitalRead(confirmPin) == LOW ? kConfirm : 0);
 }
 
+bool ButtonInput::takeDeathPress()
+{
+    const uint8_t observed = readMask();
+    const bool pressed = !waitForRelease && stableMask == 0 && observed != 0;
+    stableMask = observed;
+    cheatMode = false;
+    gestureMask = 0;
+    if (observed == 0) waitForRelease = false;
+    if (pressed) waitForRelease = true;
+    return pressed;
+}
+
 CheatButtonEvent ButtonInput::update(ButtonCallback onPrevious,
                                      ButtonCallback onNext,
                                      ButtonCallback onConfirm,

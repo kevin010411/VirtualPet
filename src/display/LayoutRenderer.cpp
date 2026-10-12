@@ -89,6 +89,7 @@ bool LayoutRenderer::updatePlayback(uint8_t layoutId)
 
 bool LayoutRenderer::drawSlot(int slot, bool selected)
 {
+    if (!commandsVisible) return true;
     if (runtimeContract == nullptr)
         return false;
     if (!hasActiveLayout)

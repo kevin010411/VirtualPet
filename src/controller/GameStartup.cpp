@@ -51,6 +51,7 @@ bool Game::prepare_game()
 #endif
 
     animations->setup(petBehaviorRuntime->baseAnimation());
+    deathPresented = false;
 
     return true;
 }
@@ -94,6 +95,7 @@ bool Game::finish_setup_game()
         return false;
     }
 
+    layout->setCommandsVisible(!pet.isDead());
     layout->updateValues(pet.statSnapshot());
     uint8_t initialLayoutId = 0;
     if (!renderer.currentLayoutId(initialLayoutId) ||
@@ -109,6 +111,7 @@ bool Game::finish_setup_game()
     }
 
     initialized = true;
+    if (enterDeathIfNeeded()) return !flow.isFatalError();
     enterCommand();
     petClock.reset(latestRtcSeconds);
     clockStarted = true;
@@ -119,6 +122,7 @@ bool Game::resetPet()
 {
     if (runtimeLoadState != RuntimeLoadState::Ready || flow.isFatalError())
         return false;
+    const bool wasDead = pet.isDead();
     initialized = false;
 #if ENABLE_COLLECTION_CATALOG
     collectionCatalog->exit();
@@ -129,12 +133,32 @@ bool Game::resetPet()
     const AppearanceChangeResult resetResult = petSession.reset();
     if (resetResult != AppearanceChangeResult::Applied)
     {
-        if (resetResult == AppearanceChangeResult::ConfigurationFailed)
+        if (resetResult == AppearanceChangeResult::ConfigurationFailed ||
+            resetResult == AppearanceChangeResult::UnlockFailed)
             enterRuntimeFatal();
-        else if (resetResult == AppearanceChangeResult::PetStateRejected)
-            renderer.showResourceError();
+        else
+        {
+            initialized = true;
+            if (wasDead)
+            {
+                refreshBaseAnimation();
+                animations->requestFullRedraw();
+                deathSaveRetryAt = millis();
+            }
+            renderer.showResourceError("pet state");
+        }
         return false;
     }
+    deathPresented = deathSavePending = false;
+    petSaves.resetTransientState();
+    commands->resetSelection();
+    layout->setCommandsVisible(true);
+#if ENABLE_APPEARANCE_SELECTION
+    appearanceSelection->exit();
+#endif
+#if ENABLE_COLLECTION_CATALOG
+    collectionSavePending = false;
+#endif
     animations->cancelAll();
 #if ENABLE_GUESS_GAME
     minigame->reset();

@@ -79,6 +79,25 @@ bool decodeStats(const Source &source, const Section &section, PetBehaviorConfig
     return true;
 }
 
+bool decodeDeathAnimation(const Source &source, const Section &assets,
+                          const Section &animations, uint16_t reference,
+                          const ActiveAssetScope &scope, PetBehaviorConfig &config)
+{
+    if (reference == kNone16) return true;
+    uint8_t animation[8] = {};
+    if (reference >= animations.count || !readRecord(source, animations, reference, animation)) return false;
+    const uint16_t first = readU16(animation + 4), count = readU16(animation + 6);
+    if (static_cast<uint32_t>(first) + count > assets.count) return false;
+    for (uint16_t offset = 0; offset < count; ++offset)
+    {
+        uint8_t asset[12] = {};
+        if (!readRecord(source, assets, static_cast<uint16_t>(first + offset), asset)) return false;
+        if (asset[2] == 2 || (asset[2] == 1 && asset[3] == scope.speciesSlot && asset[4] == scope.outfitSlot))
+            return resolveAnimation(source, assets, animations, reference, scope, config.deathAnimation);
+    }
+    return !config.deathEnabled;
+}
+
 bool decodePetStates(const Source &source,
                      const Section *states,
                      const Section *defaultState,
@@ -476,6 +495,15 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     if ((table.featureFlags & kCollectionFeature) != 0) return false;
 #endif
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
+    const Section *death = table.find(DeathConfig);
+    uint8_t deathRecord[8] = {};
+    if (death == nullptr || death->count != 1 || !readRecord(source, *death, 0, deathRecord))
+        return false;
+    config.deathEnabled = deathRecord[0] != 0;
+    config.deathStatMask = readU16(deathRecord + 2);
+    const uint16_t deathRef = readU16(deathRecord + 4);
+    if (!decodeDeathAnimation(source, *assets, *animations, deathRef, scope, config))
+        return false;
     if (!decodeStats(source, *stats, config) ||
         !decodePetStates(source, petStates, defaultPetState,
                          *assets, *animations, scope, config) ||

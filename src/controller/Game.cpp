@@ -63,6 +63,12 @@ void Game::loop_game()
         enterRuntimeFatal();
         return;
     }
+    if (enterDeathIfNeeded())
+    {
+        retryDeathSave();
+        handlePlaybackResult(tickPlayback(millis()).result);
+        return;
+    }
 #if ENABLE_COLLECTION_CATALOG
     if (collectionCatalog->active()) return;
 #endif
@@ -84,6 +90,7 @@ void Game::loop_game()
     if (flow.isMinigame())
     {
         minigame->update();
+        if (enterDeathIfNeeded()) return;
         if (!minigame->isActive())
         {
             if (!refreshOutfitUnlockMask(false))
@@ -195,6 +202,7 @@ bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 
 bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
+    pet.configureDeath(petBehaviorConfig.deathEnabled, petBehaviorConfig.deathStatMask);
     if (!renderer.configureAssetBundle(petBehaviorConfig.assetManifest.bundleId))
     {
         return false;
@@ -221,7 +229,9 @@ bool Game::refreshOutfitUnlockMask(bool initialize, bool persist)
 
 AppearanceChangeResult Game::enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot)
 {
-    return appearanceChanges.changeSpecies(speciesSlot, entryOutfitSlot);
+    const AppearanceChangeResult result = appearanceChanges.changeSpecies(speciesSlot, entryOutfitSlot);
+    enterDeathIfNeeded();
+    return result;
 }
 
 bool Game::saveNow()
@@ -231,6 +241,7 @@ bool Game::saveNow()
 
 bool Game::startStartupAnimation()
 {
+    if (pet.isDead()) return false;
     if (!initialized)
         return false;
     if (!flow.requestStartup())
@@ -284,6 +295,7 @@ bool Game::finishCollectionSave(bool saved)
 #if ENABLE_GUESS_GAME
 void Game::onGuessOutcomeApplied()
 {
+    if (enterDeathIfNeeded()) return;
     // Round and final outcomes are separate complete mutations. Commit each
     // before a following outcome or its animation can change the same stat.
     if (!refreshOutfitUnlockMask(false, false))
@@ -340,6 +352,7 @@ void Game::OnRightKey()
 
 void Game::routeDirectionKey(KeyDirection direction)
 {
+    if (initialized && pet.isDead()) { OnDeathKey(); return; }
     // Menu selection does not mutate pet values. Keep it responsive while
     // historical days settle; minigame decisions still wait for catch-up.
     if (!initialized || (hasPendingTime() && !flow.isCommand()))
@@ -387,6 +400,7 @@ void Game::routeDirectionKey(KeyDirection direction)
 
 void Game::OnConfirmKey()
 {
+    if (initialized && pet.isDead()) { OnDeathKey(); return; }
     if (!initialized || hasPendingTime())
         return;
 #if ENABLE_COLLECTION_CATALOG
@@ -399,6 +413,7 @@ void Game::OnConfirmKey()
             if (collectionCatalog->takeActivation(species, outfit))
             {
                 const AppearanceChangeResult result = appearanceChanges.applyCollectionTarget(species, outfit);
+                if (enterDeathIfNeeded()) return;
                 if (result == AppearanceChangeResult::ConfigurationFailed ||
                     result == AppearanceChangeResult::UnlockFailed ||
                     result == AppearanceChangeResult::PetStateRejected)
@@ -426,6 +441,7 @@ void Game::OnConfirmKey()
         {
             const AppearanceChangeResult result =
                 appearanceChanges.applyOutfit(selectedOutfit, requiresUnlock);
+            if (enterDeathIfNeeded()) return;
             if (result == AppearanceChangeResult::Applied)
             {
                 appearanceSelection->exit();
@@ -463,6 +479,7 @@ void Game::refreshBaseAnimation()
 
 bool Game::setStageDaysForCheat(uint32_t value)
 {
+    if (pet.isDead()) return false;
     if (!initialized || runtimeLoadState != RuntimeLoadState::Ready || flow.isFatalError() ||
         evolution->isActive())
         return false;
@@ -486,6 +503,7 @@ bool Game::setStageDaysForCheat(uint32_t value)
 
 PlaybackTickResult Game::tickPlayback(unsigned long now)
 {
+    layout->setCommandsVisible(!pet.isDead());
     if (animations->takeFullRedrawRequest())
         layout->begin();
     animations->preparePlayback(now);
@@ -496,6 +514,7 @@ PlaybackTickResult Game::tickPlayback(unsigned long now)
 
 bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
 {
+    if (enterDeathIfNeeded()) return !flow.isFatalError();
     // Keep failure handling before completion records and evolution progression.
     handlePlaybackResult(playbackResult.result);
     if (flow.isFatalError())
@@ -510,6 +529,7 @@ bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
 
 void Game::handleCommandResult(const CommandResult &result)
 {
+    if (enterDeathIfNeeded()) return;
     if (!result.executed)
         return;
 
@@ -565,6 +585,7 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
 {
     latestRtcSeconds = rtcSeconds;
     if (!initialized) return;
+    if (enterDeathIfNeeded()) return;
     if (renderer.firstAssetDataError() != AssetData::BundleError::None)
     {
         enterRuntimeFatal();
@@ -591,6 +612,7 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
     {
         // One attempted boundary per loop keeps playback and voltage sampling live.
         const DayResult result = maybeTickPet();
+        if (pet.isDead()) return;
         if (result == DayResult::Consumed || result == DayResult::ConsumedWithError)
             petClock.consume();
     }
@@ -601,18 +623,11 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
 
 Game::DayResult Game::maybeTickPet()
 {
+    if (enterDeathIfNeeded()) return DayResult::Blocked;
     const EvolutionResult progress = evolution->update(PlaybackResult::Accepted);
     handleEvolutionResult(progress);
     if (progress != EvolutionResult::NoChange)
         return flow.isFatalError() ? DayResult::Fatal : DayResult::Blocked;
-
-#if ENABLE_DAILY_POST_PROCESSING
-    if (!animations->isBusy())
-    {
-        if (handleEvolution() != EvolutionResult::NoChange)
-            return flow.isFatalError() ? DayResult::Fatal : DayResult::Blocked;
-    }
-#endif
 
     if (!animations->isBusy())
     {
@@ -621,6 +636,7 @@ Game::DayResult Game::maybeTickPet()
             renderer.showResourceError();
             return DayResult::ConsumedWithError;
         }
+        if (enterDeathIfNeeded()) return DayResult::Consumed;
 #if ENABLE_DAILY_POST_PROCESSING
 #if !ENABLE_COLLECTION_CATALOG
         petSaves.maybeSave();
@@ -645,6 +661,7 @@ Game::DayResult Game::maybeTickPet()
 
 EvolutionResult Game::handleEvolution()
 {
+    if (enterDeathIfNeeded()) return EvolutionResult::NoChange;
     const EvolutionResult result = evolution->check();
     handleEvolutionResult(result);
     return result;
@@ -781,6 +798,7 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
         enterRuntimeFatal();
         return;
     }
+    if (pet.isDead()) { renderer.showResourceError(); return; }
 
     const EvolutionResult evolutionResult = evolution->update(playbackResult);
     handleEvolutionResult(evolutionResult);
@@ -806,4 +824,52 @@ void Game::enterCommand()
 {
     flow.enterCommand();
     dirtySelect = true;
+}
+
+bool Game::isDead() const { return pet.isDead(); }
+
+void Game::OnDeathKey()
+{
+    if (initialized && pet.isDead()) resetPet();
+}
+
+bool Game::enterDeathIfNeeded()
+{
+    if (!pet.evaluateDeath()) return false;
+    if (deathPresented) return true;
+    deathPresented = true;
+    pendingFirstStartCompletion = cheatEvolutionPending = false;
+    evolution->cancel();
+    animations->cancelAll();
+#if ENABLE_COLLECTION_CATALOG
+    collectionCatalog->exit();
+    collectionSavePending = false;
+#endif
+#if ENABLE_APPEARANCE_SELECTION
+    appearanceSelection->exit();
+#endif
+#if ENABLE_GUESS_GAME
+    minigame->reset();
+#endif
+    flow.enterCommand();
+    commands->resetSelection();
+    petClock.reset(latestRtcSeconds);
+    clockStarted = false;
+    petSaves.resetTransientState();
+    deathSavePending = !petSaves.saveLifeState();
+    deathSaveRetryAt = millis();
+    refreshBaseAnimation();
+    animations->requestFullRedraw();
+    dirtySelect = false;
+    if (deathSavePending) renderer.showResourceError("pet state");
+    return true;
+}
+
+void Game::retryDeathSave()
+{
+    if (!deathSavePending || millis() - deathSaveRetryAt < 1000UL) return;
+    deathSaveRetryAt = millis();
+    deathSavePending = !petSaves.saveLifeState();
+    if (deathSavePending) renderer.showResourceError("pet state");
+    else animations->requestFullRedraw();
 }

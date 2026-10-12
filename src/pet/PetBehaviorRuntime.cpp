@@ -64,6 +64,7 @@ bool PetBehaviorRuntime::hasAction(uint8_t actionSlot) const
 
 void PetBehaviorRuntime::initializeStats()
 {
+    resetTransientState();
     PetBehaviorStatValues state = readStats(pet);
     initializePetBehaviorStats(config, state);
     writeStats(state, pet);
@@ -78,7 +79,7 @@ bool PetBehaviorRuntime::advancePetDay()
 
 PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
 {
-    if (!hasAction(actionSlot))
+    if (pet.isDead() || !hasAction(actionSlot))
         return PetBehaviorActionResult::Rejected;
 
     PetBehaviorStatValues state = readStats(pet);
@@ -92,6 +93,7 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     dailyChangePauses = nextPauses;
     for (uint8_t index = 0; index < config.trackedActionCount; ++index)
         if (config.trackedActions[index] == actionSlot) { pet.incrementActionCount(index); break; }
+    if (pet.isDead()) return PetBehaviorActionResult::Applied;
 
     const PetBehaviorActionConfig &action = config.actions[actionSlot];
     Animation sequence[1 + kMaxPetBehaviorFollowingAnimationsPerAction];
@@ -126,6 +128,7 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
 #if ENABLE_GUESS_GAME
 bool PetBehaviorRuntime::applyGuessOutcome(PetBehaviorGuessOutcome outcome)
 {
+    if (pet.isDead()) return false;
     PetBehaviorStatValues state = readStats(pet);
     if (!applyPetBehaviorGuessOutcome(config, outcome, state))
         return false;
@@ -135,8 +138,11 @@ bool PetBehaviorRuntime::applyGuessOutcome(PetBehaviorGuessOutcome outcome)
 
 AssetData::AnimationRef PetBehaviorRuntime::baseAnimation() const
 {
+    if (pet.isDead()) return config.deathAnimation.valid() ? config.deathAnimation : config.idleAnimation;
     return activePetState().idleAnimation;
 }
+
+bool PetBehaviorRuntime::isDead() const { return pet.isDead(); }
 
 ActivePetState PetBehaviorRuntime::activePetState() const
 {

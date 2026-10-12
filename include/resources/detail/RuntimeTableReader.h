@@ -41,6 +41,7 @@ enum SectionType : uint16_t
     ActionPlaybacks = 19,
     StatusSets = 20,
     StatusConditions = 21,
+    DeathConfig = 22,
     Appearance = 30,
     Species = 31,
     Outfits = 32,

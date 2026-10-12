@@ -57,12 +57,14 @@ void testDailyChangesAndSparseStats()
 void testAnimationOnlyAndOwnedEffects()
 {
     auto config = behaviorConfig();
+    config.actions[2].suspendDailyChangeDays = 3;
     PetBehaviorStatValues state = {};
     PetBehaviorDailyChangePauses pauses = {};
     initializePetBehaviorStats(config, state);
     PetBehaviorActionPlayback playback = {};
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(state.values[0] == 10 && playback.animation.animationId == 4 && playback.playbackCount == 5);
+    assert(pauses.remainingDays[0] == 0 && pauses.remainingDays[3] == 0);
 
     // Invalid effects outside the selected Outcome must never be visited.
     config.actionEffects[0] = {255, Operation::Change, 1};
@@ -82,11 +84,27 @@ void testAnimationOnlyAndOwnedEffects()
     assert(state.values[0] == 20 && state.values[3] == 0);
     assert(pauses.remainingDays[0] == 7 && pauses.remainingDays[3] == 2);
 
-    // A clamped/no-op effect must not restart a suspension.
+    // A clamped effect still starts and refreshes the target's suspension.
     config.actionOutcomes[0].effectCount = 1;
     pauses = {};
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
-    assert(pauses.remainingDays[0] == 0);
+    assert(pauses.remainingDays[0] == 3);
+    applyPetBehaviorDailyChanges(config, state, pauses);
+    assert(pauses.remainingDays[0] == 2);
+    assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
+    assert(pauses.remainingDays[0] == 3);
+    config.actionEffects[1] = {0, Operation::Set, 20};
+    pauses.remainingDays[0] = 1;
+    assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
+    assert(state.values[0] == 20 && pauses.remainingDays[0] == 3);
+    config.actionEffects[1] = {0, Operation::Change, -10};
+    state.values[0] = -20;
+    pauses.remainingDays[0] = 1;
+    assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
+    assert(state.values[0] == -20 && pauses.remainingDays[0] == 3);
+    config.actions[2].suspendDailyChangeDays = 0;
+    assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
+    assert(pauses.remainingDays[0] == 3);
 }
 
 void testRejectedEffectsAreAtomic()
@@ -123,6 +141,7 @@ void testConditionalUsesOwnedRangePriorityAndPreEffectValues()
     auto config = behaviorConfig();
     auto &action = config.actions[2];
     action.mode = PetBehaviorActionMode::ConditionalAnimation;
+    action.suspendDailyChangeDays = 3;
     action.firstCondition = 1;
     action.conditionCount = 2;
     config.actionConditionCount = 4;
@@ -140,8 +159,11 @@ void testConditionalUsesOwnedRangePriorityAndPreEffectValues()
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(playback.animation.animationId == 7 && playback.playbackCount == 3);
     assert(state.values[0] == -5);
+    applyPetBehaviorDailyChanges(config, state, pauses);
+    assert(pauses.remainingDays[0] == 2);
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(!playback.animation.valid() && playback.playbackCount == 0);
+    assert(pauses.remainingDays[0] == 3 && pauses.remainingDays[3] == 0);
     action.hasFallbackAnimation = true;
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(playback.animation.animationId == 4);
@@ -154,6 +176,7 @@ void testWeightedOutcomeBoundariesAndEffects()
     auto config = behaviorConfig();
     auto &action = config.actions[2];
     action.mode = PetBehaviorActionMode::RandomOutcome;
+    action.suspendDailyChangeDays = 4;
     action.firstOutcome = 1;
     action.outcomeCount = 3;
     config.actionOutcomeCount = 4;
@@ -179,6 +202,11 @@ void testWeightedOutcomeBoundariesAndEffects()
         assert(randomBound == 60);
         assert(playback.animation.animationId == 10 + index / 2);
         assert(state.values[0] == index / 2);
+        assert(pauses.remainingDays[0] == 4 && pauses.remainingDays[3] == 0);
+        applyPetBehaviorDailyChanges(config, state, pauses);
+        assert(pauses.remainingDays[0] == 3);
+        assert(applyPetBehaviorAction(config, 2, state, pauses, playback, deterministicRandom));
+        assert(pauses.remainingDays[0] == 4);
     }
     randomValue = 60;
     assertRejected(config);

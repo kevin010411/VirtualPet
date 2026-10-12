@@ -39,12 +39,15 @@ class Pet
 {
 public:
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 17;
+    static constexpr uint16_t kPetStateVersion = 18;
     static constexpr uint32_t kStageDaysMax = 864000UL;
 
     Pet();
 
     void setDefaultState();
+    bool isDead() const;
+    void configureDeath(bool enabled, uint16_t statMask);
+    bool evaluateDeath();
     void setSchemaFingerprint(uint32_t fingerprint);
 
     uint8_t speciesSlot() const;
@@ -80,6 +83,7 @@ public:
 
 private:
     PersistedPetState st = {};
+    uint16_t deathStatMask = 0;
 
 };
 

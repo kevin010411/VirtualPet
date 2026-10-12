@@ -179,7 +179,7 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
 
     for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
     {
-        if (affectedSlots[slot] && next.values[slot] != state.values[slot] &&
+        if (affectedSlots[slot] &&
             pauses.remainingDays[slot] < action.suspendDailyChangeDays)
         {
             pauses.remainingDays[slot] = action.suspendDailyChangeDays;

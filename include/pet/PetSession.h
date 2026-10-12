@@ -40,7 +40,8 @@ public:
 
     bool prepare(SdFat *sd);
     // Reset uses the validated startup selection and reloads its
-    // contract before initializing unlocks/saving. Failure keeps prior mutations.
+    // contract before initializing unlocks/saving. A failed attempt restores
+    // the preceding pet and appearance; only the final new snapshot is saved.
     AppearanceChangeResult reset();
     State state() const { return preparationState; }
     const char *errorStage() const;

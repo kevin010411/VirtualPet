@@ -7,6 +7,7 @@ namespace
 {
 constexpr uint32_t kFirstLaunchCompleteFlag = 0x1UL;
 constexpr uint32_t kFirstStartCompletedFlag = 0x2UL;
+constexpr uint32_t kDeadFlag = 0x4UL;
 
 uint8_t parseAppearanceSlot(const char *text)
 {
@@ -39,6 +40,20 @@ bool writeAppearanceSlot(char *destination, size_t destinationSize, uint8_t slot
 Pet::Pet()
 {
     setDefaultState();
+}
+
+bool Pet::isDead() const { return (st.flowFlags & kDeadFlag) != 0; }
+void Pet::configureDeath(bool enabled, uint16_t statMask)
+{
+    deathStatMask = enabled ? statMask : 0;
+}
+bool Pet::evaluateDeath()
+{
+    if (!isDead())
+        for (uint8_t slot = 0; slot < kPetCustomStatCount; ++slot)
+            if ((deathStatMask & (1U << slot)) != 0 && st.customStats[slot] <= 0)
+            { st.flowFlags |= kDeadFlag; break; }
+    return isDead();
 }
 
 bool Pet::configureTrackedActions(uint32_t fingerprint)
@@ -77,6 +92,7 @@ void Pet::acquireCollection(uint8_t slot)
 
 bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount)
 {
+    if (isDead()) return false;
     if (customStats == nullptr || customStatCount == 0 || customStatCount > kPetCustomStatCount)
         return false;
 
@@ -88,11 +104,13 @@ bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount)
 
 bool Pet::commitPetStats(const int16_t *customStats, size_t customStatCount)
 {
+    if (isDead()) return false;
     if (customStats == nullptr || customStatCount == 0 || customStatCount > kPetCustomStatCount)
         return false;
 
     for (size_t index = 0; index < customStatCount; ++index)
         st.customStats[index] = customStats[index];
+    evaluateDeath();
     return true;
 }
 
@@ -164,10 +182,12 @@ int16_t Pet::customStat(uint8_t index) const
 
 bool Pet::setCustomStat(uint8_t index, int16_t value)
 {
+    if (isDead()) return false;
     if (index >= PetStatSnapshot::kCustomStatCount)
         return false;
 
     st.customStats[index] = value;
+    evaluateDeath();
     return true;
 }
 
@@ -217,6 +237,7 @@ void Pet::initializeOutfitUnlockMask(uint8_t mask)
 bool Pet::commitConsumableOutfitUnlock(uint8_t outfitSlot,
                                        const PetStatSnapshot &consumedStats)
 {
+    if (isDead()) return false;
     if (outfitSlot == 0 || outfitSlot > 8 ||
         consumedStats.speciesSlot != speciesSlot() ||
         consumedStats.outfitSlot != this->outfitSlot() ||
@@ -229,6 +250,7 @@ bool Pet::commitConsumableOutfitUnlock(uint8_t outfitSlot,
     memcpy(st.customStats, consumedStats.customStats, sizeof(st.customStats));
     st.outfitUnlockMask |= static_cast<uint8_t>(1U << (outfitSlot - 1U));
     setOutfitSlot(outfitSlot);
+    evaluateDeath();
     return true;
 }
 

@@ -8,7 +8,7 @@ $outputPath = Join-Path $repoRoot '.pio\pet_behavior_runtime_host.exe'
 New-Item -ItemType Directory -Force (Split-Path $outputPath) | Out-Null
 Push-Location $repoRoot
 try {
-    foreach ($statCapacity in @(6, 10)) {
+    foreach ($statCapacity in @(6, 10, 12)) {
         & g++ -std=c++17 -Wall -Wextra -DENABLE_GUESS_GAME=1 `
             "-DAPP_MAX_PET_STATS=$statCapacity" -Itest/host_stubs -Iinclude `
             test/pet_behavior_runtime/test_main.cpp `
