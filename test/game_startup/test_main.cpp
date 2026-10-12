@@ -392,6 +392,7 @@ void testEvolutionResults()
         assert(!evolution.isActive() && data.resourceShows == 0);
     }
     assert(host.refreshes == 1);
+    assert(!animations.takeFullRedrawRequest());
     data.evolutionMode = EvolutionAnimationMode::Single;
     data.sourceAvailable = false;
     assert(evolution.check() == EvolutionResult::Failed && !evolution.isActive());
@@ -1830,6 +1831,10 @@ void Renderer::setAssetAppearance(uint8_t species, uint8_t outfit)
     scenario->rendererOutfit = outfit;
 }
 void Renderer::setAnimationArea(uint8_t, uint8_t, uint8_t, uint8_t) {}
+bool AssetData::sameBundleId(const BundleId &left, const BundleId &right)
+{
+    return memcmp(left.bytes, right.bytes, sizeof(left.bytes)) == 0;
+}
 bool Renderer::configureAssetBundle(const AssetData::BundleId &) { return scenario->bundleSucceeds; }
 bool Renderer::setAnimation(const AssetData::AnimationRef &animation, uint8_t, bool)
 {
@@ -1911,6 +1916,12 @@ SdFat *Renderer::sdCard() const { return SD; }
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && strcmp(argv[1], "--evolution") == 0)
+    {
+        testEvolutionResults();
+        testExportedEvolutionPlaybackCounts();
+        return 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--status") == 0)
     {
         testStatusReadsActionCommittedPet();

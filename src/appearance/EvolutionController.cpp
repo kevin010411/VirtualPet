@@ -138,7 +138,7 @@ void EvolutionController::finish()
     // Species entry has already committed the appearance and its one save.
     // Both completion and target playback failure return to the current base.
     host.refreshBaseAnimation();
-    animations.requestFullRedraw();
+    // Playback compares the new layout ID and values; unchanged buttons stay.
     cancel();
 }
 

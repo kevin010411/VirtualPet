@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection, [switch]$EnableCollectionCatalog, [switch]$DisableDailyPostProcessing, [switch]$SequenceInterruptionOnly, [switch]$StatusOnly)
+param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection, [switch]$EnableCollectionCatalog, [switch]$DisableDailyPostProcessing, [switch]$SequenceInterruptionOnly, [switch]$StatusOnly, [switch]$EvolutionOnly)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -47,11 +47,14 @@ try {
         -Itest/game_startup -Itest/host_stubs -Iinclude `
         @sources -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    if ($StatusOnly) { & $outputPath --status }
+    if ($EvolutionOnly) { & $outputPath --evolution }
+    elseif ($StatusOnly) { & $outputPath --status }
     elseif ($SequenceInterruptionOnly) { & $outputPath --sequence-interruption }
     else { & $outputPath }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    if ($StatusOnly) {
+    if ($EvolutionOnly) {
+        Write-Host '[PASS] Evolution completion/failure and two-phase playback counts'
+    } elseif ($StatusOnly) {
         Write-Host '[PASS] Status selects committed Pet Stat versions without scanning asset version completeness'
     } elseif ($SequenceInterruptionOnly) {
         Write-Host '[PASS] Command interruption in primary/following segments across day boundaries; RTC catch-up ordering and navigation'

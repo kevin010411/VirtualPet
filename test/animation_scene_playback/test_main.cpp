@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <string.h>
 
 #include <fstream>
 #include <iterator>
@@ -210,8 +211,71 @@ unsigned long Renderer::frameIntervalFor(
 }
 SdFat *Renderer::sdCard() const { return nullptr; }
 
+void testAppearanceRedraw()
+{
+    PetBehaviorConfig config = {};
+    config.layoutUnselected = {0, 0, 10};
+    config.layoutSelected = {0, 0, 11};
+    config.screenBlockCount = 3;
+    config.screenProductFrameCount = 6;
+    config.screenBlocks[0] = {ScreenBlockKind::Animation, 0, 0, 20, 128, 96};
+    config.screenBlocks[1] = {ScreenBlockKind::Button, 1, 0, 0, 16, 16};
+    config.screenBlocks[2] = {ScreenBlockKind::Stat, 16, 16, 0, 16, 16, 0, 2, 5};
+    config.screenRules[0] = {0, 0, 5};
+    config.screenRules[1] = {1, 100, 6};
+    config.screenRuleCount = 2;
+    config.statCount = 1;
+    config.buttons[0].active = true;
+    config.buttons[0].kind = PetBehaviorButtonKind::UserAction;
+    Renderer renderer(nullptr, nullptr);
+    CommandController commands;
+    LayoutRenderer layout(renderer, commands);
+    commands.configure(config);
+    layout.configureRuntimeContract(config);
+    selectedLayoutId = 0;
+    assert(layout.syncPlayback(PetStatSnapshot{}));
+
+    // Reloading the same bundle for another species keeps buttons and values.
+    events.clear();
+    config.activeSpeciesSlot = 2;
+    layout.configureRuntimeContract(config);
+    assert(layout.syncPlayback(PetStatSnapshot{}));
+    assert(events.empty());
+
+    // A changed stat redraws its rectangle only, without touching buttons.
+    PetStatSnapshot snapshot = {};
+    snapshot.customStats[0] = 1;
+    assert(layout.syncPlayback(snapshot));
+    assert(events.size() == 2 && events[1].frame == 6);
+    events.clear();
+    layout.configureRuntimeContract(config);
+    assert(layout.syncPlayback(snapshot));
+    assert(events.empty());
+
+    // A different composed layout redraws before the next central frame.
+    selectedLayoutId = 1;
+    assert(layout.syncPlayback(snapshot));
+    assert(events.size() == 8);
+    events.clear();
+
+    // The same layout ID in another bundle must not reuse old pixels.
+    config.assetManifest.bundleId.bytes[0] = 1;
+    layout.configureRuntimeContract(config);
+    assert(layout.syncPlayback(snapshot));
+    assert(events.size() == 8);
+    events.clear();
+    layout.begin();
+    assert(layout.syncPlayback(snapshot));
+    assert(events.size() == 8);
+}
+
 int main(int argc, char **argv)
 {
+    if (argc == 2 && strcmp(argv[1], "--appearance-redraw") == 0)
+    {
+        testAppearanceRedraw();
+        return 0;
+    }
     assert(argc == 3);
     const std::vector<uint8_t> runtimeFixture = readFixture(argv[1]);
     const std::vector<uint8_t> packFixture = readFixture(argv[2]);

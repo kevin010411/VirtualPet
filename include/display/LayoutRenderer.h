@@ -27,6 +27,7 @@ private:
     Renderer &renderer;
     CommandController &commands;
     const PetBehaviorConfig *runtimeContract = nullptr;
+    AssetData::BundleId layoutBundleId = {};
     uint8_t activeLayoutId = 0;
     bool hasActiveLayout = false;
     bool commandsVisible = true;

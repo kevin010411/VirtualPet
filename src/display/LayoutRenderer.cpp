@@ -12,6 +12,12 @@ LayoutRenderer::LayoutRenderer(Renderer &rendererRef, CommandController &command
 
 void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
 {
+    // Screen blocks, rules and shared layout products belong to the bundle,
+    // not the species. Preserve displayed values until syncPlayback compares
+    // the next animation's layout ID and current Pet Stats.
+    const bool retainLayout = runtimeContract != nullptr &&
+        AssetData::sameBundleId(layoutBundleId, config.assetManifest.bundleId);
+    layoutBundleId = config.assetManifest.bundleId;
     runtimeContract = &config;
     renderer.setAnimationArea(0, 0, 0, 0);
     for (uint8_t index = 0; index < config.screenBlockCount; ++index)
@@ -19,9 +25,11 @@ void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
         const ScreenBlockConfig &block = config.screenBlocks[index];
         if (block.kind == ScreenBlockKind::Animation)
             renderer.setAnimationArea(block.x, block.y, block.width, block.height);
-        numericFrames[index] = config.screenBlocks[index].fallbackFrame;
+        if (!retainLayout)
+            numericFrames[index] = config.screenBlocks[index].fallbackFrame;
     }
-    hasActiveLayout = false;
+    if (!retainLayout)
+        hasActiveLayout = false;
 }
 
 void LayoutRenderer::begin()

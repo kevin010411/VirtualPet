@@ -499,8 +499,6 @@ bool Game::setStageDaysForCheat(uint32_t value)
     // A one-shot may be playing during the hold. Check the new day as soon as
     // normal command playback is idle, before the next daily change.
     cheatEvolutionPending = true;
-    refreshBaseAnimation();
-    animations->requestFullRedraw();
     return true;
 }
 

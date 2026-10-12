@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([switch]$AppearanceRedrawOnly)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -10,7 +10,7 @@ $validFixture = Join-Path $fixtureRoot 'runtime.bin'
 $invalidFixture = Join-Path $fixtureRoot 'assets\species_1.data'
 $outputPath = Join-Path $repoRoot '.pio\animation_scene_playback_host.exe'
 $fixturePaths = @($validFixture, $invalidFixture)
-foreach ($fixturePath in $fixturePaths) {
+foreach ($fixturePath in $(if ($AppearanceRedrawOnly) { @() } else { $fixturePaths })) {
     if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) {
         throw "Web exporter fixture is missing: $fixturePath"
     }
@@ -42,11 +42,16 @@ try {
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    & $outputPath $validFixture $invalidFixture
+    if ($AppearanceRedrawOnly) { & $outputPath --appearance-redraw }
+    else { & $outputPath $validFixture $invalidFixture }
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
-    Write-Host '[PASS] Animation Scene playback: atomic first frame, completion, queue, interruption, Idle fallback'
+    if ($AppearanceRedrawOnly) {
+        Write-Host '[PASS] Appearance redraw: same layout retained, changed numeric region, different layout/bundle, explicit full redraw'
+    } else {
+        Write-Host '[PASS] Animation Scene playback: atomic first frame, completion, queue, interruption, Idle fallback'
+    }
     exit 0
 }
 finally {
