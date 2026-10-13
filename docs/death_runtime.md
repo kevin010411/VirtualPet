@@ -1,42 +1,18 @@
-# Death runtime implementation
+# 死亡執行
 
-The authoritative product and binary contracts remain in the paired Web
-repository's `.scratch/sd-driven-pet-stats/spec.md` and
-`.scratch/binary-runtime-tables/spec.md`. This note describes firmware execution.
+`ENABLE_DEATH` 預設 `0`，resolver 依 Project `death.enabled` 輸出。
+開啟後，Pet 在原子 Stat 提交後判斷死亡，Game 取消 Startup／Evolution／
+圖鑑／手動外觀／小遊戲工作，以死亡基礎動畫顯示並鎖定普通命令。
+死亡保存失敗保留 RAM 的 Dead，每秒最多重試一次；低電壓仍可停止迴圈。
 
-`Pet` owns the persistent Dead bit (`flowFlags & 0x4`) and the active appearance's
-volatile selected-Stat mask. Stat commits complete atomically, then evaluate
-death. Once Dead, Stat mutation rejects further care; disabling the predicate
-does not clear the saved bit. Save version 18 retains the 104-byte state layout.
+關閉時不編入新死亡判定、死亡動畫解析及新死亡保存重試。
+已死亡存檔仍鎖定操作、顯示 default idle，允許新按鍵重開；成功後不再死亡。
+啟用死亡的 SD 契約需匹配編譯能力。
 
-`Game` cancels pending startup, evolution, collection, appearance selection and
-Guess Game work when death is first presented. Its base animation selects the
-resolved death animation, or the existing default idle when a disabled project
-has no death asset for the active appearance. Playback uses the existing base
-rotation/loop mechanism, does not enqueue repeating actions, and does not refresh
-the platform's interaction clock. Normal command slots are suppressed.
+新局使用初始外觀契約建立狀態、重算初始 grants，保存最終快照後才解除 Dead。
+保存失敗恢復原 Pet／外觀，仍可按鍵重試；必要資源失敗走 fatal。
+成功會清除日暫停、補時 backlog、保存批次、選單及暫態工作。
+存檔保持 v18／104 bytes，切旗標不變更 fingerprint 或二進位格式。
 
-The death snapshot bypasses collection evaluation and RTC save batching. Failed
-writes retain Dead in RAM and retry at most once per second in the ordinary game
-loop. Low-battery handling continues to suspend that loop and input. Until an SD
-write succeeds, power loss can still recover the preceding successful save.
-
-Reset constructs initial state under the initial appearance's runtime contract,
-recomputes initial grants, and saves only its final snapshot. A failed attempt
-restores the preceding Pet and appearance. A storage failure leaves the death
-screen ready for a new button attempt; a required resource/contract failure uses
-the existing fatal resource policy. A/B candidate writes retain the preceding
-successful slot. Successful reset clears the save batch, daily pauses, clock
-backlog, collection pending flag, menu selection and all transient gameplay.
-
-Platform input observes time before buttons. A newly entered Dead state consumes
-the current held gesture. `ButtonInput::takeDeathPress` accepts one new down edge,
-including simultaneous buttons, and then waits for release. A button waking STOP
-when the Pet was already Dead resets after voltage recovery and RTC observation;
-a wake that discovers a newly expired Alive Pet is consumed without resetting.
-Boot-held keys are consumed too. ISR handling remains wake-only.
-
-Implementation was reviewed statically. Tests, target builds, resource size
-measurements and device acceptance were deferred at the user's request. Device
-acceptance remains necessary for SD failures, low-voltage recovery, multi-key
-edges, STOP wake, animation looping and restored saves.
+驗證入口：`test/game_startup/run_host_test.ps1 -DeathOnly -DeathEnabled 0`／`1`、
+Pet persistence 與 Runtime Table hosts。實機 SD 中斷寫入及 TFT／按鍵另驗收。

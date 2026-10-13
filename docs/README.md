@@ -1,38 +1,25 @@
-# 文件索引
+# 韌體文件
 
-## 從這裡開始
+本目錄只記錄現行韌體實作、操作與未完成工作。跨層產品規格由 Web 維護：
 
-- [開發與建置指令](codex.md)
-- [應用程式 profile 與功能開關](app_profiles.md)
-- [Profile feature flags 中文查表](profile_feature_flags.md)
-- [Profile size 驗證](profile_size_verification.md)
-- [系統架構](architecture.md)
-- [程式碼目錄與歸檔規則](source-layout.md)
+- [Pet Stats／Behavior／Action／Status／Evolution／存檔](E:/C++/virtualPet/web/.scratch/sd-driven-pet-stats/spec.md)
+- [Runtime Table](E:/C++/virtualPet/web/.scratch/binary-runtime-tables/spec.md)
+- [播放序列音訊](E:/C++/virtualPet/web/.scratch/sequence-audio/spec.md)
 
-## SD 卡設定與資源
+| 需要做什麼 | 文件 |
+| --- | --- |
+| 匯出、建置與驗證 | [開發流程](development-workflow.md) |
+| 查功能開關與產生來源 | [Profile flags](profile_feature_flags.md) |
+| 找模組與執行路徑 | [架構](architecture.md) |
+| 查播放／資源／保存 | [動畫](animation_scheduler.md)、[資源](renderer_asset_formats.md)、[存檔](pet_storage.md) |
+| 查死亡與音訊執行 | [死亡](death_runtime.md)、[音訊](sequence-audio-verification.md) |
+| 查硬體與待機限制 | [硬體](hardware/power-strategy-2026-10-09.md)、[RTC／按鍵／STOP](hardware/rtc-input-recovery.md) |
+| 查尚未完成的需求 | [功能待辦](bingbing-development-todo.md)、[兵兵差異](bingbing-v1.9.4-feature-gaps.md)、[四款遊戲提案](minigame-plans/README.md) |
+| 查尺寸量測與未實作旗標 | [Flash 評估](flash-feature-audit.md) |
 
-Pet Stat、Status 與 Evolution runtime table 請由 Web exporter 產生；權威規格位於
-`E:\C++\virtualPet\web\.scratch\sd-driven-pet-stats\spec.md`。本 repository 不再
-提供 `state_schema.txt`、Pet Stat alias 或手寫 Status contract 範例。
+可選功能旗標在 header 中預設 `0`，由 Web Profile Resolver 產生的 ini 明確開啟。
+`ENABLE_DAILY_POST_PROCESSING` 是診斷例外，預設 `1` 保留正常每日生命週期。
+SD 資料與圖片驗證由 Web backend/exporter 負責；韌體只處理有界讀取、
+固定容量與實際 SD／硬體執行失敗。Host／建置結果與實機驗收分開記錄。
 
-[sd_card_example](sd_card_example/README.md) 只保留韌體資源布局提示。
-
-- `runtime.bin`：完整的 versioned runtime table，不接受 TXT fallback。
-- `index/`：舊版動畫 manifest 範例，僅供歷史對照。
-
-相關格式說明：
-
-- [舊版 `/index/` manifest 格式（歷史資料）](index_txt_format.md)
-- [Renderer 資源格式](renderer_asset_formats.md)
-- [寵物存檔格式](pet_storage.md)
-
-## 維護與歷史資料
-
-- [硬體原理圖与電源策略評估（2026-10-09）](hardware/power-strategy-2026-10-09.md)
-- [RTC、STOP 與無操作背光設計草案](hardware/rtc-stop-backlight-design.md)
-
-- [Flash 最佳化紀錄](flash_optimization_report.md)
-- [待辦事項](Todo.md)
-- `legacy/`：舊版硬體與 PlatformIO 設定，僅供參考。
-
-舊版 `/index/` 與 `.txt` 範例只供歷史對照；目前專案的 runtime 設定應由 Web exporter 產生，不能依舊範例手寫。
+已合併或移除的舊文件見[清理紀錄](cleanup-review.md)。

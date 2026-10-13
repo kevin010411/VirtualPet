@@ -1,69 +1,19 @@
-# Pet Storage Format
+# 寵物存檔
 
-Pet state is stored on the SD card in two alternating slots:
+`PetStorage` 在 SD 的 `/state_a.bin`、`/state_b.bin` 交替寫入。
+目前 `PersistedPetState` 為 v18、104 bytes；實際結構以 `include/pet/Pet.h` 為準。
 
-```txt
-/state_a.bin
-/state_b.bin
-```
+內容包含 magic／version／sequence、Web 產生的 schema fingerprint、stage_days、
+flowFlags、Outfit 解鎖遮罩、12 個 Pet Stat slots、Species／Outfit slot 文字、
+圖鑑 fingerprint／mask、追蹤 Action fingerprint／8 個 counters，以及 CRC32。
+FirstStart 完成位元為 `0x2`，Dead 為 `0x4`；Daily Change 暫停計數與 RTC 時間基準不保存。
 
-The firmware no longer reads the old `/state.bin` or `/state.bak` files.
+載入檢查存檔大小、magic、version、CRC，選有效且 sequence 最新的一筆。
+Schema／Project 不符時依 Session 政策開始新局，不做遷移；
+該 fingerprint 的定義由 [Web 規格](E:/C++/virtualPet/web/.scratch/sd-driven-pet-stats/spec.md) 擁有。
+圖鑑與追蹤 counters 的相容性另由各自 fingerprint 決定。
 
-## Record
-
-Each slot contains one binary `PersistedPetState` record:
-
-- `magic`
-- `version`
-- `sequence`
-- `schemaFingerprint`
-- `species`
-- `outfit`
-- `stage_days`
-- `customStats[8]` (`custom0` through `custom7`)
-- `flowFlags`
-- `crc32`
-
-`version` is currently `12`. Fixed care values, age-tenths, sickness, health,
-and derived health state are not part of runtime or persistent pet state.
-Project-defined Pet Stats are stored in the fixed `customStats` slots.
-
-`schemaFingerprint` is emitted by the authoritative Web Pet Stat Slot contract
-at `E:\C++\virtualPet\web\.scratch\sd-driven-pet-stats\spec.md`. Firmware does
-not reconstruct it. A mismatch discards both save slots instead of migrating
-values into a new schema; a match retains the saved Pet State.
-
-`flowFlags` stores app-flow state. Bit `0` marks the first-launch flow as
-complete.
-
-## CRC
-
-`crc32` is calculated with a bitwise CRC32 implementation over the record bytes
-from the beginning of the struct up to, but not including, the `crc32` field.
-
-No lookup table is used, keeping flash and RAM overhead small.
-
-## Load
-
-On boot, firmware reads both slots:
-
-1. Reject slots with the wrong file size.
-2. Reject slots with the wrong `magic` or `version`.
-3. Reject slots whose CRC32 does not match.
-4. Load the valid slot with the newest `sequence`.
-
-If neither slot is valid, the pet starts from the default state.
-
-## Save
-
-After loading, firmware writes the next save to the older slot. Each successful
-save increments `sequence` and alternates the target slot.
-
-This means a power loss during a save can corrupt the slot being written, but
-the previous valid slot should remain available for the next boot.
-
-## Compatibility
-
-The legacy single-slot `/state.bin` and `/state.bak` files and earlier dual-slot
-record versions remain unsupported. A version or schema mismatch starts a new
-pet through the normal First Launch flow.
+下一次保存寫入另一個 slot，成功後才切換目標與 sequence。
+中斷寫入時保留前一次成功記錄；寫入失敗仍需明確處理，不能宣稱 RAM 變更已耐久保存。
+存檔 CRC 屬韌體自身持久化完整性，不是匯出資料的全檔掃描。
+舊 `/state.bin`、`/state.bak` 及舊 record versions 不受支援。

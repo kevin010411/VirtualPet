@@ -33,9 +33,9 @@
 replace(sequence)
 ```
 
-- `replace()` 取消目前 active 與 queued playback，再按原順序檢查新 sequence。
-- 有效項目加入固定 FIFO；缺少資源或描述無效的項目直接略過，不阻止同組其他動畫播放。
-- 至少一項可播放時回傳 `Accepted`；整組都無法播放時回傳第一個失敗結果。
+- `replace()` 先逐項確認整份 sequence 可執行，成功後才原子取代 active 與 queued playback。
+- 任一項缺少資源或描述無效即拒絕整組，保留原播放；不略過失敗項目。
+- 全部項目可播放時回傳 `Accepted`，否則回傳第一個失敗結果。
 - 不提供 Append。每個 owning flow 必須明確描述這次要取代目前播放的完整候選順序。
 - queue 空且沒有 active playback 時，下一次 `tick()` 回到既有 base/idle animation。
 
@@ -50,8 +50,8 @@ replace(sequence)
 
 Submission 使用 `PlaybackResult`：
 
-- `Accepted`：sequence 至少有一個可播放項目，所有有效項目已按順序加入。
-- `AnimationMissing`：整組沒有可播放項目，第一個失敗原因是 manifest 缺少動畫。
+- `Accepted`：完整 sequence 已按順序原子取代舊播放。
+- `AnimationMissing`：候選項目有缺少動畫，整組未被接受。
 - `QueueFull`：呼叫端提交的 sequence 本身超過固定容量 8。
 - `PlaybackFailed`：描述無效，或已接受的動畫在實際讀取／繪製 frame 時失敗。
 
