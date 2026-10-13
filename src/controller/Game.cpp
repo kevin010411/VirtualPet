@@ -255,6 +255,21 @@ bool Game::hasTransientAnimation() const
     return animations->isBusy();
 }
 
+bool Game::preventsIdleSleep() const
+{
+    return animations->hasFinitePlayback();
+}
+
+void Game::stopPlaybackForSleep() { animations->cancelAll(); }
+bool Game::audioActive() const
+{
+#if ENABLE_SEQUENCE_AUDIO
+    return animations->audioActive();
+#else
+    return false;
+#endif
+}
+
 bool Game::isCollectionCatalogActive() const
 {
 #if ENABLE_COLLECTION_CATALOG

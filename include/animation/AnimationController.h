@@ -24,6 +24,11 @@ public:
     PlaybackResult replace(const AnimationSequence &sequence);
     void cancelAll();
     bool isBusy() const;
+    bool hasFinitePlayback() const;
+#if ENABLE_SEQUENCE_AUDIO
+    bool audioActive() const { return audioPlayer.audible(); }
+    SequenceAudioError audioError() const { return audioPlayer.firstError(); }
+#endif
     bool hasAnimationPending(FirmwarePlaybackRole id) const;
     FirmwarePlaybackRole currentPlaybackRole() const;
     uint8_t currentVersionIndex() const;
@@ -67,6 +72,22 @@ private:
     bool preparedFrameDue = false;
     bool fullRedrawRequested = false;
 
+#if ENABLE_SEQUENCE_AUDIO
+    SequenceAudioPlayer audioPlayer;
+    SequenceAudioRef pendingSequenceAudio;
+    bool synchronizedSequence = false;
+    bool sequenceStarted = false;
+    bool sequenceLoops = false;
+    uint32_t sequenceDuration = 0;
+    uint32_t synchronizedPassMs[kMaxQueuedAnimations] = {};
+    uint16_t synchronizedIntervalMs[kMaxQueuedAnimations] = {};
+    uint32_t lastSequenceCycle = 0;
+    uint8_t synchronizedSegment = 255;
+    uint8_t synchronizedRepeat = 255;
+    uint16_t synchronizedFrame = 0;
+    void prepareSynchronizedPlayback(unsigned long now);
+    PlaybackTickResult tickSynchronizedPlayback();
+#endif
     void resetPlaybackState();
     unsigned long completePlaybackDuration(uint16_t frameCount, unsigned long frameIntervalMs) const;
     void updateElapsed(unsigned long elapsed);

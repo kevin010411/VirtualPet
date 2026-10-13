@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <stddef.h>
 #include "resources/AssetRuntimeContract.h"
+#include "audio/SequenceAudio.h"
 
 enum class FirmwarePlaybackRole : uint8_t
 {
@@ -120,6 +121,10 @@ struct AnimationSequence
 {
     const Animation *items;
     uint8_t count;
+#if ENABLE_SEQUENCE_AUDIO
+    SequenceAudioRef audio = {};
+    bool loop = false;
+#endif
 
     AnimationSequence(const Animation *sequenceItems, uint8_t sequenceCount)
         : items(sequenceItems), count(sequenceCount) {}

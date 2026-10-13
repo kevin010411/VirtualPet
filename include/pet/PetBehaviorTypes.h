@@ -9,6 +9,7 @@
 #include "controller/SystemCommandCatalog.h"
 #include "pet/RuntimeValueResolver.h"
 #include "common/AppProfile.h"
+#include "audio/SequenceAudio.h"
 
 constexpr uint8_t kPetBehaviorSlotCount = APP_MAX_PET_STATS;
 constexpr uint8_t kMaxPetBehaviorStats = kPetBehaviorSlotCount;
@@ -121,6 +122,9 @@ struct PetBehaviorConfig
     PetBehaviorStatConfig stats[kPetBehaviorSlotCount];
     RuntimePetStateConfig petStates[kMaxRuntimePetStates];
     PetBehaviorActionConfig actions[kMaxPetBehaviorActions];
+#if ENABLE_SEQUENCE_AUDIO
+    SequenceAudioRef actionAudio[kMaxPetBehaviorActions];
+#endif
     PetBehaviorAnimationPlaybackConfig followingAnimations[kMaxPetBehaviorFollowingAnimations];
     PetBehaviorActionOutcomeConfig actionOutcomes[kMaxPetBehaviorActionOutcomes];
     PetBehaviorActionConditionConfig actionConditions[kMaxPetBehaviorActionConditions];

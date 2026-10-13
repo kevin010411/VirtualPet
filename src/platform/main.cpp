@@ -281,6 +281,9 @@ static unsigned long g_buttonBeepStartedAt = 0;
 
 static void updateButtonBeep(unsigned long now)
 {
+#if ENABLE_SEQUENCE_AUDIO
+  if (game.audioActive()) { g_buttonBeepActive = false; return; }
+#endif
   if (g_buttonBeepActive && now - g_buttonBeepStartedAt >= 35)
   {
     digitalWrite(BoardConfig::buzzerPin, LOW);
@@ -290,6 +293,9 @@ static void updateButtonBeep(unsigned long now)
 
 void playButtonBeep()
 {
+#if ENABLE_SEQUENCE_AUDIO
+  if (game.audioActive()) return;
+#endif
   digitalWrite(BoardConfig::buzzerPin, HIGH);
   g_buttonBeepStartedAt = millis();
   g_buttonBeepActive = true;
@@ -342,6 +348,7 @@ void enterSleep()
   if (g_isSleeping || !g_rtcReady)
     return;
 
+  game.stopPlaybackForSleep();
   g_isSleeping = true;
   buttons.clearFlags();
   setBacklightImmediate(0);
@@ -837,7 +844,7 @@ void loop()
   const unsigned long sleepCheckNow = millis();
   const bool busy = !g_rtcReady || buttons.isHeld() ||
       (g_sdReady && SD.card()->isBusy()) ||
-      (g_gameReady && game.isReady() && (game.hasTransientAnimation() || game.hasPendingTime()));
+      (g_gameReady && game.isReady() && (game.preventsIdleSleep() || game.hasPendingTime()));
   if (powerController.shouldSleep(sleepCheckNow, busy))
   {
     enterSleep();

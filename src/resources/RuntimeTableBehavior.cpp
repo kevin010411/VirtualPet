@@ -456,6 +456,32 @@ bool decodeStatus(const Source &source,
     return nextCondition == conditions->count;
 }
 
+bool decodeActionAudio(const RuntimeTable &table, PetBehaviorConfig &config)
+{
+#if ENABLE_SEQUENCE_AUDIO
+    const Section *bindings = table.find(ActionAudio);
+    const Section *references = table.find(AudioRefs);
+    if (bindings == nullptr) return true;
+    if (references == nullptr || bindings->count > kMaxPetBehaviorActions ||
+        references->count > kMaxPetBehaviorActions) return false;
+    for (uint16_t index = 0; index < bindings->count; ++index)
+    {
+        uint8_t binding[4] = {}, resource[12] = {};
+        if (!readRecord(table.source, *bindings, index, binding) ||
+            binding[0] >= config.actionCount ||
+            !readRecord(table.source, *references, readU16(binding + 2), resource)) return false;
+        auto &audio = config.actionAudio[binding[0]];
+        audio.offset = readU32(resource + 4);
+        audio.sampleCount = readU32(resource + 8);
+        // Bounds of the resource actually used, without scanning unused assets.
+        if (audio.sampleCount > 80000UL || audio.offset > 640000UL - audio.sampleCount) return false;
+    }
+#else
+    if ((table.featureFlags & kSequenceAudioFeature) != 0) return false;
+#endif
+    return true;
+}
+
 bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                                 const AssetData::RuntimeManifest &manifest,
                                 uint8_t speciesSlot,
@@ -511,6 +537,7 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                        *assets, *animations, scope, config) ||
         !decodeFollowingAnimations(source, table.find(ActionPlaybacks),
                                    *assets, *animations, scope, config) ||
+        !decodeActionAudio(table, config) ||
         !decodeGuessEffects(source, table.featureFlags, guessEffects, config) ||
         !decodeButtons(source, *buttons, config) ||
         !decodeStatus(source, table.featureFlags,
@@ -522,6 +549,9 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
 
 bool compiledFeaturesAccept(uint32_t flags)
 {
+#if !ENABLE_SEQUENCE_AUDIO
+    if ((flags & kSequenceAudioFeature) != 0) return false;
+#endif
 #if !ENABLE_GUESS_GAME
     if ((flags & kGuessGameFeature) != 0)
         return false;

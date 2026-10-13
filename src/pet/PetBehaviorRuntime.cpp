@@ -119,7 +119,11 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     if (count == 0)
         return PetBehaviorActionResult::Applied;
 
-    const PlaybackResult replaceResult = animations.replace(AnimationSequence(sequence, count));
+    AnimationSequence request(sequence, count);
+#if ENABLE_SEQUENCE_AUDIO
+    request.audio = config.actionAudio[actionSlot];
+#endif
+    const PlaybackResult replaceResult = animations.replace(request);
     return replaceResult == PlaybackResult::AnimationMissing
                ? PetBehaviorActionResult::AppliedAnimationMissing
                : PetBehaviorActionResult::Applied;

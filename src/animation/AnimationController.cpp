@@ -41,6 +41,10 @@ void AnimationController::setup(const AssetData::AnimationRef &baseAnimation)
 
 void AnimationController::resetPlaybackState()
 {
+#if ENABLE_SEQUENCE_AUDIO
+    audioPlayer.stop();
+    synchronizedSequence = sequenceStarted = false;
+#endif
     animationQueueCount = 0;
     activeAnimation = {};
     hasActiveAnimation = false;
@@ -122,6 +126,31 @@ PlaybackResult AnimationController::replace(const AnimationSequence &sequence)
         if (result != PlaybackResult::Accepted)
             return result;
     }
+#if ENABLE_SEQUENCE_AUDIO
+    audioPlayer.stop();
+    synchronizedSequence = sequence.audio.bound();
+    pendingSequenceAudio = sequence.audio;
+    sequenceStarted = false;
+    sequenceLoops = sequence.loop;
+    sequenceDuration = 0;
+    synchronizedSegment = synchronizedRepeat = 255;
+    synchronizedFrame = 0;
+    lastSequenceCycle = 0;
+    if (synchronizedSequence)
+    {
+        audioPlayer.prepare(sdCard(), sequence.audio);
+        for (uint8_t index = 0; index < sequence.count; ++index)
+        {
+            const auto &item = sequence.items[index];
+            const auto reference = resolvedAnimation(item);
+            const uint32_t interval = renderer.frameIntervalFor(reference, item.versionIndex, frameIntervalSlow);
+            synchronizedIntervalMs[index] = interval ? interval : 1;
+            synchronizedPassMs[index] = item.isFixedFrame() ? item.durationMs :
+                uint32_t(renderer.frameCountFor(reference, item.versionIndex)) * synchronizedIntervalMs[index];
+            sequenceDuration += synchronizedPassMs[index] * (item.isFixedFrame() ? 1 : item.repeatCount);
+        }
+    }
+#endif
     animationQueueCount = sequence.count;
     for (uint8_t index = 0; index < sequence.count; ++index)
         animationQueue[index] = sequence.items[index];
@@ -135,6 +164,10 @@ PlaybackResult AnimationController::replace(const AnimationSequence &sequence)
 
 void AnimationController::cancelAll()
 {
+#if ENABLE_SEQUENCE_AUDIO
+    audioPlayer.stop();
+    synchronizedSequence = sequenceStarted = false;
+#endif
     animationQueueCount = 0;
     hasActiveAnimation = false;
     activeRepeatsRemaining = 0;
@@ -146,6 +179,15 @@ void AnimationController::cancelAll()
 bool AnimationController::isBusy() const
 {
     return hasActiveAnimation || animationQueueCount > 0;
+}
+
+bool AnimationController::hasFinitePlayback() const
+{
+#if ENABLE_SEQUENCE_AUDIO
+    if (synchronizedSequence) return !sequenceLoops;
+#endif
+    return animationQueueCount > 0 || (hasActiveAnimation &&
+        (activeAnimation.playOnce || activeAnimation.durationMs > 0));
 }
 
 FirmwarePlaybackRole AnimationController::currentPlaybackRole() const
@@ -258,6 +300,14 @@ void AnimationController::preparePlayback(unsigned long now)
 {
     if (playbackPrepared)
         return;
+#if ENABLE_SEQUENCE_AUDIO
+    audioPlayer.timelineMs(now); // Also services a finishing fade after the sequence.
+    if (synchronizedSequence)
+    {
+        prepareSynchronizedPlayback(now);
+        return;
+    }
+#endif
     playbackFailedThisTick = false;
     playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
     if (lastPlaybackUpdateTime == 0)
@@ -312,6 +362,9 @@ PlaybackTickResult AnimationController::tick(unsigned long now)
 {
     if (!playbackPrepared)
         preparePlayback(now);
+#if ENABLE_SEQUENCE_AUDIO
+    if (synchronizedSequence) return tickSynchronizedPlayback();
+#endif
     renderPrepared();
     if (hasActiveAnimation && activeAnimation.playOnce &&
         !activeAnimation.isFixedFrame() && animateDone)

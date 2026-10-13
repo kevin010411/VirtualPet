@@ -9,7 +9,7 @@
 // readRuntimeTable, which validates their byte ranges and record sizes.
 namespace RuntimeTableInternal
 {
-constexpr uint16_t kMaxSections = 32;
+constexpr uint16_t kMaxSections = 64;
 constexpr uint16_t kNone16 = 0xffffU;
 constexpr uint32_t kPetBehaviorFeature = 1UL << 0;
 constexpr uint32_t kStatusFeature = 1UL << 1;
@@ -21,7 +21,8 @@ constexpr uint32_t kSequentialStatusFeature = 1UL << 9;
 constexpr uint32_t kOutfitChooseAnimationFeature = 1UL << 11;
 constexpr uint32_t kEvolutionPlaybackCountsFeature = 1UL << 12;
 constexpr uint32_t kCollectionFeature = 1UL << 13;
-constexpr uint32_t kKnownFeatures = ((1UL << 14) - 1UL) & ~(1UL << 8);
+constexpr uint32_t kSequenceAudioFeature = 1UL << 14;
+constexpr uint32_t kKnownFeatures = ((1UL << 15) - 1UL) & ~(1UL << 8);
 
 enum SectionType : uint16_t
 {
@@ -42,6 +43,8 @@ enum SectionType : uint16_t
     StatusSets = 20,
     StatusConditions = 21,
     DeathConfig = 22,
+    AudioRefs = 23,
+    ActionAudio = 24,
     Appearance = 30,
     Species = 31,
     Outfits = 32,

@@ -9,7 +9,7 @@ namespace
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
 // v16 permits animation-free User Action outcomes and conditional branches.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 18;
+constexpr uint16_t kVersion = 19;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -43,6 +43,8 @@ uint16_t recordSizeFor(uint16_t type)
     case StatusSets: return 12;
     case StatusConditions: return 12;
     case DeathConfig: return 8;
+    case AudioRefs: return 12;
+    case ActionAudio: return 4;
     case Appearance: return 8;
     case Species: return 8;
     case Outfits: return 8;

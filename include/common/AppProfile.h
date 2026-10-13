@@ -61,6 +61,13 @@
 #define ENABLE_COMMAND_OUTFIT 1
 #endif
 
+#ifndef ENABLE_SEQUENCE_AUDIO
+#define ENABLE_SEQUENCE_AUDIO 0
+#endif
+#if ENABLE_SEQUENCE_AUDIO != 0 && ENABLE_SEQUENCE_AUDIO != 1
+#error "ENABLE_SEQUENCE_AUDIO must be 0 or 1."
+#endif
+
 #ifndef ENABLE_DEBUG
 #define ENABLE_DEBUG 0
 #endif

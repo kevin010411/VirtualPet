@@ -18,7 +18,9 @@ constexpr int NextCommandButtonPin = PA12;
 constexpr int PreviousCommandButtonPin = PA10;
 constexpr int ConfirmCommandButtonPin = PA11;
 
-constexpr int buzzerPin = PA4;
+constexpr int AudioPwmPin = PA2;
+constexpr int AudioAmpEnablePin = PA4;
+constexpr int buzzerPin = AudioAmpEnablePin;
 
 constexpr uint32_t SdSpiMhz = 21;
 constexpr uint8_t TftInitTab = INITR_BLACKTAB;

@@ -55,6 +55,9 @@ public:
     bool saveNow();
     bool startStartupAnimation();
     bool hasTransientAnimation() const;
+    bool preventsIdleSleep() const;
+    void stopPlaybackForSleep();
+    bool audioActive() const;
     bool isCollectionCatalogActive() const;
     void startBatteryAnimation();
     void endBatteryAnimation();
