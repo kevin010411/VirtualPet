@@ -1,6 +1,7 @@
 #include "pet/PetBehaviorRuntimeRules.h"
 
 #include "pet/PetBehaviorStatSlot.h"
+#include "pet/Pet.h"
 
 namespace
 {
@@ -137,21 +138,93 @@ void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStat
 
 void applyPetBehaviorDailyChanges(const PetBehaviorConfig &config,
                                   PetBehaviorStatValues &state,
-                                  PetBehaviorDailyChangePauses &pauses)
+                                  PetBehaviorDailyChangePauses &pauses, uint32_t days)
 {
     for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
     {
         const PetBehaviorStatConfig &stat = config.stats[slot];
         if (!stat.active)
             continue;
-        if (pauses.remainingDays[slot] > 0)
-        {
-            --pauses.remainingDays[slot];
-            continue;
-        }
-        state.values[slot] = clampedChange(
-            state.values[slot], stat.dailyChange, stat.minValue, stat.maxValue);
+        const uint32_t paused = days < pauses.remainingDays[slot] ? days : pauses.remainingDays[slot];
+        pauses.remainingDays[slot] -= paused;
+        uint32_t activeDays = days - paused;
+        const int32_t delta = stat.dailyChange;
+        if (delta == 0 || activeDays == 0) continue;
+        const int32_t value = state.values[slot];
+        const int32_t gap = delta > 0 ? stat.maxValue - value : value - stat.minValue;
+        const uint32_t magnitude = delta > 0 ? delta : -delta;
+        const uint32_t untilClamp = (gap + magnitude - 1) / magnitude;
+        if (activeDays > untilClamp) activeDays = untilClamp;
+        const int32_t next = value + delta * static_cast<int32_t>(activeDays);
+        state.values[slot] = next < stat.minValue ? stat.minValue :
+                            next > stat.maxValue ? stat.maxValue : static_cast<int16_t>(next);
     }
+}
+
+uint32_t petBehaviorRangeChangeDays(const PetBehaviorConfig &config,
+                                   const PetBehaviorStatValues &state,
+                                   const PetBehaviorDailyChangePauses &pauses,
+                                   const RuntimeRangePredicate &predicate, uint32_t limit)
+{
+    int32_t value, delta, low, high;
+    if (predicate.valueId == kRuntimeValueStageDays)
+    {
+        value = state.stageDays;
+        delta = 1;
+        low = 0;
+        high = Pet::kStageDaysMax;
+    }
+    else if (isRuntimeValueIdPetStat(predicate.valueId))
+    {
+        const uint8_t slot = runtimePetStatSlot(predicate.valueId);
+        if (slot >= kPetBehaviorSlotCount || !config.stats[slot].active || pauses.remainingDays[slot])
+            return limit;
+        const auto &stat = config.stats[slot];
+        value = state.values[slot];
+        delta = stat.dailyChange;
+        low = stat.minValue;
+        high = stat.maxValue;
+    }
+    else return limit; // Species, Outfit and action counts do not drift with time.
+
+    if (delta == 0 || predicate.minimum > high || predicate.maximum < low) return limit;
+    const int32_t minimum = predicate.minimum < low ? low : predicate.minimum;
+    const int32_t maximum = predicate.maximum > high ? high : predicate.maximum;
+    uint32_t days;
+    if (delta > 0)
+    {
+        if (value < minimum) days = (minimum - value + delta - 1) / delta;
+        else if (value <= maximum && maximum < high) days = (maximum - value) / delta + 1;
+        else return limit;
+    }
+    else
+    {
+        const int32_t magnitude = -delta;
+        if (value > maximum) days = (value - maximum + magnitude - 1) / magnitude;
+        else if (value >= minimum && minimum > low) days = (value - minimum) / magnitude + 1;
+        else return limit;
+    }
+    return days < limit ? days : limit;
+}
+
+uint32_t petBehaviorCatchUpDays(const PetBehaviorConfig &config,
+                              const PetBehaviorStatValues &state,
+                              const PetBehaviorDailyChangePauses &pauses, uint32_t limit)
+{
+    for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
+    {
+        if (!config.stats[slot].active) continue;
+        const uint32_t paused = pauses.remainingDays[slot];
+        if (paused && paused < limit) limit = paused;
+#if ENABLE_DEATH
+        if (config.deathEnabled && (config.deathStatMask & (1U << slot)))
+            limit = petBehaviorRangeChangeDays(config, state, pauses,
+                {runtimeValueIdForPetStat(slot), INT32_MIN, 0}, limit);
+#endif
+    }
+    for (uint8_t index = 0; index < config.petStateCount; ++index)
+        limit = petBehaviorRangeChangeDays(config, state, pauses, config.petStates[index].predicate, limit);
+    return limit;
 }
 
 bool applyPetBehaviorAction(const PetBehaviorConfig &config,

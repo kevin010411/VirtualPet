@@ -113,6 +113,7 @@ private:
     PetClock petClock;
     uint32_t latestRtcSeconds = 0;
     bool clockStarted = false;
+    bool catchUpPrimed = false;
     bool dirtySelect = true;
     bool cheatEvolutionPending = false;
     bool pendingFirstStartCompletion = false;
@@ -138,7 +139,7 @@ private:
     void routeDirectionKey(KeyDirection direction);
     void handleCommandResult(const CommandResult &result);
     enum class DayResult : uint8_t { Blocked, Consumed, ConsumedWithError, Fatal };
-    DayResult maybeTickPet();
+    DayResult maybeTickPet(uint32_t &days);
     EvolutionResult handleEvolution();
     void handleEvolutionResult(EvolutionResult result);
     // State-only: prepare runs before display initialization.

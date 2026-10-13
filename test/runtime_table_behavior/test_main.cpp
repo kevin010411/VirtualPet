@@ -297,6 +297,56 @@ void testEvolutionConditionRanges(const std::vector<uint8_t> &exported)
     }
 }
 
+void testSdCatchUpThresholds(const std::vector<uint8_t> &exported)
+{
+    // Neutralize unrelated thresholds, then exercise the production SD query
+    // with one-day windows in both Evolution and Outfit unlock sections.
+    auto fixture = exported;
+    std::vector<size_t> thresholds;
+    const uint16_t sectionCount = fixture[24] | (uint16_t(fixture[25]) << 8);
+    for (uint16_t index = 0; index < sectionCount; ++index)
+    {
+        const size_t entry = 64 + index * 16;
+        if (fixture[entry] != 34 && fixture[entry] != 36) continue;
+        const uint16_t count = fixture[entry + 8] | (uint16_t(fixture[entry + 9]) << 8);
+        const size_t offset = readFixtureU32(fixture, entry + 4);
+        if (count) thresholds.push_back(offset);
+        for (uint16_t row = 0; row < count; ++row)
+        {
+            putFixtureU16(fixture, offset + row * 12, runtimeValueIdForPetStat(1));
+            putFixtureU32(fixture, offset + row * 12 + 2, 0);
+            putFixtureU32(fixture, offset + row * 12 + 6, 100);
+        }
+    }
+    assert(thresholds.size() == 2);
+    for (size_t offset : thresholds)
+    {
+        auto selected = fixture;
+        putFixtureU16(selected, offset, runtimeValueIdForPetStat(0));
+        putFixtureU32(selected, offset + 2, 95);
+        putFixtureU32(selected, offset + 6, 95);
+        SdFat sd(selected.data(), selected.size());
+        PetBehaviorConfig config = {};
+        config.assetManifest = releaseFixtureManifest(selected);
+        config.stats[0] = {true, 100, 0, 100, -1};
+        config.stats[1] = {true, 0, 0, 100, 0};
+        SdAppearanceLoader loader(&sd);
+        loader.configureRuntimeContract(config);
+        PetBehaviorStatValues state = {};
+        state.values[0] = 100;
+        PetBehaviorDailyChangePauses pauses = {};
+        uint32_t days = 0;
+        assert(loader.catchUpDays(config, state, pauses, 100, days) && days == 5);
+        state.values[0] = 95;
+        assert(loader.catchUpDays(config, state, pauses, 100, days) && days == 1);
+        state.values[0] = 94;
+        assert(loader.catchUpDays(config, state, pauses, 100, days) && days == 100);
+        HostSd::mountedData = nullptr;
+        assert(!loader.catchUpDays(config, state, pauses, 100, days));
+        assert(std::strcmp(loader.firstAssetDataErrorResource(), "runtime") == 0);
+    }
+}
+
 void testDecodedActionRanges(const std::vector<uint8_t> &exported)
 {
     auto fixture = actionModesFixture(exported);
@@ -718,6 +768,7 @@ int main(int argc, char **argv)
     testRuntimeSnapshotLifecycle(startup);
     testEvolutionPlaybackRecords(startup);
     testEvolutionConditionRanges(startup);
+    testSdCatchUpThresholds(startup);
     PetBehaviorConfig config = {};
     assert(parseRuntimeTableBehavior(valid.data(), valid.size(),
                                      releaseFixtureManifest(valid), 1, 1, config));

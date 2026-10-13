@@ -9,6 +9,8 @@ class SdAppearanceLoader : public AppearanceLoader
 {
 public:
     explicit SdAppearanceLoader(SdFat *refSd);
+    bool catchUpDays(const PetBehaviorConfig &config, const PetBehaviorStatValues &state,
+                     const PetBehaviorDailyChangePauses &pauses, uint32_t limit, uint32_t &days) override;
 
     void configureRuntimeContract(const PetBehaviorConfig &config) override;
     const char *firstAssetDataErrorResource() const override;

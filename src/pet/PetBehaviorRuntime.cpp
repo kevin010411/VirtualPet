@@ -6,6 +6,7 @@
 #include "pet/PetBehaviorRuntimeRules.h"
 #include "display/Renderer.h"
 #include "common/FirmwareRandom.h"
+#include "appearance/AppearanceLoader.h"
 
 namespace
 {
@@ -70,11 +71,19 @@ void PetBehaviorRuntime::initializeStats()
     writeStats(state, pet);
 }
 
-bool PetBehaviorRuntime::advancePetDay()
+bool PetBehaviorRuntime::catchUpDays(AppearanceLoader &loader, uint32_t limit, uint32_t &days) const
+{
+    return loader.catchUpDays(config, readStats(pet), dailyChangePauses, limit, days);
+}
+
+bool PetBehaviorRuntime::advancePetDay(uint32_t days)
 {
     PetBehaviorStatValues state = readStats(pet);
-    applyPetBehaviorDailyChanges(config, state, dailyChangePauses);
-    return pet.commitPetDay(state.values, kPetBehaviorSlotCount);
+    PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
+    applyPetBehaviorDailyChanges(config, state, nextPauses, days);
+    if (!pet.commitPetDay(state.values, kPetBehaviorSlotCount, days)) return false;
+    dailyChangePauses = nextPauses;
+    return true;
 }
 
 PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)

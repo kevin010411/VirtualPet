@@ -4,6 +4,12 @@
 #include <SdFat.h>
 #include "appearance/AppearanceLoader.h"
 #include "pet/PetBehaviorStatSlot.h"
+#include "pet/PetBehaviorRuntimeRules.h"
+
+bool runtimeTableCatchUpDays(SdFat *sd, const PetBehaviorConfig &config,
+                            const PetBehaviorStatValues &state,
+                            const PetBehaviorDailyChangePauses &pauses,
+                            uint32_t limit, uint32_t &days);
 
 // Each query streams and validates a fresh /runtime.bin snapshot. Appearance,
 // Outfit and Evolution records stay on SD instead of occupying a resident table.

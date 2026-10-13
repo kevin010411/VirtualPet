@@ -92,14 +92,14 @@ void Pet::acquireCollection(uint8_t slot)
     if (slot < 64) st.collectionMask |= uint64_t(1) << slot;
 }
 
-bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount)
+bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount, uint32_t days)
 {
     if (isDead()) return false;
     if (customStats == nullptr || customStatCount == 0 || customStatCount > kPetCustomStatCount)
         return false;
 
-    const uint32_t nextStageDays = st.stage_days >= kStageDaysMax
-                                       ? kStageDaysMax : st.stage_days + 1;
+    const uint32_t remaining = st.stage_days < kStageDaysMax ? kStageDaysMax - st.stage_days : 0;
+    const uint32_t nextStageDays = days >= remaining ? kStageDaysMax : st.stage_days + days;
     st.stage_days = nextStageDays;
     return commitPetStats(customStats, customStatCount);
 }

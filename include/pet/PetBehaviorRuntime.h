@@ -9,6 +9,7 @@
 class AnimationController;
 class Pet;
 class Renderer;
+class AppearanceLoader;
 
 enum class PetBehaviorActionResult : uint8_t
 {
@@ -29,7 +30,8 @@ public:
     void initializeStats();
     void resetTransientState() { dailyChangePauses = {}; }
     bool isDead() const;
-    bool advancePetDay();
+    bool advancePetDay(uint32_t days = 1);
+    bool catchUpDays(AppearanceLoader &loader, uint32_t limit, uint32_t &days) const;
     PetBehaviorActionResult executeAction(uint8_t actionSlot);
 #if ENABLE_GUESS_GAME
     bool applyGuessOutcome(PetBehaviorGuessOutcome outcome);

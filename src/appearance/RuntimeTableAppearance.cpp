@@ -4,6 +4,50 @@
 
 using namespace RuntimeTableInternal;
 
+bool runtimeTableCatchUpDays(SdFat *sd, const PetBehaviorConfig &config,
+                            const PetBehaviorStatValues &state,
+                            const PetBehaviorDailyChangePauses &pauses,
+                            uint32_t limit, uint32_t &days)
+{
+    days = petBehaviorCatchUpDays(config, state, pauses, limit);
+    if (days <= 1) return true;
+    RuntimeTableFile file;
+    if (!file.open(sd, config.assetManifest)) return false;
+    const RuntimeTable &table = file.table();
+    // Read executable thresholds only. Exporter validation owns their shape
+    // and references. Including inactive branches is conservative and avoids
+    // retaining another table or caching stale thresholds across evolution.
+    const SectionType types[] = {EvolutionConditions, OutfitUnlockConditions
+#if ENABLE_COLLECTION_CATALOG
+        , CollectionConditions
+#endif
+    };
+    for (SectionType type : types)
+    {
+#if !ENABLE_DAILY_POST_PROCESSING
+        if (type == EvolutionConditions || type == OutfitUnlockConditions) continue;
+#endif
+        const Section *section = table.find(type);
+        if (section == nullptr) continue;
+        for (uint16_t index = 0; index < section->count && days > 1; ++index)
+        {
+            uint8_t record[12];
+            if (!readRecord(table.source, *section, index, record)) return false;
+            RuntimeValueId valueId = readU16(record);
+#if ENABLE_COLLECTION_CATALOG
+            if (type == CollectionConditions)
+            {
+                if (record[0] >= kPetBehaviorSlotCount) continue;
+                valueId = runtimeValueIdForPetStat(record[0]);
+            }
+#endif
+            days = petBehaviorRangeChangeDays(config, state, pauses,
+                {valueId, readI32(record + 2), readI32(record + 6)}, days);
+        }
+    }
+    return true;
+}
+
 namespace
 {
 bool appearanceReferencesAvailable(const RuntimeTable &table)

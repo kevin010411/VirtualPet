@@ -420,7 +420,7 @@ void enterSleep()
   }
 
   tft.enableSleep(false);
-  delay(120);
+  delay(60);
   RtcClock::requestSynchronization();
   if (g_gameReady)
     synchronizeGameTime();

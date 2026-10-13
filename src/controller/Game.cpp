@@ -621,23 +621,33 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
     {
         petClock.reset(rtcSeconds);
         clockStarted = true;
+        catchUpPrimed = false;
     }
     petClock.observe(rtcSeconds);
     if (petClock.due() > 1) petSaves.beginBatch();
     if (petClock.pending())
     {
-        // One attempted boundary per loop keeps playback and voltage sampling live.
-        const DayResult result = maybeTickPet();
+        // One event boundary per loop keeps playback and voltage sampling live.
+        uint32_t days = 1;
+        const DayResult result = maybeTickPet(days);
         if (pet.isDead()) return;
         if (result == DayResult::Consumed || result == DayResult::ConsumedWithError)
-            petClock.consume();
+        {
+            petClock.consume(days);
+            catchUpPrimed = true;
+        }
+        else catchUpPrimed = false;
     }
     // Time spent draining the snapshot must precede new input too.
     if (initialized && !petClock.pending()) petClock.observe(rtcSeconds);
-    if (initialized && !petClock.pending()) petSaves.endBatch();
+    if (initialized && !petClock.pending())
+    {
+        catchUpPrimed = false;
+        petSaves.endBatch();
+    }
 }
 
-Game::DayResult Game::maybeTickPet()
+Game::DayResult Game::maybeTickPet(uint32_t &days)
 {
     if (enterDeathIfNeeded()) return DayResult::Blocked;
     const EvolutionResult progress = evolution->update(PlaybackResult::Accepted);
@@ -647,7 +657,15 @@ Game::DayResult Game::maybeTickPet()
 
     if (!animations->isBusy())
     {
-        if (!petBehaviorRuntime->advancePetDay())
+        // Settle already-matching unlock/acquisition predicates on the first
+        // day before skipping a stable interval (which may end in death).
+        if (catchUpPrimed && petClock.due() > 1 &&
+            !petBehaviorRuntime->catchUpDays(appearanceLoader, petClock.due(), days))
+        {
+            enterRuntimeFatal();
+            return DayResult::Fatal;
+        }
+        if (!petBehaviorRuntime->advancePetDay(days))
         {
             renderer.showResourceError();
             return DayResult::ConsumedWithError;

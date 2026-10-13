@@ -28,6 +28,11 @@ namespace
 {
 struct Scenario
 {
+    bool catchUpEvents = false;
+    bool batchCatchUp = false;
+    bool catchUpReadSucceeds = true;
+    int catchUpQueries = 0;
+    uint32_t firstUnlockDay = 0;
     bool deathEnabled = false;
     bool firstStartAvailable = true;
     bool rejectFirstStartQueue = false;
@@ -109,12 +114,35 @@ void copyName(char *destination, size_t capacity, const char *source)
 class FakeAppearanceLoader : public AppearanceLoader
 {
 public:
+    bool catchUpDays(const PetBehaviorConfig &config, const PetBehaviorStatValues &state,
+                     const PetBehaviorDailyChangePauses &pauses, uint32_t limit, uint32_t &days) override
+    {
+        ++scenario->catchUpQueries;
+        days = scenario->batchCatchUp ? petBehaviorCatchUpDays(config, state, pauses, limit) : 1;
+        if (scenario->batchCatchUp && scenario->catchUpEvents)
+            for (int threshold : {99, 95, 93, 90})
+                days = petBehaviorRangeChangeDays(config, state, pauses,
+                    {runtimeValueIdForPetStat(0), threshold, threshold}, days);
+        return scenario->catchUpReadSucceeds;
+    }
     void configureRuntimeContract(const PetBehaviorConfig &) override {}
     const char *firstAssetDataErrorResource() const override { return "appearance"; }
-    EvolutionLookupResult findEvolutionTarget(const PetStatSnapshot &,
+    EvolutionLookupResult findEvolutionTarget(const PetStatSnapshot &stats,
                                              AppearanceSelection &selection) override
     {
         ++scenario->evolutionLookups;
+        if (scenario->catchUpEvents)
+        {
+            if ((stats.speciesSlot == 1 && stats.customStats[0] == 93) ||
+                (stats.speciesSlot == 2 && stats.customStats[0] == 90))
+            {
+                selection.speciesSlot = stats.speciesSlot + 1;
+                selection.outfitSlot = 1;
+                selection.evolutionMode = EvolutionAnimationMode::Disabled;
+                return EvolutionLookupResult::Found;
+            }
+            return EvolutionLookupResult::NoTarget;
+        }
         if (scenario->evolutionResult == EvolutionLookupResult::Found)
         {
             selection.speciesSlot = scenario->evolutionSpecies;
@@ -151,6 +179,11 @@ public:
         scenario->unlockInput = stats;
         scenario->lastUnlockInitialize = initialize;
         resolved = scenario->replaceUnlockMask ? scenario->resolvedUnlockMask : current;
+        if (scenario->catchUpEvents && (stats.customStats[0] == 99 || stats.customStats[0] == 95))
+        {
+            resolved |= 2;
+            if (!scenario->firstUnlockDay) scenario->firstUnlockDay = stats.stage_days;
+        }
         return scenario->unlockSucceeds;
     }
     bool resolveConsumableOutfitUnlock(uint8_t, uint8_t, const PetStatSnapshot &stats,
@@ -1750,6 +1783,82 @@ void testSavedDeathReset()
     game.loop_game();
     assert(game.isDead() == bool(ENABLE_DEATH));
 }
+
+void testBatchedCatchUpMatchesDailyEvents()
+{
+    PetStatSnapshot reference = {};
+    bool referenceDead = false;
+    int referenceSteps = 0;
+    for (bool batch : {false, true})
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.commandAction = true;
+        data.catchUpEvents = true;
+        data.batchCatchUp = batch;
+        data.deathEnabled = bool(ENABLE_DEATH);
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader loader;
+        Game game(pet, storage, renderer, loader);
+        assert(game.setup_game());
+        game.synchronizeTime(0);
+        int steps = 0;
+        do
+        {
+            game.synchronizeTime(2001); // 1000 days plus a retained partial day.
+            game.loop_game();
+            assert(++steps < 1100);
+        } while (game.hasPendingTime() && !game.isDead());
+        assert(game.isReady());
+        assert(data.firstUnlockDay == 1); // Already matching before the first batch.
+#if ENABLE_DAILY_POST_PROCESSING
+        assert(pet.speciesSlot() == 3); // Both one-day evolution windows survived.
+#endif
+        if (!batch)
+        {
+            reference = pet.statSnapshot();
+            referenceDead = pet.isDead();
+            referenceSteps = steps;
+        }
+        else
+        {
+            const auto actual = pet.statSnapshot();
+            assert(actual.stage_days == reference.stage_days && actual.speciesSlot == reference.speciesSlot);
+            assert(actual.customStats[0] == reference.customStats[0] && pet.isDead() == referenceDead);
+            assert(steps < 20 && steps < referenceSteps);
+            if (!pet.isDead())
+            {
+                const uint32_t days = pet.stageDays();
+                game.synchronizeTime(2002);
+                assert(pet.stageDays() == days + 1); // Batch retained the one-second remainder.
+            }
+        }
+    }
+    // A failed boundary read cannot consume time or mutate the pet.
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = true;
+    data.batchCatchUp = true;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader loader;
+    Game game(pet, storage, renderer, loader);
+    assert(game.setup_game());
+    game.synchronizeTime(0);
+    game.synchronizeTime(1000); // First day settles existing matches.
+    const auto before = pet.statSnapshot();
+    data.catchUpReadSucceeds = false;
+    game.synchronizeTime(1000);
+    assert(!game.isReady());
+    assert(pet.stageDays() == before.stage_days && pet.customStat(0) == before.customStats[0]);
+}
 } // namespace
 
 #if ENABLE_COLLECTION_CATALOG
@@ -1796,6 +1905,7 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
     if (scenario->commandAction)
     {
         config.stats[0] = {true, 2, 0, 10, 0};
+        if (scenario->catchUpEvents) config.stats[0] = {true, 100, 0, 100, -1};
         config.actions[0].active = true;
         config.actions[0].mode = PetBehaviorActionMode::Standard;
         config.actions[0].outcomeCount = 1;
@@ -1995,6 +2105,7 @@ int main(int argc, char **argv)
     }
     if (argc == 2 && strcmp(argv[1], "--sequence-interruption") == 0)
     {
+        testBatchedCatchUpMatchesDailyEvents();
         testCommandReplacesSequenceAcrossDayBoundary();
         testRtcCatchUp();
         testRtcSnapshotAndReset();
@@ -2008,6 +2119,7 @@ int main(int argc, char **argv)
     return 0;
 #endif
     testFourSecondPeriodicSave();
+    testBatchedCatchUpMatchesDailyEvents();
     testDailySaveRetry();
     testNavigationDuringRtcCatchUp();
     testRtcCatchUp();

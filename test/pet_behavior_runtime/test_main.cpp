@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <limits.h>
+#include <initializer_list>
 #include <string.h>
 #include "pet/PetBehaviorRuntimeRules.h"
 
@@ -52,6 +53,61 @@ void testDailyChangesAndSparseStats()
     assert(state.values[0] == 10 && state.values[1] == 77 && state.values[3] == 100);
     applyPetBehaviorDailyChanges(config, state, pauses);
     assert(state.values[0] == 3 && state.values[3] == 100);
+}
+
+void testBatchDailyChangesAndBoundaries()
+{
+    // Compare arithmetic batches with independent single-day clamping,
+    // including pauses, sparse slots, extreme deltas and long sleep intervals.
+    auto config = behaviorConfig();
+    for (int delta : {-32768, -7, -1, 0, 1, 7, 32767})
+    for (uint32_t days : {1U, 3U, 255U, 100000U, UINT32_MAX})
+    {
+        config.stats[0] = {true, 10, -20, 20, static_cast<int16_t>(delta)};
+        PetBehaviorStatValues batch = {}, expected = {};
+        initializePetBehaviorStats(config, batch);
+        expected = batch;
+        PetBehaviorDailyChangePauses pauses = {}, reference = {};
+        pauses.remainingDays[0] = reference.remainingDays[0] = 3;
+        applyPetBehaviorDailyChanges(config, batch, pauses, days);
+        // After 1000 days every tested nonzero slope is clamped and pause expired.
+        const uint32_t iterations = days < 1000 ? days : 1000;
+        for (uint32_t day = 0; day < iterations; ++day)
+            for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
+            {
+                const auto &stat = config.stats[slot];
+                if (!stat.active) continue;
+                if (reference.remainingDays[slot]) { --reference.remainingDays[slot]; continue; }
+                const int next = expected.values[slot] + stat.dailyChange;
+                expected.values[slot] = next < stat.minValue ? stat.minValue :
+                    next > stat.maxValue ? stat.maxValue : next;
+            }
+        assert(memcmp(batch.values, expected.values, sizeof(batch.values)) == 0);
+        assert(memcmp(&pauses, &reference, sizeof(pauses)) == 0);
+    }
+
+    config.stats[0] = {true, 10, -20, 20, -1};
+    PetBehaviorStatValues state = {};
+    initializePetBehaviorStats(config, state);
+    PetBehaviorDailyChangePauses pauses = {};
+    const RuntimeRangePredicate narrow = {runtimeValueIdForPetStat(0), 5, 5};
+    assert(petBehaviorRangeChangeDays(config, state, pauses, narrow, 100) == 5);
+    state.values[0] = 5;
+    assert(petBehaviorRangeChangeDays(config, state, pauses, narrow, 100) == 1);
+    state.values[0] = -20;
+    assert(petBehaviorRangeChangeDays(config, state, pauses, narrow, 100) == 100);
+    config.stats[0].dailyChange = 1;
+    assert(petBehaviorRangeChangeDays(config, state, pauses, narrow, 100) == 25);
+    assert(petBehaviorRangeChangeDays(config, state, pauses,
+        {runtimeValueIdForPetStat(0), INT32_MIN, INT32_MAX}, 100) == 100);
+    pauses.remainingDays[0] = 3;
+    assert(petBehaviorCatchUpDays(config, state, pauses, 100) == 3);
+    state.stageDays = 0;
+    assert(petBehaviorRangeChangeDays(config, state, pauses, {0, 7, 7}, 100) == 7);
+    state.stageDays = 7;
+    assert(petBehaviorRangeChangeDays(config, state, pauses, {0, 7, 7}, 100) == 1);
+    state.stageDays = 864000;
+    assert(petBehaviorRangeChangeDays(config, state, pauses, {0, 864000, INT32_MAX}, 100) == 100);
 }
 
 void testAnimationOnlyAndOwnedEffects()
@@ -220,6 +276,7 @@ void testWeightedOutcomeBoundariesAndEffects()
 int main()
 {
     testDailyChangesAndSparseStats();
+    testBatchDailyChangesAndBoundaries();
     testAnimationOnlyAndOwnedEffects();
     testRejectedEffectsAreAtomic();
     testConditionalUsesOwnedRangePriorityAndPreEffectValues();

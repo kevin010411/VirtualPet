@@ -7,6 +7,8 @@
 #include "resources/AssetRuntimeContract.h"
 
 struct PetBehaviorConfig;
+struct PetBehaviorStatValues;
+struct PetBehaviorDailyChangePauses;
 
 enum class EvolutionAnimationMode : uint8_t
 {
@@ -46,6 +48,10 @@ class AppearanceLoader
 {
 public:
     virtual ~AppearanceLoader() = default;
+    // Adapters without a boundary query retain the exact single-day path.
+    virtual bool catchUpDays(const PetBehaviorConfig &, const PetBehaviorStatValues &,
+                             const PetBehaviorDailyChangePauses &, uint32_t, uint32_t &days)
+    { days = 1; return true; }
     virtual void configureRuntimeContract(const PetBehaviorConfig &config) = 0;
     virtual const char *firstAssetDataErrorResource() const = 0;
     virtual EvolutionLookupResult findEvolutionTarget(const PetStatSnapshot &stats,

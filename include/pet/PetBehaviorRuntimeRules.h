@@ -20,7 +20,14 @@ using PetBehaviorRandomBoundedSource = uint16_t (*)(uint16_t upperExclusive);
 void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStatValues &state);
 void applyPetBehaviorDailyChanges(const PetBehaviorConfig &config,
                                   PetBehaviorStatValues &state,
-                                  PetBehaviorDailyChangePauses &pauses);
+                                  PetBehaviorDailyChangePauses &pauses, uint32_t days = 1);
+uint32_t petBehaviorRangeChangeDays(const PetBehaviorConfig &config,
+                                   const PetBehaviorStatValues &state,
+                                   const PetBehaviorDailyChangePauses &pauses,
+                                   const RuntimeRangePredicate &predicate, uint32_t limit);
+uint32_t petBehaviorCatchUpDays(const PetBehaviorConfig &config,
+                              const PetBehaviorStatValues &state,
+                              const PetBehaviorDailyChangePauses &pauses, uint32_t limit);
 bool applyPetBehaviorAction(const PetBehaviorConfig &config,
                             uint8_t actionSlot,
                             PetBehaviorStatValues &state,

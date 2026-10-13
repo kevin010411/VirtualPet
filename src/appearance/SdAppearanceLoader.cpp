@@ -8,6 +8,14 @@ SdAppearanceLoader::SdAppearanceLoader(SdFat *refSd)
 {
 }
 
+bool SdAppearanceLoader::catchUpDays(const PetBehaviorConfig &config,
+                                    const PetBehaviorStatValues &state,
+                                    const PetBehaviorDailyChangePauses &pauses,
+                                    uint32_t limit, uint32_t &days)
+{
+    return recordQueryResult(runtimeTableCatchUpDays(sd, config, state, pauses, limit, days));
+}
+
 void SdAppearanceLoader::configureRuntimeContract(const PetBehaviorConfig &config)
 {
     evolutionStatSlots.configure(config);

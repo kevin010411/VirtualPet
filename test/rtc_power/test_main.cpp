@@ -43,8 +43,7 @@ int main()
     clock.reset(UINT32_MAX - 1);
     clock.observe(2);
     assert(clock.due() == 2);
-    clock.consume();
-    clock.consume();
+    clock.consume(100); // Batched consumption clamps to backlog across rollover.
     clock.observe(3);
     assert(!clock.pending());
     clock.observe(4);

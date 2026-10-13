@@ -14,6 +14,8 @@
 #include "animation/AnimationController.h"
 #include "resources/RuntimeContractLoader.h"
 #include "common/FirmwareRandom.h"
+#include "collection/CollectionCatalog.h"
+#include "appearance/RuntimeTableAppearance.h"
 
 unsigned long hostMillis = 0;
 
@@ -196,9 +198,73 @@ static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display, bool tw
     puts("[PASS] Real64 bundle: five pages, cyclic navigation, blank skipping, all returns, transparent per-cell composition, final tile/story frames, exact detail focus and two-cell redraw");
 }
 
+static void verifyCatchUpCollectionWindow(const std::filesystem::path &root)
+{
+    using namespace RuntimeTableInternal;
+    SdFat sd;
+    mountBundle(sd, root);
+    PetBehaviorConfig config = {};
+    assert(loadRuntimeContract(&sd, 1, 1, config));
+    std::ifstream input(root / "runtime.bin", std::ios::binary);
+    std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    auto put = [&](size_t offset, uint32_t value, uint8_t width) {
+        for (uint8_t byte = 0; byte < width; ++byte) bytes[offset + byte] = value >> (8 * byte);
+    };
+    size_t collectionCondition = 0, item = 0;
+    for (uint16_t index = 0; index < readU16(bytes.data() + 24); ++index)
+    {
+        const size_t entry = 64 + index * 16;
+        const uint16_t type = readU16(bytes.data() + entry);
+        const size_t offset = readU32(bytes.data() + entry + 4);
+        if (type == CollectionItems) item = offset;
+        if (type != CollectionConditions && type != EvolutionConditions && type != OutfitUnlockConditions) continue;
+        if (type == CollectionConditions) collectionCondition = offset;
+        for (uint16_t row = 0; row < readU16(bytes.data() + entry + 8); ++row)
+        {
+            const size_t record = offset + row * readU16(bytes.data() + entry + 10);
+            put(record, type == CollectionConditions ? 1 : runtimeValueIdForPetStat(1), 2);
+            put(record + 2, 0, 4);
+            put(record + 6, 100, 4);
+        }
+    }
+    assert(collectionCondition && item);
+    put(collectionCondition, 0, 2);
+    put(collectionCondition + 2, 95, 4);
+    put(collectionCondition + 6, 95, 4);
+    put(item + 1, 0, 1); // Image activation; no appearance grant.
+    put(item + 2, 0, 2);
+    put(item + 4, 1, 2);
+    sd.seedReadOnly("/runtime.bin", bytes);
+    config.stats[0] = {true, 100, 0, 100, -1};
+    config.stats[1] = {true, 0, 0, 100, 0};
+    config.petStateCount = 0;
+    config.deathEnabled = false;
+    PetBehaviorStatValues state = {};
+    state.values[0] = 100;
+    PetBehaviorDailyChangePauses pauses = {};
+    Pet pet;
+    uint32_t remaining = 100, batches = 0;
+    while (remaining)
+    {
+        uint32_t days = 0;
+        assert(runtimeTableCatchUpDays(&sd, config, state, pauses, remaining, days));
+        if (batches == 0) assert(days == 5);
+        applyPetBehaviorDailyChanges(config, state, pauses, days);
+        assert(pet.commitPetDay(state.values, kPetBehaviorSlotCount, days));
+        bool changed = false;
+        assert(evaluateCollectionCatalog(&sd, config, pet, changed));
+        if (batches == 0) assert(pet.isCollectionOwned(0) && pet.customStat(0) == 95);
+        remaining -= days;
+        ++batches;
+    }
+    assert(pet.isCollectionOwned(0) && pet.customStat(0) == 0 && batches == 3);
+    puts("[PASS] Production SD catch-up acquires a one-day Collection window before skipping the remaining days");
+}
+
 int main(int argc, char **argv)
 {
     assert(argc == 2 || argc == 3);
+    if (argc == 2 || std::string(argv[2]) == "single") verifyCatchUpCollectionWindow(argv[1]);
 #if COLLECTION_USE_RTC
     if (argc == 3 && std::string(argv[2]) == "guess-classic")
     {

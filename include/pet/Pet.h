@@ -62,7 +62,7 @@ public:
     uint32_t stageDays() const;
     void setStageDays(uint32_t value);
     bool commitPetStats(const int16_t *customStats, size_t customStatCount);
-    bool commitPetDay(const int16_t *customStats, size_t customStatCount);
+    bool commitPetDay(const int16_t *customStats, size_t customStatCount, uint32_t days = 1);
     PetStatSnapshot statSnapshot() const;
     int16_t customStat(uint8_t index) const;
     bool setCustomStat(uint8_t index, int16_t value);

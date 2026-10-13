@@ -31,7 +31,7 @@ public:
     }
     uint32_t due() const { return paused ? 0U : (target - boundary) / 2U; }
     bool pending() const { return due() != 0; }
-    void consume() { if (pending()) boundary += 2U; }
+    void consume(uint32_t days = 1) { boundary += 2U * (days < due() ? days : due()); }
 private:
     uint32_t boundary = 0;
     uint32_t target = 0;
