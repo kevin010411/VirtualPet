@@ -45,4 +45,3 @@ private:
     SequenceAudioError firstError_ = SequenceAudioError::None;
 };
 #endif
-

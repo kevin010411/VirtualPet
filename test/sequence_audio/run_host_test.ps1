@@ -26,6 +26,3 @@ try {
     & '.pio/sequence_audio_host.exe' @arguments
     exit $LASTEXITCODE
 } finally { Pop-Location }
-
-
-
