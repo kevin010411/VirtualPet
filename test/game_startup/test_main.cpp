@@ -40,6 +40,7 @@ struct Scenario
     bool commandAction = false;
     bool navigationButtons = false;
     bool commandSequence = false;
+    bool pausedDailyAction = false;
     uint8_t heldAnimationId = 0;
     uint16_t selectedButtonFrame = 0;
     bool commandOutfit = false;
@@ -1179,7 +1180,7 @@ void testCommandReplacesSequenceAcrossDayBoundary()
         assert(data.displayedAnimation.animationId == data.heldAnimationId);
         assert(game.hasTransientAnimation());
         game.synchronizeTime(dayDue ? 12 : 11);
-        assert(game.hasPendingTime() == dayDue);
+        assert(!game.hasPendingTime());
         game.OnRightKey();
         game.loop_game();
         assert(data.selectedButtonFrame == 3);
@@ -1194,7 +1195,55 @@ void testCommandReplacesSequenceAcrossDayBoundary()
         assert(!game.hasTransientAnimation()); // Old following segments are gone.
         game.synchronizeTime(dayDue ? 12 : 11);
         assert(!game.hasPendingTime());
-        assert(pet.stageDays() == (dayDue ? 1u : 0u));
+        assert(pet.stageDays() == 0);
+    }
+}
+
+void testActionPlaybackPausesPetTime()
+{
+    for (uint8_t heldSegment : {1, 2})
+    for (bool cancelForSleep : {false, true})
+    {
+        hostMillis = 1;
+        Scenario data;
+        scenario = &data;
+        data.commandAction = data.commandSequence = data.pausedDailyAction = true;
+        data.heldAnimationId = heldSegment;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader loader;
+        Game game(pet, storage, renderer, loader);
+        game.synchronizeTime(10);
+        assert(game.setup_game());
+        game.synchronizeTime(11); // Preserve the second before the action.
+        game.OnConfirmKey();
+        ++hostMillis;
+        game.loop_game();
+        if (heldSegment == 2) { ++hostMillis; game.loop_game(); }
+        assert(data.displayedAnimation.animationId == heldSegment);
+        game.synchronizeTime(16);
+        assert(pet.stageDays() == 0 && pet.customStat(0) == 8);
+        assert(!game.hasPendingTime());
+        if (cancelForSleep)
+            game.stopPlaybackForSleep();
+        else
+        {
+            data.heldAnimationId = 0;
+            for (int frame = 0; frame < 4; ++frame) { hostMillis += 700; game.loop_game(); }
+            assert(!game.hasTransientAnimation());
+        }
+        game.synchronizeTime(16);
+        assert(pet.stageDays() == 0 && pet.customStat(0) == 8);
+        game.synchronizeTime(17);
+        assert(pet.stageDays() == 1 && pet.customStat(0) == 8); // First pause day.
+        game.synchronizeTime(19);
+        assert(pet.stageDays() == 2 && pet.customStat(0) == 7);
+        game.stopPlaybackForSleep();
+        // No playback or clock polls while sleeping; all three days still settle.
+        for (int day = 0; day < 3; ++day) game.synchronizeTime(25);
+        assert(pet.stageDays() == 5 && pet.customStat(0) == 4);
     }
 }
 
@@ -1574,10 +1623,10 @@ void testRtcCatchUp()
             game.OnConfirmKey();
             assert(pet.customStat(0) == 8);
             game.synchronizeTime(3614);
-            assert(pet.stageDays() == 1801 && game.hasPendingTime());
+            assert(pet.stageDays() == 1801 && !game.hasPendingTime());
             game.loop_game();
             game.synchronizeTime(3614);
-            assert(pet.stageDays() == 1802); // Busy action retained its boundary.
+            assert(pet.stageDays() == 1801); // Playback time is excluded.
         }
     }
 }
@@ -1905,8 +1954,10 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
     if (scenario->commandAction)
     {
         config.stats[0] = {true, 2, 0, 10, 0};
+        if (scenario->pausedDailyAction) config.stats[0].dailyChange = -1;
         if (scenario->catchUpEvents) config.stats[0] = {true, 100, 0, 100, -1};
         config.actions[0].active = true;
+        if (scenario->pausedDailyAction) config.actions[0].suspendDailyChangeDays = 1;
         config.actions[0].mode = PetBehaviorActionMode::Standard;
         config.actions[0].outcomeCount = 1;
         config.actionOutcomeCount = 1;
@@ -2105,6 +2156,7 @@ int main(int argc, char **argv)
     }
     if (argc == 2 && strcmp(argv[1], "--sequence-interruption") == 0)
     {
+        testActionPlaybackPausesPetTime();
         testBatchedCatchUpMatchesDailyEvents();
         testCommandReplacesSequenceAcrossDayBoundary();
         testRtcCatchUp();
@@ -2119,6 +2171,7 @@ int main(int argc, char **argv)
     return 0;
 #endif
     testFourSecondPeriodicSave();
+    testActionPlaybackPausesPetTime();
     testBatchedCatchUpMatchesDailyEvents();
     testDailySaveRetry();
     testNavigationDuringRtcCatchUp();

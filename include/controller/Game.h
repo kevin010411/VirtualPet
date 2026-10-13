@@ -135,6 +135,7 @@ private:
     AppearanceChangeResult enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot) override;
     void refreshBaseAnimation() override;
     PlaybackTickResult tickPlayback(unsigned long now);
+    void synchronizePlaybackClock();
     bool completePlaybackTick(const PlaybackTickResult &playbackResult);
     void routeDirectionKey(KeyDirection direction);
     void handleCommandResult(const CommandResult &result);

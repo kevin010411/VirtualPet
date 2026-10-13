@@ -260,7 +260,11 @@ bool Game::preventsIdleSleep() const
     return animations->hasFinitePlayback();
 }
 
-void Game::stopPlaybackForSleep() { animations->cancelAll(); }
+void Game::stopPlaybackForSleep()
+{
+    animations->cancelAll();
+    synchronizePlaybackClock();
+}
 bool Game::audioActive() const
 {
 #if ENABLE_SEQUENCE_AUDIO
@@ -488,6 +492,7 @@ void Game::OnConfirmKey()
         return;
 
     handleCommandResult(commandExecutor->execute(*commands));
+    synchronizePlaybackClock();
 }
 
 void Game::refreshBaseAnimation()
@@ -540,7 +545,15 @@ bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
         return false;
     if (playbackResult.result == PlaybackResult::Accepted)
         handleEvolutionResult(evolution->update(PlaybackResult::Accepted));
+    synchronizePlaybackClock();
     return !flow.isFatalError();
+}
+
+void Game::synchronizePlaybackClock()
+{
+    if (!flow.isCommand()) return;
+    if (animations->hasFinitePlayback()) petClock.pause(latestRtcSeconds);
+    else petClock.resume(latestRtcSeconds);
 }
 
 void Game::handleCommandResult(const CommandResult &result)
@@ -623,6 +636,7 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
         clockStarted = true;
         catchUpPrimed = false;
     }
+    synchronizePlaybackClock();
     petClock.observe(rtcSeconds);
     if (petClock.due() > 1) petSaves.beginBatch();
     if (petClock.pending())

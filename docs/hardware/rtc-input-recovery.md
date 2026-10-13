@@ -8,6 +8,11 @@ RTC 不可用時用 millis 維持清醒進度並禁止 STOP；有效 counter 保
 backup domain 失效才重建 epoch，避免巨量補時與清醒時間重算。
 STOP 期間 counter 遺失的時間無法可靠還原；斷電／重啟沒有持久化時間 checkpoint。
 
+Command 中的一次性播放（包含 User Action 後續段落及 Status）使用 PetClock
+pause／resume 排除整段播放時間，完成、替換或取消時保留播放前的兩秒日餘數。
+播放期間不消耗 Daily Change 暫停天數；base／條件 idle 動畫仍隨寵物時間推進。
+睡眠前取消播放會先恢復 PetClock，因此 STOP 期間的 RTC 時間仍補算。
+
 普通單鍵首次輪詢按下即派送，沒有 30 ms 等待，保留 250 ms 短按間隔。
 作弊單鍵仍於放開區分短／長按。左右導航可在補時期間更新；確認執行仍受
 未完成補時／進化限制。提示音非阻塞。
