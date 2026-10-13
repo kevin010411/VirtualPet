@@ -117,11 +117,16 @@ private:
     bool cheatEvolutionPending = false;
     bool pendingFirstStartCompletion = false;
     bool initialized = false;
+#if ENABLE_DEATH
     bool deathPresented = false;
     bool deathSavePending = false;
     unsigned long deathSaveRetryAt = 0;
     bool enterDeathIfNeeded();
     void retryDeathSave();
+#else
+    bool enterDeathIfNeeded() { return isDead(); }
+    void retryDeathSave() {}
+#endif
     RuntimeLoadState runtimeLoadState = RuntimeLoadState::Unloaded;
     bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot) override;
     bool activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot) override;

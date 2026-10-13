@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection, [switch]$EnableCollectionCatalog, [switch]$DisableDailyPostProcessing, [switch]$SequenceInterruptionOnly, [switch]$StatusOnly, [switch]$EvolutionOnly)
+param([switch]$EnableFirstStartAnimation, [switch]$EnableAppearanceSelection, [switch]$EnableCollectionCatalog, [switch]$DisableDailyPostProcessing, [switch]$SequenceInterruptionOnly, [switch]$StatusOnly, [switch]$EvolutionOnly, [switch]$DeathOnly, [ValidateSet(0, 1)][int]$DeathEnabled = 0)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -40,6 +40,7 @@ if ($EnableAppearanceSelection) { $sources += 'src/appearance/AppearanceSelectio
 Push-Location $repoRoot
 try {
     & g++ -std=c++17 -O1 -ffunction-sections -fdata-sections '-Wl,--gc-sections' `
+        "-DENABLE_DEATH=$DeathEnabled" `
         "-DENABLE_DAILY_POST_PROCESSING=$([int](-not $DisableDailyPostProcessing.IsPresent))" `
         -DENABLE_DEBUG=0 -DENABLE_GUESS_GAME=0 "-DENABLE_COLLECTION_CATALOG=$([int]$EnableCollectionCatalog.IsPresent)" "-DENABLE_COMMAND_OUTFIT=$appearanceEnabled" `
         -DENABLE_COMMAND_PREDICT=0 "-DENABLE_APPEARANCE_SELECTION=$appearanceEnabled" `
@@ -47,12 +48,15 @@ try {
         -Itest/game_startup -Itest/host_stubs -Iinclude `
         @sources -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    if ($EvolutionOnly) { & $outputPath --evolution }
+    if ($DeathOnly) { & $outputPath --death }
+    elseif ($EvolutionOnly) { & $outputPath --evolution }
     elseif ($StatusOnly) { & $outputPath --status }
     elseif ($SequenceInterruptionOnly) { & $outputPath --sequence-interruption }
     else { & $outputPath }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    if ($EvolutionOnly) {
+    if ($DeathOnly) {
+        Write-Host "[PASS] Death gating, saved Dead, reset save rollback and new life (ENABLE_DEATH=$DeathEnabled)"
+    } elseif ($EvolutionOnly) {
         Write-Host '[PASS] Evolution completion/failure and two-phase playback counts'
     } elseif ($StatusOnly) {
         Write-Host '[PASS] Status selects committed Pet Stat versions without scanning asset version completeness'

@@ -43,6 +43,7 @@ Pet::Pet()
 }
 
 bool Pet::isDead() const { return (st.flowFlags & kDeadFlag) != 0; }
+#if ENABLE_DEATH
 void Pet::configureDeath(bool enabled, uint16_t statMask)
 {
     deathStatMask = enabled ? statMask : 0;
@@ -55,6 +56,7 @@ bool Pet::evaluateDeath()
             { st.flowFlags |= kDeadFlag; break; }
     return isDead();
 }
+#endif
 
 bool Pet::configureTrackedActions(uint32_t fingerprint)
 {

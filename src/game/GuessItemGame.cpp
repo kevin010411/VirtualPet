@@ -7,10 +7,6 @@
 
 namespace
 {
-#ifndef ENABLE_GUESS_GAME_SINGLE_ROUND
-#define ENABLE_GUESS_GAME_SINGLE_ROUND 0
-#endif
-
     constexpr unsigned long kItemRevealDelayMs = 50;
     constexpr unsigned long kItemPromptLoopDurationMs = 24UL * 60UL * 60UL * 1000UL;
     constexpr unsigned long kItemPromptSwitchIntervalMs = 800;

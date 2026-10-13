@@ -12,10 +12,6 @@
 
 using namespace RuntimeTableInternal;
 
-#ifndef ENABLE_GUESS_GAME_SINGLE_ROUND
-#define ENABLE_GUESS_GAME_SINGLE_ROUND 0
-#endif
-
 namespace
 {
 struct MemorySource
@@ -79,6 +75,7 @@ bool decodeStats(const Source &source, const Section &section, PetBehaviorConfig
     return true;
 }
 
+#if ENABLE_DEATH
 bool decodeDeathAnimation(const Source &source, const Section &assets,
                           const Section &animations, uint16_t reference,
                           const ActiveAssetScope &scope, PetBehaviorConfig &config)
@@ -97,6 +94,7 @@ bool decodeDeathAnimation(const Source &source, const Section &assets,
     }
     return !config.deathEnabled;
 }
+#endif
 
 bool decodePetStates(const Source &source,
                      const Section *states,
@@ -523,11 +521,15 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     uint8_t deathRecord[8] = {};
     if (death == nullptr || death->count != 1 || !readRecord(source, *death, 0, deathRecord))
         return false;
+#if ENABLE_DEATH
     config.deathEnabled = deathRecord[0] != 0;
     config.deathStatMask = readU16(deathRecord + 2);
     const uint16_t deathRef = readU16(deathRecord + 4);
     if (!decodeDeathAnimation(source, *assets, *animations, deathRef, scope, config))
         return false;
+#else
+    if (deathRecord[0] != 0) return false;
+#endif
     if (!decodeStats(source, *stats, config) ||
         !decodePetStates(source, petStates, defaultPetState,
                          *assets, *animations, scope, config) ||

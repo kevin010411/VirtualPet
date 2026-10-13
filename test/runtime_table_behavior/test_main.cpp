@@ -670,6 +670,35 @@ void testRuntimeSnapshotLifecycle(const std::vector<uint8_t> &fixture)
     HostSd::mountedData = fixture.data();
 }
 
+void testDeathCapability(const std::vector<uint8_t> &base)
+{
+    auto fixture = base;
+    size_t deathOffset = 0;
+    uint16_t animationReference = 0;
+    const uint16_t count = fixture[24] | (static_cast<uint16_t>(fixture[25]) << 8);
+    for (uint16_t index = 0; index < count; ++index)
+    {
+        const size_t entry = 64 + index * 16;
+        const uint16_t type = fixture[entry] | (static_cast<uint16_t>(fixture[entry + 1]) << 8);
+        const size_t offset = readFixtureU32(fixture, entry + 4);
+        if (type == 22) deathOffset = offset;
+        if (type == 13)
+            animationReference = fixture[offset + 2] | (static_cast<uint16_t>(fixture[offset + 3]) << 8);
+    }
+    assert(deathOffset != 0);
+    fixture[deathOffset] = 1;
+    putFixtureU16(fixture, deathOffset + 2, 1);
+    putFixtureU16(fixture, deathOffset + 4, animationReference);
+    PetBehaviorConfig config = {};
+    assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(),
+                                    releaseFixtureManifest(fixture), 1, 1, config) == bool(ENABLE_DEATH));
+    fixture[deathOffset] = 0;
+    assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(),
+                                    releaseFixtureManifest(fixture), 1, 1, config));
+    assert(!config.deathEnabled);
+    assert(config.deathAnimation.valid() == bool(ENABLE_DEATH));
+}
+
 int main(int argc, char **argv)
 {
     AssetData::AssetFrameAddress ninthSpecies = {};
@@ -682,6 +711,7 @@ int main(int argc, char **argv)
 #if RUNTIME_TABLE_V8
     assert(argc >= 5);
     const std::vector<uint8_t> valid = readFixture(argv[1]);
+    testDeathCapability(valid);
     testDecodedActionRanges(valid);
     const std::vector<uint8_t> legacy = readFixture(argv[2]);
     const std::vector<uint8_t> startup = readFixture(argv[3]);

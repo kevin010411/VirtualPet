@@ -91,8 +91,10 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     if (!writeStats(state, pet))
         return PetBehaviorActionResult::Rejected;
     dailyChangePauses = nextPauses;
+#if ENABLE_COLLECTION_CATALOG
     for (uint8_t index = 0; index < config.trackedActionCount; ++index)
         if (config.trackedActions[index] == actionSlot) { pet.incrementActionCount(index); break; }
+#endif
     if (pet.isDead()) return PetBehaviorActionResult::Applied;
 
     const PetBehaviorActionConfig &action = config.actions[actionSlot];
@@ -142,7 +144,11 @@ bool PetBehaviorRuntime::applyGuessOutcome(PetBehaviorGuessOutcome outcome)
 
 AssetData::AnimationRef PetBehaviorRuntime::baseAnimation() const
 {
+#if ENABLE_DEATH
     if (pet.isDead()) return config.deathAnimation.valid() ? config.deathAnimation : config.idleAnimation;
+#else
+    if (pet.isDead()) return config.idleAnimation;
+#endif
     return activePetState().idleAnimation;
 }
 

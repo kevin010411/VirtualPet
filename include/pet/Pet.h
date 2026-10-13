@@ -2,6 +2,7 @@
 #define PET_H
 
 #include <Arduino.h>
+#include "common/AppProfile.h"
 
 static constexpr size_t kPetCustomStatCount = 12;
 static constexpr size_t kTrackedActionCount = 8;
@@ -46,8 +47,14 @@ public:
 
     void setDefaultState();
     bool isDead() const;
+#if ENABLE_DEATH
     void configureDeath(bool enabled, uint16_t statMask);
     bool evaluateDeath();
+#else
+    void configureDeath(bool, uint16_t) {}
+    // Saved Dead still blocks care until the existing new-life reset succeeds.
+    bool evaluateDeath() { return isDead(); }
+#endif
     void setSchemaFingerprint(uint32_t fingerprint);
 
     uint8_t speciesSlot() const;
@@ -83,7 +90,9 @@ public:
 
 private:
     PersistedPetState st = {};
+#if ENABLE_DEATH
     uint16_t deathStatMask = 0;
+#endif
 
 };
 

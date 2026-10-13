@@ -42,7 +42,7 @@ void assertActionApplied(PetBehaviorConfig &config, bool hasFollowing = false)
     animationLookups = 0;
     missingLookups = 0;
     assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
-    assert(pet.customStat(0) == 15 && pet.actionCount(0) == 1);
+    assert(pet.customStat(0) == 15 && pet.actionCount(0) == ENABLE_COLLECTION_CATALOG);
     assert(animations.isBusy() == hasFollowing);
     assert(animationLookups == (hasFollowing ? 1U : 0U));
     assert(missingLookups == 0);
@@ -85,7 +85,7 @@ void testUnchangedEffectRefreshesThroughRuntimeCommit()
         assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
         assert(runtime.advancePetDay() && pet.customStat(0) == 100);
         assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
-        assert(pet.actionCount(0) == 2);
+        assert(pet.actionCount(0) == 2 * ENABLE_COLLECTION_CATALOG);
         assert(runtime.advancePetDay() && pet.customStat(0) == 100);
         assert(runtime.advancePetDay() && pet.customStat(0) == 100);
         assert(runtime.advancePetDay() && pet.customStat(0) == 99);
@@ -148,7 +148,7 @@ void testReferencedMissingAnimationRetainsCommit()
     PetBehaviorRuntime runtime(config, pet, animations, renderer);
     runtime.initializeStats();
     assert(runtime.executeAction(0) == PetBehaviorActionResult::AppliedAnimationMissing);
-    assert(pet.customStat(0) == 15 && pet.actionCount(0) == 1);
+    assert(pet.customStat(0) == 15 && pet.actionCount(0) == ENABLE_COLLECTION_CATALOG);
     assert(!animations.isBusy());
     assert(runtime.advancePetDay() && pet.customStat(0) == 15);
 }

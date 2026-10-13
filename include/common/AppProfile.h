@@ -10,17 +10,22 @@
 #define APP_COMMAND_USER_ACTION 11
 #define APP_COMMAND_COLLECTION_CATALOG 12
 
-// Daily unlock/catalog/save/evolution processing is enabled by default.
+// Normal daily lifecycle stays on; override to 0 only for diagnostics/size probes.
 #ifndef ENABLE_DAILY_POST_PROCESSING
 #define ENABLE_DAILY_POST_PROCESSING 1
 #endif
 
+// Optional feature defaults stay off. The Profile Resolver emits opt-ins.
 #ifndef ENABLE_COLLECTION_CATALOG
 #define ENABLE_COLLECTION_CATALOG 0
 #endif
 
 #ifndef ENABLE_GUESS_GAME
-#define ENABLE_GUESS_GAME 1
+#define ENABLE_GUESS_GAME 0
+#endif
+
+#ifndef ENABLE_GUESS_GAME_SINGLE_ROUND
+#define ENABLE_GUESS_GAME_SINGLE_ROUND 0
 #endif
 
 // When enabled, GuessLL/GuessRR represent the player's left/right choice.
@@ -50,15 +55,15 @@
 #endif
 
 #ifndef ENABLE_APPEARANCE_SELECTION
-#define ENABLE_APPEARANCE_SELECTION 1
+#define ENABLE_APPEARANCE_SELECTION 0
 #endif
 
 #ifndef ENABLE_COMMAND_PREDICT
-#define ENABLE_COMMAND_PREDICT 1
+#define ENABLE_COMMAND_PREDICT 0
 #endif
 
 #ifndef ENABLE_COMMAND_OUTFIT
-#define ENABLE_COMMAND_OUTFIT 1
+#define ENABLE_COMMAND_OUTFIT 0
 #endif
 
 #ifndef ENABLE_SEQUENCE_AUDIO
@@ -66,6 +71,13 @@
 #endif
 #if ENABLE_SEQUENCE_AUDIO != 0 && ENABLE_SEQUENCE_AUDIO != 1
 #error "ENABLE_SEQUENCE_AUDIO must be 0 or 1."
+#endif
+
+#ifndef ENABLE_DEATH
+#define ENABLE_DEATH 0
+#endif
+#if ENABLE_DEATH != 0 && ENABLE_DEATH != 1
+#error "ENABLE_DEATH must be 0 or 1."
 #endif
 
 #ifndef ENABLE_DEBUG

@@ -9,15 +9,17 @@ $outputPath = Join-Path $repoRoot '.pio\pet_persistence_host.exe'
 
 Push-Location $repoRoot
 try {
-    & g++ -std=c++17 -Itest/host_stubs -Iinclude `
-        test/pet_persistence/test_main.cpp `
-        src/pet/Pet.cpp `
-        -o $outputPath
-    if ($LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
+    foreach ($deathEnabled in @(0, 1)) {
+        & g++ -std=c++17 "-DENABLE_DEATH=$deathEnabled" -Itest/host_stubs -Iinclude `
+            test/pet_persistence/test_main.cpp `
+            src/pet/Pet.cpp `
+            -o $outputPath
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & $outputPath
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Write-Host "[PASS] Death gating, saved Dead and new-life reset (ENABLE_DEATH=$deathEnabled)"
     }
-    & $outputPath
-    exit $LASTEXITCODE
+    exit 0
 }
 finally {
     Pop-Location

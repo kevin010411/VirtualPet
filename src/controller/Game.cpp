@@ -849,6 +849,7 @@ void Game::OnDeathKey()
     if (initialized && pet.isDead()) resetPet();
 }
 
+#if ENABLE_DEATH
 bool Game::enterDeathIfNeeded()
 {
     if (!pet.evaluateDeath()) return false;
@@ -889,3 +890,4 @@ void Game::retryDeathSave()
     if (deathSavePending) renderer.showResourceError("pet state");
     else animations->requestFullRedraw();
 }
+#endif

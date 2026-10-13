@@ -51,7 +51,9 @@ bool Game::prepare_game()
 #endif
 
     animations->setup(petBehaviorRuntime->baseAnimation());
+#if ENABLE_DEATH
     deathPresented = false;
+#endif
 
     return true;
 }
@@ -143,13 +145,17 @@ bool Game::resetPet()
             {
                 refreshBaseAnimation();
                 animations->requestFullRedraw();
+#if ENABLE_DEATH
                 deathSaveRetryAt = millis();
+#endif
             }
             renderer.showResourceError("pet state");
         }
         return false;
     }
+#if ENABLE_DEATH
     deathPresented = deathSavePending = false;
+#endif
     petSaves.resetTransientState();
     commands->resetSelection();
     layout->setCommandsVisible(true);

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([ValidateSet(0, 1)][int]$DeathEnabled = 0)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -36,6 +36,7 @@ $sources = @(
 Push-Location $repoRoot
 try {
     & g++ -std=c++17 -DRUNTIME_TABLE_V8=1 -DENABLE_GUESS_GAME=1 `
+        "-DENABLE_DEATH=$DeathEnabled" `
         -DAPP_MAX_PET_STATS=10 -Itest/host_stubs -Iinclude @sources -o $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath $validFixture $legacyFixture $startupFixture @appliedFixtures $sequenceFixture $optionalFixture

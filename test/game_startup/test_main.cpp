@@ -28,6 +28,7 @@ namespace
 {
 struct Scenario
 {
+    bool deathEnabled = false;
     bool firstStartAvailable = true;
     bool rejectFirstStartQueue = false;
     int firstStartFrameQueries = 0;
@@ -1693,6 +1694,62 @@ void testDailySaveRetry()
     // Pending event commits retry even before the ordinary two-day threshold.
     assert(saves.saveDailyProgress(true) && data.saves == 5);
 }
+void testDeathCompileFlag()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = true;
+    data.deathEnabled = bool(ENABLE_DEATH);
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader loader;
+    Game game(pet, storage, renderer, loader);
+    assert(game.setup_game());
+    assert(pet.setCustomStat(0, 0));
+    game.loop_game();
+    assert(game.isDead() == bool(ENABLE_DEATH));
+    if (ENABLE_DEATH)
+    {
+        game.OnDeathKey();
+        assert(!game.isDead() && pet.customStat(0) == 2);
+    }
+}
+
+void testSavedDeathReset()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = true;
+    data.deathEnabled = bool(ENABLE_DEATH);
+    data.hasSave = true;
+    PersistedPetState saved = data.savedPet.persistentState();
+    saved.schemaFingerprint = 123;
+    saved.flowFlags |= 0x4UL;
+    saved.customStats[0] = 2;
+    assert(data.savedPet.restoreState(saved));
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader loader;
+    Game game(pet, storage, renderer, loader);
+    assert(game.setup_game() && game.isDead());
+    assert(!pet.setCustomStat(0, 5));
+    data.saveSucceeds = false;
+    game.OnDeathKey();
+    assert(game.isReady() && game.isDead());
+    data.saveSucceeds = true;
+    game.OnDeathKey();
+    assert(game.isReady() && !game.isDead() && !data.savedPet.isDead());
+    assert(pet.customStat(0) == 2);
+    assert(pet.setCustomStat(0, 0));
+    game.loop_game();
+    assert(game.isDead() == bool(ENABLE_DEATH));
+}
 } // namespace
 
 #if ENABLE_COLLECTION_CATALOG
@@ -1731,6 +1788,9 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
     config.activeSpeciesSlot = selection.speciesSlot;
     config.activeOutfitSlot = selection.outfitSlot;
     config.idleAnimation = {selection.speciesSlot, selection.outfitSlot, 5};
+    config.deathEnabled = scenario->deathEnabled;
+    config.deathStatMask = 1;
+    config.deathAnimation = {selection.speciesSlot, selection.outfitSlot, 9};
     config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::FirstStart)] =
         {selection.speciesSlot, selection.outfitSlot, 6};
     if (scenario->commandAction)
@@ -1916,6 +1976,12 @@ SdFat *Renderer::sdCard() const { return SD; }
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && strcmp(argv[1], "--death") == 0)
+    {
+        testDeathCompileFlag();
+        testSavedDeathReset();
+        return 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--evolution") == 0)
     {
         testEvolutionResults();
