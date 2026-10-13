@@ -473,8 +473,6 @@ bool decodeActionAudio(const RuntimeTable &table, PetBehaviorConfig &config)
         auto &audio = config.actionAudio[binding[0]];
         audio.offset = readU32(resource + 4);
         audio.sampleCount = readU32(resource + 8);
-        // Bounds of the resource actually used, without scanning unused assets.
-        if (audio.sampleCount > 80000UL || audio.offset > 640000UL - audio.sampleCount) return false;
     }
 #else
     if ((table.featureFlags & kSequenceAudioFeature) != 0) return false;

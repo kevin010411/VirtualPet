@@ -98,7 +98,7 @@ bool prepare(SdFat *sd, const SequenceAudioRef &reference)
     sampleCount = reference.sampleCount;
     loaded = completed = 0;
     refillMask = 0;
-    if (sd == nullptr || !sampleCount || sampleCount > 80000 ||
+    if (sd == nullptr || !sampleCount ||
         !audioFile.open("/audio.data", O_RDONLY) ||
         !audioFile.seekSet(reference.offset) || !fillHalf(0) || !fillHalf(1))
     {

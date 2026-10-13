@@ -77,7 +77,7 @@ root task independently confirmed it before the audio changes.
 
 All audio-enabled translation units and timer/DMA configuration compile.
 The standard 64 KiB C8 audio-enabled link fails only with FLASH overflow of
-988 bytes. It is not a passing build for that hardware configuration.
+944 bytes. It is not a passing build for that hardware configuration.
 
 For a measurable linked image, the isolated verification INI adds two variants
 with the same `board_upload.maximum_size = 131072`, environment, input, and
@@ -88,16 +88,20 @@ linker allowance does not establish the physical MCU's Flash size.
 | --- | ---: | ---: | --- |
 | Standard project_12, audio disabled | 63132 B | 7464 B | Pass, 64 KiB limit |
 | Diagnostic 128 KiB, audio disabled | 63132 B | 7464 B | Pass |
-| Diagnostic 128 KiB, audio enabled | 66228 B | 10468 B | Pass |
-| Standard 64 KiB, audio enabled | No linked image | No linked image | FLASH overflow 988 B |
+| Diagnostic 128 KiB, audio enabled | 66184 B | 10468 B | Pass |
+| Standard 64 KiB, audio enabled | No linked image | No linked image | FLASH overflow 944 B |
 
-The controlled diagnostic difference is +3096 B Flash and +3004 B static RAM.
+The controlled diagnostic difference is +3052 B Flash and +3004 B static RAM.
 Static RAM excludes heap allocations and runtime peak stack use; no peak RAM
 or synchronization-error bound is claimed. The feature includes cached segment
 timings and player state within the heap-owned AnimationController.
 
 Build INI and raw logs are preserved in the integration workspace's ignored
 `.pio/sequence-audio-firmware-evidence/` directory, outside temporary worktrees.
+The final ownership-review build logs are `build-review-disabled.log` and
+`build-review-ab.log`. Firmware no longer repeats the exporter's sample-count
+or total audio-resource-size limits; fixed binding-array bounds and actual
+bounded SD reads remain.
 
 ## Deferred device acceptance
 
