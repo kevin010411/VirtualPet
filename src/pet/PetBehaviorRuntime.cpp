@@ -131,9 +131,6 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
         return PetBehaviorActionResult::Applied;
 
     AnimationSequence request(sequence, count);
-#if ENABLE_SEQUENCE_AUDIO
-    request.audio = config.actionAudio[actionSlot];
-#endif
     const PlaybackResult replaceResult = animations.replace(request);
     return replaceResult == PlaybackResult::AnimationMissing
                ? PetBehaviorActionResult::AppliedAnimationMissing
@@ -162,6 +159,14 @@ AssetData::AnimationRef PetBehaviorRuntime::baseAnimation() const
 }
 
 bool PetBehaviorRuntime::isDead() const { return pet.isDead(); }
+
+#if ENABLE_SEQUENCE_AUDIO
+SequenceAudioRef PetBehaviorRuntime::baseAudio() const
+{
+    const auto animation = baseAnimation();
+    return animation.valid() ? config.animationAudio[animation.animationId - 1] : SequenceAudioRef{};
+}
+#endif
 
 ActivePetState PetBehaviorRuntime::activePetState() const
 {

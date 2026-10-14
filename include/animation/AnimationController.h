@@ -16,7 +16,9 @@ public:
 
     void configureRuntimeContract(const PetBehaviorConfig &config);
     void setup(const AssetData::AnimationRef &baseAnimation);
-    void setBaseAnimation(const AssetData::AnimationRef &baseAnimation);
+    void setBaseAnimation(const AssetData::AnimationRef &baseAnimation,
+                          uint8_t stateSlot = UINT8_MAX,
+                          const SequenceAudioRef &audio = {});
     bool hasAnimation(FirmwarePlaybackRole id) const;
     bool hasAnimation(const AssetData::AnimationRef &animation) const;
     bool hasActionAnimation(FirmwarePlaybackRole id) const;
@@ -74,17 +76,25 @@ private:
 
 #if ENABLE_SEQUENCE_AUDIO
     SequenceAudioPlayer audioPlayer;
-    SequenceAudioRef pendingSequenceAudio;
+    SequenceAudioRef baseAudio;
+    bool synchronizedBase = false;
+    bool baseStarted = false;
+    uint32_t baseLoopDuration = 0;
+    uint16_t baseFrame = 0;
+    void prepareBasePlayback(unsigned long now);
+    PlaybackTickResult tickBasePlayback();
     bool synchronizedSequence = false;
     bool sequenceStarted = false;
     bool sequenceLoops = false;
-    uint32_t sequenceDuration = 0;
     uint32_t synchronizedPassMs[kMaxQueuedAnimations] = {};
+    uint32_t synchronizedDurationMs[kMaxQueuedAnimations] = {};
+    uint32_t synchronizedSegmentElapsedMs = 0;
     uint16_t synchronizedIntervalMs[kMaxQueuedAnimations] = {};
-    uint32_t lastSequenceCycle = 0;
     uint8_t synchronizedSegment = 255;
     uint8_t synchronizedRepeat = 255;
     uint16_t synchronizedFrame = 0;
+    bool synchronizedTargetPending = false;
+    SequenceAudioRef audioFor(const AssetData::AnimationRef &animation) const;
     void prepareSynchronizedPlayback(unsigned long now);
     PlaybackTickResult tickSynchronizedPlayback();
 #endif

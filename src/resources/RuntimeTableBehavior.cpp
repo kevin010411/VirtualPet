@@ -461,7 +461,7 @@ bool decodeActionAudio(const RuntimeTable &table, PetBehaviorConfig &config)
     const Section *references = table.find(AudioRefs);
     if (bindings == nullptr) return true;
     if (references == nullptr || bindings->count > kMaxPetBehaviorActions ||
-        references->count > kMaxPetBehaviorActions) return false;
+        references->count > 25) return false;
     for (uint16_t index = 0; index < bindings->count; ++index)
     {
         uint8_t binding[4] = {}, resource[12] = {};
@@ -471,6 +471,55 @@ bool decodeActionAudio(const RuntimeTable &table, PetBehaviorConfig &config)
         auto &audio = config.actionAudio[binding[0]];
         audio.offset = readU32(resource + 4);
         audio.sampleCount = readU32(resource + 8);
+    }
+#else
+    if ((table.featureFlags & kSequenceAudioFeature) != 0) return false;
+#endif
+    return true;
+}
+
+bool decodeIdleAudio(const RuntimeTable &table, PetBehaviorConfig &config)
+{
+#if ENABLE_SEQUENCE_AUDIO
+    const Section *bindings = table.find(IdleAudio);
+    if (bindings == nullptr) return true;
+    const Section *references = table.find(AudioRefs);
+    if (references == nullptr) return false;
+    // The exporter owns record/reference validation. Bound the work and writes
+    // to the compiled storage; never scan audio.data or validate media here.
+    for (uint16_t index = 0; index < bindings->count && index < kMaxRuntimePetStates + 1; ++index)
+    {
+        uint8_t binding[4] = {}, resource[12] = {};
+        if (!readRecord(table.source, *bindings, index, binding) ||
+            !readRecord(table.source, *references, readU16(binding + 2), resource)) return false;
+        const SequenceAudioRef audio = {readU32(resource + 4), readU32(resource + 8)};
+        if (binding[0] == UINT8_MAX) config.defaultIdleAudio = audio;
+        else if (binding[0] < kMaxRuntimePetStates) config.idleAudio[binding[0]] = audio;
+    }
+#else
+    if ((table.featureFlags & kSequenceAudioFeature) != 0) return false;
+#endif
+    return true;
+}
+
+bool decodeAnimationAudio(const RuntimeTable &table, const Section &animations,
+                          PetBehaviorConfig &config)
+{
+#if ENABLE_SEQUENCE_AUDIO
+    const Section *bindings = table.find(AnimationAudio);
+    if (bindings == nullptr) return true;
+    const Section *references = table.find(AudioRefs);
+    if (references == nullptr || bindings->count > AssetData::kMaxRuntimeAnimationId) return false;
+    for (uint16_t index = 0; index < bindings->count; ++index)
+    {
+        uint8_t binding[4] = {}, animation[8] = {}, resource[12] = {};
+        if (!readRecord(table.source, *bindings, index, binding) ||
+            !readRecord(table.source, animations, readU16(binding), animation) ||
+            !readRecord(table.source, *references, readU16(binding + 2), resource)) return false;
+        const uint16_t runtimeId = readU16(animation + 2);
+        // Bound only the storage actually dereferenced; exporter validates ownership.
+        if (runtimeId == 0 || runtimeId > AssetData::kMaxRuntimeAnimationId) return false;
+        config.animationAudio[runtimeId - 1] = {readU32(resource + 4), readU32(resource + 8)};
     }
 #else
     if ((table.featureFlags & kSequenceAudioFeature) != 0) return false;
@@ -538,6 +587,8 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         !decodeFollowingAnimations(source, table.find(ActionPlaybacks),
                                    *assets, *animations, scope, config) ||
         !decodeActionAudio(table, config) ||
+        !decodeIdleAudio(table, config) ||
+        !decodeAnimationAudio(table, *animations, config) ||
         !decodeGuessEffects(source, table.featureFlags, guessEffects, config) ||
         !decodeButtons(source, *buttons, config) ||
         !decodeStatus(source, table.featureFlags,

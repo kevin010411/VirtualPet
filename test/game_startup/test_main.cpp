@@ -17,6 +17,20 @@
 #endif
 
 unsigned long hostMillis = 0;
+#if ENABLE_SEQUENCE_AUDIO
+namespace SequenceAudioPlatform
+{
+bool running = false;
+uint32_t startedAt = 0;
+bool prepare(SdFat *, const SequenceAudioRef &) { running = false; return true; }
+bool start() { running = true; startedAt = hostMillis; return true; }
+void service() {}
+uint32_t consumedSamples() { return uint32_t(hostMillis - startedAt) * 8; }
+bool active() { return running; }
+SequenceAudioError error() { return SequenceAudioError::None; }
+void stop(bool) { running = false; }
+}
+#endif
 
 void rtcLoop(Game &game)
 {
@@ -28,6 +42,7 @@ namespace
 {
 struct Scenario
 {
+    bool idleMusic = false;
     bool catchUpEvents = false;
     bool batchCatchUp = false;
     bool catchUpReadSucceeds = true;
@@ -1577,6 +1592,71 @@ void testFinishLayoutFailure()
     assertFatalBlocksPublicEntries(game, pet, data);
 }
 
+#if ENABLE_SEQUENCE_AUDIO
+void testIdleMusicGameLifecycle()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = true;
+    data.idleMusic = true;
+    data.deathEnabled = bool(ENABLE_DEATH);
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    game.synchronizeTime(10);
+    assert(game.setup_game());
+    game.loop_game();
+    assert(game.audioActive() && !game.hasTransientAnimation() && !game.preventsIdleSleep());
+    hostMillis = 2000;
+    game.synchronizeTime(12);
+    game.loop_game();
+    assert(pet.stageDays() == 1 && game.audioActive());
+    game.stopPlaybackForSleep();
+    assert(!game.audioActive());
+    hostMillis = 3000;
+    game.redrawAllNow();
+    assert(game.audioActive());
+    game.synchronizeTime(2012); // 1000 RTC days can settle while base music loops.
+    for (uint32_t pending = 0; game.hasPendingTime() && pending < 1000; ++pending)
+        game.synchronizeTime(2012);
+    assert(pet.stageDays() == 1001 && !game.hasPendingTime());
+    game.OnConfirmKey();
+    assert(pet.customStat(0) == 8 && !game.audioActive());
+    game.loop_game();
+    hostMillis += 100;
+    game.loop_game();
+    assert(game.audioActive() && !game.hasTransientAnimation());
+#if ENABLE_DEATH
+    assert(pet.setCustomStat(0, 0));
+    game.loop_game();
+    assert(game.isDead() && !game.audioActive());
+    game.redrawAllNow();
+    assert(!game.audioActive());
+#endif
+#if ENABLE_APPEARANCE_SELECTION
+    hostMillis = 0;
+    Scenario chooser;
+    scenario = &chooser;
+    chooser.commandAction = chooser.commandOutfit = chooser.idleMusic = true;
+    Pet menuPet;
+    PetStorage menuStorage(&sd);
+    Renderer menuRenderer(nullptr, &sd);
+    Game menuGame(menuPet, menuStorage, menuRenderer, appearance);
+    assert(menuGame.setup_game());
+    menuGame.loop_game();
+    assert(menuGame.audioActive());
+    menuGame.OnConfirmKey();
+    assert(!menuGame.audioActive());
+    menuGame.redrawAllNow();
+    assert(!menuGame.audioActive());
+#endif
+}
+#endif
+
 void testRtcCatchUp()
 {
     for (int failure = 0; failure < 3; ++failure)
@@ -1946,6 +2026,9 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
     config.activeSpeciesSlot = selection.speciesSlot;
     config.activeOutfitSlot = selection.outfitSlot;
     config.idleAnimation = {selection.speciesSlot, selection.outfitSlot, 5};
+#if ENABLE_SEQUENCE_AUDIO
+    if (scenario->idleMusic) config.defaultIdleAudio = {0, 16000};
+#endif
     config.deathEnabled = scenario->deathEnabled;
     config.deathStatMask = 1;
     config.deathAnimation = {selection.speciesSlot, selection.outfitSlot, 9};
@@ -2137,6 +2220,14 @@ SdFat *Renderer::sdCard() const { return SD; }
 
 int main(int argc, char **argv)
 {
+#if ENABLE_SEQUENCE_AUDIO
+    if (argc == 2 && strcmp(argv[1], "--idle-audio") == 0)
+    {
+        testIdleMusicGameLifecycle();
+        puts("[PASS] Game idle music leaves pet clock/RTC catch-up active; Action return, STOP redraw, death and chooser interruption");
+        return 0;
+    }
+#endif
     if (argc == 2 && strcmp(argv[1], "--death") == 0)
     {
         testDeathCompileFlag();

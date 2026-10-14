@@ -32,6 +32,14 @@ AssetData::AnimationRef AnimationController::resolvedAnimation(const Animation &
     return animation.asset.valid() ? animation.asset : systemAnimation(animation.playbackRole);
 }
 
+#if ENABLE_SEQUENCE_AUDIO
+SequenceAudioRef AnimationController::audioFor(const AssetData::AnimationRef &animation) const
+{
+    return runtimeContract != nullptr && animation.valid()
+        ? runtimeContract->animationAudio[animation.animationId - 1] : SequenceAudioRef{};
+}
+#endif
+
 void AnimationController::setup(const AssetData::AnimationRef &baseAnimation)
 {
     resetPlaybackState();
@@ -44,6 +52,8 @@ void AnimationController::resetPlaybackState()
 #if ENABLE_SEQUENCE_AUDIO
     audioPlayer.stop();
     synchronizedSequence = sequenceStarted = false;
+    synchronizedBase = baseStarted = false;
+    baseAudio = {};
 #endif
     animationQueueCount = 0;
     activeAnimation = {};
@@ -67,9 +77,24 @@ void AnimationController::resetPlaybackState()
     renderer.initAnimations();
 }
 
-void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAnimation)
+void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAnimation,
+                                           uint8_t stateSlot, const SequenceAudioRef &audio)
 {
-    if (baseRotation.setBaseAnimation(baseAnimation, renderer))
+    bool changed = baseRotation.setBaseAnimation(baseAnimation, renderer);
+#if ENABLE_SEQUENCE_AUDIO
+    const auto mappedAudio = audioFor(baseRotation.selectedAnimation());
+    changed = changed || baseAudio.offset != mappedAudio.offset ||
+        baseAudio.sampleCount != mappedAudio.sampleCount;
+    baseAudio = mappedAudio;
+    if (changed && synchronizedBase)
+    {
+        audioPlayer.stop();
+        synchronizedBase = baseStarted = false;
+    }
+#endif
+    (void)stateSlot;
+    (void)audio;
+    if (changed)
     {
         dirtyAnimation = true;
         playbackPrepared = false;
@@ -128,17 +153,18 @@ PlaybackResult AnimationController::replace(const AnimationSequence &sequence)
     }
 #if ENABLE_SEQUENCE_AUDIO
     audioPlayer.stop();
-    synchronizedSequence = sequence.audio.bound();
-    pendingSequenceAudio = sequence.audio;
+    synchronizedBase = baseStarted = false;
+    synchronizedSequence = sequence.loop;
+    for (uint8_t index = 0; index < sequence.count; ++index)
+        synchronizedSequence = synchronizedSequence || audioFor(resolvedAnimation(sequence.items[index])).bound();
     sequenceStarted = false;
     sequenceLoops = sequence.loop;
-    sequenceDuration = 0;
-    synchronizedSegment = synchronizedRepeat = 255;
+    synchronizedSegment = synchronizedRepeat = 0;
+    synchronizedSegmentElapsedMs = 0;
+    synchronizedTargetPending = true;
     synchronizedFrame = 0;
-    lastSequenceCycle = 0;
     if (synchronizedSequence)
     {
-        audioPlayer.prepare(sdCard(), sequence.audio);
         for (uint8_t index = 0; index < sequence.count; ++index)
         {
             const auto &item = sequence.items[index];
@@ -147,7 +173,8 @@ PlaybackResult AnimationController::replace(const AnimationSequence &sequence)
             synchronizedIntervalMs[index] = interval ? interval : 1;
             synchronizedPassMs[index] = item.isFixedFrame() ? item.durationMs :
                 uint32_t(renderer.frameCountFor(reference, item.versionIndex)) * synchronizedIntervalMs[index];
-            sequenceDuration += synchronizedPassMs[index] * (item.isFixedFrame() ? 1 : item.repeatCount);
+            if (synchronizedPassMs[index] == 0) synchronizedPassMs[index] = 1;
+            synchronizedDurationMs[index] = (item.durationMs ? item.durationMs : synchronizedPassMs[index]) * item.repeatCount;
         }
     }
 #endif
@@ -167,6 +194,7 @@ void AnimationController::cancelAll()
 #if ENABLE_SEQUENCE_AUDIO
     audioPlayer.stop();
     synchronizedSequence = sequenceStarted = false;
+    synchronizedBase = baseStarted = false;
 #endif
     animationQueueCount = 0;
     hasActiveAnimation = false;
@@ -315,6 +343,14 @@ void AnimationController::preparePlayback(unsigned long now)
     const unsigned long elapsed = now - lastPlaybackUpdateTime;
     lastPlaybackUpdateTime = now;
     updateElapsed(elapsed);
+    tryStartNextAnimation();
+#if ENABLE_SEQUENCE_AUDIO
+    if (!isBusy() && baseAudio.bound())
+    {
+        prepareBasePlayback(now);
+        return;
+    }
+#endif
     preparedFrameDue = now - lastFrameTime >= frameInterval;
     if (preparedFrameDue)
         lastFrameTime = now;
@@ -364,6 +400,7 @@ PlaybackTickResult AnimationController::tick(unsigned long now)
         preparePlayback(now);
 #if ENABLE_SEQUENCE_AUDIO
     if (synchronizedSequence) return tickSynchronizedPlayback();
+    if (synchronizedBase) return tickBasePlayback();
 #endif
     renderPrepared();
     if (hasActiveAnimation && activeAnimation.playOnce &&

@@ -37,6 +37,9 @@ public:
     bool applyGuessOutcome(PetBehaviorGuessOutcome outcome);
 #endif
     AssetData::AnimationRef baseAnimation() const;
+#if ENABLE_SEQUENCE_AUDIO
+    SequenceAudioRef baseAudio() const;
+#endif
     ActivePetState activePetState() const;
     ActivePetState activePetState(const PetStatSnapshot &snapshot) const;
 

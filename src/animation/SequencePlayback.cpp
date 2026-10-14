@@ -2,65 +2,113 @@
 #if ENABLE_SEQUENCE_AUDIO
 #include "display/Renderer.h"
 
+void AnimationController::prepareBasePlayback(unsigned long now)
+{
+    playbackFailedThisTick = false;
+    playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
+    uint32_t elapsed = synchronizedBase && baseStarted ? audioPlayer.timelineMs(now) : 0;
+    bool restart = !synchronizedBase;
+    if (!restart && baseStarted && elapsed >= baseLoopDuration)
+    {
+        // Rotation keeps its existing ten complete loops per Version selection.
+        // A late tick skips frames within this loop, not whole authored loops.
+        baseRotation.onLoopCompletedAndRotateIfDue(renderer);
+        restart = true;
+    }
+    if (restart)
+    {
+        audioPlayer.stop();
+        audioPlayer.prepare(sdCard(), baseAudio);
+        synchronizedBase = true;
+        baseStarted = false;
+        elapsed = 0;
+        showAnimation = baseRotation.selectedAnimation();
+        showVersionIndex = baseRotation.selectedVersion();
+        showPlaybackRole = FirmwarePlaybackRole::None;
+        frameInterval = renderer.frameIntervalFor(showAnimation, showVersionIndex, frameIntervalSlow);
+        if (frameInterval == 0) frameInterval = 1;
+        baseLoopDuration = uint32_t(renderer.frameCountFor(showAnimation, showVersionIndex)) * frameInterval;
+        animateDone = !renderer.setAnimation(showAnimation, showVersionIndex, false);
+        dirtyAnimation = false;
+    }
+    const uint16_t frame = uint16_t(elapsed / frameInterval + 1);
+    preparedTargetChanged = restart || dirtyAnimation;
+    preparedFrameDue = preparedTargetChanged || frame != baseFrame;
+    baseFrame = frame;
+    dirtyAnimation = false;
+    playbackPrepared = true;
+}
+
+PlaybackTickResult AnimationController::tickBasePlayback()
+{
+    if (preparedFrameDue && !renderer.ShowAnimationFrame(showAnimation, showVersionIndex, baseFrame))
+        playbackFailedThisTick = true;
+    if (!baseStarted)
+    {
+        // Buffer preparation and the first TFT transfer precede the sample clock.
+        // On SD failure the existing player preserves the visual millis timeline;
+        // retry happens at a full animation loop, never every update.
+        audioPlayer.start(millis());
+        baseStarted = true;
+    }
+    playbackPrepared = false;
+    return {playbackFailedThisTick ? PlaybackResult::PlaybackFailed : PlaybackResult::Accepted,
+            FirmwarePlaybackRole::None};
+}
+
 void AnimationController::prepareSynchronizedPlayback(unsigned long now)
 {
     playbackFailedThisTick = false;
     playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
     uint32_t elapsed = sequenceStarted ? audioPlayer.timelineMs(now) : 0;
-    if (sequenceDuration == 0 || (!sequenceLoops && elapsed >= sequenceDuration))
+    const uint32_t remaining = synchronizedDurationMs[synchronizedSegment] - synchronizedSegmentElapsedMs;
+    const uint32_t passDuration = remaining < synchronizedPassMs[synchronizedSegment] ? remaining : synchronizedPassMs[synchronizedSegment];
+    if (sequenceStarted && elapsed >= passDuration)
     {
         audioPlayer.stop(true);
-        synchronizedSequence = sequenceStarted = false;
-        animationQueueCount = 0;
-        hasActiveAnimation = false;
-        dirtyAnimation = true;
-        playbackPrepared = false;
-        lastPlaybackUpdateTime = now;
-        preparePlayback(now);
-        return;
-    }
-    if (sequenceLoops)
-    {
-        const uint32_t cycle = elapsed / sequenceDuration;
-        if (cycle != lastSequenceCycle)
+        sequenceStarted = false;
+        synchronizedSegmentElapsedMs += passDuration;
+        if (synchronizedSegmentElapsedMs < synchronizedDurationMs[synchronizedSegment])
+            ++synchronizedRepeat;
+        else
         {
-            // A full loop restarts both tracks; the binding remains in runtime.
-            audioPlayer.prepare(sdCard(), pendingSequenceAudio);
-            sequenceStarted = false;
-            synchronizedSegment = synchronizedRepeat = 255;
-            lastSequenceCycle = 0;
-            elapsed = 0;
+            synchronizedRepeat = 0;
+            synchronizedSegmentElapsedMs = 0;
+            ++synchronizedSegment;
         }
-        else elapsed %= sequenceDuration;
+        if (synchronizedSegment >= animationQueueCount)
+        {
+            if (sequenceLoops) synchronizedSegment = 0;
+            else
+            {
+                synchronizedSequence = false;
+                animationQueueCount = 0;
+                hasActiveAnimation = false;
+                dirtyAnimation = true;
+                playbackPrepared = false;
+                lastPlaybackUpdateTime = now;
+                preparePlayback(now);
+                return;
+            }
+        }
+        synchronizedTargetPending = true;
+        elapsed = 0;
     }
-    uint8_t segment = 0;
-    uint32_t segmentElapsed = elapsed;
-    uint32_t interval = 1, onePass = 1;
-    for (; segment < animationQueueCount; ++segment)
-    {
-        const auto &item = animationQueue[segment];
-        interval = synchronizedIntervalMs[segment];
-        onePass = synchronizedPassMs[segment];
-        const uint32_t total = item.isFixedFrame() ? onePass : onePass * item.repeatCount;
-        if (segmentElapsed < total) break;
-        segmentElapsed -= total;
-    }
-    if (segment >= animationQueueCount) return;
-    activeAnimation = animationQueue[segment];
+    activeAnimation = animationQueue[synchronizedSegment];
     hasActiveAnimation = true;
     showAnimation = resolvedAnimation(activeAnimation);
     showVersionIndex = activeAnimation.versionIndex;
     showPlaybackRole = activeAnimation.playbackRole;
-    const uint8_t repeat = activeAnimation.isFixedFrame() ? 0 : segmentElapsed / onePass;
+    const uint32_t interval = synchronizedIntervalMs[synchronizedSegment];
     const uint16_t frame = activeAnimation.isFixedFrame() ? activeAnimation.frameIndex :
-        uint16_t((segmentElapsed % onePass) / interval + 1);
-    preparedTargetChanged = segment != synchronizedSegment || repeat != synchronizedRepeat;
+        uint16_t(elapsed / interval + 1);
+    preparedTargetChanged = synchronizedTargetPending;
     preparedFrameDue = preparedTargetChanged || frame != synchronizedFrame;
     if (preparedTargetChanged)
     {
+        audioPlayer.prepare(sdCard(), audioFor(showAnimation));
         renderer.setAnimation(showAnimation, showVersionIndex, true);
-        synchronizedSegment = segment;
-        synchronizedRepeat = repeat;
+        synchronizedTargetPending = false;
     }
     synchronizedFrame = frame;
     playbackPrepared = true;

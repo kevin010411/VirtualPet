@@ -51,6 +51,7 @@ bool Game::prepare_game()
 #endif
 
     animations->setup(petBehaviorRuntime->baseAnimation());
+    refreshBaseAnimation();
 #if ENABLE_DEATH
     deathPresented = false;
 #endif

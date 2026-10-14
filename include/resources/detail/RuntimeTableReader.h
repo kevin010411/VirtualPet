@@ -45,6 +45,8 @@ enum SectionType : uint16_t
     DeathConfig = 22,
     AudioRefs = 23,
     ActionAudio = 24,
+    IdleAudio = 25,
+    AnimationAudio = 26,
     Appearance = 30,
     Species = 31,
     Outfits = 32,

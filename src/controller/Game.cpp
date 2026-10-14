@@ -164,6 +164,17 @@ void Game::redrawAllNow()
 #endif
 
     const unsigned long now = millis();
+#if ENABLE_APPEARANCE_SELECTION
+    if (appearanceSelection->isActive())
+    {
+        // A STOP wake redraw of the chooser must not resume base music behind it.
+        layout->updateValues(pet.statSnapshot());
+        appearanceSelection->requestFullRedraw();
+        appearanceSelection->render(now);
+        dirtySelect = false;
+        return;
+    }
+#endif
 
     // Repaint the entire animation area even when an animation frame was already
     // considered current before STOP mode.
@@ -497,7 +508,13 @@ void Game::OnConfirmKey()
 
 void Game::refreshBaseAnimation()
 {
+#if ENABLE_SEQUENCE_AUDIO
+    animations->setBaseAnimation(petBehaviorRuntime->baseAnimation(),
+                                 petBehaviorRuntime->activePetState().slot,
+                                 petBehaviorRuntime->baseAudio());
+#else
     animations->setBaseAnimation(petBehaviorRuntime->baseAnimation());
+#endif
 }
 
 bool Game::setStageDaysForCheat(uint32_t value)

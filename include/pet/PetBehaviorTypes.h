@@ -124,6 +124,10 @@ struct PetBehaviorConfig
     PetBehaviorActionConfig actions[kMaxPetBehaviorActions];
 #if ENABLE_SEQUENCE_AUDIO
     SequenceAudioRef actionAudio[kMaxPetBehaviorActions];
+    SequenceAudioRef idleAudio[kMaxRuntimePetStates];
+    SequenceAudioRef defaultIdleAudio;
+    // Runtime animation IDs are stable across appearances and Versions.
+    SequenceAudioRef animationAudio[AssetData::kMaxRuntimeAnimationId];
 #endif
     PetBehaviorAnimationPlaybackConfig followingAnimations[kMaxPetBehaviorFollowingAnimations];
     PetBehaviorActionOutcomeConfig actionOutcomes[kMaxPetBehaviorActionOutcomes];

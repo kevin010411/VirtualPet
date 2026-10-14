@@ -7,9 +7,9 @@ namespace RuntimeTableInternal
 namespace
 {
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// v16 permits animation-free User Action outcomes and conditional branches.
+// v21 binds BGM to logical animation identity.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 19;
+constexpr uint16_t kVersion = 21;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -45,6 +45,8 @@ uint16_t recordSizeFor(uint16_t type)
     case DeathConfig: return 8;
     case AudioRefs: return 12;
     case ActionAudio: return 4;
+    case IdleAudio: return 4;
+    case AnimationAudio: return 4;
     case Appearance: return 8;
     case Species: return 8;
     case Outfits: return 8;
