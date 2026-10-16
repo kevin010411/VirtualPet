@@ -22,7 +22,7 @@ int main(int argc, char **argv)
         manifest.fileCrc32 = RuntimeTableInternal::readU32(bytes.data() + 48);
         PetBehaviorConfig config = {};
         const bool loaded = parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, 1, config);
-        assert(loaded == (argument == 1)); // Silent v21 loads; idle-only bit14 cannot execute without the player.
+        assert(loaded == (argument == 1)); // Silent v21 loads; animation audio requires the player.
     }
-    puts("[PASS] ENABLE_SEQUENCE_AUDIO=0 loads silent v21 and refuses idle-only audio feature");
+    puts("[PASS] ENABLE_SEQUENCE_AUDIO=0 loads silent v21 and refuses animation audio");
 }

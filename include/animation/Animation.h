@@ -122,7 +122,6 @@ struct AnimationSequence
     const Animation *items;
     uint8_t count;
 #if ENABLE_SEQUENCE_AUDIO
-    SequenceAudioRef audio = {};
     bool loop = false;
 #endif
 

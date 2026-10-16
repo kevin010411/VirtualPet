@@ -454,54 +454,6 @@ bool decodeStatus(const Source &source,
     return nextCondition == conditions->count;
 }
 
-bool decodeActionAudio(const RuntimeTable &table, PetBehaviorConfig &config)
-{
-#if ENABLE_SEQUENCE_AUDIO
-    const Section *bindings = table.find(ActionAudio);
-    const Section *references = table.find(AudioRefs);
-    if (bindings == nullptr) return true;
-    if (references == nullptr || bindings->count > kMaxPetBehaviorActions ||
-        references->count > 25) return false;
-    for (uint16_t index = 0; index < bindings->count; ++index)
-    {
-        uint8_t binding[4] = {}, resource[12] = {};
-        if (!readRecord(table.source, *bindings, index, binding) ||
-            binding[0] >= config.actionCount ||
-            !readRecord(table.source, *references, readU16(binding + 2), resource)) return false;
-        auto &audio = config.actionAudio[binding[0]];
-        audio.offset = readU32(resource + 4);
-        audio.sampleCount = readU32(resource + 8);
-    }
-#else
-    if ((table.featureFlags & kSequenceAudioFeature) != 0) return false;
-#endif
-    return true;
-}
-
-bool decodeIdleAudio(const RuntimeTable &table, PetBehaviorConfig &config)
-{
-#if ENABLE_SEQUENCE_AUDIO
-    const Section *bindings = table.find(IdleAudio);
-    if (bindings == nullptr) return true;
-    const Section *references = table.find(AudioRefs);
-    if (references == nullptr) return false;
-    // The exporter owns record/reference validation. Bound the work and writes
-    // to the compiled storage; never scan audio.data or validate media here.
-    for (uint16_t index = 0; index < bindings->count && index < kMaxRuntimePetStates + 1; ++index)
-    {
-        uint8_t binding[4] = {}, resource[12] = {};
-        if (!readRecord(table.source, *bindings, index, binding) ||
-            !readRecord(table.source, *references, readU16(binding + 2), resource)) return false;
-        const SequenceAudioRef audio = {readU32(resource + 4), readU32(resource + 8)};
-        if (binding[0] == UINT8_MAX) config.defaultIdleAudio = audio;
-        else if (binding[0] < kMaxRuntimePetStates) config.idleAudio[binding[0]] = audio;
-    }
-#else
-    if ((table.featureFlags & kSequenceAudioFeature) != 0) return false;
-#endif
-    return true;
-}
-
 bool decodeAnimationAudio(const RuntimeTable &table, const Section &animations,
                           PetBehaviorConfig &config)
 {
@@ -586,8 +538,6 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                        *assets, *animations, scope, config) ||
         !decodeFollowingAnimations(source, table.find(ActionPlaybacks),
                                    *assets, *animations, scope, config) ||
-        !decodeActionAudio(table, config) ||
-        !decodeIdleAudio(table, config) ||
         !decodeAnimationAudio(table, *animations, config) ||
         !decodeGuessEffects(source, table.featureFlags, guessEffects, config) ||
         !decodeButtons(source, *buttons, config) ||
@@ -754,34 +704,31 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
     config.layoutUnselected = {};
     config.layoutSelected = {};
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
-    if (roles != nullptr)
+    for (uint16_t index = 0; index < roles->count; ++index)
     {
-        for (uint16_t index = 0; index < roles->count; ++index)
+        uint8_t record[8] = {};
+        AssetData::AnimationRef animation = {};
+        if (!readRecord(source, *roles, index, record))
+            return false;
+        const uint8_t role = record[0];
+        if (role == 0 || role >= kFirmwarePlaybackRoleCount ||
+            readU16(record + 4) != 0)
+            return false;
+        if (!resolveAnimation(source, *assets, *animations, readU16(record + 2), scope,
+                              animation))
         {
-            uint8_t record[8] = {};
-            AssetData::AnimationRef animation = {};
-            if (!readRecord(source, *roles, index, record))
-                return false;
-            const uint8_t role = record[0];
-            if (role == 0 || role >= kFirmwarePlaybackRoleCount ||
-                readU16(record + 4) != 0)
-                return false;
-            if (!resolveAnimation(source, *assets, *animations, readU16(record + 2), scope,
-                                  animation))
-            {
-                // Evolution uses references on each evolution record. Start
-                // belongs to the initial appearance, not later species.
-                if (role == static_cast<uint8_t>(FirmwarePlaybackRole::Evolution) ||
-                    role == static_cast<uint8_t>(FirmwarePlaybackRole::Start))
-                    continue;
-                return false;
-            }
-            config.systemAnimations[role] = animation;
-            if (role == static_cast<uint8_t>(FirmwarePlaybackRole::Layout))
-                config.layoutUnselected = animation;
-            else if (role == static_cast<uint8_t>(FirmwarePlaybackRole::LayoutSel))
-                config.layoutSelected = animation;
+            // Evolution uses references on each evolution record. Start
+            // belongs to the initial appearance, not later species.
+            if (role == static_cast<uint8_t>(FirmwarePlaybackRole::Evolution) ||
+                role == static_cast<uint8_t>(FirmwarePlaybackRole::Start))
+                continue;
+            return false;
         }
+        config.systemAnimations[role] = animation;
+        if (role == static_cast<uint8_t>(FirmwarePlaybackRole::Layout))
+            config.layoutUnselected = animation;
+        else if (role == static_cast<uint8_t>(FirmwarePlaybackRole::LayoutSel))
+            config.layoutSelected = animation;
     }
     return config.layoutUnselected.valid() && config.layoutUnselected.shared() &&
            config.layoutSelected.valid() && config.layoutSelected.shared();

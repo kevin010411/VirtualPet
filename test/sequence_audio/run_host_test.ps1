@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$Silent, [switch]$Idle, [switch]$Disabled, [switch]$Animation)
+param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$Silent, [switch]$Disabled, [switch]$Animation)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -30,10 +30,9 @@ try {
         @sources -o '.pio/sequence_audio_host.exe'
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $arguments = @((Join-Path $FixtureRoot 'runtime.bin'), (Join-Path $FixtureRoot 'audio.data'))
-    if ($Disabled) { $arguments = @((Join-Path $FixtureRoot 'no_audio/runtime.bin'), (Join-Path $FixtureRoot 'idle_only/runtime.bin')) }
+    if ($Disabled) { $arguments = @((Join-Path $FixtureRoot 'no_audio/runtime.bin'), (Join-Path $FixtureRoot 'animation_music/runtime.bin')) }
     if ($Animation) { $arguments += '--animation' }
     elseif ($Silent) { $arguments += '--silent' }
-    elseif ($Idle) { $arguments += '--idle' }
     & '.pio/sequence_audio_host.exe' @arguments
     exit $LASTEXITCODE
 } finally { Pop-Location }

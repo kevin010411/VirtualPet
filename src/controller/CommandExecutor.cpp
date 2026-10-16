@@ -7,6 +7,9 @@
 #include "pet/PetBehaviorStatSlot.h"
 #include "pet/PetBehaviorTypes.h"
 #include "common/FirmwareRandom.h"
+#if ENABLE_COMMAND_PREDICT
+#include "game/PredictGame.h"
+#endif
 
 namespace
 {
@@ -77,8 +80,8 @@ CommandResult CommandExecutor::execute(const CommandController &commands)
 #endif
 #if ENABLE_COMMAND_PREDICT
     case AppCommandId::Predict:
-        if (canPredict())
-            commandPredict(result);
+        result.requestedMinigame = PredictGame::canStart(animations);
+        result.executed = result.requestedMinigame;
         break;
 #endif
 #if ENABLE_GUESS_GAME
@@ -103,49 +106,6 @@ void CommandExecutor::configureRuntimeContract(const PetBehaviorConfig &config)
 {
     petBehaviorConfig = &config;
 }
-
-#if ENABLE_COMMAND_PREDICT
-FirmwarePlaybackRole CommandExecutor::fortuneToPlaybackRole(int fortuneIndex)
-{
-    switch (fortuneIndex)
-    {
-    case 1:
-        return FirmwarePlaybackRole::Predict1;
-    case 2:
-        return FirmwarePlaybackRole::Predict2;
-    case 3:
-        return FirmwarePlaybackRole::Predict3;
-    case 4:
-        return FirmwarePlaybackRole::Predict4;
-    case 5:
-        return FirmwarePlaybackRole::Predict5;
-    case 6:
-        return FirmwarePlaybackRole::Predict6;
-    case 7:
-        return FirmwarePlaybackRole::Predict7;
-    case 8:
-        return FirmwarePlaybackRole::Predict8;
-    case 9:
-        return FirmwarePlaybackRole::Predict9;
-    case 10:
-        return FirmwarePlaybackRole::Predict10;
-    default:
-        return FirmwarePlaybackRole::Predict11;
-    }
-}
-#endif
-#if ENABLE_COMMAND_PREDICT
-void CommandExecutor::commandPredict(CommandResult &result)
-{
-    const Animation sequence[] = {
-        Animation(FirmwarePlaybackRole::PredAnim, gameTick * 20, true),
-        Animation(fortuneToPlaybackRole(1 + FirmwareRandom::below(maxFortune)), gameTick * 2.4, false),
-    };
-    result.executed = animations.replace(
-                                 AnimationSequence(sequence, sizeof(sequence) / sizeof(sequence[0]))) ==
-                             PlaybackResult::Accepted;
-}
-#endif
 
 bool CommandExecutor::queueStatusSetsAnimation()
 {
@@ -207,23 +167,5 @@ bool CommandExecutor::canPlayGuessItemGame() const
         FirmwarePlaybackRole::GuessItem4};
     return animations.hasAnimation(FirmwarePlaybackRole::GuessStart) ||
            animations.hasAnimations(itemPrompts, sizeof(itemPrompts) / sizeof(itemPrompts[0]));
-}
-#endif
-
-#if ENABLE_COMMAND_PREDICT
-bool CommandExecutor::canPredict() const
-{
-    const FirmwarePlaybackRole required[] = {
-        FirmwarePlaybackRole::PredAnim,
-        FirmwarePlaybackRole::Predict1, FirmwarePlaybackRole::Predict2,
-        FirmwarePlaybackRole::Predict3, FirmwarePlaybackRole::Predict4,
-        FirmwarePlaybackRole::Predict5, FirmwarePlaybackRole::Predict6,
-        FirmwarePlaybackRole::Predict7, FirmwarePlaybackRole::Predict8,
-        FirmwarePlaybackRole::Predict9, FirmwarePlaybackRole::Predict10,
-        FirmwarePlaybackRole::Predict11};
-    for (FirmwarePlaybackRole role : required)
-        if (!animations.hasActionAnimation(role))
-            return false;
-    return true;
 }
 #endif

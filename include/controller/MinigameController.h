@@ -3,9 +3,13 @@
 
 #include "common/AppProfile.h"
 
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
 
 #include "animation/AnimationController.h"
+#if ENABLE_COMMAND_PREDICT
+#include "game/PredictGame.h"
+#endif
+#if ENABLE_GUESS_GAME
 #include "game/GuessItemGame.h"
 
 class PetBehaviorRuntime;
@@ -17,14 +21,26 @@ public:
 protected:
     ~MinigameOutcomeHost() = default;
 };
+#endif
 
-class MinigameController : public GuessItemGameHost
+class MinigameController
+#if ENABLE_GUESS_GAME
+    : public GuessItemGameHost
+#endif
 {
 public:
-    MinigameController(AnimationController &animations, PetBehaviorRuntime &petBehavior,
-                       MinigameOutcomeHost &outcomeHost);
+    explicit MinigameController(AnimationController &animations
+#if ENABLE_GUESS_GAME
+                       , PetBehaviorRuntime &petBehavior, MinigameOutcomeHost &outcomeHost
+#endif
+    );
 
+#if ENABLE_GUESS_GAME
     void startGuessItem();
+#endif
+#if ENABLE_COMMAND_PREDICT
+    bool startPredict();
+#endif
     void reset();
     void update();
     void onLeft();
@@ -32,9 +48,17 @@ public:
     void onConfirm();
     void onPlaybackFailed();
     bool isActive() const;
+    bool pausesPetTime() const;
+    bool showsResourceErrorOnPlaybackFailure() const;
 
 private:
+    enum class Kind : uint8_t { None, GuessItem, Predict };
+    Kind activeGame = Kind::None;
     AnimationController &animations;
+#if ENABLE_COMMAND_PREDICT
+    PredictGame predict;
+#endif
+#if ENABLE_GUESS_GAME
     PetBehaviorRuntime &petBehavior;
     MinigameOutcomeHost &outcomeHost;
     GuessItemGame guessItem;
@@ -45,8 +69,9 @@ private:
     bool hasAnimation(FirmwarePlaybackRole id) const override;
     bool hasAnimationPending(FirmwarePlaybackRole id) const override;
     void settleOutcome(GuessItemOutcome outcome) override;
+#endif
 };
 
-#endif // ENABLE_GUESS_GAME
+#endif // ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
 
 #endif // MINIGAME_CONTROLLER_H

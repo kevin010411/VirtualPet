@@ -12,6 +12,7 @@
 #include "pet/PetBehaviorRuntime.h"
 #include "animation/AnimationController.h"
 #include "controller/CommandExecutor.h"
+#include "common/FirmwareRandom.h"
 #if ENABLE_COLLECTION_CATALOG
 #include "collection/CollectionCatalog.h"
 #endif
@@ -53,6 +54,9 @@ struct Scenario
     bool rejectFirstStartQueue = false;
     int firstStartFrameQueries = 0;
     bool commandAction = false;
+    bool commandPredict = false;
+    bool commandGuess = false;
+    bool missingPredict = false;
     bool navigationButtons = false;
     bool commandSequence = false;
     bool pausedDailyAction = false;
@@ -814,11 +818,12 @@ void testResetReloadFailure()
     assert(game.setup_game());
     data.reloadSucceeds = false;
     assert(!game.resetPet());
-    assert(data.reloads == 1 && data.saves == 1);
+    // The failed reset also attempts to restore the previous appearance contract.
+    assert(data.reloads == 2 && data.saves == 1);
     assert(!game.setStageDaysForCheat(1));
     assert(!game.saveNow());
     assert(!game.resetPet());
-    assert(data.reloads == 1 && data.saves == 1);
+    assert(data.reloads == 2 && data.saves == 1);
 }
 
 void testRestoredReloadFailure()
@@ -910,9 +915,11 @@ void testEvolutionLoadFailureDuringPetTick()
     assert(data.evolutionLookups == 1);
     assert(strcmp(data.firstRecordedResource, "appearance") == 0);
     assert(strcmp(data.lastShownResource, "appearance") == 0);
-    assert(pet.stageDays() == 0);
+    // The daily transaction commits before its evolution lookup fails.
+    assert(pet.stageDays() == 1);
     rtcLoop(game);
     assert(strcmp(data.lastShownResource, "appearance") == 0);
+    assert(pet.stageDays() == 1); // Fatal state blocks further progression.
     assert(!game.setStageDaysForCheat(1));
     hostMillis = 0;
 }
@@ -2027,7 +2034,7 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
     config.activeOutfitSlot = selection.outfitSlot;
     config.idleAnimation = {selection.speciesSlot, selection.outfitSlot, 5};
 #if ENABLE_SEQUENCE_AUDIO
-    if (scenario->idleMusic) config.defaultIdleAudio = {0, 16000};
+    if (scenario->idleMusic) config.animationAudio[config.idleAnimation.animationId - 1] = {0, 16000};
 #endif
     config.deathEnabled = scenario->deathEnabled;
     config.deathStatMask = 1;
@@ -2085,6 +2092,34 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
         config.actionEffects[1] = {0, PetBehaviorEffectOperation::Set, 4};
         config.buttons[1].actionSlot = 1;
     }
+    if (scenario->commandPredict)
+    {
+        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Predict};
+        config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::PredAnim)] = {1, 1, 10};
+        config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Battery)] = {1, 1, 22};
+        for (size_t index = 0; index < 11; ++index)
+            config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Predict1) + index] =
+                {1, 1, static_cast<uint16_t>(11 + index)};
+        if (scenario->missingPredict)
+            config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Predict11)] = {};
+    }
+#if ENABLE_GUESS_GAME
+    if (scenario->commandGuess)
+    {
+        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::GuessGame};
+        config.buttons[1] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Predict};
+        for (auto role : {FirmwarePlaybackRole::GuessStart, FirmwarePlaybackRole::GuessItem1,
+                         FirmwarePlaybackRole::GuessItem2, FirmwarePlaybackRole::GuessItem3,
+                         FirmwarePlaybackRole::GuessItem4, FirmwarePlaybackRole::GuessLL,
+                         FirmwarePlaybackRole::GuessLR, FirmwarePlaybackRole::GuessRL,
+                         FirmwarePlaybackRole::GuessRR, FirmwarePlaybackRole::GuessRight,
+                         FirmwarePlaybackRole::GuessWrong, FirmwarePlaybackRole::GuessWin,
+                         FirmwarePlaybackRole::GuessLoss})
+            config.systemAnimations[static_cast<size_t>(role)] = {1, 1, static_cast<uint16_t>(40 + static_cast<uint8_t>(role))};
+        config.guessEffectCount = 1;
+        config.guessEffects[0] = {true, PetBehaviorGuessOutcome::RoundCorrect, 0, PetBehaviorEffectOperation::Change, 1};
+    }
+#endif
     return true;
 }
 
@@ -2166,6 +2201,15 @@ bool Renderer::advanceAnimationFrame()
     if (scenario->frameFailed && scenario->evolutionMode != EvolutionAnimationMode::Disabled &&
         scenario->assetError)
         recordAssetDataErrorResource(id == 3 ? "source.data" : "target.data");
+#if ENABLE_GUESS_GAME
+    // A looping item prompt does not finish after the fake display's first frame.
+    if (scenario->commandGuess &&
+        (id == 40 + static_cast<uint8_t>(FirmwarePlaybackRole::GuessItem1) ||
+         id == 40 + static_cast<uint8_t>(FirmwarePlaybackRole::GuessItem2) ||
+         id == 40 + static_cast<uint8_t>(FirmwarePlaybackRole::GuessItem3) ||
+         id == 40 + static_cast<uint8_t>(FirmwarePlaybackRole::GuessItem4)))
+        return false;
+#endif
     return scenario->heldAnimationId == 0 || id != scenario->heldAnimationId;
 }
 bool Renderer::animationFrameFailed() const { return scenario->frameFailed; }
@@ -2218,8 +2262,208 @@ AssetData::BundleError Renderer::firstAssetDataError() const
 const char *Renderer::firstAssetDataErrorResource() const { return scenario->firstRecordedResource; }
 SdFat *Renderer::sdCard() const { return SD; }
 
+#if ENABLE_COMMAND_PREDICT
+void testPredictMinigame()
+{
+    for (int mode = 0; mode < 6 + ENABLE_DEATH; ++mode)
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.commandAction = data.commandPredict = data.navigationButtons = true;
+        data.heldAnimationId = 10;
+        data.missingPredict = mode == 1;
+        data.deathEnabled = mode == 6;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, appearance);
+        game.synchronizeTime(10);
+        assert(game.setup_game());
+        game.OnConfirmKey();
+        if (data.missingPredict)
+        {
+            assert(!game.hasTransientAnimation());
+            game.OnRightKey();
+            game.OnConfirmKey();
+            assert(pet.customStat(0) == 8); // Failed availability leaves the command menu usable.
+            continue;
+        }
+        game.loop_game();
+        assert(data.displayedAnimation.animationId == 10 && game.preventsIdleSleep());
+        game.OnRightKey();
+        game.OnConfirmKey();
+        assert(pet.customStat(0) == 2); // Minigame input cannot execute a different menu action.
+        game.synchronizeTime(20);
+        assert(pet.stageDays() == 0 && !game.hasPendingTime()); // Preserve excluded Predict playback time.
+        if (mode == 2)
+        {
+            data.failedAnimationId = 10;
+            hostMillis = 700;
+            game.loop_game();
+            assert(data.resourceShows == 1 && !game.hasTransientAnimation());
+            data.failedAnimationId = 0;
+            game.loop_game(); // Failed game returns to commands.
+        }
+        else if (mode == 3)
+        {
+            assert(game.resetPet());
+            assert(!game.hasTransientAnimation());
+        }
+        else if (mode == 4)
+        {
+            game.startBatteryAnimation();
+            game.endBatteryAnimation();
+            game.loop_game();
+            assert(!game.hasTransientAnimation());
+        }
+        else if (mode == 5)
+        {
+            game.stopPlaybackForSleep();
+            game.redrawAllNow();
+            game.loop_game();
+            assert(!game.hasTransientAnimation());
+        }
+#if ENABLE_DEATH
+        else if (mode == 6)
+        {
+            assert(pet.setCustomStat(0, 0));
+            game.loop_game();
+            assert(game.isDead() && !game.hasTransientAnimation());
+            game.OnConfirmKey();
+            assert(!game.isDead());
+        }
+#endif
+        else
+        {
+            data.heldAnimationId = 0;
+            hostMillis = 700;
+            game.loop_game(); // Finish the once-only introduction.
+            hostMillis = 701;
+            game.loop_game(); // Start the selected timed result.
+            assert(data.displayedAnimation.animationId >= 11 && data.displayedAnimation.animationId <= 21);
+            hostMillis = 5501;
+            game.loop_game();
+            game.loop_game();
+            assert(!game.hasTransientAnimation());
+        }
+        game.OnRightKey();
+        game.OnConfirmKey();
+        assert(pet.customStat(0) == 8); // Completion, failure and reset all release minigame routing.
+    }
+
+    // Preserve the same PRNG choice and all eleven result roles.
+    Scenario data;
+    scenario = &data;
+    data.commandPredict = true;
+    SdFat sd;
+    Renderer renderer(nullptr, &sd);
+    PetBehaviorConfig config = {};
+    AppearanceSelection selection;
+    bool resolved = false;
+    char resource[20] = {};
+    assert(loadInitialRuntimeContract(&sd, selection, config, resolved, resource, sizeof(resource)));
+    AnimationController animations(renderer);
+    animations.configureRuntimeContract(config);
+    animations.setup(config.idleAnimation);
+    PredictGame predict(animations);
+    uint16_t seen = 0;
+    for (uint32_t seed : {1U, 33U, 48U, 49U, 66U, 96U, 98U, 99U, 113U, 114U, 180U})
+    {
+        animations.cancelAll();
+        FirmwareRandom::seed(seed);
+        const uint16_t expected = FirmwareRandom::below(11);
+        FirmwareRandom::seed(seed);
+        assert(PredictGame::canStart(animations) && predict.start());
+        assert(animations.hasAnimationPending(static_cast<FirmwarePlaybackRole>(
+            static_cast<uint8_t>(FirmwarePlaybackRole::Predict1) + expected)));
+        seen |= static_cast<uint16_t>(1U << expected);
+        predict.onPlaybackFailed();
+        assert(!predict.isActive() && !animations.isBusy());
+    }
+    assert(seen == 0x7ff);
+#if ENABLE_SEQUENCE_AUDIO
+    // Timed system animations use their own v21 BGM and keep the original
+    // 40-second introduction / 4.8-second result across animation loop boundaries.
+    for (uint8_t id = 10; id <= 21; ++id) config.animationAudio[id - 1] = {0, 800};
+    AnimationController musical(renderer);
+    musical.configureRuntimeContract(config);
+    musical.setup(config.idleAnimation);
+    PredictGame musicalPredict(musical);
+    assert(musicalPredict.start());
+    auto tick = [&](unsigned long now) {
+        hostMillis = now;
+        musical.preparePlayback(now);
+        musical.tick(now);
+        musicalPredict.update();
+    };
+    tick(1000);
+    assert(musical.audioActive() && musical.currentPlaybackRole() == FirmwarePlaybackRole::PredAnim);
+    for (unsigned long now = 1600; now <= 40600; now += 600) tick(now);
+    tick(40999);
+    assert(musicalPredict.isActive() && musical.currentPlaybackRole() == FirmwarePlaybackRole::PredAnim);
+    tick(41000);
+    assert(musicalPredict.isActive() && musical.currentPlaybackRole() >= FirmwarePlaybackRole::Predict1 &&
+           musical.currentPlaybackRole() <= FirmwarePlaybackRole::Predict11);
+    for (unsigned long now = 41600; now <= 45200; now += 600) tick(now);
+    tick(45799);
+    assert(musicalPredict.isActive());
+    tick(45800);
+    assert(!musicalPredict.isActive() && !musical.audioActive());
+#endif
+    puts("[PASS] Predict minigame: availability, 11 seeded results, routing, duration, clock pause, failure and reset");
+}
+
+#if ENABLE_GUESS_GAME
+void testSwitchFromGuessToPredict()
+{
+    Scenario data;
+    scenario = &data;
+    data.commandAction = data.commandPredict = data.commandGuess = data.navigationButtons = true;
+    hostMillis = 0;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    assert(game.setup_game());
+    game.OnConfirmKey();
+    const int16_t expectedStat = 2 + (ENABLE_GUESS_GAME_SINGLE_ROUND ? 1 : 3);
+    for (unsigned tick = 0; tick < 100; ++tick)
+    {
+        hostMillis += 700;
+        FirmwareRandom::seed(1); // The next item reveal chooses Right.
+        game.loop_game();
+        if (!game.hasTransientAnimation() && pet.customStat(0) == expectedStat) break;
+        game.OnRightKey();
+    }
+    game.loop_game();
+    assert(!game.hasTransientAnimation());
+    assert(pet.customStat(0) == expectedStat);
+    game.OnRightKey();
+    game.OnConfirmKey();
+    game.loop_game();
+    assert(data.displayedAnimation.animationId == 10 && game.hasTransientAnimation());
+    puts("[PASS] Guess outcomes finish through the shared controller, then Predict starts independently");
+}
+#endif
+#endif
+
 int main(int argc, char **argv)
 {
+#if ENABLE_COMMAND_PREDICT
+    if (argc == 2 && strcmp(argv[1], "--predict") == 0)
+    {
+        testPredictMinigame();
+#if ENABLE_GUESS_GAME
+        testSwitchFromGuessToPredict();
+#endif
+        return 0;
+    }
+#endif
 #if ENABLE_SEQUENCE_AUDIO
     if (argc == 2 && strcmp(argv[1], "--idle-audio") == 0)
     {
@@ -2320,4 +2564,10 @@ int main(int argc, char **argv)
     testGameRoutesUserActionResult();
     testUnifiedCommandExecution();
     testStatusReadsActionCommittedPet();
+#if ENABLE_COMMAND_PREDICT
+    testPredictMinigame();
+#if ENABLE_GUESS_GAME
+    testSwitchFromGuessToPredict();
+#endif
+#endif
 }

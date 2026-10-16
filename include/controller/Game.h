@@ -11,7 +11,7 @@
 #include "pet/PetSaveController.h"
 #include "resources/RuntimeContractLoader.h"
 #include "pet/PetSession.h"
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
 #include "controller/MinigameController.h"
 #endif
 #include "pet/PetClock.h"
@@ -106,7 +106,7 @@ private:
 #if ENABLE_APPEARANCE_SELECTION
     std::unique_ptr<AppearanceSelectionController> appearanceSelection;
 #endif
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     std::unique_ptr<MinigameController> minigame;
 #endif
 
@@ -139,6 +139,8 @@ private:
     bool completePlaybackTick(const PlaybackTickResult &playbackResult);
     void routeDirectionKey(KeyDirection direction);
     void handleCommandResult(const CommandResult &result);
+    void handleAppliedUserAction();
+    void handleSystemCommandRequest(const CommandResult &result);
     enum class DayResult : uint8_t { Blocked, Consumed, ConsumedWithError, Fatal };
     DayResult maybeTickPet(uint32_t &days);
     EvolutionResult handleEvolution();

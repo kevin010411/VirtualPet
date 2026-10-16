@@ -33,9 +33,6 @@ public:
     void configureRuntimeContract(const PetBehaviorConfig &config);
 
 private:
-    static constexpr unsigned long gameTick = 2000;
-    static constexpr int maxFortune = 11;
-
     const Pet &pet;
     AnimationController &animations;
     PetBehaviorRuntime &petBehaviorRuntime;
@@ -44,18 +41,11 @@ private:
     uint8_t nextStatusSetIndex = 0;
 #endif
 
-#if ENABLE_COMMAND_PREDICT
-    static FirmwarePlaybackRole fortuneToPlaybackRole(int fortuneIndex);
-#endif
     bool queueStatusSetsAnimation();
 #if ENABLE_GUESS_GAME
     bool canPlayGuessItemGame() const;
 #endif
 
-#if ENABLE_COMMAND_PREDICT
-    bool canPredict() const;
-    void commandPredict(CommandResult &result);
-#endif
 };
 
 #endif // COMMAND_EXECUTOR_H

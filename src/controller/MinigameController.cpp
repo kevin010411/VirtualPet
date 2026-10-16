@@ -1,58 +1,120 @@
 #include "controller/MinigameController.h"
 #include "pet/PetBehaviorRuntime.h"
 
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
 
-MinigameController::MinigameController(AnimationController &animationsRef,
-                                       PetBehaviorRuntime &petBehaviorRef,
-                                       MinigameOutcomeHost &outcomeHostRef)
-    : animations(animationsRef),
-      petBehavior(petBehaviorRef),
+MinigameController::MinigameController(AnimationController &animationsRef
+#if ENABLE_GUESS_GAME
+                                       , PetBehaviorRuntime &petBehaviorRef,
+                                       MinigameOutcomeHost &outcomeHostRef
+#endif
+    )
+    : animations(animationsRef)
+#if ENABLE_COMMAND_PREDICT
+      , predict(animationsRef)
+#endif
+#if ENABLE_GUESS_GAME
+      , petBehavior(petBehaviorRef),
       outcomeHost(outcomeHostRef),
       guessItem(*this)
+#endif
 {
 }
 
+#if ENABLE_GUESS_GAME
 void MinigameController::startGuessItem()
 {
+    reset();
+    activeGame = Kind::GuessItem;
     guessItem.start();
 }
+#endif
+
+#if ENABLE_COMMAND_PREDICT
+bool MinigameController::startPredict()
+{
+    reset();
+    if (!predict.start()) return false;
+    activeGame = Kind::Predict;
+    return true;
+}
+#endif
 
 void MinigameController::reset()
 {
+    activeGame = Kind::None;
+#if ENABLE_GUESS_GAME
     guessItem.reset();
+#endif
+#if ENABLE_COMMAND_PREDICT
+    predict.reset();
+#endif
 }
 
 void MinigameController::update()
 {
-    guessItem.update();
+#if ENABLE_GUESS_GAME
+    if (activeGame == Kind::GuessItem) guessItem.update();
+#endif
+#if ENABLE_COMMAND_PREDICT
+    if (activeGame == Kind::Predict) predict.update();
+#endif
 }
 
 void MinigameController::onLeft()
 {
-    guessItem.onLeft();
+#if ENABLE_GUESS_GAME
+    if (activeGame == Kind::GuessItem) guessItem.onLeft();
+#endif
 }
 
 void MinigameController::onRight()
 {
-    guessItem.onRight();
+#if ENABLE_GUESS_GAME
+    if (activeGame == Kind::GuessItem) guessItem.onRight();
+#endif
 }
 
 void MinigameController::onConfirm()
 {
-    guessItem.onMid();
+#if ENABLE_GUESS_GAME
+    if (activeGame == Kind::GuessItem) guessItem.onMid();
+#endif
 }
 
 void MinigameController::onPlaybackFailed()
 {
-    guessItem.onPlaybackFailed();
+#if ENABLE_GUESS_GAME
+    if (activeGame == Kind::GuessItem) guessItem.onPlaybackFailed();
+#endif
+#if ENABLE_COMMAND_PREDICT
+    if (activeGame == Kind::Predict) predict.onPlaybackFailed();
+#endif
 }
 
 bool MinigameController::isActive() const
 {
-    return guessItem.isActive();
+#if ENABLE_GUESS_GAME
+    if (activeGame == Kind::GuessItem) return guessItem.isActive();
+#endif
+#if ENABLE_COMMAND_PREDICT
+    if (activeGame == Kind::Predict) return predict.isActive();
+#endif
+    return false;
 }
 
+bool MinigameController::pausesPetTime() const
+{
+    // Predict was a command sequence: its playback time never accrued pet days.
+    return activeGame == Kind::Predict;
+}
+
+bool MinigameController::showsResourceErrorOnPlaybackFailure() const
+{
+    return activeGame == Kind::Predict;
+}
+
+#if ENABLE_GUESS_GAME
 PlaybackResult MinigameController::replace(const AnimationSequence &sequence)
 {
     return animations.replace(sequence);
@@ -100,3 +162,4 @@ void MinigameController::settleOutcome(GuessItemOutcome outcome)
 }
 
 #endif // ENABLE_GUESS_GAME
+#endif // ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT

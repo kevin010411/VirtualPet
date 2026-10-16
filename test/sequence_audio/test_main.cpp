@@ -136,9 +136,8 @@ int main(int argc, char **argv)
 {
     assert(argc == 3 || argc == 4);
     const auto bytes = readBytes(argv[1]);
-    const bool idleFixture = argc == 4 && strcmp(argv[3], "--idle") == 0;
     const bool animationFixture = argc == 4 && strcmp(argv[3], "--animation") == 0;
-    const bool silentFixture = argc == 4 && !idleFixture && !animationFixture;
+    const bool silentFixture = argc == 4 && !animationFixture;
     if (!silentFixture) pcm = readBytes(argv[2]);
     const auto root = std::filesystem::path(argv[1]).parent_path();
     speciesPack = readBytes((root / "assets/species_1.data").string().c_str());
@@ -162,7 +161,7 @@ int main(int argc, char **argv)
         assert(starts == 1 && amplifier && !controller.isBusy());
         const auto selectedVersionQueries = versionQueries;
         // A state-only change using the same animation keeps its current loop.
-        controller.setBaseAnimation(primary, 1, {});
+        controller.setBaseAnimation(primary);
         tick(controller, 1100);
         assert(starts == 1 && drawnFrame == 2);
         for (uint32_t loop = 1; loop <= 10; ++loop) tick(controller, 1000 + loop * 200);
@@ -223,121 +222,54 @@ int main(int argc, char **argv)
         assert(starts == timedStart + 2 && controller.isBusy());
         tick(controller, 10450);
         assert(!controller.isBusy());
+        // Exercise current Action music failures without reverting committed effects.
+        controller.cancelAll();
+        auto failureCase = [&](SequenceAudioError expected, uint32_t origin) {
+            AnimationController failed(renderer);
+            failed.configureRuntimeContract(config);
+            failed.setup(config.idleAnimation);
+            Pet failedPet;
+            PetBehaviorRuntime failedRuntime(config, failedPet, failed, renderer);
+            failedRuntime.initializeStats();
+            failedPet.setCustomStat(0, 20);
+            failRead = expected == SequenceAudioError::ReadFailed;
+            failStart = expected == SequenceAudioError::HardwareFailed;
+            assert(failedRuntime.executeAction(0) == PetBehaviorActionResult::Applied);
+            const auto committed = failedPet.statSnapshot();
+            tick(failed, origin);
+            underrun = expected == SequenceAudioError::Underrun;
+            tick(failed, origin + 50);
+            assert(!amplifier && failed.isBusy() && failed.audioError() == expected);
+            assert(memcmp(committed.customStats, failedPet.statSnapshot().customStats,
+                          sizeof(committed.customStats)) == 0);
+            failRead = failStart = underrun = false;
+            failed.cancelAll();
+            assert(!amplifier && !failed.isBusy());
+        };
+        failureCase(SequenceAudioError::ReadFailed, 12000);
+        failureCase(SequenceAudioError::HardwareFailed, 14000);
+        failureCase(SequenceAudioError::Underrun, 16000);
+
+        Animation loopItem = Animation::complete(primary);
+        AnimationSequence looping(&loopItem, 1);
+        looping.loop = true;
+        assert(controller.replace(looping) == PlaybackResult::Accepted);
+        tick(controller, 18000);
+        const auto loopStarts = starts;
+        tick(controller, 18200);
+        assert(starts == loopStarts + 1 && !controller.hasFinitePlayback());
+        PowerController power;
+        power.interact(18000);
+        assert(power.shouldSleep(150000, controller.hasFinitePlayback()));
+        controller.cancelAll();
+        assert(!amplifier && !controller.isBusy());
         puts("[PASS] v21 animation BGM: shared context, loop/version rotation, per-repeat and following audio, cutoff, short EOF, effects once, bounded SD retry and cancellation");
         return 0;
     }
-    if (idleFixture)
-    {
-        assert(config.petStateCount == 2 && config.idleAudio[0].bound() && config.idleAudio[1].bound());
-        assert(config.idleAudio[0].offset != config.idleAudio[1].offset);
-        Renderer renderer(nullptr, nullptr);
-        AnimationController controller(renderer);
-        controller.configureRuntimeContract(config);
-        controller.setup(config.idleAnimation);
-        Pet pet;
-        PetBehaviorRuntime runtime(config, pet, controller, renderer);
-        runtime.initializeStats();
-        auto refresh = [&]() {
-            controller.setBaseAnimation(runtime.baseAnimation(), runtime.activePetState().slot, runtime.baseAudio());
-        };
-        pet.setCustomStat(0, int16_t(config.petStates[0].predicate.minimum));
-        assert(runtime.activePetState().slot == 0);
-        refresh();
-        tick(controller, 1000);
-        assert(starts == 1 && amplifier && !controller.isBusy() && !controller.hasFinitePlayback());
-        const auto queries = versionQueries;
-        tick(controller, 1150);
-        assert(drawnFrame == 2 && starts == 1);
-        for (uint32_t loop = 1; loop <= 10; ++loop)
-        {
-            tick(controller, 1000 + loop * 200);
-            assert(starts == loop + 1 && drawnFrame == 1 && amplifier);
-            assert(versionQueries == queries + (loop == 10 ? 1 : 0));
-        }
-        const auto stateZero = runtime.baseAnimation();
-        pet.setCustomStat(0, int16_t(config.petStates[1].predicate.minimum));
-        assert(runtime.activePetState().slot == 1);
-        assert(runtime.baseAnimation().animationId == stateZero.animationId);
-        refresh();
-        assert(!amplifier); // Same animation, different State identity stops immediately.
-        tick(controller, 3050);
-        assert(amplifier && starts == 12 && preparedOffset == config.idleAudio[1].offset && drawnFrame == 1);
-        // Even identical resource refs restart when State identity changes.
-        controller.setBaseAnimation(stateZero, 0, config.idleAudio[1]);
-        assert(!amplifier);
-        tick(controller, 3100);
-        assert(starts == 13 && drawnFrame == 1);
-        pet.setCustomStat(0, 1);
-        assert(runtime.activePetState().isDefault);
-        refresh();
-        assert(!amplifier);
-        tick(controller, 3200);
-        assert(amplifier == config.defaultIdleAudio.bound());
-        // A short clip remains silent until the full visual loop boundary.
-        SequenceAudioRef shortAudio = config.idleAudio[0];
-        shortAudio.sampleCount = 8;
-        controller.setBaseAnimation(stateZero, 0, shortAudio);
-        tick(controller, 4000);
-        const auto shortStart = starts;
-        tick(controller, 4150);
-        assert(!amplifier && starts == shortStart && drawnFrame == 2);
-        tick(controller, 4200);
-        assert(amplifier && starts == shortStart + 1 && drawnFrame == 1);
-        // Natural SD preparation errors do not retry at every update.
-        failRead = true;
-        controller.setBaseAnimation(stateZero, 1, config.idleAudio[1]);
-        tick(controller, 5000);
-        const auto failedPrepare = preparations;
-        tick(controller, 5050);
-        tick(controller, 5150);
-        assert(preparations == failedPrepare && !amplifier && drawnFrame == 2);
-        tick(controller, 5200);
-        assert(preparations == failedPrepare + 1);
-        failRead = false;
-        controller.cancelAll();
-        tick(controller, 6000);
-        assert(amplifier);
-        Animation fixed(stateZero, 100, false, 1, FirmwarePlaybackRole::Status);
-        AnimationSequence status(&fixed, 1);
-        assert(controller.replace(status) == PlaybackResult::Accepted);
-        assert(!amplifier);
-        tick(controller, 6010);
-        assert(controller.isBusy() && !amplifier);
-        tick(controller, 6110);
-        assert(!controller.isBusy() && amplifier && drawnFrame == 1);
-        // Action replacement similarly stops idle; completion resumes from zero.
-        assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
-        assert(!amplifier);
-        for (uint32_t t = 6200; t <= 7200; t += 100) tick(controller, t);
-        assert(!controller.isBusy());
-        refresh();
-        controller.setBaseAnimation(stateZero, 0, config.idleAudio[0]);
-        tick(controller, 8000);
-        const auto beforeDay = pet.stageDays();
-        assert(runtime.advancePetDay() && pet.stageDays() == beforeDay + 1);
-        assert(!controller.isBusy() && !controller.hasFinitePlayback());
-        PowerController power;
-        power.interact(8000);
-        assert(power.shouldSleep(130000, controller.hasFinitePlayback()));
-        controller.cancelAll(); // Menu/STOP cancellation seam.
-        assert(!amplifier);
-        const auto beforeWake = starts;
-        tick(controller, 9000);
-        assert(starts == beforeWake + 1 && amplifier && drawnFrame == 1);
-        pet.configureDeath(true, 1);
-        pet.setCustomStat(0, 0);
-        assert(pet.evaluateDeath() && !runtime.baseAudio().bound());
-        controller.cancelAll();
-        refresh();
-        tick(controller, 10000);
-        assert(!amplifier && !controller.isBusy());
-        puts("[PASS] Real Web idle bindings, shared-animation State identity, default, full-loop audio, ten-loop Version selection, short EOF, bounded SD retry, Action/Status return, daily changes, STOP and death");
-        return 0;
-    }
-    uint8_t slot = 0;
-    while (slot < config.actionCount && !config.actionAudio[slot].bound()) ++slot;
-    if (silentFixture) { assert(slot == config.actionCount); slot = 0; }
-    else assert(slot < config.actionCount);
+    // Legacy action/idle fixtures no longer define production playback. Keep
+    // silent export coverage through the same public Action execution seam.
+    assert(silentFixture);
+    const uint8_t slot = 0;
     Renderer renderer(nullptr, nullptr);
     AnimationController controller(renderer);
     controller.configureRuntimeContract(config);
@@ -345,121 +277,15 @@ int main(int argc, char **argv)
     Pet pet;
     PetBehaviorRuntime runtime(config, pet, controller, renderer);
     runtime.initializeStats();
-    pet.setCustomStat(0, 20); // Make the fixture's +40 effect observable, unclamped.
+    pet.setCustomStat(0, 20);
     config.trackedActionCount = 1;
     config.trackedActions[0] = slot;
     pet.configureTrackedActions(1);
-    const auto before = pet.statSnapshot();
     assert(runtime.executeAction(slot) == PetBehaviorActionResult::Applied);
-    const auto after = pet.statSnapshot();
-    assert(after.customStats[0] == 60 && before.customStats[0] == 20);
-    assert(pet.actionCount(0) == expectedTrackedActionCount);
+    assert(pet.customStat(0) == 60 && pet.actionCount(0) == expectedTrackedActionCount);
     tick(controller, 1000);
-    if (silentFixture)
-    {
-        assert(starts == 0 && !amplifier);
-        controller.cancelAll();
-        assert(pet.customStat(0) == 60 && pet.actionCount(0) == expectedTrackedActionCount);
-        puts("[PASS] Real silent/muted/feature-off Web fixture executes effects once without sample playback");
-        return 0;
-    }
-    assert(starts == 1 && amplifier && controller.hasFinitePlayback());
-    const uint16_t primary = drawnAnimation;
-    tick(controller, 1150);
-    assert(drawnFrame == 2); // Uses actual exported two-frame/100ms metadata.
-    assert(starts == 1);
-    tick(controller, 1200);
-    assert(starts == 1); // Segment repetitions never restart audio.
-    tick(controller, 1750);
-    assert(starts == 1);
-    assert(memcmp(after.customStats, pet.statSnapshot().customStats, sizeof(after.customStats)) == 0);
-    assert(pet.actionCount(0) == expectedTrackedActionCount);
-    (void)before; (void)primary;
+    assert(starts == 0 && !amplifier);
     controller.cancelAll();
-    assert(!controller.isBusy() && !amplifier);
-
-    const auto realAnimation = config.actionOutcomes[config.actions[slot].firstOutcome].animationPlayback.animation;
-    Animation items[2] = {Animation::complete(realAnimation, 2), Animation::complete(realAnimation, 1)};
-    AnimationSequence sequence(items, 2);
-    sequence.audio = config.actionAudio[slot];
-    assert(controller.replace(sequence) == PlaybackResult::Accepted);
-    tick(controller, 2000);
-    const unsigned started = starts;
-    tick(controller, 2580);
-    assert(starts == started && controller.isBusy());
-    tick(controller, 2600);
-    assert(!controller.isBusy());
-    assert(!amplifier); // Longer audio stops with its visual sequence.
-
-    // Natural EOF discovered late preserves the original monotonic origin.
-    sequence.audio.sampleCount = 8;
-    assert(controller.replace(sequence) == PlaybackResult::Accepted);
-    tick(controller, 3000);
-    tick(controller, 3500);
-    assert(controller.isBusy());
-    tick(controller, 3600);
-    assert(!controller.isBusy());
-    sequence.audio = config.actionAudio[slot];
-    assert(controller.replace(sequence) == PlaybackResult::Accepted);
-    tick(controller, 4000);
-    failRead = true;
-    tick(controller, 4500);
-    assert(!amplifier && controller.isBusy());
-    assert(controller.audioError() == SequenceAudioError::ReadFailed);
-    tick(controller, 4600);
-    assert(!controller.isBusy());
-    failRead = false;
-
-    // Whole sequence looping, finite sleep gate, STOP-like cancellation.
-    sequence.loop = true;
-    assert(controller.replace(sequence) == PlaybackResult::Accepted);
-    tick(controller, 5000);
-    const unsigned loopingStart = starts;
-    assert(!controller.hasFinitePlayback());
-    tick(controller, 5600);
-    assert(starts == loopingStart + 1);
-    PowerController power;
-    power.interact(5000);
-    assert(power.shouldSleep(130000, controller.hasFinitePlayback()));
-    controller.cancelAll();
-    assert(!amplifier && !controller.isBusy());
-    tick(controller, 5700);
-    assert(!amplifier); // Wake redraw cannot resume an old sample position.
-    // The same public Action execution seam retains commits under each
-    // distinct playback failure, including preparation and hardware start.
-    auto failureCase = [&](SequenceAudioError expected, uint32_t origin) {
-        AnimationController failedController(renderer);
-        failedController.configureRuntimeContract(config);
-        failedController.setup(config.idleAnimation);
-        Pet failedPet;
-        PetBehaviorRuntime failedRuntime(config, failedPet, failedController, renderer);
-        failedRuntime.initializeStats();
-        failedPet.setCustomStat(0, 20);
-        failedPet.configureTrackedActions(1);
-        const bool duringPlayback = expected == SequenceAudioError::Underrun;
-        failRead = expected == SequenceAudioError::ReadFailed;
-        failStart = expected == SequenceAudioError::HardwareFailed;
-        assert(failedRuntime.executeAction(slot) == PetBehaviorActionResult::Applied);
-        tick(failedController, origin);
-        if (duringPlayback) underrun = true;
-        tick(failedController, origin + 750);
-        assert(!amplifier && failedController.isBusy());
-        assert(failedController.audioError() == expected);
-        assert(failedPet.customStat(0) == 60 && failedPet.actionCount(0) == expectedTrackedActionCount);
-        tick(failedController, origin + 1000);
-        assert(!failedController.isBusy());
-        assert(failedPet.customStat(0) == 60 && failedPet.actionCount(0) == expectedTrackedActionCount);
-        failRead = failStart = underrun = false;
-    };
-    failureCase(SequenceAudioError::ReadFailed, 6000);
-    failureCase(SequenceAudioError::HardwareFailed, 8000);
-    failureCase(SequenceAudioError::Underrun, 10000);
-    sequence.loop = false;
-    assert(controller.replace(sequence) == PlaybackResult::Accepted);
-    tick(controller, 12000);
-    assert(amplifier);
-    AnimationSequence silentReplacement(items, 1);
-    assert(controller.replace(silentReplacement) == PlaybackResult::Accepted);
-    assert(!amplifier); // Accepted replacement clears the old audio and tail queue.
-    puts("[PASS] Real Web runtime20/audio.data; action effects once, first frame before samples, absolute frame catch-up, repeats, short/long audio, late EOF/read failure, cycles, cancel and sleep gate");
+    assert(pet.customStat(0) == 60 && pet.actionCount(0) == expectedTrackedActionCount);
+    puts("[PASS] Silent v21 Web fixture commits effects once without sample playback");
 }

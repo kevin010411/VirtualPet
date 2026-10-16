@@ -46,7 +46,7 @@ bool Game::prepare_game()
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
 #endif
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     minigame->reset();
 #endif
 
@@ -167,7 +167,7 @@ bool Game::resetPet()
     collectionSavePending = false;
 #endif
     animations->cancelAll();
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     minigame->reset();
 #endif
     refreshBaseAnimation();

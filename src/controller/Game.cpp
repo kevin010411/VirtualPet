@@ -42,10 +42,13 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       ,
       appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader, *layout))
 #endif
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
       ,
-      minigame(std::make_unique<MinigameController>(*animations, *petBehaviorRuntime,
-                  static_cast<MinigameOutcomeHost &>(*this)))
+      minigame(std::make_unique<MinigameController>(*animations
+#if ENABLE_GUESS_GAME
+                  , *petBehaviorRuntime, static_cast<MinigameOutcomeHost &>(*this)
+#endif
+                  ))
 #endif
 {
 }
@@ -86,7 +89,7 @@ void Game::loop_game()
     if (flow.isStartup() && !animations->isBusy())
         enterCommand();
 
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     if (flow.isMinigame())
     {
         minigame->update();
@@ -407,7 +410,7 @@ void Game::routeDirectionKey(KeyDirection direction)
     }
 #endif
 
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     if (flow.isMinigame())
     {
         if (direction == KeyDirection::Left)
@@ -491,7 +494,7 @@ void Game::OnConfirmKey()
     }
 #endif
 
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     if (flow.isMinigame())
     {
         minigame->onConfirm();
@@ -508,13 +511,7 @@ void Game::OnConfirmKey()
 
 void Game::refreshBaseAnimation()
 {
-#if ENABLE_SEQUENCE_AUDIO
-    animations->setBaseAnimation(petBehaviorRuntime->baseAnimation(),
-                                 petBehaviorRuntime->activePetState().slot,
-                                 petBehaviorRuntime->baseAudio());
-#else
     animations->setBaseAnimation(petBehaviorRuntime->baseAnimation());
-#endif
 }
 
 bool Game::setStageDaysForCheat(uint32_t value)
@@ -568,7 +565,11 @@ bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
 
 void Game::synchronizePlaybackClock()
 {
-    if (!flow.isCommand()) return;
+    if (!flow.isCommand()
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+        && !(flow.isMinigame() && minigame->pausesPetTime())
+#endif
+    ) return;
     if (animations->hasFinitePlayback()) petClock.pause(latestRtcSeconds);
     else petClock.resume(latestRtcSeconds);
 }
@@ -584,15 +585,26 @@ void Game::handleCommandResult(const CommandResult &result)
 
     if (result.actionResult != PetBehaviorActionResult::Rejected)
     {
-        if (!refreshOutfitUnlockMask(false, false))
-            renderer.showResourceError();
-#if ENABLE_COLLECTION_CATALOG
-        collectionSavePending = true;
-#endif
-        if (!updateCollectionProgress()) return;
-        refreshBaseAnimation();
+        handleAppliedUserAction();
         return;
     }
+
+    handleSystemCommandRequest(result);
+}
+
+void Game::handleAppliedUserAction()
+{
+    if (!refreshOutfitUnlockMask(false, false))
+        renderer.showResourceError();
+#if ENABLE_COLLECTION_CATALOG
+    collectionSavePending = true;
+#endif
+    if (!updateCollectionProgress()) return;
+    refreshBaseAnimation();
+}
+
+void Game::handleSystemCommandRequest(const CommandResult &result)
+{
 #if ENABLE_COLLECTION_CATALOG
     if (result.requestedCollection)
     {
@@ -616,15 +628,23 @@ void Game::handleCommandResult(const CommandResult &result)
     }
 #endif
 
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     if (result.requestedMinigame)
     {
+#if ENABLE_COMMAND_PREDICT
+        if (result.commandId == AppCommandId::Predict)
+        {
+            if (minigame->startPredict()) flow.enterMinigame();
+            return;
+        }
+#endif
+#if ENABLE_GUESS_GAME
         minigame->startGuessItem();
         flow.enterMinigame();
+#endif
         return;
     }
 #endif
-
 }
 
 void Game::synchronizeTime(uint32_t rtcSeconds)
@@ -751,7 +771,7 @@ void Game::enterFatalState()
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
 #endif
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     minigame->reset();
 #endif
     flow.enterFatalError();
@@ -785,32 +805,29 @@ bool Game::beginStartupAnimation()
     pendingFirstStartCompletion = needsFirstStart;
     Animation sequence[3];
     uint8_t sequenceCount = 0;
+    const auto segmentDuration = [this](FirmwarePlaybackRole role)
+    {
+        return max(startupSegmentMs,
+                   static_cast<unsigned long>(animations->frameCountFor(role)) *
+                       animations->frameIntervalFor(role));
+    };
 
     if (hasIntro)
     {
-        const unsigned long introDuration = max(
-            startupSegmentMs,
-            static_cast<unsigned long>(animations->frameCountFor(FirmwarePlaybackRole::StartIntro)) *
-                animations->frameIntervalFor(FirmwarePlaybackRole::StartIntro));
-        sequence[sequenceCount++] = Animation(FirmwarePlaybackRole::StartIntro, introDuration, true);
+        sequence[sequenceCount++] = Animation(
+            FirmwarePlaybackRole::StartIntro, segmentDuration(FirmwarePlaybackRole::StartIntro), true);
     }
 
     if (needsFirstStart)
     {
-        const unsigned long firstStartDuration = max(
-            startupSegmentMs,
-            static_cast<unsigned long>(animations->frameCountFor(FirmwarePlaybackRole::FirstStart)) *
-                animations->frameIntervalFor(FirmwarePlaybackRole::FirstStart));
-        sequence[sequenceCount++] = Animation(FirmwarePlaybackRole::FirstStart, firstStartDuration, true);
+        sequence[sequenceCount++] = Animation(
+            FirmwarePlaybackRole::FirstStart, segmentDuration(FirmwarePlaybackRole::FirstStart), true);
     }
 
     if (hasSpeciesStart)
     {
-        const unsigned long startupDuration = max(
-            startupSegmentMs,
-            static_cast<unsigned long>(animations->frameCountFor(FirmwarePlaybackRole::Start)) *
-                animations->frameIntervalFor(FirmwarePlaybackRole::Start));
-        sequence[sequenceCount++] = Animation(FirmwarePlaybackRole::Start, startupDuration, true);
+        sequence[sequenceCount++] = Animation(
+            FirmwarePlaybackRole::Start, segmentDuration(FirmwarePlaybackRole::Start), true);
     }
 
     if (animations->replace(AnimationSequence(sequence, sequenceCount)) !=
@@ -870,9 +887,10 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
     if (evolutionResult != EvolutionResult::NoChange)
         return;
 
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     if (flow.isMinigame())
     {
+        if (minigame->showsResourceErrorOnPlaybackFailure()) renderer.showResourceError();
         minigame->onPlaybackFailed();
         return;
     }
@@ -914,7 +932,7 @@ bool Game::enterDeathIfNeeded()
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
 #endif
-#if ENABLE_GUESS_GAME
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
     minigame->reset();
 #endif
     flow.enterCommand();

@@ -1,5 +1,10 @@
 ## 動畫配樂 v21（2026-10-15）
 
+2026-10-16：已清理舊 action/idle 載入與資料欄位，以及被忽略的播放 API 參數。
+歷史播放測試改由現行 v21 路徑保留失敗、效果與取消覆蓋；音訊開啟、靜音與停用
+host 皆通過。占卜小遊戲與 C8 建置組合結果見
+[占卜與音訊清理驗證](predict-minigame-verification.md)，其中全功能組合仍超出容量。
+
 目前格式規格為 Web `contracts/runtime_table_v21.json` 與 `.scratch/sequence-audio/spec.md` 的 v21 節。下方 v20 行為／狀態歸屬僅為歷史記錄，已由動畫固定配樂取代。
 
 韌體將 `ANIMATION_AUDIO` 的 logical ref 解析為既有 runtime animation ID，於啟用音訊時使用有界 lookup。AnimationController 對一般、系統與 base 動畫使用共同配樂入口；各輪及後續段重啟該動畫的音樂，段落結束／切換立刻停止，短音樂保留剩餘畫面的靜音。狀態切換但動畫相同時保留目前循環。沿用十輪 base 版本輪替及一次效果提交；資料／資源完整性驗證仍由 exporter 負責。

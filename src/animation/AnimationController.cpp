@@ -77,8 +77,7 @@ void AnimationController::resetPlaybackState()
     renderer.initAnimations();
 }
 
-void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAnimation,
-                                           uint8_t stateSlot, const SequenceAudioRef &audio)
+void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAnimation)
 {
     bool changed = baseRotation.setBaseAnimation(baseAnimation, renderer);
 #if ENABLE_SEQUENCE_AUDIO
@@ -92,8 +91,6 @@ void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAn
         synchronizedBase = baseStarted = false;
     }
 #endif
-    (void)stateSlot;
-    (void)audio;
     if (changed)
     {
         dirtyAnimation = true;
@@ -109,11 +106,6 @@ bool AnimationController::hasAnimation(FirmwarePlaybackRole id) const
 bool AnimationController::hasAnimation(const AssetData::AnimationRef &animation) const
 {
     return animation.valid() && renderer.frameCountFor(animation) > 0;
-}
-
-bool AnimationController::hasActionAnimation(FirmwarePlaybackRole id) const
-{
-    return hasAnimation(id);
 }
 
 bool AnimationController::hasAnimations(const FirmwarePlaybackRole *ids, size_t count) const
@@ -416,6 +408,7 @@ PlaybackTickResult AnimationController::tick(unsigned long now)
 
 void AnimationController::renderPrepared()
 {
+    bool frameFailed = false;
     if (preparedTargetChanged)
     {
         if (hasActiveAnimation && activeAnimation.isFixedFrame())
@@ -423,20 +416,12 @@ void AnimationController::renderPrepared()
             const bool rendered = renderer.ShowAnimationFrame(
                 showAnimation, showVersionIndex, activeAnimation.frameIndex);
             animateDone = !rendered;
-            if (!rendered)
-            {
-                playbackFailedRoleThisTick = activeAnimation.playbackRole;
-                playbackFailedThisTick = true;
-            }
+            frameFailed = !rendered;
         }
         else if (!animateDone)
         {
             animateDone = renderer.advanceAnimationFrame();
-            if (renderer.animationFrameFailed() && hasActiveAnimation)
-            {
-                playbackFailedRoleThisTick = activeAnimation.playbackRole;
-                playbackFailedThisTick = true;
-            }
+            frameFailed = renderer.animationFrameFailed();
         }
     }
     else if (preparedFrameDue &&
@@ -444,11 +429,12 @@ void AnimationController::renderPrepared()
              !(hasActiveAnimation && activeAnimation.playOnce && animateDone))
     {
         animateDone |= renderer.advanceAnimationFrame();
-        if (renderer.animationFrameFailed() && hasActiveAnimation)
-        {
-            playbackFailedRoleThisTick = activeAnimation.playbackRole;
-            playbackFailedThisTick = true;
-        }
+        frameFailed = renderer.animationFrameFailed();
+    }
+    if (frameFailed && hasActiveAnimation)
+    {
+        playbackFailedRoleThisTick = activeAnimation.playbackRole;
+        playbackFailedThisTick = true;
     }
 }
 

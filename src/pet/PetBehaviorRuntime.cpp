@@ -160,14 +160,6 @@ AssetData::AnimationRef PetBehaviorRuntime::baseAnimation() const
 
 bool PetBehaviorRuntime::isDead() const { return pet.isDead(); }
 
-#if ENABLE_SEQUENCE_AUDIO
-SequenceAudioRef PetBehaviorRuntime::baseAudio() const
-{
-    const auto animation = baseAnimation();
-    return animation.valid() ? config.animationAudio[animation.animationId - 1] : SequenceAudioRef{};
-}
-#endif
-
 ActivePetState PetBehaviorRuntime::activePetState() const
 {
     return activePetState(pet.statSnapshot());

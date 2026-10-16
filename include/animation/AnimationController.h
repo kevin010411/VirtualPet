@@ -16,12 +16,9 @@ public:
 
     void configureRuntimeContract(const PetBehaviorConfig &config);
     void setup(const AssetData::AnimationRef &baseAnimation);
-    void setBaseAnimation(const AssetData::AnimationRef &baseAnimation,
-                          uint8_t stateSlot = UINT8_MAX,
-                          const SequenceAudioRef &audio = {});
+    void setBaseAnimation(const AssetData::AnimationRef &baseAnimation);
     bool hasAnimation(FirmwarePlaybackRole id) const;
     bool hasAnimation(const AssetData::AnimationRef &animation) const;
-    bool hasActionAnimation(FirmwarePlaybackRole id) const;
     bool hasAnimations(const FirmwarePlaybackRole *ids, size_t count) const;
     PlaybackResult replace(const AnimationSequence &sequence);
     void cancelAll();
