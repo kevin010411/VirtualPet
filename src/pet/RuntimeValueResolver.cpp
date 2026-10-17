@@ -5,7 +5,7 @@
 
 bool resolveRuntimeValue(RuntimeValueId valueId,
                          const RuntimeValueContext &context,
-                         int32_t &value)
+                         int64_t &value)
 {
     value = 0;
     if (!isRuntimeValueIdKnown(valueId))
@@ -25,7 +25,7 @@ bool resolveRuntimeValue(RuntimeValueId valueId,
     {
     case kRuntimeValueStageDays:
         value = context.stageDays > INT32_MAX ? INT32_MAX :
-                static_cast<int32_t>(context.stageDays);
+                static_cast<int64_t>(context.stageDays);
         return context.stageDays <= INT32_MAX;
     case kRuntimeValueSpeciesSlot:
         if (context.speciesSlot == 0)
@@ -47,7 +47,7 @@ bool matchesRuntimeRange(const RuntimeRangePredicate &predicate,
 {
     if (!isRuntimeRangeWellFormed(predicate))
         return false;
-    int32_t value = 0;
+    int64_t value = 0;
     return resolveRuntimeValue(predicate.valueId, context, value) &&
            value >= predicate.minimum && value <= predicate.maximum;
 }

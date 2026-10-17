@@ -28,7 +28,7 @@ struct StatusValueContext
 
 bool statusValueFromSnapshot(const StatusSetCondition &condition,
                              const void *context,
-                             int32_t &value)
+                             int64_t &value)
 {
     if (context == nullptr)
         return false;

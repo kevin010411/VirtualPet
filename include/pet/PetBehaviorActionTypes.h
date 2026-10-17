@@ -77,7 +77,7 @@ struct PetBehaviorActionEffectConfig
 {
     uint8_t statSlot;
     PetBehaviorEffectOperation operation;
-    int16_t value;
+    int64_t value;
 };
 
 #endif // PET_BEHAVIOR_ACTION_TYPES_H

@@ -23,8 +23,8 @@ struct StatusSetCondition
     RuntimeValueId valueId;
     uint16_t petStateMask;
     uint8_t levels;
-    int32_t minValue;
-    int32_t maxValue;
+    int64_t minValue;
+    int64_t maxValue;
 };
 
 struct StatusSetConfig
@@ -43,7 +43,7 @@ struct StatusSetsConfig
 
 using StatusValueSource = bool (*)(const StatusSetCondition &condition,
                                   const void *context,
-                                  int32_t &value);
+                                  int64_t &value);
 
 struct StatusSetResolution
 {
@@ -56,7 +56,7 @@ struct StatusSetResolution
 bool resolvePetStateStatusLevel(
     const StatusSetCondition &condition,
     const ActivePetState &activePetState,
-    int32_t &level);
+    int64_t &level);
 
 bool resolveStatusSet(
     const StatusSetConfig &set,

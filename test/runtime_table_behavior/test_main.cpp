@@ -145,7 +145,7 @@ std::vector<uint8_t> actionModesFixture(const std::vector<uint8_t> &base)
         actions[index * 16 + 10] = index == 1 ? 1 : 0;
     }
     std::vector<uint8_t> outcomes(4 * 10, 0);
-    std::vector<uint8_t> effects(4 * 6, 0);
+    std::vector<uint8_t> effects(4 * 12, 0);
     for (uint8_t index = 0; index < 4; ++index)
     {
         outcomes[index * 10] = index >= 2 ? 1 : 0;
@@ -153,19 +153,19 @@ std::vector<uint8_t> actionModesFixture(const std::vector<uint8_t> &base)
         putFixtureU16(outcomes, index * 10 + 2, animationRef);
         putFixtureU16(outcomes, index * 10 + 4, index);
         putFixtureU16(outcomes, index * 10 + 6, 1);
-        effects[index * 6 + 1] = 1; // set stat zero
-        putFixtureU16(effects, index * 6 + 2, index + 1);
+        effects[index * 12 + 1] = 1; // set stat zero
+        putFixtureU16(effects, index * 12 + 2, index + 1);
     }
-    std::vector<uint8_t> conditions(16, 0);
+    std::vector<uint8_t> conditions(24, 0);
     putFixtureU16(conditions, 2, runtimeValueIdForPetStat(0));
     conditions[4] = 5;
     putFixtureU16(conditions, 6, animationRef);
     putFixtureU32(conditions, 8, 10);
-    putFixtureU32(conditions, 12, 10);
+    putFixtureU32(conditions, 16, 10);
     sections.push_back({12, 16, actions});
     sections.push_back({13, 10, outcomes});
-    sections.push_back({14, 16, conditions});
-    sections.push_back({15, 6, effects});
+    sections.push_back({14, 24, conditions});
+    sections.push_back({15, 12, effects});
     std::sort(sections.begin(), sections.end(), [](const FixtureSection &a, const FixtureSection &b) {
         return a.type < b.type;
     });
@@ -259,21 +259,21 @@ void testEvolutionConditionRanges(const std::vector<uint8_t> &exported)
         const uint16_t storedCount = variant == 3 ? conditionCount - 1 : conditionCount;
         fixture.resize((fixture.size() + 3) & ~size_t(3));
         const size_t conditionOffset = fixture.size();
-        fixture.resize(conditionOffset + storedCount * 12, 0);
+        fixture.resize(conditionOffset + storedCount * 20, 0);
         for (uint16_t index = 0; index < storedCount; ++index)
         {
-            const size_t offset = conditionOffset + index * 12;
+            const size_t offset = conditionOffset + index * 20;
             // stage_days AND all five Pet Stats, as in project_26. Extra wire
             // predicates exercise the uint8 count boundary without new storage.
             const RuntimeValueId valueId = index == 0 || index > 5
                 ? kRuntimeValueStageDays : runtimeValueIdForPetStat(index - 1);
             putFixtureU16(fixture, offset, valueId);
             putFixtureU32(fixture, offset + 2, variant == 2 && index == 5 ? 1 : 0);
-            putFixtureU32(fixture, offset + 6, 864000);
+            putFixtureU32(fixture, offset + 10, 864000);
         }
         putFixtureU32(fixture, conditionEntry + 4, static_cast<uint32_t>(conditionOffset));
         putFixtureU16(fixture, conditionEntry + 8, storedCount);
-        putFixtureU32(fixture, conditionEntry + 12, storedCount * 12);
+        putFixtureU32(fixture, conditionEntry + 12, storedCount * 20);
         fixture[evolutionOffset + 5] = conditionCount;
         putFixtureU16(fixture, evolutionOffset + 6, 0);
         putFixtureU32(fixture, 16, static_cast<uint32_t>(fixture.size()));
@@ -313,9 +313,9 @@ void testSdCatchUpThresholds(const std::vector<uint8_t> &exported)
         if (count) thresholds.push_back(offset);
         for (uint16_t row = 0; row < count; ++row)
         {
-            putFixtureU16(fixture, offset + row * 12, runtimeValueIdForPetStat(1));
-            putFixtureU32(fixture, offset + row * 12 + 2, 0);
-            putFixtureU32(fixture, offset + row * 12 + 6, 100);
+            putFixtureU16(fixture, offset + row * 20, runtimeValueIdForPetStat(1));
+            putFixtureU32(fixture, offset + row * 20 + 2, 0);
+            putFixtureU32(fixture, offset + row * 20 + 10, 100);
         }
     }
     assert(thresholds.size() == 2);
@@ -324,7 +324,7 @@ void testSdCatchUpThresholds(const std::vector<uint8_t> &exported)
         auto selected = fixture;
         putFixtureU16(selected, offset, runtimeValueIdForPetStat(0));
         putFixtureU32(selected, offset + 2, 95);
-        putFixtureU32(selected, offset + 6, 95);
+        putFixtureU32(selected, offset + 10, 95);
         SdFat sd(selected.data(), selected.size());
         PetBehaviorConfig config = {};
         config.assetManifest = releaseFixtureManifest(selected);
@@ -394,7 +394,7 @@ struct StatusContext
 
 bool statusValue(const StatusSetCondition &condition,
                  const void *rawContext,
-                 int32_t &value)
+                 int64_t &value)
 {
     const StatusContext &context = *static_cast<const StatusContext *>(rawContext);
     if (condition.kind != StatusConditionKind::RuntimeValue)

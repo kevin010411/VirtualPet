@@ -16,7 +16,7 @@ struct PersistedPetState
     uint32_t stage_days;
     uint32_t flowFlags;
     uint8_t outfitUnlockMask;
-    int16_t customStats[kPetCustomStatCount];
+    uint32_t customStats[kPetCustomStatCount];
     char speciesSlotText[9];
     char outfitSlotText[9];
     uint32_t collectionFingerprint;
@@ -33,14 +33,14 @@ struct PetStatSnapshot
     uint32_t stage_days;
     uint8_t speciesSlot;
     uint8_t outfitSlot;
-    int16_t customStats[kCustomStatCount];
+    uint32_t customStats[kCustomStatCount];
 };
 
 class Pet
 {
 public:
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 18;
+    static constexpr uint16_t kPetStateVersion = 19;
     static constexpr uint32_t kStageDaysMax = 864000UL;
 
     Pet();
@@ -61,11 +61,11 @@ public:
     uint8_t outfitSlot() const;
     uint32_t stageDays() const;
     void setStageDays(uint32_t value);
-    bool commitPetStats(const int16_t *customStats, size_t customStatCount);
-    bool commitPetDay(const int16_t *customStats, size_t customStatCount, uint32_t days = 1);
+    bool commitPetStats(const uint32_t *customStats, size_t customStatCount);
+    bool commitPetDay(const uint32_t *customStats, size_t customStatCount, uint32_t days = 1);
     PetStatSnapshot statSnapshot() const;
-    int16_t customStat(uint8_t index) const;
-    bool setCustomStat(uint8_t index, int16_t value);
+    uint32_t customStat(uint8_t index) const;
+    bool setCustomStat(uint8_t index, uint32_t value);
     bool setSpeciesSlot(uint8_t slot);
     bool setOutfitSlot(uint8_t slot);
     uint8_t outfitUnlockMask() const;

@@ -132,7 +132,7 @@ void LayoutRenderer::updateValues(const PetStatSnapshot &snapshot)
         if (block.kind != ScreenBlockKind::Stat)
             continue;
         uint16_t frame = block.fallbackFrame;
-        int32_t value = 0;
+        int64_t value = 0;
         if (block.source != kUnboundScreenSource && resolveRuntimeValue(block.source, values, value))
         {
             for (uint8_t child = 0; child < block.ruleCount; ++child)

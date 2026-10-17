@@ -4,7 +4,7 @@
 
 namespace
 {
-uint8_t levelForValue(int32_t value, int32_t minValue, int32_t maxValue, uint8_t levels)
+uint8_t levelForValue(int64_t value, int64_t minValue, int64_t maxValue, uint8_t levels)
 {
     if (levels <= 1 || value <= minValue)
         return 0;
@@ -21,7 +21,7 @@ uint8_t levelForValue(int32_t value, int32_t minValue, int32_t maxValue, uint8_t
 bool resolvePetStateStatusLevel(
     const StatusSetCondition &condition,
     const ActivePetState &activePetState,
-    int32_t &level)
+    int64_t &level)
 {
     const uint16_t selectedPetStateMask = condition.petStateMask;
     if (selectedPetStateMask == 0 ||
@@ -43,7 +43,7 @@ bool resolvePetStateStatusLevel(
 
     const bool selected = !activePetState.isDefault &&
         (selectedPetStateMask & static_cast<uint16_t>(1U << activePetState.slot)) != 0;
-    level = selected ? rank : static_cast<int32_t>(selectedCount);
+    level = selected ? rank : static_cast<int64_t>(selectedCount);
     return true;
 }
 
@@ -73,7 +73,7 @@ bool resolveStatusSet(
     for (uint8_t index = 0; index < set.conditionCount; ++index)
     {
         const StatusSetCondition &condition = set.conditions[index];
-        int32_t value = 0;
+        int64_t value = 0;
         if (!valueSource(condition, valueContext, value))
             return false;
         if (condition.levels == 0)

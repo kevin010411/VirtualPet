@@ -43,15 +43,15 @@ constexpr uint8_t runtimePetStatSlot(RuntimeValueId valueId)
 struct RuntimeRangePredicate
 {
     RuntimeValueId valueId = 0;
-    int32_t minimum = 0;
-    int32_t maximum = 0;
+    int64_t minimum = 0;
+    int64_t maximum = 0;
 };
 
 // Callers normalize their ownership model into one fixed-capacity value view;
 // the resolver never depends on configuration or adapter types.
 struct RuntimeValueContext
 {
-    const int16_t *petStats = nullptr;
+    const uint32_t *petStats = nullptr;
     uint16_t activePetStatMask = 0;
     uint32_t stageDays = 0;
     uint8_t speciesSlot = 0;
@@ -60,7 +60,7 @@ struct RuntimeValueContext
 
 bool resolveRuntimeValue(RuntimeValueId valueId,
                          const RuntimeValueContext &context,
-                         int32_t &value);
+                         int64_t &value);
 
 bool matchesRuntimeRange(const RuntimeRangePredicate &predicate,
                          const RuntimeValueContext &context);

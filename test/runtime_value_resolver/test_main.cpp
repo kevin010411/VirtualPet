@@ -6,7 +6,7 @@
 
 namespace
 {
-RuntimeValueContext petContext(const int16_t *values, uint16_t activeMask)
+RuntimeValueContext petContext(const uint32_t *values, uint16_t activeMask)
 {
     RuntimeValueContext context = {};
     context.petStats = values;
@@ -17,9 +17,9 @@ RuntimeValueContext petContext(const int16_t *values, uint16_t activeMask)
 
 void testStageBoundaries()
 {
-    int16_t values[1] = {};
+    uint32_t values[1] = {};
     RuntimeValueContext context = petContext(values, 1U);
-    int32_t value = -1;
+    int64_t value = -1;
 
     context.stageDays = 0;
     assert(resolveRuntimeValue(kRuntimeValueStageDays, context, value));
@@ -42,11 +42,11 @@ void testInvalidReferencesFailClosed()
     PetBehaviorConfig config = {};
     config.statCount = 1;
     config.stats[0].active = true;
-    config.stats[0].minValue = -10;
+    config.stats[0].minValue = 0;
     config.stats[0].maxValue = 10;
-    int16_t values[1] = {5};
+    uint32_t values[1] = {5};
     RuntimeValueContext context = petContext(values, activePetBehaviorStatMask(config));
-    int32_t value = 0;
+    int64_t value = 0;
 
     assert(!resolveRuntimeValue(99, context, value));
     assert(!matchesRuntimeRange(

@@ -25,10 +25,10 @@ constexpr uint8_t kPetBehaviorButtonCount = 8;
 struct PetBehaviorStatConfig
 {
     bool active;
-    int16_t initialValue;
-    int16_t minValue;
-    int16_t maxValue;
-    int16_t dailyChange;
+    uint32_t initialValue;
+    uint32_t minValue;
+    uint32_t maxValue;
+    int64_t dailyChange;
 };
 
 struct RuntimePetStateConfig
@@ -52,7 +52,7 @@ struct PetBehaviorGuessEffectConfig
     PetBehaviorGuessOutcome outcome;
     uint8_t statSlot;
     PetBehaviorEffectOperation operation;
-    int16_t value;
+    int64_t value;
 };
 #endif
 
@@ -100,8 +100,8 @@ struct ScreenBlockConfig
 
 struct ScreenRuleConfig
 {
-    int32_t minimum;
-    int32_t maximum;
+    int64_t minimum;
+    int64_t maximum;
     uint16_t frame;
 };
 

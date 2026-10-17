@@ -4,7 +4,7 @@
 
 namespace
 {
-bool readValue(const StatusSetCondition &condition, const void *, int32_t &value)
+bool readValue(const StatusSetCondition &condition, const void *, int64_t &value)
 {
     if (condition.kind != StatusConditionKind::RuntimeValue ||
         condition.valueId != runtimeValueIdForPetStat(0))
@@ -34,7 +34,7 @@ void testRuntimeContractStatusResolution()
 
 void testPetStateSubsetRanksAndOtherFallback()
 {
-    int32_t level = -1;
+    int64_t level = -1;
     StatusSetCondition condition = {};
     condition.petStateMask = 0x8201U; // slots 0, 9, and 15
     condition.levels = 4;
@@ -61,7 +61,7 @@ void testPetStateSubsetRanksAndOtherFallback()
 
 void testLowerSelectedSlotCountDeterminesRank()
 {
-    int32_t level = -1;
+    int64_t level = -1;
     StatusSetCondition condition = {};
     condition.levels = 4;
     ActivePetState active = {};
@@ -77,7 +77,7 @@ void testLowerSelectedSlotCountDeterminesRank()
 
 void testPetStateLevelShapeFailsClosed()
 {
-    int32_t level = -1;
+    int64_t level = -1;
     StatusSetCondition condition = {};
     condition.levels = 1;
     ActivePetState active = {};

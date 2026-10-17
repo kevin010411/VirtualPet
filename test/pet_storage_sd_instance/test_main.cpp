@@ -52,5 +52,15 @@ int main()
         assert(restored.customStat(0) == 0);
         assert(!restored.isCollectionOwned(0));
     }
+    {
+        SdFat sd;
+        Pet wide;
+        assert(wide.setCustomStat(0, UINT32_MAX));
+        PetStorage storage(&sd);
+        assert(storage.save(wide));
+        Pet restored;
+        assert(storage.load(restored, wide.persistentState().schemaFingerprint));
+        assert(restored.customStat(0) == UINT32_MAX);
+    }
     return 0;
 }

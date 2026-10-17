@@ -5,20 +5,20 @@
 
 namespace
 {
-int16_t clampedChange(int16_t current, int16_t delta, int16_t minimum, int16_t maximum)
+uint32_t clampedChange(uint32_t current, int64_t delta, uint32_t minimum, uint32_t maximum)
 {
-    const int32_t next = static_cast<int32_t>(current) + static_cast<int32_t>(delta);
+    const int64_t next = static_cast<int64_t>(current) + static_cast<int64_t>(delta);
     if (next < minimum)
         return minimum;
     if (next > maximum)
         return maximum;
-    return static_cast<int16_t>(next);
+    return static_cast<uint32_t>(next);
 }
 
 bool applyEffect(const PetBehaviorConfig &config,
                  uint8_t statSlot,
                  PetBehaviorEffectOperation operation,
-                 int16_t value,
+                 int64_t value,
                  PetBehaviorStatValues &state,
                  bool *affectedSlots)
 {
@@ -148,16 +148,16 @@ void applyPetBehaviorDailyChanges(const PetBehaviorConfig &config,
         const uint32_t paused = days < pauses.remainingDays[slot] ? days : pauses.remainingDays[slot];
         pauses.remainingDays[slot] -= paused;
         uint32_t activeDays = days - paused;
-        const int32_t delta = stat.dailyChange;
+        const int64_t delta = stat.dailyChange;
         if (delta == 0 || activeDays == 0) continue;
-        const int32_t value = state.values[slot];
-        const int32_t gap = delta > 0 ? stat.maxValue - value : value - stat.minValue;
+        const int64_t value = state.values[slot];
+        const int64_t gap = delta > 0 ? stat.maxValue - value : value - stat.minValue;
         const uint32_t magnitude = delta > 0 ? delta : -delta;
-        const uint32_t untilClamp = (gap + magnitude - 1) / magnitude;
+        const int64_t untilClamp = (gap + magnitude - 1) / magnitude;
         if (activeDays > untilClamp) activeDays = untilClamp;
-        const int32_t next = value + delta * static_cast<int32_t>(activeDays);
+        const int64_t next = value + delta * static_cast<int64_t>(activeDays);
         state.values[slot] = next < stat.minValue ? stat.minValue :
-                            next > stat.maxValue ? stat.maxValue : static_cast<int16_t>(next);
+                            next > stat.maxValue ? stat.maxValue : static_cast<uint32_t>(next);
     }
 }
 
@@ -166,7 +166,7 @@ uint32_t petBehaviorRangeChangeDays(const PetBehaviorConfig &config,
                                    const PetBehaviorDailyChangePauses &pauses,
                                    const RuntimeRangePredicate &predicate, uint32_t limit)
 {
-    int32_t value, delta, low, high;
+    int64_t value, delta, low, high;
     if (predicate.valueId == kRuntimeValueStageDays)
     {
         value = state.stageDays;
@@ -188,9 +188,9 @@ uint32_t petBehaviorRangeChangeDays(const PetBehaviorConfig &config,
     else return limit; // Species, Outfit and action counts do not drift with time.
 
     if (delta == 0 || predicate.minimum > high || predicate.maximum < low) return limit;
-    const int32_t minimum = predicate.minimum < low ? low : predicate.minimum;
-    const int32_t maximum = predicate.maximum > high ? high : predicate.maximum;
-    uint32_t days;
+    const int64_t minimum = predicate.minimum < low ? low : predicate.minimum;
+    const int64_t maximum = predicate.maximum > high ? high : predicate.maximum;
+    int64_t days;
     if (delta > 0)
     {
         if (value < minimum) days = (minimum - value + delta - 1) / delta;
@@ -199,7 +199,7 @@ uint32_t petBehaviorRangeChangeDays(const PetBehaviorConfig &config,
     }
     else
     {
-        const int32_t magnitude = -delta;
+        const int64_t magnitude = -delta;
         if (value > maximum) days = (value - maximum + magnitude - 1) / magnitude;
         else if (value >= minimum && minimum > low) days = (value - minimum) / magnitude + 1;
         else return limit;

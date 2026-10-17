@@ -31,7 +31,7 @@ bool runtimeTableCatchUpDays(SdFat *sd, const PetBehaviorConfig &config,
         if (section == nullptr) continue;
         for (uint16_t index = 0; index < section->count && days > 1; ++index)
         {
-            uint8_t record[12];
+            uint8_t record[20];
             if (!readRecord(table.source, *section, index, record)) return false;
             RuntimeValueId valueId = readU16(record);
 #if ENABLE_COLLECTION_CATALOG
@@ -42,7 +42,7 @@ bool runtimeTableCatchUpDays(SdFat *sd, const PetBehaviorConfig &config,
             }
 #endif
             days = petBehaviorRangeChangeDays(config, state, pauses,
-                {valueId, readI32(record + 2), readI32(record + 6)}, days);
+                {valueId, readI64(record + 2), readI64(record + 10)}, days);
         }
     }
     return true;
@@ -124,8 +124,8 @@ bool readRuntimePredicate(const uint8_t *record, bool allowAppearanceValues,
                           RuntimeRangePredicate &predicate)
 {
     predicate = {
-        readU16(record), readI32(record + 2), readI32(record + 6)};
-    return readU16(record + 10) == 0 &&
+        readU16(record), readI64(record + 2), readI64(record + 10)};
+    return readU16(record + 18) == 0 &&
            (allowAppearanceValues ? isRuntimeRangeWellFormed(predicate)
                                   : isRuntimeBehaviorRange(predicate));
 }
@@ -181,7 +181,7 @@ bool decodeEvolutionQuery(const RuntimeTable &table, BundleReader &bundleReader,
         bool matched = stats.speciesSlot == evolution.sourceSpecies;
         for (uint8_t offset = 0; offset < evolution.conditionCount; ++offset)
         {
-            uint8_t condition[12] = {};
+            uint8_t condition[20] = {};
             RuntimeRangePredicate predicate = {};
             if (conditions == nullptr ||
                 !readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition) ||
@@ -337,7 +337,7 @@ bool decodeOutfitUnlocks(const RuntimeTable &table, uint8_t speciesSlot,
         bool matching = unlock[2] == 1;
         for (uint8_t conditionIndex = 0; conditionIndex < unlock[7]; ++conditionIndex)
         {
-            uint8_t condition[12] = {};
+            uint8_t condition[20] = {};
             RuntimeRangePredicate predicate = {};
             if (!readRecord(source, *unlockConditions,
                             static_cast<uint16_t>(readU16(unlock + 5) + conditionIndex), condition) ||
@@ -382,7 +382,7 @@ bool decodeConsumableOutfitUnlock(const RuntimeTable &table,
     PetStatSnapshot result = stats;
     for (uint8_t offset = 0; offset < unlock[7]; ++offset)
     {
-        uint8_t condition[12] = {};
+        uint8_t condition[20] = {};
         RuntimeRangePredicate predicate = {};
         if (!readRecord(source, *unlockConditions,
                         static_cast<uint16_t>(readU16(unlock + 5) + offset), condition) ||
@@ -391,7 +391,7 @@ bool decodeConsumableOutfitUnlock(const RuntimeTable &table,
                 predicate, runtimeValueContext(stats, activeSlots)))
             return false;
         const RuntimeValueId valueId = readU16(condition);
-        const int32_t cost = readI32(condition + 2);
+        const int64_t cost = readI64(condition + 2);
         if (cost < 0)
             return false;
         if (valueId == kRuntimeValueStageDays)
@@ -403,15 +403,15 @@ bool decodeConsumableOutfitUnlock(const RuntimeTable &table,
         else if (isRuntimeValueIdPetStat(valueId))
         {
             const uint8_t slot = runtimePetStatSlot(valueId);
-            uint8_t stat[12] = {};
+            uint8_t stat[24] = {};
             if (slot >= PetStatSnapshot::kCustomStatCount ||
                 !activeSlots.contains(slot) ||
                 !readRecord(source, *statRecords, slot, stat))
                 return false;
-            const int32_t next = static_cast<int32_t>(result.customStats[slot]) - cost;
-            if (next < readI16(stat + 4) || next > readI16(stat + 6))
+            const int64_t next = static_cast<int64_t>(result.customStats[slot]) - cost;
+            if (next < readU32(stat + 6) || next > readU32(stat + 10))
                 return false;
-            result.customStats[slot] = static_cast<int16_t>(next);
+            result.customStats[slot] = static_cast<uint32_t>(next);
         }
         else
             return false;

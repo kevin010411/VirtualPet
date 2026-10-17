@@ -18,7 +18,7 @@ uint16_t deterministicRandom(uint16_t bound)
 PetBehaviorConfig behaviorConfig()
 {
     PetBehaviorConfig config = {};
-    config.stats[0] = {true, 10, -20, 20, -7};
+    config.stats[0] = {true, 10, 0, 20, -7};
     config.stats[3] = {true, 100, 0, 100, 50};
     config.statCount = 2;
     config.actions[2].active = true;
@@ -63,7 +63,7 @@ void testBatchDailyChangesAndBoundaries()
     for (int delta : {-32768, -7, -1, 0, 1, 7, 32767})
     for (uint32_t days : {1U, 3U, 255U, 100000U, UINT32_MAX})
     {
-        config.stats[0] = {true, 10, -20, 20, static_cast<int16_t>(delta)};
+        config.stats[0] = {true, 10, 0, 20, static_cast<int16_t>(delta)};
         PetBehaviorStatValues batch = {}, expected = {};
         initializePetBehaviorStats(config, batch);
         expected = batch;
@@ -78,7 +78,7 @@ void testBatchDailyChangesAndBoundaries()
                 const auto &stat = config.stats[slot];
                 if (!stat.active) continue;
                 if (reference.remainingDays[slot]) { --reference.remainingDays[slot]; continue; }
-                const int next = expected.values[slot] + stat.dailyChange;
+                const int64_t next = expected.values[slot] + stat.dailyChange;
                 expected.values[slot] = next < stat.minValue ? stat.minValue :
                     next > stat.maxValue ? stat.maxValue : next;
             }
@@ -86,7 +86,7 @@ void testBatchDailyChangesAndBoundaries()
         assert(memcmp(&pauses, &reference, sizeof(pauses)) == 0);
     }
 
-    config.stats[0] = {true, 10, -20, 20, -1};
+    config.stats[0] = {true, 10, 0, 20, -1};
     PetBehaviorStatValues state = {};
     initializePetBehaviorStats(config, state);
     PetBehaviorDailyChangePauses pauses = {};
@@ -94,10 +94,10 @@ void testBatchDailyChangesAndBoundaries()
     assert(petBehaviorRangeChangeDays(config, state, pauses, narrow, 100) == 5);
     state.values[0] = 5;
     assert(petBehaviorRangeChangeDays(config, state, pauses, narrow, 100) == 1);
-    state.values[0] = -20;
+    state.values[0] = 0;
     assert(petBehaviorRangeChangeDays(config, state, pauses, narrow, 100) == 100);
     config.stats[0].dailyChange = 1;
-    assert(petBehaviorRangeChangeDays(config, state, pauses, narrow, 100) == 25);
+    assert(petBehaviorRangeChangeDays(config, state, pauses, narrow, 100) == 5);
     assert(petBehaviorRangeChangeDays(config, state, pauses,
         {runtimeValueIdForPetStat(0), INT32_MIN, INT32_MAX}, 100) == 100);
     pauses.remainingDays[0] = 3;
@@ -125,7 +125,7 @@ void testAnimationOnlyAndOwnedEffects()
     // Invalid effects outside the selected Outcome must never be visited.
     config.actionEffects[0] = {255, Operation::Change, 1};
     config.actionEffects[1] = {0, Operation::Change, INT16_MAX};
-    config.actionEffects[2] = {3, Operation::Set, INT16_MIN};
+    config.actionEffects[2] = {3, Operation::Set, 0};
     config.actionEffects[3] = {255, Operation::Change, 1};
     config.actionEffectCount = 4;
     config.actionOutcomes[0].firstEffect = 1;
@@ -154,10 +154,10 @@ void testAnimationOnlyAndOwnedEffects()
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(state.values[0] == 20 && pauses.remainingDays[0] == 3);
     config.actionEffects[1] = {0, Operation::Change, -10};
-    state.values[0] = -20;
+    state.values[0] = 0;
     pauses.remainingDays[0] = 1;
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
-    assert(state.values[0] == -20 && pauses.remainingDays[0] == 3);
+    assert(state.values[0] == 0 && pauses.remainingDays[0] == 3);
     config.actions[2].suspendDailyChangeDays = 0;
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(pauses.remainingDays[0] == 3);
@@ -205,7 +205,7 @@ void testConditionalUsesOwnedRangePriorityAndPreEffectValues()
     config.actionConditions[1] = {{runtimeValueIdForPetStat(0), 10, 10}, {{1, 1, 6}, 2}, 5};
     config.actionConditions[2] = {{runtimeValueIdForPetStat(0), 10, 10}, {{1, 1, 7}, 3}, 2};
     config.actionConditions[3] = config.actionConditions[0];
-    config.actionEffects[0] = {0, Operation::Set, -5};
+    config.actionEffects[0] = {0, Operation::Set, 5};
     config.actionEffectCount = 1;
     config.actionOutcomes[0].effectCount = 1;
     PetBehaviorStatValues state = {};
@@ -214,7 +214,7 @@ void testConditionalUsesOwnedRangePriorityAndPreEffectValues()
     PetBehaviorActionPlayback playback = {};
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
     assert(playback.animation.animationId == 7 && playback.playbackCount == 3);
-    assert(state.values[0] == -5);
+    assert(state.values[0] == 5);
     applyPetBehaviorDailyChanges(config, state, pauses);
     assert(pauses.remainingDays[0] == 2);
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback));
@@ -275,6 +275,34 @@ void testWeightedOutcomeBoundariesAndEffects()
 
 int main()
 {
+    // Full uint32 values, signed changes, saturation and predicate crossings.
+    auto wide = behaviorConfig();
+    wide.stats[0] = {true, UINT32_MAX - 1U, 0, UINT32_MAX, 1};
+    PetBehaviorStatValues values = {};
+    PetBehaviorDailyChangePauses pauses = {};
+    initializePetBehaviorStats(wide, values);
+    assert(petBehaviorRangeChangeDays(wide, values, pauses,
+        {runtimeValueIdForPetStat(0), UINT32_MAX, UINT32_MAX}, 100) == 1);
+    applyPetBehaviorDailyChanges(wide, values, pauses, UINT32_MAX);
+    assert(values.values[0] == UINT32_MAX);
+    wide.stats[0].dailyChange = -static_cast<int64_t>(UINT32_MAX);
+    applyPetBehaviorDailyChanges(wide, values, pauses, UINT32_MAX);
+    assert(values.values[0] == 0);
+    wide.actionEffects[0] = {0, Operation::Set, UINT32_MAX};
+    wide.actionEffectCount = wide.actionOutcomes[0].effectCount = 1;
+    PetBehaviorActionPlayback playback = {};
+    assert(applyPetBehaviorAction(wide, 2, values, pauses, playback));
+    assert(values.values[0] == UINT32_MAX);
+    RuntimeValueContext context = {};
+    context.petStats = values.values;
+    context.activePetStatMask = 1;
+    assert(matchesRuntimeRange({runtimeValueIdForPetStat(0), UINT32_MAX, UINT32_MAX}, context));
+    wide.actionEffects[0] = {0, Operation::Change, 1};
+    assert(applyPetBehaviorAction(wide, 2, values, pauses, playback));
+    assert(values.values[0] == UINT32_MAX);
+    wide.actionEffects[0].value = -static_cast<int64_t>(UINT32_MAX);
+    assert(applyPetBehaviorAction(wide, 2, values, pauses, playback));
+    assert(values.values[0] == 0);
     testDailyChangesAndSparseStats();
     testBatchDailyChangesAndBoundaries();
     testAnimationOnlyAndOwnedEffects();

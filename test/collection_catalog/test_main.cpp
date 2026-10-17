@@ -207,7 +207,7 @@ static void verifyCatchUpCollectionWindow(const std::filesystem::path &root)
     assert(loadRuntimeContract(&sd, 1, 1, config));
     std::ifstream input(root / "runtime.bin", std::ios::binary);
     std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
-    auto put = [&](size_t offset, uint32_t value, uint8_t width) {
+    auto put = [&](size_t offset, uint64_t value, uint8_t width) {
         for (uint8_t byte = 0; byte < width; ++byte) bytes[offset + byte] = value >> (8 * byte);
     };
     size_t collectionCondition = 0, item = 0;
@@ -223,14 +223,14 @@ static void verifyCatchUpCollectionWindow(const std::filesystem::path &root)
         {
             const size_t record = offset + row * readU16(bytes.data() + entry + 10);
             put(record, type == CollectionConditions ? 1 : runtimeValueIdForPetStat(1), 2);
-            put(record + 2, 0, 4);
-            put(record + 6, 100, 4);
+            put(record + 2, 0, 8);
+            put(record + 10, 100, 8);
         }
     }
     assert(collectionCondition && item);
     put(collectionCondition, 0, 2);
-    put(collectionCondition + 2, 95, 4);
-    put(collectionCondition + 6, 95, 4);
+    put(collectionCondition + 2, 95, 8);
+    put(collectionCondition + 10, 95, 8);
     put(item + 1, 0, 1); // Image activation; no appearance grant.
     put(item + 2, 0, 2);
     put(item + 4, 1, 2);

@@ -124,6 +124,12 @@ inline int32_t readI32(const uint8_t *bytes)
     return static_cast<int32_t>(readU32(bytes));
 }
 
+inline int64_t readI64(const uint8_t *bytes)
+{
+    const uint64_t bits = readU32(bytes) | (static_cast<uint64_t>(readU32(bytes + 4)) << 32);
+    return static_cast<int64_t>(bits);
+}
+
 bool readRuntimeManifest(const Source &source, AssetData::RuntimeManifest &manifest);
 bool readRuntimeTable(const Source &source,
                       const AssetData::RuntimeManifest *expectedManifest,

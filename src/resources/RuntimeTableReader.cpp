@@ -9,7 +9,7 @@ namespace
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
 // v21 binds BGM to logical animation identity.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 21;
+constexpr uint16_t kVersion = 22;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -30,18 +30,18 @@ uint16_t recordSizeFor(uint16_t type)
     case Persistence: return 16;
     case AssetRefs: return 12;
     case Animations: return 8;
-    case PetStats: return 12;
-    case PetStates: return 16;
+    case PetStats: return 24;
+    case PetStates: return 24;
     case Actions: return 16;
     case ActionOutcomes: return 10;
-    case ActionConditions: return 16;
-    case ActionEffects: return 6;
+    case ActionConditions: return 24;
+    case ActionEffects: return 12;
     case Buttons: return 8;
-    case GuessEffects: return 8;
+    case GuessEffects: return 14;
     case DefaultPetState: return 4;
     case ActionPlaybacks: return 6;
     case StatusSets: return 12;
-    case StatusConditions: return 12;
+    case StatusConditions: return 20;
     case DeathConfig: return 8;
     case AudioRefs: return 12;
     case ActionAudio: return 4;
@@ -51,17 +51,17 @@ uint16_t recordSizeFor(uint16_t type)
     case Species: return 8;
     case Outfits: return 8;
     case Evolutions: return 16;
-    case EvolutionConditions: return 12;
+    case EvolutionConditions: return 20;
     case OutfitUnlocks: return 8;
-    case OutfitUnlockConditions: return 12;
+    case OutfitUnlockConditions: return 20;
     case SystemRoles: return 8;
     case Flow: return 16;
     case FlowRoles: return 8;
     case ScreenBlocks: return 16;
-    case ScreenRules: return 12;
+    case ScreenRules: return 20;
     case CollectionConfig: return 24;
     case CollectionItems: return 36;
-    case CollectionConditions: return 10;
+    case CollectionConditions: return 18;
     case CollectionTrackedActions: return 4;
     default: return 0;
     }

@@ -5,7 +5,7 @@
 
 struct PetBehaviorStatValues
 {
-    int16_t values[kPetBehaviorSlotCount];
+    uint32_t values[kPetBehaviorSlotCount];
     uint32_t stageDays;
 };
 

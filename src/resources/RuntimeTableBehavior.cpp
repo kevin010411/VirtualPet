@@ -61,15 +61,15 @@ bool decodeStats(const Source &source, const Section &section, PetBehaviorConfig
         return false;
     for (uint16_t index = 0; index < section.count; ++index)
     {
-        uint8_t record[12] = {};
+        uint8_t record[24] = {};
         if (!readRecord(source, section, index, record))
             return false;
         PetBehaviorStatConfig &stat = config.stats[index];
         stat.active = true;
-        stat.initialValue = readI16(record + 2);
-        stat.minValue = readI16(record + 4);
-        stat.maxValue = readI16(record + 6);
-        stat.dailyChange = readI16(record + 8);
+        stat.initialValue = readU32(record + 2);
+        stat.minValue = readU32(record + 6);
+        stat.maxValue = readU32(record + 10);
+        stat.dailyChange = readI64(record + 14);
     }
     config.statCount = static_cast<uint8_t>(section.count);
     return true;
@@ -110,17 +110,17 @@ bool decodePetStates(const Source &source,
 
     for (uint16_t index = 0; index < states->count; ++index)
     {
-        uint8_t record[16] = {};
+        uint8_t record[24] = {};
         AssetData::AnimationRef animation = {};
         if (!readRecord(source, *states, index, record))
             return false;
         const RuntimeRangePredicate predicate = {
-            readU16(record + 2), readI32(record + 4), readI32(record + 8)};
-        if (readU16(record) != index || readU16(record + 14) != 0 ||
+            readU16(record + 2), readI64(record + 4), readI64(record + 12)};
+        if (readU16(record) != index || readU16(record + 22) != 0 ||
             !isRuntimeBehaviorRange(predicate) ||
             (isRuntimeValueIdPetStat(predicate.valueId) &&
              runtimePetStatSlot(predicate.valueId) >= config.statCount) ||
-            !resolveAnimation(source, assets, animations, readU16(record + 12), scope, animation))
+            !resolveAnimation(source, assets, animations, readU16(record + 20), scope, animation))
             return false;
 
         RuntimePetStateConfig &state = config.petStates[index];
@@ -156,7 +156,7 @@ bool decodeGuessEffects(const Source &source,
 
     for (uint16_t index = 0; index < effects->count; ++index)
     {
-        uint8_t record[8] = {};
+        uint8_t record[14] = {};
         if (!readRecord(source, *effects, index, record) || record[1] >= config.statCount)
             return false;
 
@@ -165,7 +165,7 @@ bool decodeGuessEffects(const Source &source,
         effect.outcome = static_cast<PetBehaviorGuessOutcome>(record[0]);
         effect.statSlot = record[1];
         effect.operation = static_cast<PetBehaviorEffectOperation>(record[2]);
-        effect.value = readI16(record + 4);
+        effect.value = readI64(record + 4);
     }
     config.guessEffectCount = static_cast<uint8_t>(effects->count);
     return true;
@@ -248,15 +248,15 @@ bool decodeActions(const Source &source,
 
             for (uint16_t effectOffset = 0; effectOffset < effectCount; ++effectOffset)
             {
-                uint8_t effectRecord[6] = {};
+                uint8_t effectRecord[12] = {};
                 if (effects == nullptr || !readRecord(source, *effects, nextEffect, effectRecord) ||
                     effectRecord[0] >= config.statCount || effectRecord[1] > 1 ||
-                    readU16(effectRecord + 4) != 0)
+                    readU16(effectRecord + 10) != 0)
                     return false;
                 PetBehaviorActionEffectConfig &effect = config.actionEffects[nextEffect];
                 effect.statSlot = effectRecord[0];
                 effect.operation = static_cast<PetBehaviorEffectOperation>(effectRecord[1]);
-                effect.value = readI16(effectRecord + 2);
+                effect.value = readI64(effectRecord + 2);
                 ++nextEffect;
             }
             ++nextOutcome;
@@ -264,13 +264,13 @@ bool decodeActions(const Source &source,
 
         for (uint8_t conditionSlot = 0; conditionSlot < conditionCount; ++conditionSlot)
         {
-            uint8_t conditionRecord[16] = {};
+            uint8_t conditionRecord[24] = {};
             if (conditions == nullptr ||
                 !readRecord(source, *conditions, nextCondition, conditionRecord))
                 return false;
             const RuntimeRangePredicate predicate = {
-                readU16(conditionRecord + 2), readI32(conditionRecord + 8),
-                readI32(conditionRecord + 12)};
+                readU16(conditionRecord + 2), readI64(conditionRecord + 8),
+                readI64(conditionRecord + 16)};
             if (conditionRecord[1] != 0 || conditionRecord[5] != 0 ||
                 conditionRecord[4] > 5 ||
                 !isRuntimeBehaviorRange(predicate) ||
@@ -401,11 +401,11 @@ bool decodeStatus(const Source &source,
         uint16_t versionProduct = 1;
         for (uint8_t conditionIndex = 0; conditionIndex < set.conditionCount; ++conditionIndex)
         {
-            uint8_t conditionRecord[12] = {};
+            uint8_t conditionRecord[20] = {};
             if (!readRecord(source, *conditions, nextCondition, conditionRecord) ||
                 conditionRecord[3] == 0 || conditionRecord[3] > 32 ||
                 conditionRecord[0] > 1 ||
-                readI32(conditionRecord + 4) > readI32(conditionRecord + 8))
+                readI64(conditionRecord + 4) > readI64(conditionRecord + 12))
                 return false;
             StatusSetCondition &condition = set.conditions[conditionIndex];
             condition.kind = static_cast<StatusConditionKind>(conditionRecord[0]);
@@ -417,8 +417,8 @@ bool decodeStatus(const Source &source,
                                          ? sourceValue
                                          : 0;
             condition.levels = conditionRecord[3];
-            condition.minValue = readI32(conditionRecord + 4);
-            condition.maxValue = readI32(conditionRecord + 8);
+            condition.minValue = readI64(conditionRecord + 4);
+            condition.maxValue = readI64(conditionRecord + 12);
             if (condition.kind == StatusConditionKind::PetStatusAxis)
             {
                 const uint16_t allowedMask = config.petStateCount >= 16
@@ -635,11 +635,11 @@ bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
                 uint16_t frame = block.fallbackFrame;
                 if (child != 0)
                 {
-                    uint8_t ruleRecord[12] = {};
-                    if (!readRecord(table.source, *rules, firstRule + child - 1, ruleRecord) || readU16(ruleRecord + 10))
+                    uint8_t ruleRecord[20] = {};
+                    if (!readRecord(table.source, *rules, firstRule + child - 1, ruleRecord) || readU16(ruleRecord + 18))
                         return false;
                     ScreenRuleConfig &rule = config.screenRules[firstRule + child - 1];
-                    rule = {readI32(ruleRecord), readI32(ruleRecord + 4), readU16(ruleRecord + 8)};
+                    rule = {readI64(ruleRecord), readI64(ruleRecord + 8), readU16(ruleRecord + 16)};
                     if (rule.minimum > rule.maximum)
                         return false;
                     for (uint16_t earlier = firstRule; earlier < firstRule + child - 1; ++earlier)

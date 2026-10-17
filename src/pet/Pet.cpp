@@ -92,7 +92,7 @@ void Pet::acquireCollection(uint8_t slot)
     if (slot < 64) st.collectionMask |= uint64_t(1) << slot;
 }
 
-bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount, uint32_t days)
+bool Pet::commitPetDay(const uint32_t *customStats, size_t customStatCount, uint32_t days)
 {
     if (isDead()) return false;
     if (customStats == nullptr || customStatCount == 0 || customStatCount > kPetCustomStatCount)
@@ -104,7 +104,7 @@ bool Pet::commitPetDay(const int16_t *customStats, size_t customStatCount, uint3
     return commitPetStats(customStats, customStatCount);
 }
 
-bool Pet::commitPetStats(const int16_t *customStats, size_t customStatCount)
+bool Pet::commitPetStats(const uint32_t *customStats, size_t customStatCount)
 {
     if (isDead()) return false;
     if (customStats == nullptr || customStatCount == 0 || customStatCount > kPetCustomStatCount)
@@ -174,7 +174,7 @@ PetStatSnapshot Pet::statSnapshot() const
     return snapshot;
 }
 
-int16_t Pet::customStat(uint8_t index) const
+uint32_t Pet::customStat(uint8_t index) const
 {
     if (index >= PetStatSnapshot::kCustomStatCount)
         return 0;
@@ -182,7 +182,7 @@ int16_t Pet::customStat(uint8_t index) const
     return st.customStats[index];
 }
 
-bool Pet::setCustomStat(uint8_t index, int16_t value)
+bool Pet::setCustomStat(uint8_t index, uint32_t value)
 {
     if (isDead()) return false;
     if (index >= PetStatSnapshot::kCustomStatCount)
