@@ -17,7 +17,6 @@ public:
     ~Renderer();
 
     void initAnimations();
-    void setAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot);
     void setAnimationArea(uint8_t x, uint8_t y, uint8_t width = 128, uint8_t height = 96);
     bool configureAssetBundle(const AssetData::BundleId &bundleId);
     bool ShowDataFrame(const AssetData::AssetFrameAddress &address,
@@ -68,12 +67,6 @@ private:
     void showAssetDataDebug(const char *fallbackResource = nullptr,
                             const char *debugStage = nullptr);
 #endif
-
-    Adafruit_ST7735 *display() const;
-    uint8_t *readBuffer();
-    size_t readBufferSize() const;
-    uint16_t *lineBuffer();
-    size_t lineBufferPixels() const;
 
     Adafruit_ST7735 *tft;
     SdFat *SD;

@@ -23,13 +23,10 @@ struct Renderer::AnimationState
     uint8_t versionIndex = 0;
     uint16_t nextFrame = 0;
     uint16_t maxFrame = 0;
-    uint16_t frameMs = 0;
     uint8_t layoutId = 0;
     bool playOnce = false;
     bool animationFrameFailed = false;
     char externalErrorResource[20] = {};
-    uint8_t speciesSlot = 1;
-    uint8_t outfitSlot = 1;
     uint8_t animationX = 0;
     uint8_t animationY = 32;
     uint8_t animationWidth = 128;
@@ -77,19 +74,9 @@ void Renderer::initAnimations()
     state->versionIndex = 0;
     state->nextFrame = 0;
     state->maxFrame = 0;
-    state->frameMs = 0;
     state->layoutId = 0;
     state->playOnce = false;
     state->animationFrameFailed = false;
-}
-
-void Renderer::setAssetAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
-{
-    if (speciesSlot != 0 && outfitSlot != 0)
-    {
-        state->speciesSlot = speciesSlot;
-        state->outfitSlot = outfitSlot;
-    }
 }
 
 void Renderer::setAnimationArea(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
@@ -105,15 +92,7 @@ bool Renderer::configureAssetBundle(const AssetData::BundleId &bundleId)
     return state->bundleReader.configureBundle(bundleId);
 }
 
-Adafruit_ST7735 *Renderer::display() const { return tft; }
 SdFat *Renderer::sdCard() const { return SD; }
-uint8_t *Renderer::readBuffer() { return state->readBuffer; }
-size_t Renderer::readBufferSize() const { return sizeof(state->readBuffer); }
-uint16_t *Renderer::lineBuffer() { return state->lineBuffer; }
-size_t Renderer::lineBufferPixels() const
-{
-    return sizeof(state->lineBuffer) / sizeof(state->lineBuffer[0]);
-}
 
 bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
                              int xmin,
@@ -121,8 +100,8 @@ bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
                              int batch_lines, uint16_t expectedWidth, uint16_t expectedHeight)
 {
     const bool ok = FrameDecoder::showDataFrame(
-        state->bundleReader, address, display(), readBuffer(), readBufferSize(),
-        lineBuffer(), lineBufferPixels(),
+        state->bundleReader, address, tft, state->readBuffer, sizeof(state->readBuffer),
+        state->lineBuffer, FrameDecoder::kLineBufferPixels,
         xmin < 0 ? state->animationX : xmin,
         ymin < 0 ? state->animationY : ymin, batch_lines, expectedWidth, expectedHeight);
     if (!ok)
@@ -180,7 +159,6 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation,
     state->versionIndex = versionIndex;
     state->nextFrame = 0;
     state->maxFrame = record.frameCount;
-    state->frameMs = record.frameMs;
     state->layoutId = record.layoutId;
     state->playOnce = playOnce;
     return record.frameCount > 0;

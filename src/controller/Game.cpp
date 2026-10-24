@@ -222,7 +222,6 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
         return false;
     }
 
-    renderer.setAssetAppearance(speciesSlot, outfitSlot);
     appearanceLoader.configureRuntimeContract(petBehaviorConfig);
     animations->configureRuntimeContract(petBehaviorConfig);
     commandExecutor->configureRuntimeContract(petBehaviorConfig);

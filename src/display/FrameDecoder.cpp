@@ -174,6 +174,16 @@ bool showDataFrame(BundleReader &bundleReader,
     else if (descriptor.codec != AssetData::kCodecRgb565RunLiteral)
         return rejectDataFrame(bundleReader, address, frame);
 
+    const auto readPixel = [&](uint16_t &pixel) {
+        if (descriptor.codec != AssetData::kCodecPal8RunLiteral)
+            return reader.readU16LE(pixel);
+        uint8_t paletteIndex = 0;
+        if (!reader.readByte(paletteIndex) || paletteIndex >= paletteCount)
+            return false;
+        pixel = palette[paletteIndex];
+        return true;
+    };
+
     const bool frameFullyVisible = xmin >= 0 && ymin >= 0 &&
                                    static_cast<uint32_t>(xmin) + descriptor.width <= static_cast<uint32_t>(tft->width()) &&
                                    static_cast<uint32_t>(ymin) + descriptor.height <= static_cast<uint32_t>(tft->height());
@@ -207,14 +217,7 @@ bool showDataFrame(BundleReader &bundleReader,
                         return rejectDataFrame(bundleReader, address, frame);
                     if (packetIsRun)
                     {
-                        if (descriptor.codec == AssetData::kCodecPal8RunLiteral)
-                        {
-                            uint8_t paletteIndex = 0;
-                            if (!reader.readByte(paletteIndex) || paletteIndex >= paletteCount)
-                                return rejectDataFrame(bundleReader, address, frame);
-                            runPixel = palette[paletteIndex];
-                        }
-                        else if (!reader.readU16LE(runPixel))
+                        if (!readPixel(runPixel))
                             return rejectDataFrame(bundleReader, address, frame);
                     }
                 }
@@ -231,14 +234,7 @@ bool showDataFrame(BundleReader &bundleReader,
                     for (size_t index = 0; index < copyCount; ++index)
                     {
                         uint16_t pixel = 0;
-                        if (descriptor.codec == AssetData::kCodecPal8RunLiteral)
-                        {
-                            uint8_t paletteIndex = 0;
-                            if (!reader.readByte(paletteIndex) || paletteIndex >= paletteCount)
-                                return rejectDataFrame(bundleReader, address, frame);
-                            pixel = palette[paletteIndex];
-                        }
-                        else if (!reader.readU16LE(pixel))
+                        if (!readPixel(pixel))
                             return rejectDataFrame(bundleReader, address, frame);
                         destination[lineCount + index] = pixel;
                     }

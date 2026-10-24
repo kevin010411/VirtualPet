@@ -80,8 +80,7 @@ struct Scenario
     std::string appearanceEvents;
     PetStatSnapshot unlockInput = {};
     PetStatSnapshot saveInput = {};
-    uint8_t rendererSpecies = 0;
-    uint8_t rendererOutfit = 0;
+    uint8_t configuredOutfit = 0;
     EvolutionLookupResult evolutionResult = EvolutionLookupResult::NoTarget;
     uint8_t evolutionSpecies = 2;
     EvolutionAnimationMode evolutionMode = EvolutionAnimationMode::Disabled;
@@ -221,16 +220,13 @@ public:
 class ChangeHost : public AppearanceChangeHost
 {
 public:
-    explicit ChangeHost(Renderer &rendererRef) : renderer(rendererRef) {}
-    bool configureActiveAppearance(uint8_t species, uint8_t outfit) override
+    bool configureActiveAppearance(uint8_t, uint8_t outfit) override
     {
         scenario->appearanceEvents += 'L';
         if (!scenario->reloadSucceeds) return false;
-        renderer.setAssetAppearance(species, outfit);
+        scenario->configuredOutfit = outfit;
         return true;
     }
-private:
-    Renderer &renderer;
 };
 
 class SessionHost : public PetSessionHost
@@ -242,7 +238,6 @@ public:
     bool activateLoadedAppearance(uint8_t species, uint8_t outfit) override
     {
         if (!renderer.configureAssetBundle(config.assetManifest.bundleId)) return false;
-        renderer.setAssetAppearance(species, outfit);
         loader.configureRuntimeContract(config);
         animations.configureRuntimeContract(config);
         return true;
@@ -490,7 +485,7 @@ void testAppearanceChanges()
         Renderer renderer(nullptr, &sd);
         FakeAppearanceLoader loader;
         PetSaveController saves(pet, storage, renderer);
-        ChangeHost host(renderer);
+        ChangeHost host;
         AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
         const auto result = changes.changeSpecies(2, failure == 1 ? 0 : 1,
             failure == 5 ? AppearanceChangeController::ContractState::AlreadyActivated
@@ -499,7 +494,7 @@ void testAppearanceChanges()
             AppearanceChangeResult::ConfigurationFailed, AppearanceChangeResult::PetStateRejected,
             AppearanceChangeResult::UnlockFailed, AppearanceChangeResult::SaveFailed,
             AppearanceChangeResult::Applied, AppearanceChangeResult::Applied};
-        const char *events[] = {"L", "LR", "LRU", "LRUS", "LRUS", "US"};
+        const char *events[] = {"L", "L", "LU", "LUS", "LUS", "US"};
         assert(result == expected[failure]);
         assert(data.appearanceEvents == events[failure]);
         assert(pet.speciesSlot() == (failure == 0 ? 1 : 2));
@@ -537,7 +532,7 @@ void testAppearanceChanges()
         Renderer renderer(nullptr, &sd);
         FakeAppearanceLoader loader;
         PetSaveController saves(pet, storage, renderer);
-        ChangeHost host(renderer);
+        ChangeHost host;
         AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
         const auto result = changes.applyOutfit(2, failure < 5);
         const AppearanceChangeResult expected[] = {
@@ -545,14 +540,14 @@ void testAppearanceChanges()
             AppearanceChangeResult::PetStateRejected, AppearanceChangeResult::SaveFailed,
             AppearanceChangeResult::Applied, AppearanceChangeResult::SaveFailed,
             AppearanceChangeResult::Applied};
-        const char *events[] = {"L", "LRC", "LRC", "LRCRS", "LRCRS", "LRRS", "LRRS"};
+        const char *events[] = {"L", "LC", "LC", "LCS", "LCS", "LS", "LS"};
         assert(result == expected[failure]);
         assert(data.appearanceEvents == events[failure]);
         assert(pet.outfitSlot() == (failure < 3 ? 1 : 2));
         assert(pet.stageDays() == (failure == 3 || failure == 4 ? 8 : 10));
         assert(pet.customStat(0) == (failure == 3 || failure == 4 ? 6 : 9));
         assert(pet.outfitUnlockMask() == (failure == 3 || failure == 4 ? 3 : 1));
-        assert(data.rendererOutfit == (failure == 0 ? 0 : 2));
+        assert(data.configuredOutfit == (failure == 0 ? 0 : 2));
         assert(data.firstRecordedResource[0] == '\0');
     }
 }
@@ -570,7 +565,7 @@ void testUnlockRefreshAndSaveCadence()
     Renderer renderer(nullptr, &sd);
     FakeAppearanceLoader loader;
     PetSaveController saves(pet, storage, renderer);
-    ChangeHost host(renderer);
+    ChangeHost host;
     AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
     assert(changes.refreshUnlockState(false) && data.saves == 0);
     saves.maybeSave();
@@ -2163,12 +2158,6 @@ uint32_t PetStorage::lastSaveSequence() const { return 1; }
 Renderer::Renderer(Adafruit_ST7735 *display, SdFat *sd) : tft(display), SD(sd), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
-void Renderer::setAssetAppearance(uint8_t species, uint8_t outfit)
-{
-    scenario->appearanceEvents += 'R';
-    scenario->rendererSpecies = species;
-    scenario->rendererOutfit = outfit;
-}
 void Renderer::setAnimationArea(uint8_t, uint8_t, uint8_t, uint8_t) {}
 bool AssetData::sameBundleId(const BundleId &left, const BundleId &right)
 {

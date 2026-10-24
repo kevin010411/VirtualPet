@@ -56,7 +56,6 @@ AppearanceChangeResult AppearanceChangeController::applyOutfit(
     }
     else if (!pet.setSpeciesSlot(pet.speciesSlot()) || !pet.setOutfitSlot(outfitSlot))
         return AppearanceChangeResult::PetStateRejected;
-    renderer.setAssetAppearance(pet.speciesSlot(), pet.outfitSlot());
     if (pet.evaluateDeath()) return AppearanceChangeResult::Applied;
     return saves.saveNow() ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;
 }
