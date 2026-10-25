@@ -19,12 +19,9 @@ void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
         AssetData::sameBundleId(layoutBundleId, config.assetManifest.bundleId);
     layoutBundleId = config.assetManifest.bundleId;
     runtimeContract = &config;
-    renderer.setAnimationArea(0, 0, 0, 0);
+    restoreAnimationArea();
     for (uint8_t index = 0; index < config.screenBlockCount; ++index)
     {
-        const ScreenBlockConfig &block = config.screenBlocks[index];
-        if (block.kind == ScreenBlockKind::Animation)
-            renderer.setAnimationArea(block.x, block.y, block.width, block.height);
         if (!retainLayout)
             numericFrames[index] = config.screenBlocks[index].fallbackFrame;
     }
@@ -32,8 +29,21 @@ void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
         hasActiveLayout = false;
 }
 
+void LayoutRenderer::restoreAnimationArea()
+{
+    renderer.setAnimationArea(0, 0, 0, 0);
+    if (runtimeContract == nullptr) return;
+    for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
+    {
+        const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
+        if (block.kind == ScreenBlockKind::Animation)
+            renderer.setAnimationArea(block.x, block.y, block.width, block.height);
+    }
+}
+
 void LayoutRenderer::begin()
 {
+    restoreAnimationArea();
     hasActiveLayout = false;
 }
 

@@ -2,6 +2,7 @@
 #define BUTTON_INPUT_H
 
 #include <Arduino.h>
+#include "common/AppProfile.h"
 
 typedef void (*ButtonCallback)();
 
@@ -15,6 +16,12 @@ class ButtonInput
 public:
     ButtonInput(int previousPin, int nextPin, int confirmPin, unsigned long cooldownMs = 250);
     void begin();
+#if ENABLE_INSTRUCTION_RESPONSE
+    void instructionSample(uint8_t &held, uint8_t &pressed, uint32_t &timestamp);
+    bool instructionPending() const { return instructionObserved != instructionStable; }
+    uint32_t instructionPendingAt() const;
+    uint8_t instructionRawMask() const { return instructionObserved; }
+#endif
     void clearFlags();
     bool takeDeathPress();
     bool isHeld() const { return readMask() != 0; }
@@ -31,6 +38,10 @@ private:
                                        ButtonCallback onNext, ButtonCallback onConfirm,
                                        ButtonCallback onAnyPress);
 
+#if ENABLE_INSTRUCTION_RESPONSE
+    uint8_t instructionObserved = 255, instructionStable = 7;
+    uint32_t instructionChangedAt[3] = {};
+#endif
     int previousPin;
     int nextPin;
     int confirmPin;

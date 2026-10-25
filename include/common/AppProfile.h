@@ -9,6 +9,10 @@
 #define APP_COMMAND_CHANGE_SPECIES 10
 #define APP_COMMAND_USER_ACTION 11
 #define APP_COMMAND_COLLECTION_CATALOG 12
+#define APP_COMMAND_INSTRUCTION_RESPONSE 13
+#ifndef ENABLE_INSTRUCTION_RESPONSE
+#define ENABLE_INSTRUCTION_RESPONSE 0
+#endif
 
 // Normal daily lifecycle stays on; override to 0 only for diagnostics/size probes.
 #ifndef ENABLE_DAILY_POST_PROCESSING

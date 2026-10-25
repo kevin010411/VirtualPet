@@ -33,6 +33,7 @@ private:
     bool commandsVisible = true;
     uint16_t numericFrames[32] = {};
 
+    void restoreAnimationArea();
     bool drawNumeric(uint8_t index);
     bool drawSlot(int slot, bool selected);
 };

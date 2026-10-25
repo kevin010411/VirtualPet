@@ -24,6 +24,8 @@ $sources = @(
     'test/runtime_table_behavior/test_main.cpp',
     'src/appearance/SdAppearanceLoader.cpp',
     'src/resources/RuntimeTableBehavior.cpp',
+    'src/resources/RuntimeTableBehaviorDecoder.cpp',
+    'src/resources/RuntimeTablePresentationDecoder.cpp',
     'src/appearance/RuntimeTableAppearance.cpp',
     'src/resources/RuntimeTableReader.cpp',
     'src/resources/RuntimeTableFile.cpp',
@@ -41,7 +43,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath $validFixture $legacyFixture $startupFixture @appliedFixtures $sequenceFixture $optionalFixture
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] Runtime Table v16 optional action animations, action ranges, applied screen, initial contract, malformed records, and legacy rejection'
+    Write-Host '[PASS] Runtime Table v26 optional action animations, action ranges, applied screen, initial contract, malformed records, and legacy rejection'
     exit 0
 }
 finally {

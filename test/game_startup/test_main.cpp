@@ -55,6 +55,23 @@ struct Scenario
     int firstStartFrameQueries = 0;
     bool commandAction = false;
     bool commandPredict = false;
+    bool commandInstruction = false;
+    bool instructionCustomArea = false;
+    bool instructionEffects = false;
+    uint16_t instructionOptionIds[3] = {};
+    bool instructionAnimatedFeedback = false;
+#if ENABLE_INSTRUCTION_RESPONSE
+    InstructionResponseSettings instructionSettings;
+#endif
+    uint8_t animationArea[4] = {};
+    unsigned instructionOptionGroups = 0;
+    unsigned instructionFeedbackDraws = 0;
+    uint8_t instructionFeedbackFrames = 1;
+    uint8_t instructionFeedbackFrame = 0;
+    uint32_t feedbackFirstDrawMs = 0;
+    uint32_t feedbackFrameDrawMs = 0;
+    uint16_t instructionFrameMs = 167;
+    bool pendingFeedbackDelay = false;
     bool commandGuess = false;
     bool missingPredict = false;
     bool navigationButtons = false;
@@ -581,7 +598,7 @@ void testUnlockRefreshAndSaveCadence()
     saves.maybeSave();
     assert(data.saves == 3);
     data.saveSucceeds = true;
-    assert(saves.saveNow() && data.saves == 4);
+    assert(saves.requestSave() == PetSaveResult::Persisted && data.saves == 4);
     saves.maybeSave();
     assert(data.saves == 4);
     saves.maybeSave();
@@ -1844,19 +1861,60 @@ void testDailySaveRetry()
     PetStorage storage(&sd);
     Renderer renderer(nullptr, &sd);
     PetSaveController saves(pet, storage, renderer);
-    assert(saves.saveDailyProgress() && data.saves == 0);
+    assert(saves.saveDailyProgress() == PetSaveResult::NotNeeded && data.saves == 0);
     data.saveSucceeds = false;
-    assert(!saves.saveDailyProgress() && data.saves == 1);
+    assert(saves.saveDailyProgress() == PetSaveResult::Failed && data.saves == 1);
     data.saveSucceeds = true;
     // Retry on the next day; a failed write must not reset the interval.
-    assert(saves.saveDailyProgress() && data.saves == 2);
-    assert(saves.saveDailyProgress() && data.saves == 2);
-    assert(saves.saveDailyProgress() && data.saves == 3);
+    assert(saves.saveDailyProgress() == PetSaveResult::Persisted && data.saves == 2);
+    assert(saves.saveDailyProgress() == PetSaveResult::NotNeeded && data.saves == 2);
+    assert(saves.saveDailyProgress() == PetSaveResult::Persisted && data.saves == 3);
     data.saveSucceeds = false;
-    assert(!saves.saveNow() && data.saves == 4);
+    assert(saves.requestSave() == PetSaveResult::Failed && data.saves == 4);
     data.saveSucceeds = true;
     // Pending event commits retry even before the ordinary two-day threshold.
-    assert(saves.saveDailyProgress(true) && data.saves == 5);
+    assert(saves.saveDailyProgress(true) == PetSaveResult::Persisted && data.saves == 5);
+}
+
+void testSaveRequestResults()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    PetSaveController saves(pet, storage, renderer);
+    assert(saves.endBatch() == PetSaveResult::NotNeeded && data.saves == 0);
+    assert(saves.maybeSave() == PetSaveResult::NotNeeded && data.saves == 0);
+
+    saves.beginBatch();
+    assert(saves.maybeSave() == PetSaveResult::Deferred && data.saves == 0);
+    assert(saves.requestSave() == PetSaveResult::Deferred && data.saves == 0);
+    pet.setStageDays(7); // The batch writes its final state, not the request-time snapshot.
+    assert(saves.endBatch() == PetSaveResult::Persisted && data.saves == 1);
+    assert(data.saveInput.stage_days == 7);
+    assert(saves.endBatch() == PetSaveResult::NotNeeded && data.saves == 1);
+
+    saves.beginBatch();
+    assert(saves.saveDailyProgress() == PetSaveResult::Deferred && data.saves == 1);
+    // Life-state commits bypass batching and clear its pending snapshot.
+    assert(saves.saveLifeState() == PetSaveResult::Persisted && data.saves == 2);
+    assert(saves.endBatch() == PetSaveResult::NotNeeded && data.saves == 2);
+
+    saves.beginBatch();
+    assert(saves.requestSave() == PetSaveResult::Deferred && data.saves == 2);
+    data.saveSucceeds = false;
+    assert(saves.endBatch() == PetSaveResult::Failed && data.saves == 3);
+    assert(saves.endBatch() == PetSaveResult::NotNeeded && data.saves == 3);
+    data.saveSucceeds = true;
+    assert(saves.requestSave() == PetSaveResult::Persisted && data.saves == 4);
+
+    saves.beginBatch();
+    assert(saves.requestSave() == PetSaveResult::Deferred && data.saves == 4);
+    // Immediate collection events retain their existing bypass policy too.
+    assert(saves.saveCollectionProgress(true, true) == PetSaveResult::Persisted && data.saves == 5);
+    assert(saves.endBatch() == PetSaveResult::NotNeeded && data.saves == 5);
 }
 void testDeathCompileFlag()
 {
@@ -2087,6 +2145,39 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
         config.actionEffects[1] = {0, PetBehaviorEffectOperation::Set, 4};
         config.buttons[1].actionSlot = 1;
     }
+#if ENABLE_INSTRUCTION_RESPONSE
+    if (scenario->commandInstruction)
+    {
+        config.instructionSettings = scenario->instructionSettings;
+        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::InstructionResponse};
+        if (scenario->instructionEffects)
+        {
+            config.stats[0] = {true, 9, 0, 10, 0};
+            config.instructionEffectCount = 2;
+            config.instructionEffects[0] = {0, 0, PetBehaviorEffectOperation::Change, 5};
+            config.instructionEffects[1] = {1, 0, scenario->deathEnabled ? PetBehaviorEffectOperation::Set : PetBehaviorEffectOperation::Change,
+                                            scenario->deathEnabled ? 0 : -5};
+        }
+        if (scenario->instructionCustomArea)
+        {
+            auto &area = config.screenBlocks[config.screenBlockCount++];
+            area.kind = ScreenBlockKind::Animation;
+            area.x = 16; area.y = 32; area.width = 96; area.height = 96;
+        }
+        if (scenario->instructionAnimatedFeedback)
+        {
+            config.systemAnimations[38] = {1, 1, 95};
+            config.systemAnimations[39] = {1, 1, 95};
+        }
+        for (uint8_t item = 0; item < 3; ++item)
+        {
+            config.instructionOptions[item] = {0, 0, static_cast<uint16_t>(80 + item)};
+            config.systemAnimations[35 + item] = {1, 1, static_cast<uint16_t>(90 + item)};
+            if (config.instructionSettings.noGoEnabled)
+                config.systemAnimations[40 + item] = {1, 1, static_cast<uint16_t>(85 + item)};
+        }
+    }
+#endif
     if (scenario->commandPredict)
     {
         config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Predict};
@@ -2158,23 +2249,35 @@ uint32_t PetStorage::lastSaveSequence() const { return 1; }
 Renderer::Renderer(Adafruit_ST7735 *display, SdFat *sd) : tft(display), SD(sd), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
-void Renderer::setAnimationArea(uint8_t, uint8_t, uint8_t, uint8_t) {}
+void Renderer::setAnimationArea(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
+{
+    scenario->animationArea[0] = x; scenario->animationArea[1] = y;
+    scenario->animationArea[2] = width; scenario->animationArea[3] = height;
+}
 bool AssetData::sameBundleId(const BundleId &left, const BundleId &right)
 {
     return memcmp(left.bytes, right.bytes, sizeof(left.bytes)) == 0;
 }
 bool Renderer::configureAssetBundle(const AssetData::BundleId &) { return scenario->bundleSucceeds; }
-bool Renderer::setAnimation(const AssetData::AnimationRef &animation, uint8_t, bool)
+bool Renderer::setAnimation(const AssetData::AnimationRef &animation, uint8_t, bool once)
 {
     scenario->displayedAnimation = animation;
+    if (animation.animationId == 95)
+    {
+        assert(once);
+        scenario->pendingFeedbackDelay = true;
+        scenario->instructionFeedbackFrame = 0;
+    }
     return true;
 }
 bool Renderer::currentLayoutId(uint8_t &layout) const { layout = 0; return scenario->layoutSucceeds; }
 bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &,
                                      const AssetData::AnimationRef &, uint8_t, uint8_t, uint16_t) { return true; }
 bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation, uint8_t,
-                                  uint16_t frame, int, int, int, uint16_t, uint16_t)
+                                  uint16_t frame, int x, int, int, uint16_t, uint16_t)
 {
+    if (animation.animationId >= 80 && animation.animationId <= 82)
+        scenario->instructionOptionIds[x / 43] = animation.animationId;
     if (animation.animationId == 8) scenario->selectedButtonFrame = frame;
     ++scenario->playbackDraws;
     return true;
@@ -2182,14 +2285,26 @@ bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation, uint
 bool Renderer::willRestartAnimationLoop() const { return false; }
 bool Renderer::advanceAnimationFrame()
 {
-    ++scenario->playbackDraws;
     const uint8_t id = scenario->displayedAnimation.animationId;
+    if (id == 95 && scenario->instructionFeedbackFrame >= scenario->instructionFeedbackFrames)
+        return true;
+    ++scenario->playbackDraws;
+    if (id == 95) ++scenario->instructionFeedbackFrame;
+    if (id == 95 && scenario->pendingFeedbackDelay)
+    {
+        scenario->pendingFeedbackDelay = false;
+        ++scenario->instructionFeedbackDraws;
+        hostMillis += scenario->feedbackFirstDrawMs;
+    }
+    else if (id == 95)
+        hostMillis += scenario->feedbackFrameDrawMs;
     if (id == 3) ++scenario->sourceDraws;
     if (id == 4) ++scenario->targetDraws;
     scenario->frameFailed = id != 0 && id == scenario->failedAnimationId;
     if (scenario->frameFailed && scenario->evolutionMode != EvolutionAnimationMode::Disabled &&
         scenario->assetError)
         recordAssetDataErrorResource(id == 3 ? "source.data" : "target.data");
+    if (id == 95) return scenario->frameFailed;
 #if ENABLE_GUESS_GAME
     // A looping item prompt does not finish after the fake display's first frame.
     if (scenario->commandGuess &&
@@ -2226,7 +2341,10 @@ uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &animation)
          : animation.animationId == 2 ? scenario->statusVersions : 1;
 }
 unsigned long Renderer::frameIntervalFor(const AssetData::AnimationRef &, uint8_t,
-                                         unsigned long defaultInterval) { return defaultInterval; }
+                                         unsigned long defaultInterval)
+{
+    return scenario->commandInstruction ? scenario->instructionFrameMs : defaultInterval;
+}
 void Renderer::showResourceError()
 {
     ++scenario->resourceShows;
@@ -2441,8 +2559,382 @@ void testSwitchFromGuessToPredict()
 #endif
 #endif
 
+#if ENABLE_INSTRUCTION_RESPONSE
+void Renderer::clearInstructionOptions() { ++scenario->instructionOptionGroups; }
+void Renderer::showInstructionFeedback(bool)
+{
+    ++scenario->instructionFeedbackDraws;
+    hostMillis += scenario->feedbackFirstDrawMs;
+}
+void testInstructionDeferredEffects()
+{
+    // Complete, cancelled, precommit read failure, failed save, postcommit visual failure, death.
+    for (unsigned kind = 0; kind < 4; ++kind)
+    for (unsigned mode = 0; mode < 8; ++mode)
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.commandAction = data.commandInstruction = data.navigationButtons = data.instructionEffects = true;
+        data.instructionSettings.hard = (kind & 1) != 0;
+        data.instructionSettings.noGoEnabled = (kind & 2) != 0;
+        data.instructionSettings.typeWeights[0] = 0;
+        data.instructionSettings.typeWeights[1] = 1;
+        data.deathEnabled = mode == 5;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, appearance);
+        assert(game.setup_game());
+        const int savesBefore = data.saves;
+        game.OnConfirmKey();
+        game.instructionInput(0, 0, hostMillis);
+        game.loop_game();
+        for (unsigned round = 0; round < 10; ++round)
+        {
+            game.instructionInput(0, 0, hostMillis);
+            game.loop_game();
+            if (mode == 1 && round == 1)
+            {
+                game.instructionInput(5, 5, hostMillis);
+                hostMillis += 1000;
+                game.loop_game();
+                break;
+            }
+            if (mode == 2 && round == 1)
+            {
+                data.failedAnimationId = data.displayedAnimation.animationId;
+                hostMillis += 167;
+                game.loop_game();
+                break;
+            }
+            if (mode == 6 && round == 1)
+            {
+                game.startBatteryAnimation();
+                assert(!game.capturesInstructionInput());
+                game.endBatteryAnimation();
+                game.loop_game();
+                break;
+            }
+            if ((round % 2 == 0) != data.instructionSettings.noGoEnabled)
+            {
+                const uint16_t option = 80 + data.displayedAnimation.animationId - (data.instructionSettings.noGoEnabled ? 85 : 90);
+                uint8_t pressed = 0;
+                for (uint8_t index = 0; index < 3; ++index)
+                    if (data.instructionOptionIds[index] == option) pressed = 1 << index;
+                assert(pressed);
+                game.instructionInput(pressed, pressed, hostMillis + 1);
+                game.instructionInput(0, 0, hostMillis + 2);
+            }
+            hostMillis += 2000;
+            game.loop_game();
+            assert(pet.customStat(0) == 9 && data.saves == savesBefore && !pet.isDead());
+            hostMillis += 499;
+            game.loop_game();
+            assert(pet.customStat(0) == 9 && data.saves == savesBefore);
+            if (mode == 7 && round == 9)
+            {
+                const uint32_t pressedAt = hostMillis - 4;
+                game.instructionPending(true, pressedAt, 5);
+                ++hostMillis;
+                game.loop_game();
+                assert(game.capturesInstructionInput() && pet.customStat(0) == 9 && data.saves == savesBefore);
+                hostMillis = pressedAt + 20;
+                game.instructionInput(5, 5, pressedAt);
+                game.instructionPending(false, hostMillis, 5);
+                game.loop_game();
+                hostMillis = pressedAt + 999;
+                game.loop_game();
+                assert(game.capturesInstructionInput() && pet.customStat(0) == 9);
+                ++hostMillis;
+                game.loop_game();
+                break;
+            }
+            if (mode == 3 && round == 9) data.saveSucceeds = false;
+            ++hostMillis;
+            game.loop_game();
+        }
+        assert(!game.capturesInstructionInput());
+        if (mode == 1 || mode == 2 || mode == 6 || mode == 7)
+            assert(pet.customStat(0) == 9 && data.saves == savesBefore);
+        else
+        {
+            const uint32_t expected = mode == 5 ? 0 : 5;
+            assert(pet.customStat(0) == expected);
+            assert(data.saves == savesBefore + 1);
+            if (mode == 3) assert(data.resourceShows > 0 && !strcmp(data.lastShownResource, "pet state"));
+            if (mode == 4) data.failedAnimationId = 5;
+            const int attempts = data.saves;
+            for (int repeat = 0; repeat < 3; ++repeat) game.loop_game();
+            assert(pet.customStat(0) == expected && data.saves == attempts);
+#if ENABLE_DEATH
+            if (mode == 5) assert(pet.isDead() && data.evolutionLookups == 0 && data.displayedAnimation.animationId == 9);
+#endif
+        }
+    }
+    puts("[PASS] Deferred ordered clamps: 9,+5,-5 ->5; questions/feedback unchanged; cancel/read failure discard; one save; failed save and visual failure never replay; death before evolution");
+}
+
+void testInstructionBatteryReturn()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = data.commandInstruction = data.navigationButtons = data.instructionEffects = true;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    assert(game.setup_game());
+    game.synchronizeTime(0);
+    const auto before = pet.statSnapshot();
+    game.OnConfirmKey();
+    game.instructionInput(0, 0, 0);
+    game.loop_game();
+    assert(game.capturesInstructionInput() && game.preventsIdleSleep());
+    game.synchronizeTime(8);
+    game.startBatteryAnimation();
+    assert(!game.capturesInstructionInput());
+    game.endBatteryAnimation();
+    game.loop_game();
+    game.synchronizeTime(8);
+    assert(pet.customStat(0) == before.customStats[0] && pet.stageDays() == before.stage_days);
+    game.OnConfirmKey();
+    assert(game.capturesInstructionInput());
+    game.instructionInput(0, 0, 0);
+    game.loop_game();
+    game.instructionInput(5, 5, 1);
+    hostMillis = 1001;
+    game.loop_game();
+    assert(!game.capturesInstructionInput() && pet.customStat(0) == before.customStats[0]);
+    game.synchronizeTime(10);
+    assert(pet.stageDays() == before.stage_days + 1);
+    puts("[PASS] battery interruption discards the session, excludes game RTC time, permits a fresh game and normal clock return");
+}
+
+void testInstructionFeedbackInterruption()
+{
+    for (bool failedFrame : {false, true})
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.commandAction = data.commandInstruction = data.navigationButtons = data.instructionEffects = true;
+        data.instructionSettings = {1, 500, 10000, {1, 1, 1}};
+        data.instructionAnimatedFeedback = true;
+        data.instructionFeedbackFrames = 3;
+        data.instructionFrameMs = 50;
+        data.feedbackFirstDrawMs = 700;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, appearance);
+        assert(game.setup_game());
+        const int saves = data.saves;
+        game.OnConfirmKey();
+        game.instructionInput(0, 0, 0);
+        game.loop_game();
+        hostMillis = 500;
+        game.loop_game();
+        assert(hostMillis == 1200 && data.instructionFeedbackDraws == 1);
+        hostMillis = 1250;
+        game.loop_game();
+        if (failedFrame) data.failedAnimationId = 95;
+        hostMillis = 1300;
+        game.loop_game();
+        if (!failedFrame)
+        {
+            game.instructionPending(true, 1349, 5);
+            hostMillis = 1350;
+            game.loop_game();
+            game.loop_game();
+            assert(game.capturesInstructionInput() && data.instructionFeedbackFrame == 3);
+            game.instructionInput(5, 5, 1349);
+            game.instructionPending(false, 1369, 5);
+            hostMillis = 2348;
+            game.loop_game();
+            assert(game.capturesInstructionInput());
+            ++hostMillis;
+            game.loop_game();
+        }
+        assert(!game.capturesInstructionInput() && pet.customStat(0) == 9 && data.saves == saves);
+        assert((data.resourceShows != 0) == failedFrame);
+    }
+    puts("[PASS] final feedback frame failure or pending exit cancels before settlement even after animation completion");
+}
+
+void testInstructionFeedbackDrawLatency()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = data.commandInstruction = data.navigationButtons = data.instructionEffects = true;
+    data.instructionSettings = {1, 500, 10000, {1, 1, 1}};
+    data.instructionAnimatedFeedback = true;
+    data.instructionFeedbackFrames = 3;
+    data.instructionFrameMs = 50;
+    data.feedbackFirstDrawMs = data.feedbackFrameDrawMs = 700;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    assert(game.setup_game());
+    const int saves = data.saves;
+    game.OnConfirmKey();
+    game.instructionInput(0, 0, 0);
+    game.loop_game();
+    hostMillis = 500;
+    game.loop_game();
+    assert(hostMillis == 1200);
+    for (uint8_t frame = 1; frame < 3; ++frame)
+    {
+        game.loop_game();
+        assert(data.instructionFeedbackFrame == frame);
+        hostMillis += 49;
+        game.loop_game();
+        assert(data.instructionFeedbackFrame == frame && data.saves == saves);
+        ++hostMillis;
+        const unsigned long beforeDraw = hostMillis;
+        game.loop_game();
+        assert(hostMillis == beforeDraw + 700 && data.instructionFeedbackFrame == frame + 1);
+    }
+    hostMillis += 49;
+    game.loop_game();
+    assert(game.capturesInstructionInput() && data.saves == saves);
+    ++hostMillis;
+    game.loop_game();
+    game.loop_game();
+    assert(!game.capturesInstructionInput() && data.saves == saves + 1 && pet.customStat(0) == 4);
+    puts("[PASS] slow SD/display draws do not consume the next feedback frame's interval or final hold");
+}
+
+void testInstructionLifecycle()
+{
+    const InstructionResponseSettings configurations[] = {
+        {}, {1, 500, 100, {65535, 0, 0}}, {20, 10000, 10000, {0, 65535, 65535}},
+        {1, 500, 100, {1, 1, 1}, true, false, {1, 0}},
+        {20, 500, 100, {65535, 65535, 65535}, true, true, {0, 65535}}
+    };
+    for (const auto &settings : configurations)
+    for (uint16_t frameMs : {50, 10000})
+    for (bool cancel : {false, true})
+    for (bool customArea : {false, true})
+    for (bool animatedFeedback : {false, true})
+    for (uint8_t feedbackFrames : {1, 3})
+    {
+        hostMillis = 0;
+        Scenario data;
+        data.instructionSettings = settings;
+        data.instructionFrameMs = frameMs;
+        data.instructionCustomArea = customArea;
+        data.instructionAnimatedFeedback = animatedFeedback;
+        data.instructionFeedbackFrames = feedbackFrames;
+        data.feedbackFirstDrawMs = 700;
+        scenario = &data;
+        data.commandAction = data.commandInstruction = data.navigationButtons = true;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, appearance);
+        assert(game.setup_game());
+        game.synchronizeTime(0);
+        const auto before = pet.statSnapshot();
+        game.OnConfirmKey();
+        assert(game.capturesInstructionInput() && game.preventsIdleSleep());
+        game.instructionInput(0, 0, 0);
+        game.loop_game();
+        if (cancel)
+        {
+            hostMillis = settings.answerMs - 100;
+            game.instructionInput(5, 5, hostMillis);
+            game.loop_game();
+            hostMillis = settings.answerMs;
+            rtcLoop(game);
+            assert(game.capturesInstructionInput());
+            hostMillis = settings.answerMs + 900;
+            rtcLoop(game);
+        }
+        else
+        {
+            for (unsigned round = 0; round < settings.roundCount; ++round)
+            {
+                game.instructionInput(0, 0, hostMillis);
+                game.loop_game();
+                hostMillis += settings.answerMs - 1;
+                rtcLoop(game);
+                assert(data.instructionFeedbackDraws == round);
+                hostMillis += 1;
+                rtcLoop(game);
+                if (data.instructionFeedbackDraws != round + 1)
+                    fprintf(stderr, "instruction mismatch: hard=%d noGo=%d rounds=%u round=%u frameMs=%u feedback=%d active=%d draws=%u expected=%u now=%lu animation=%u\n",
+                        settings.hard, settings.noGoEnabled, settings.roundCount, round, frameMs, animatedFeedback,
+                        game.capturesInstructionInput(), data.instructionFeedbackDraws, round + 1, hostMillis, data.displayedAnimation.animationId);
+                assert(data.instructionFeedbackDraws == round + 1);
+                const unsigned groups = data.instructionOptionGroups;
+                if (animatedFeedback)
+                {
+                    for (uint8_t frame = 0; frame < feedbackFrames; ++frame)
+                    {
+                        hostMillis += frameMs - 1;
+                        rtcLoop(game);
+                        assert(game.capturesInstructionInput() && data.instructionOptionGroups == groups);
+                        const int draws = data.playbackDraws;
+                        ++hostMillis;
+                        rtcLoop(game);
+                        assert(data.playbackDraws == draws + (frame + 1 < feedbackFrames ? 1 : 0));
+                        assert(game.capturesInstructionInput() && data.instructionOptionGroups == groups);
+                    }
+                    // Completion is consumed after the renderer confirms the final frame's hold.
+                    rtcLoop(game);
+                }
+                else
+                {
+                    hostMillis += 499;
+                    rtcLoop(game);
+                    assert(game.capturesInstructionInput() && data.instructionOptionGroups == groups);
+                    ++hostMillis;
+                    rtcLoop(game);
+                }
+            }
+        }
+        assert(!game.capturesInstructionInput() && !game.preventsIdleSleep());
+        const uint8_t custom[] = {16, 32, 96, 96}, none[] = {0, 0, 0, 0};
+        assert(memcmp(data.animationArea, customArea ? custom : none, 4) == 0);
+        assert(data.resourceShows == 0);
+        assert(pet.stageDays() == before.stage_days && pet.customStat(0) == before.customStats[0]);
+        const uint32_t returnedAt = hostMillis / 1000;
+        game.synchronizeTime(returnedAt);
+        assert(pet.stageDays() == before.stage_days && !game.hasPendingTime());
+        game.synchronizeTime(returnedAt + 2);
+        assert(pet.stageDays() == before.stage_days + 1);
+    }
+    puts("[PASS] Game 1/10/20 rounds: delayed builtin feedback holds 500ms; authored 1/3-frame feedback plays once including final hold regardless of feedback_ms; completion/cancel restores geometry without PetClock catch-up");
+}
+#endif
+
 int main(int argc, char **argv)
 {
+#if ENABLE_INSTRUCTION_RESPONSE
+    if (argc == 2 && strcmp(argv[1], "--instruction") == 0)
+    {
+        testInstructionLifecycle();
+        testInstructionBatteryReturn();
+        testInstructionFeedbackInterruption();
+        testInstructionFeedbackDrawLatency();
+        testInstructionDeferredEffects();
+        return 0;
+    }
+#endif
 #if ENABLE_COMMAND_PREDICT
     if (argc == 2 && strcmp(argv[1], "--predict") == 0)
     {
@@ -2498,6 +2990,7 @@ int main(int argc, char **argv)
     testActionPlaybackPausesPetTime();
     testBatchedCatchUpMatchesDailyEvents();
     testDailySaveRetry();
+    testSaveRequestResults();
     testNavigationDuringRtcCatchUp();
     testRtcCatchUp();
     testRtcSnapshotAndReset();

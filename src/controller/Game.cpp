@@ -42,7 +42,7 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, Appear
       ,
       appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader, *layout))
 #endif
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
       ,
       minigame(std::make_unique<MinigameController>(*animations
 #if ENABLE_GUESS_GAME
@@ -89,16 +89,43 @@ void Game::loop_game()
     if (flow.isStartup() && !animations->isBusy())
         enterCommand();
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     if (flow.isMinigame())
     {
         minigame->update();
+#if ENABLE_INSTRUCTION_RESPONSE
+        uint32_t instructionMask = 0;
+        uint8_t instructionCount = 0;
+        if (minigame->consumeInstructionCompletion(instructionMask, instructionCount))
+        {
+            // Consume before commit/save: a failed disk write must never replay arithmetic.
+            if (!petBehaviorRuntime->applyInstructionResults(instructionMask, instructionCount))
+                renderer.showResourceError("pet state");
+            else
+            {
+                if (enterDeathIfNeeded()) return;
+                if (!refreshOutfitUnlockMask(false, false)) renderer.showResourceError();
+#if ENABLE_COLLECTION_CATALOG
+                collectionSavePending = true;
+                updateCollectionProgress(true);
+#else
+                if (petSaves.saveCollectionProgress(true, true) == PetSaveResult::Failed)
+                    renderer.showResourceError("pet state");
+#endif
+            }
+        }
+        if (minigame->capturesInstructionInput()) return;
+#endif
         if (enterDeathIfNeeded()) return;
         if (!minigame->isActive())
         {
             if (!refreshOutfitUnlockMask(false))
                 renderer.showResourceError();
             flow.onMinigameEnded();
+            layout->begin();
+            animations->requestFullRedraw();
+            dirtySelect = true;
+            synchronizePlaybackClock();
         }
     }
 #endif
@@ -249,7 +276,7 @@ AppearanceChangeResult Game::enterSpecies(uint8_t speciesSlot, uint8_t entryOutf
 
 bool Game::saveNow()
 {
-    return initialized && petSaves.saveNow();
+    return initialized && petSaves.requestSave() != PetSaveResult::Failed;
 }
 
 bool Game::startStartupAnimation()
@@ -270,6 +297,9 @@ bool Game::hasTransientAnimation() const
 
 bool Game::preventsIdleSleep() const
 {
+#if ENABLE_INSTRUCTION_RESPONSE
+    if (capturesInstructionInput()) return true;
+#endif
     return animations->hasFinitePlayback();
 }
 
@@ -306,9 +336,9 @@ bool Game::updateCollectionProgress(bool immediate)
 }
 
 #if ENABLE_COLLECTION_CATALOG
-bool Game::finishCollectionSave(bool saved)
+bool Game::finishCollectionSave(PetSaveResult result)
 {
-    if (!saved)
+    if (result == PetSaveResult::Failed)
     {
         // A failed commit keeps pending progress for the next complete mutation.
         // Contract failure remains terminal, distinct from storage failure.
@@ -339,7 +369,8 @@ void Game::onGuessOutcomeApplied()
     collectionSavePending = true;
     updateCollectionProgress(true);
 #else
-    if (!petSaves.saveCollectionProgress(true, true)) renderer.showResourceError("pet state");
+    if (petSaves.saveCollectionProgress(true, true) == PetSaveResult::Failed)
+        renderer.showResourceError("pet state");
 #endif
 }
 #endif
@@ -348,6 +379,15 @@ void Game::startBatteryAnimation()
 {
     if (!initialized)
         return;
+#if ENABLE_INSTRUCTION_RESPONSE
+    if (capturesInstructionInput())
+    {
+        minigame->reset();
+        flow.onMinigameEnded();
+        layout->begin();
+        synchronizePlaybackClock();
+    }
+#endif
     evolution->cancel();
     flow.enterBattery();
     animations->startBatteryAnimation();
@@ -409,7 +449,7 @@ void Game::routeDirectionKey(KeyDirection direction)
     }
 #endif
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     if (flow.isMinigame())
     {
         if (direction == KeyDirection::Left)
@@ -493,7 +533,7 @@ void Game::OnConfirmKey()
     }
 #endif
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     if (flow.isMinigame())
     {
         minigame->onConfirm();
@@ -522,7 +562,7 @@ bool Game::setStageDaysForCheat(uint32_t value)
 
     const uint32_t previous = pet.stageDays();
     pet.setStageDays(value);
-    if (!petSaves.saveNow())
+    if (petSaves.requestSave() == PetSaveResult::Failed)
     {
         pet.setStageDays(previous);
         return false;
@@ -565,10 +605,17 @@ bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
 void Game::synchronizePlaybackClock()
 {
     if (!flow.isCommand()
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
         && !(flow.isMinigame() && minigame->pausesPetTime())
 #endif
     ) return;
+#if ENABLE_INSTRUCTION_RESPONSE
+    if (capturesInstructionInput())
+    {
+        petClock.pause(latestRtcSeconds);
+        return;
+    }
+#endif
     if (animations->hasFinitePlayback()) petClock.pause(latestRtcSeconds);
     else petClock.resume(latestRtcSeconds);
 }
@@ -627,9 +674,18 @@ void Game::handleSystemCommandRequest(const CommandResult &result)
     }
 #endif
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     if (result.requestedMinigame)
     {
+#if ENABLE_INSTRUCTION_RESPONSE
+        if (result.commandId == AppCommandId::InstructionResponse)
+        {
+            petClock.pause(latestRtcSeconds);
+            minigame->startInstruction(renderer, petBehaviorConfig);
+            flow.enterMinigame();
+            return;
+        }
+#endif
 #if ENABLE_COMMAND_PREDICT
         if (result.commandId == AppCommandId::Predict)
         {
@@ -678,69 +734,61 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
     if (petClock.pending())
     {
         // One event boundary per loop keeps playback and voltage sampling live.
-        uint32_t days = 1;
-        const DayResult result = maybeTickPet(days);
+        const uint32_t consumedDays = settlePetDays(petClock.due());
         if (pet.isDead()) return;
-        if (result == DayResult::Consumed || result == DayResult::ConsumedWithError)
-        {
-            petClock.consume(days);
-            catchUpPrimed = true;
-        }
-        else catchUpPrimed = false;
+        if (consumedDays != 0) petClock.consume(consumedDays);
+        catchUpPrimed = consumedDays != 0;
     }
     // Time spent draining the snapshot must precede new input too.
     if (initialized && !petClock.pending()) petClock.observe(rtcSeconds);
     if (initialized && !petClock.pending())
     {
         catchUpPrimed = false;
-        petSaves.endBatch();
+        // Periodic write failures retain their existing retry cadence.
+        (void)petSaves.endBatch();
     }
 }
 
-Game::DayResult Game::maybeTickPet(uint32_t &days)
+uint32_t Game::settlePetDays(uint32_t dueDays)
 {
-    if (enterDeathIfNeeded()) return DayResult::Blocked;
+    if (enterDeathIfNeeded()) return 0;
     const EvolutionResult progress = evolution->update(PlaybackResult::Accepted);
     handleEvolutionResult(progress);
-    if (progress != EvolutionResult::NoChange)
-        return flow.isFatalError() ? DayResult::Fatal : DayResult::Blocked;
+    if (progress != EvolutionResult::NoChange || animations->isBusy()) return 0;
 
-    if (!animations->isBusy())
+    uint32_t days = 1;
+    // Settle already-matching unlock/acquisition predicates on the first
+    // day before skipping a stable interval (which may end in death).
+    if (catchUpPrimed && dueDays > 1 &&
+        !petBehaviorRuntime->catchUpDays(appearanceLoader, dueDays, days))
     {
-        // Settle already-matching unlock/acquisition predicates on the first
-        // day before skipping a stable interval (which may end in death).
-        if (catchUpPrimed && petClock.due() > 1 &&
-            !petBehaviorRuntime->catchUpDays(appearanceLoader, petClock.due(), days))
-        {
-            enterRuntimeFatal();
-            return DayResult::Fatal;
-        }
-        if (!petBehaviorRuntime->advancePetDay(days))
-        {
-            renderer.showResourceError();
-            return DayResult::ConsumedWithError;
-        }
-        if (enterDeathIfNeeded()) return DayResult::Consumed;
+        enterRuntimeFatal();
+        return 0;
+    }
+    if (!petBehaviorRuntime->advancePetDay(days))
+    {
+        renderer.showResourceError();
+        return days;
+    }
+    if (enterDeathIfNeeded()) return days;
 #if ENABLE_DAILY_POST_PROCESSING
 #if !ENABLE_COLLECTION_CATALOG
-        petSaves.maybeSave();
+    (void)petSaves.maybeSave();
 #endif
-        if (!refreshOutfitUnlockMask(false, false))
-        {
-            renderer.showResourceError();
-            return DayResult::ConsumedWithError;
-        }
-#if ENABLE_COLLECTION_CATALOG
-        if (!finishCollectionSave(petSaves.saveDailyProgress(collectionSavePending)))
-            return DayResult::ConsumedWithError;
-#endif
-        if (handleEvolution() != EvolutionResult::NoChange)
-            return flow.isFatalError() ? DayResult::Fatal : DayResult::Consumed;
-#endif
-        refreshBaseAnimation();
-        return DayResult::Consumed;
+    if (!refreshOutfitUnlockMask(false, false))
+    {
+        renderer.showResourceError();
+        return days;
     }
-    return DayResult::Blocked;
+#if ENABLE_COLLECTION_CATALOG
+    if (!finishCollectionSave(petSaves.saveDailyProgress(collectionSavePending)))
+        return days;
+#endif
+    if (handleEvolution() != EvolutionResult::NoChange)
+        return flow.isFatalError() ? 0 : days;
+#endif
+    refreshBaseAnimation();
+    return days;
 }
 
 EvolutionResult Game::handleEvolution()
@@ -770,7 +818,7 @@ void Game::enterFatalState()
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
 #endif
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     minigame->reset();
 #endif
     flow.enterFatalError();
@@ -861,7 +909,7 @@ void Game::completeFirstStartIfReady(const PlaybackTickResult &playbackResult)
     pendingFirstStartCompletion = false;
 
     pet.markFirstStartCompleted();
-    if (!petSaves.saveNow())
+    if (petSaves.requestSave() == PetSaveResult::Failed)
         pet.resetFirstStartCompleted();
 #endif
 #if !ENABLE_FIRST_START_ANIMATION
@@ -886,7 +934,7 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
     if (evolutionResult != EvolutionResult::NoChange)
         return;
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     if (flow.isMinigame())
     {
         if (minigame->showsResourceErrorOnPlaybackFailure()) renderer.showResourceError();
@@ -931,7 +979,7 @@ bool Game::enterDeathIfNeeded()
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
 #endif
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     minigame->reset();
 #endif
     flow.enterCommand();
@@ -939,7 +987,7 @@ bool Game::enterDeathIfNeeded()
     petClock.reset(latestRtcSeconds);
     clockStarted = false;
     petSaves.resetTransientState();
-    deathSavePending = !petSaves.saveLifeState();
+    deathSavePending = petSaves.saveLifeState() != PetSaveResult::Persisted;
     deathSaveRetryAt = millis();
     refreshBaseAnimation();
     animations->requestFullRedraw();
@@ -952,8 +1000,20 @@ void Game::retryDeathSave()
 {
     if (!deathSavePending || millis() - deathSaveRetryAt < 1000UL) return;
     deathSaveRetryAt = millis();
-    deathSavePending = !petSaves.saveLifeState();
+    deathSavePending = petSaves.saveLifeState() != PetSaveResult::Persisted;
     if (deathSavePending) renderer.showResourceError("pet state");
     else animations->requestFullRedraw();
+}
+#endif
+
+#if ENABLE_INSTRUCTION_RESPONSE
+bool Game::capturesInstructionInput() const { return flow.isMinigame() && minigame->capturesInstructionInput(); }
+void Game::instructionInput(uint8_t held, uint8_t pressed, uint32_t timestamp)
+{
+    if (capturesInstructionInput()) minigame->instructionInput(held, pressed, timestamp);
+}
+void Game::instructionPending(bool pending, uint32_t at, uint8_t raw)
+{
+    if (capturesInstructionInput()) minigame->instructionPending(pending, at, raw);
 }
 #endif

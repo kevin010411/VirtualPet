@@ -3,9 +3,14 @@
 
 #include "common/AppProfile.h"
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
 
 #include "animation/AnimationController.h"
+#if ENABLE_INSTRUCTION_RESPONSE
+#include "game/InstructionResponse.h"
+class Renderer;
+struct PetBehaviorConfig;
+#endif
 #if ENABLE_COMMAND_PREDICT
 #include "game/PredictGame.h"
 #endif
@@ -41,6 +46,15 @@ public:
 #if ENABLE_COMMAND_PREDICT
     bool startPredict();
 #endif
+#if ENABLE_INSTRUCTION_RESPONSE
+    void startInstruction(Renderer &renderer, const PetBehaviorConfig &config);
+    bool capturesInstructionInput() const;
+    void instructionInput(uint8_t held, uint8_t pressed, uint32_t timestamp);
+    void instructionPending(bool pending, uint32_t at, uint8_t raw)
+    { instruction.pendingInput(pending, at, raw); }
+    bool consumeInstructionCompletion(uint32_t &mask, uint8_t &count)
+    { return activeGame == Kind::Instruction && instruction.consumeCompletion(mask, count); }
+#endif
     void reset();
     void update();
     void onLeft();
@@ -52,7 +66,17 @@ public:
     bool showsResourceErrorOnPlaybackFailure() const;
 
 private:
-    enum class Kind : uint8_t { None, GuessItem, Predict };
+    enum class Kind : uint8_t { None, GuessItem, Predict, Instruction };
+#if ENABLE_INSTRUCTION_RESPONSE
+    InstructionResponse instruction;
+    InstructionResponse::Phase drawnPhase = InstructionResponse::Phase::Idle;
+    Renderer *instructionRenderer = nullptr;
+    const PetBehaviorConfig *instructionConfig = nullptr;
+    uint8_t instructionHeld = 7;
+    uint8_t promptVersion = 0;
+    uint32_t frameAt = 0, frameMs = 167;
+    bool renderInstruction();
+#endif
     Kind activeGame = Kind::None;
     AnimationController &animations;
 #if ENABLE_COMMAND_PREDICT
@@ -72,6 +96,6 @@ private:
 #endif
 };
 
-#endif // ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#endif // ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
 
 #endif // MINIGAME_CONTROLLER_H

@@ -69,6 +69,11 @@ CommandResult CommandExecutor::execute(const CommandController &commands)
         result.executed = result.actionResult != PetBehaviorActionResult::Rejected;
         result.resourceError = result.actionResult == PetBehaviorActionResult::AppliedAnimationMissing;
         break;
+#if ENABLE_INSTRUCTION_RESPONSE
+    case AppCommandId::InstructionResponse:
+        result.executed = result.requestedMinigame = true;
+        break;
+#endif
     case AppCommandId::Status:
         result.executed = true;
         result.resourceError = !queueStatusSetsAnimation();

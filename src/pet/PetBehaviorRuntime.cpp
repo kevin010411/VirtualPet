@@ -170,3 +170,13 @@ ActivePetState PetBehaviorRuntime::activePetState(
 {
     return PetStateClassifier::classify(config, snapshot);
 }
+
+#if ENABLE_INSTRUCTION_RESPONSE
+bool PetBehaviorRuntime::applyInstructionResults(uint32_t correctMask, uint8_t count)
+{
+    if (pet.isDead()) return false;
+    PetBehaviorStatValues state = readStats(pet);
+    if (!applyPetBehaviorInstructionResults(config, correctMask, count, state)) return false;
+    return writeStats(state, pet);
+}
+#endif

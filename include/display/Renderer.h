@@ -39,6 +39,10 @@ public:
     bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
     bool animationFrameFailed() const;
+#if ENABLE_INSTRUCTION_RESPONSE
+    void clearInstructionOptions();
+    void showInstructionFeedback(bool correct);
+#endif
     void showResourceError();
     void showResourceError(const char *resource);
 #if ENABLE_DEBUG

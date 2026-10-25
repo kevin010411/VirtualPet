@@ -3,9 +3,118 @@
 #include "pet/PetClock.h"
 #include "platform/PowerController.h"
 #include "platform/SessionClock.h"
+#include "platform/VoltageMonitor.h"
+
+static void testVoltagePolicy()
+{
+    using State = VoltageState;
+    using Wake = VoltageMonitor::WakeResult;
+    VoltageMonitor voltage;
+    voltage.begin(100, State::Normal);
+    assert(!voltage.sampleDue(199));
+    assert(voltage.sampleDue(200));
+    voltage.observe(200, State::Dimmed);
+    assert(voltage.state() == State::Dimmed);
+    voltage.observe(300, State::Critical);
+    assert(voltage.isCritical());
+    assert(!voltage.shouldStop(5299));
+    assert(voltage.shouldStop(5300));
+
+    // Even a normal measurement recovers only one brightness level per window.
+    voltage.observe(5400, State::Normal);
+    assert(!voltage.shouldStop(10400));
+    voltage.observe(10399, State::Normal);
+    assert(voltage.isCritical());
+    voltage.observe(10400, State::Normal);
+    assert(voltage.state() == State::Dimmed);
+    voltage.observe(15399, State::Normal);
+    assert(voltage.state() == State::Dimmed);
+    voltage.observe(15400, State::Normal);
+    assert(voltage.state() == State::Normal);
+
+    // An equal/worse sample cancels a partial recovery and restarts the window.
+    voltage.observe(15500, State::Critical);
+    voltage.observe(15600, State::Normal);
+    voltage.observe(20500, State::Critical);
+    voltage.observe(20600, State::Normal);
+    voltage.observe(25599, State::Normal);
+    assert(voltage.isCritical());
+    voltage.observe(25600, State::Normal);
+    assert(voltage.state() == State::Dimmed);
+    voltage.observe(25700, State::Dimmed);
+    voltage.observe(25800, State::Normal);
+    voltage.observe(30799, State::Normal);
+    assert(voltage.state() == State::Dimmed);
+    voltage.observe(30800, State::Normal);
+    assert(voltage.state() == State::Normal);
+
+    VoltageMonitor bootCritical;
+    bootCritical.begin(10, State::Critical);
+    assert(!bootCritical.shouldStop(10000)); // First periodic sample starts delay.
+    bootCritical.observe(110, State::Critical);
+    assert(!bootCritical.shouldStop(5109));
+    assert(bootCritical.shouldStop(5110));
+
+    // A dark wake never brightens immediately; critical requires confirmation.
+    assert(voltage.observeWake(State::Dimmed) == Wake::Ready);
+    assert(voltage.state() == State::Dimmed);
+    assert(voltage.observeWake(State::Normal) == Wake::Ready);
+    assert(voltage.state() == State::Dimmed);
+    assert(voltage.observeWake(State::Critical) == Wake::Retry);
+    assert(voltage.isCritical());
+    assert(voltage.observeWake(State::Normal) == Wake::ConfirmRecovery);
+    assert(voltage.isCritical()); // Failed confirmation leaves state unchanged.
+    assert(voltage.observeWake(State::Dimmed) == Wake::ConfirmRecovery);
+    voltage.completeWakeRecovery(State::Normal, 40000);
+    assert(voltage.state() == State::Dimmed);
+    voltage.observe(44999, State::Normal);
+    assert(voltage.state() == State::Dimmed);
+    voltage.observe(45000, State::Normal);
+    assert(voltage.state() == State::Normal);
+
+    // The final PVD resample may fall again after a successful confirmation.
+    assert(voltage.observeWake(State::Critical) == Wake::Retry);
+    voltage.completeWakeRecovery(State::Critical, 46000);
+    assert(voltage.state() == State::Dimmed);
+    assert(!voltage.shouldStop(60000));
+    voltage.observe(46100, State::Critical);
+    assert(voltage.isCritical());
+    assert(!voltage.shouldStop(51099));
+    assert(voltage.shouldStop(51100));
+
+    VoltageMonitor wrapped;
+    wrapped.begin(UINT32_MAX - 50, State::Normal);
+    assert(!wrapped.sampleDue(48));
+    assert(wrapped.sampleDue(49));
+    const uint32_t criticalAt = UINT32_MAX - 900;
+    wrapped.observe(criticalAt, State::Critical);
+    assert(!wrapped.shouldStop(uint32_t(criticalAt + 4999U)));
+    assert(wrapped.shouldStop(uint32_t(criticalAt + 5000U)));
+    const uint32_t recoveredAt = UINT32_MAX - 500;
+    wrapped.observe(recoveredAt, State::Normal);
+    wrapped.observe(uint32_t(recoveredAt + 4999U), State::Normal);
+    assert(wrapped.isCritical());
+    wrapped.observe(uint32_t(recoveredAt + 5000U), State::Normal);
+    assert(wrapped.state() == State::Dimmed);
+
+    // Preserve the original zero sentinel when a sample lands exactly at wrap.
+    VoltageMonitor zero;
+    zero.observe(0, State::Critical);
+    assert(!zero.shouldStop(5000));
+    zero.observe(100, State::Critical);
+    assert(zero.shouldStop(5100));
+    zero.completeWakeRecovery(State::Normal, 0);
+    zero.observe(100, State::Normal);
+    zero.observe(5099, State::Normal);
+    assert(zero.state() == State::Dimmed);
+    zero.observe(5100, State::Normal);
+    assert(zero.state() == State::Normal);
+    puts("[PASS] Voltage sampling, critical STOP delay, staged recovery, dark wake and uint32 rollover");
+}
 
 int main()
 {
+    testVoltagePolicy();
     SessionClock session;
     assert(session.update(0, true, 100, 1) == 0);
     assert(session.update(1000, true, 101, 1) == 1);

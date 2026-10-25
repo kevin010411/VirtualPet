@@ -36,6 +36,9 @@ public:
 #if ENABLE_GUESS_GAME
     bool applyGuessOutcome(PetBehaviorGuessOutcome outcome);
 #endif
+#if ENABLE_INSTRUCTION_RESPONSE
+    bool applyInstructionResults(uint32_t correctMask, uint8_t count);
+#endif
     AssetData::AnimationRef baseAnimation() const;
     ActivePetState activePetState() const;
     ActivePetState activePetState(const PetStatSnapshot &snapshot) const;

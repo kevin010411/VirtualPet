@@ -22,10 +22,13 @@ constexpr uint32_t kOutfitChooseAnimationFeature = 1UL << 11;
 constexpr uint32_t kEvolutionPlaybackCountsFeature = 1UL << 12;
 constexpr uint32_t kCollectionFeature = 1UL << 13;
 constexpr uint32_t kSequenceAudioFeature = 1UL << 14;
-constexpr uint32_t kKnownFeatures = ((1UL << 15) - 1UL) & ~(1UL << 8);
+constexpr uint32_t kInstructionResponseFeature = 1UL << 15;
+constexpr uint32_t kKnownFeatures = ((1UL << 16) - 1UL) & ~(1UL << 8);
 
 enum SectionType : uint16_t
 {
+    InstructionResponseConfig = 70,
+    InstructionResponseEffects = 71,
     Profile = 1,
     Persistence = 2,
     AssetRefs = 3,

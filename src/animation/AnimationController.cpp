@@ -71,9 +71,7 @@ void AnimationController::resetPlaybackState()
     showVersionIndex = 0;
     playbackFailedThisTick = false;
     playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
-    playbackPrepared = false;
-    preparedTargetChanged = false;
-    preparedFrameDue = false;
+    preparedFrame = PreparedFrame::Unprepared;
     renderer.initAnimations();
 }
 
@@ -94,7 +92,7 @@ void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAn
     if (changed)
     {
         dirtyAnimation = true;
-        playbackPrepared = false;
+        preparedFrame = PreparedFrame::Unprepared;
     }
 }
 
@@ -177,7 +175,7 @@ PlaybackResult AnimationController::replace(const AnimationSequence &sequence)
     activeRepeatsRemaining = 0;
     dirtyAnimation = true;
     animateDone = false;
-    playbackPrepared = false;
+    preparedFrame = PreparedFrame::Unprepared;
     return PlaybackResult::Accepted;
 }
 
@@ -193,7 +191,7 @@ void AnimationController::cancelAll()
     activeRepeatsRemaining = 0;
     dirtyAnimation = true;
     animateDone = false;
-    playbackPrepared = false;
+    preparedFrame = PreparedFrame::Unprepared;
 }
 
 bool AnimationController::isBusy() const
@@ -228,7 +226,7 @@ void AnimationController::requestFullRedraw()
     showAnimation = {};
     animateDone = true;
     lastFrameTime = 0;
-    playbackPrepared = false;
+    preparedFrame = PreparedFrame::Unprepared;
 }
 
 bool AnimationController::takeFullRedrawRequest()
@@ -279,7 +277,7 @@ void AnimationController::completeActiveAnimation()
     activeRepeatsRemaining = 0;
     dirtyAnimation = true;
     animateDone = false;
-    playbackPrepared = false;
+    preparedFrame = PreparedFrame::Unprepared;
 }
 
 void AnimationController::tryStartNextAnimation()
@@ -318,7 +316,7 @@ unsigned long AnimationController::completePlaybackDuration(
 
 void AnimationController::preparePlayback(unsigned long now)
 {
-    if (playbackPrepared)
+    if (preparedFrame != PreparedFrame::Unprepared)
         return;
 #if ENABLE_SEQUENCE_AUDIO
     audioPlayer.timelineMs(now); // Also services a finishing fade after the sequence.
@@ -343,10 +341,10 @@ void AnimationController::preparePlayback(unsigned long now)
         return;
     }
 #endif
-    preparedFrameDue = now - lastFrameTime >= frameInterval;
-    if (preparedFrameDue)
+    const bool frameDue = now - lastFrameTime >= frameInterval;
+    if (frameDue)
         lastFrameTime = now;
-    preparedTargetChanged = false;
+    preparedFrame = frameDue ? PreparedFrame::Advance : PreparedFrame::Hold;
 
     if (dirtyAnimation || !showAnimation.valid())
     {
@@ -371,9 +369,9 @@ void AnimationController::preparePlayback(unsigned long now)
         animateDone = !renderer.setAnimation(
             showAnimation, showVersionIndex, playOnce);
         dirtyAnimation = false;
-        preparedTargetChanged = true;
+        preparedFrame = PreparedFrame::FirstFrame;
     }
-    else if (preparedFrameDue && !hasActiveAnimation &&
+    else if (frameDue && !hasActiveAnimation &&
              renderer.willRestartAnimationLoop() &&
              baseRotation.onLoopCompletedAndRotateIfDue(renderer))
     {
@@ -381,14 +379,13 @@ void AnimationController::preparePlayback(unsigned long now)
         showVersionIndex = baseRotation.selectedVersion();
         animateDone = !renderer.setAnimation(
             showAnimation, showVersionIndex, false);
-        preparedTargetChanged = true;
+        preparedFrame = PreparedFrame::FirstFrame;
     }
-    playbackPrepared = true;
 }
 
 PlaybackTickResult AnimationController::tick(unsigned long now)
 {
-    if (!playbackPrepared)
+    if (preparedFrame == PreparedFrame::Unprepared)
         preparePlayback(now);
 #if ENABLE_SEQUENCE_AUDIO
     if (synchronizedSequence) return tickSynchronizedPlayback();
@@ -398,7 +395,7 @@ PlaybackTickResult AnimationController::tick(unsigned long now)
     if (hasActiveAnimation && activeAnimation.playOnce &&
         !activeAnimation.isFixedFrame() && animateDone)
         completeActiveAnimation();
-    playbackPrepared = false;
+    preparedFrame = PreparedFrame::Unprepared;
     return {
         playbackFailedThisTick ? PlaybackResult::PlaybackFailed
                                : PlaybackResult::Accepted,
@@ -409,7 +406,7 @@ PlaybackTickResult AnimationController::tick(unsigned long now)
 void AnimationController::renderPrepared()
 {
     bool frameFailed = false;
-    if (preparedTargetChanged)
+    if (preparedFrame == PreparedFrame::FirstFrame)
     {
         if (hasActiveAnimation && activeAnimation.isFixedFrame())
         {
@@ -424,7 +421,7 @@ void AnimationController::renderPrepared()
             frameFailed = renderer.animationFrameFailed();
         }
     }
-    else if (preparedFrameDue &&
+    else if (preparedFrame == PreparedFrame::Advance &&
              !(hasActiveAnimation && activeAnimation.isFixedFrame()) &&
              !(hasActiveAnimation && activeAnimation.playOnce && animateDone))
     {
@@ -449,9 +446,7 @@ void AnimationController::startBatteryAnimation()
     lastFrameTime = 0;
     animateDone = !renderer.setAnimation(showAnimation, showVersionIndex, false);
     dirtyAnimation = false;
-    preparedTargetChanged = true;
-    preparedFrameDue = true;
-    playbackPrepared = true;
+    preparedFrame = PreparedFrame::FirstFrame;
 }
 
 void AnimationController::updateBatteryAnimation(unsigned long now)

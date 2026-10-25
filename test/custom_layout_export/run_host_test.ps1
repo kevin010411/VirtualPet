@@ -26,6 +26,8 @@ $sources = @(
     'src/controller/CommandController.cpp',
     'src/controller/SystemCommandCatalog.cpp', 'src/controller/StatusSetContract.cpp',
     'src/resources/RuntimeTableBehavior.cpp',
+    'src/resources/RuntimeTableBehaviorDecoder.cpp',
+    'src/resources/RuntimeTablePresentationDecoder.cpp',
     'src/appearance/RuntimeTableAppearance.cpp',
     'src/resources/RuntimeTableReader.cpp',
     'src/resources/RuntimeTableFile.cpp',

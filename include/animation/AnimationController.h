@@ -66,9 +66,10 @@ private:
     uint8_t showVersionIndex = 0;
     bool playbackFailedThisTick = false;
     FirmwarePlaybackRole playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
-    bool playbackPrepared = false;
-    bool preparedTargetChanged = false;
-    bool preparedFrameDue = false;
+    // Preparation selects metadata before LayoutRenderer synchronizes the scene.
+    // tick() then consumes exactly one render intent and invalidates it.
+    enum class PreparedFrame : uint8_t { Unprepared, Hold, FirstFrame, Advance };
+    PreparedFrame preparedFrame = PreparedFrame::Unprepared;
     bool fullRedrawRequested = false;
 
 #if ENABLE_SEQUENCE_AUDIO

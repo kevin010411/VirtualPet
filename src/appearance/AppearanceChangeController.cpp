@@ -31,7 +31,7 @@ AppearanceChangeResult AppearanceChangeController::changeSpecies(
         renderer.recordAssetDataErrorResource(loader.firstAssetDataErrorResource());
         return AppearanceChangeResult::UnlockFailed;
     }
-    if (!saves.saveNow())
+    if (saves.requestSave() == PetSaveResult::Failed)
     {
         renderer.recordAssetDataErrorResource(
             storage.lastSaveSlot() == 'B' ? "state_b.bin" : "state_a.bin");
@@ -57,7 +57,8 @@ AppearanceChangeResult AppearanceChangeController::applyOutfit(
     else if (!pet.setSpeciesSlot(pet.speciesSlot()) || !pet.setOutfitSlot(outfitSlot))
         return AppearanceChangeResult::PetStateRejected;
     if (pet.evaluateDeath()) return AppearanceChangeResult::Applied;
-    return saves.saveNow() ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;
+    return saves.requestSave() == PetSaveResult::Failed
+        ? AppearanceChangeResult::SaveFailed : AppearanceChangeResult::Applied;
 }
 
 bool AppearanceChangeController::resolveUnlockState(bool initialize)
@@ -74,7 +75,8 @@ bool AppearanceChangeController::refreshUnlockState(bool initialize, bool persis
 {
     const uint8_t previousMask = pet.outfitUnlockMask();
     return resolveUnlockState(initialize) &&
-           (!persist || pet.outfitUnlockMask() == previousMask || saves.saveNow());
+           (!persist || pet.outfitUnlockMask() == previousMask ||
+            saves.requestSave() != PetSaveResult::Failed);
 }
 
 AppearanceChangeResult AppearanceChangeController::applyCollectionTarget(uint8_t speciesSlot, uint8_t outfitSlot)
@@ -87,5 +89,6 @@ AppearanceChangeResult AppearanceChangeController::applyCollectionTarget(uint8_t
     if (pet.evaluateDeath()) return AppearanceChangeResult::Applied;
     if (!resolveUnlockState(changedSpecies)) return AppearanceChangeResult::UnlockFailed;
     pet.unlockOutfit(outfitSlot);
-    return saves.saveNow() ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;
+    return saves.requestSave() == PetSaveResult::Failed
+        ? AppearanceChangeResult::SaveFailed : AppearanceChangeResult::Applied;
 }

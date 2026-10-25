@@ -9,6 +9,7 @@ namespace FirmwareRandom
 {
 void seed(uint32_t value);
 uint16_t below(uint16_t upperExclusive);
+uint32_t belowWide(uint32_t upperExclusive);
 }
 
 #endif // FIRMWARE_RANDOM_H

@@ -4,6 +4,7 @@
 #include "platform/RtcClock.h"
 #include "platform/SessionClock.h"
 #include "platform/PowerController.h"
+#include "platform/VoltageMonitor.h"
 #include "controller/Game.h"
 #include "appearance/SdAppearanceLoader.h"
 #include "pet/Pet.h"
@@ -72,25 +73,10 @@ ButtonInput buttons(
 // =========================
 static bool g_sdReady = false;
 static bool g_gameReady = false;
-static bool g_lowBatteryMode = false;
 static bool g_rtcReady = false;
 static SessionClock sessionClock;
 static PowerController powerController;
-enum class VoltageState : uint8_t
-{
-  Normal = 0,
-  Dimmed = 1,
-  Critical = 2
-};
-
-static VoltageState g_voltageState = VoltageState::Normal;
-static VoltageState g_measuredVoltageState = VoltageState::Normal;
-static unsigned long g_lastVoltageSampleAt = 0;
-static unsigned long g_voltageRecoverySince = 0;
-static unsigned long g_criticalBelowSince = 0;
-static const unsigned long kVoltageSampleIntervalMs = 100;
-static const unsigned long kVoltageRecoveryConfirmMs = 5000;
-static const unsigned long kCriticalStopDelayMs = 5000;
+static VoltageMonitor voltageMonitor;
 static const unsigned long kPvdSettleUs = 50;
 static const uint8_t kPvdLevelDimmed = 7;
 static const uint8_t kPvdLevelCritical = 6;
@@ -303,7 +289,7 @@ void playButtonBeep()
 
 static uint8_t desiredBacklight(unsigned long now)
 {
-  return powerController.brightness(now, brightnessForVoltageState(g_voltageState));
+  return powerController.brightness(now, brightnessForVoltageState(voltageMonitor.state()));
 }
 
 void playCheatStageDaysBeep()
@@ -325,15 +311,15 @@ static void synchronizeGameTime()
   uint32_t rtcSeconds = 0, epoch = 0;
   g_rtcReady = RtcClock::pollSeconds(rtcSeconds, epoch);
   const uint32_t seconds = sessionClock.update(millis(), g_rtcReady, rtcSeconds, epoch);
-  if (!g_lowBatteryMode) game.synchronizeTime(seconds);
+  if (!voltageMonitor.isCritical()) game.synchronizeTime(seconds);
 }
 
 static bool confirmVoltageRecoveredFromCritical()
 {
   const unsigned long recoveredSince = millis();
-  while (millis() - recoveredSince < kVoltageRecoveryConfirmMs)
+  while (millis() - recoveredSince < VoltageMonitor::kRecoveryConfirmMs)
   {
-    delay(kVoltageSampleIntervalMs);
+    delay(VoltageMonitor::kSampleIntervalMs);
     if (sampleVoltageState() == VoltageState::Critical)
       return false;
   }
@@ -383,38 +369,22 @@ void enterSleep()
     // Consume the button that woke the MCU. It must not execute a game action.
     buttons.clearFlags();
 
-    const VoltageState measuredState = sampleVoltageState();
-    g_measuredVoltageState = measuredState;
-    if (measuredState == VoltageState::Critical)
+    const VoltageMonitor::WakeResult wake = voltageMonitor.observeWake(sampleVoltageState());
+    if (wake == VoltageMonitor::WakeResult::Retry)
     {
-      g_voltageState = VoltageState::Critical;
-      g_lowBatteryMode = true;
-      g_voltageRecoverySince = 0;
-      if (buttons.isHeld()) delay(kVoltageSampleIntervalMs);
+      if (buttons.isHeld()) delay(VoltageMonitor::kSampleIntervalMs);
       continue;
     }
 
-    if (g_voltageState == VoltageState::Critical || g_lowBatteryMode)
+    if (wake == VoltageMonitor::WakeResult::ConfirmRecovery)
     {
       // Keep the screen dark while verifying that PLS6 has recovered.
       if (!confirmVoltageRecoveredFromCritical())
-      {
-        g_voltageState = VoltageState::Critical;
-        g_lowBatteryMode = true;
         continue;
-      }
 
-      g_voltageState = VoltageState::Dimmed;
-      g_measuredVoltageState = sampleVoltageState();
-      g_lowBatteryMode = false;
+      const VoltageState recoveredSample = sampleVoltageState();
       game.endBatteryAnimation();
-      g_criticalBelowSince = 0;
-      g_voltageRecoverySince = millis();
-    }
-    else if (static_cast<uint8_t>(measuredState) > static_cast<uint8_t>(g_voltageState))
-    {
-      // Voltage fell while sleeping; lowering brightness never needs debounce.
-      g_voltageState = measuredState;
+      voltageMonitor.completeWakeRecovery(recoveredSample, millis());
     }
     break;
   }
@@ -424,7 +394,7 @@ void enterSleep()
   RtcClock::requestSynchronization();
   if (g_gameReady)
     synchronizeGameTime();
-  if (deadBeforeSleep && !g_lowBatteryMode && game.isDead() && game.isReady())
+  if (deadBeforeSleep && !voltageMonitor.isCritical() && game.isDead() && game.isReady())
   {
     game.OnDeathKey();
     buttons.clearFlags();
@@ -547,12 +517,8 @@ static void resetPetFromCheatMode()
   setBacklightTarget(desiredBacklight(millis()));
 }
 
-static void enterLowBatteryMode(unsigned long now)
+static void enterLowBatteryMode()
 {
-  if (g_lowBatteryMode)
-    return;
-
-  g_lowBatteryMode = true;
   buttons.clearFlags();
   setBacklightTarget(kBacklightCritical);
   if (g_gameReady && game.isReady())
@@ -564,7 +530,6 @@ static void enterLowBatteryMode(unsigned long now)
 
 static void leaveLowBatteryMode(unsigned long now)
 {
-  g_lowBatteryMode = false;
   buttons.clearFlags();
   game.endBatteryAnimation();
   noteInteraction(now);
@@ -572,19 +537,18 @@ static void leaveLowBatteryMode(unsigned long now)
     setBacklightTarget(desiredBacklight(now));
 }
 
-static void applyVoltageState(VoltageState nextState, unsigned long now)
+static void applyVoltageTransition(VoltageState previousState, unsigned long now)
 {
-  const VoltageState previousState = g_voltageState;
+  const VoltageState nextState = voltageMonitor.state();
   if (previousState == nextState)
     return;
 
-  g_voltageState = nextState;
   if (!g_restoreBacklightAfterRender)
     setBacklightTarget(desiredBacklight(now));
 
   if (nextState == VoltageState::Critical)
   {
-    enterLowBatteryMode(now);
+    enterLowBatteryMode();
     return;
   }
 
@@ -594,59 +558,19 @@ static void applyVoltageState(VoltageState nextState, unsigned long now)
 
 static void updateVoltageState(unsigned long now)
 {
-  if (now - g_lastVoltageSampleAt >= kVoltageSampleIntervalMs)
+  if (voltageMonitor.sampleDue(now))
   {
-    g_lastVoltageSampleAt = now;
-    g_measuredVoltageState = sampleVoltageState();
-
-    if (g_measuredVoltageState == VoltageState::Critical)
-    {
-      if (g_criticalBelowSince == 0)
-        g_criticalBelowSince = now;
-    }
-    else
-    {
-      g_criticalBelowSince = 0;
-    }
-
-    const uint8_t measuredRank = static_cast<uint8_t>(g_measuredVoltageState);
-    const uint8_t currentRank = static_cast<uint8_t>(g_voltageState);
-    if (measuredRank > currentRank)
-    {
-      // Falling voltage lowers brightness immediately.
-      g_voltageRecoverySince = 0;
-      applyVoltageState(g_measuredVoltageState, now);
-    }
-    else if (measuredRank < currentRank)
-    {
-      if (g_voltageRecoverySince == 0)
-      {
-        g_voltageRecoverySince = now;
-      }
-      else if (now - g_voltageRecoverySince >= kVoltageRecoveryConfirmMs)
-      {
-        // Recover one brightness level at a time so the load rises gradually.
-        const VoltageState nextState = static_cast<VoltageState>(currentRank - 1U);
-        applyVoltageState(nextState, now);
-        g_voltageRecoverySince = now;
-      }
-    }
-    else
-    {
-      g_voltageRecoverySince = 0;
-    }
+    const VoltageState previousState = voltageMonitor.state();
+    voltageMonitor.observe(now, sampleVoltageState());
+    applyVoltageTransition(previousState, now);
   }
 
-  if (!g_lowBatteryMode)
+  if (!voltageMonitor.isCritical())
     return;
 
   game.updateBatteryAnimation(now);
-  if (g_measuredVoltageState == VoltageState::Critical &&
-      g_criticalBelowSince != 0 &&
-      now - g_criticalBelowSince >= kCriticalStopDelayMs)
-  {
+  if (voltageMonitor.shouldStop(now))
     enterSleep();
-  }
 }
 
 void setup()
@@ -765,14 +689,14 @@ void setup()
     delay(kStartupPostSetupMs);
 
   const unsigned long now = millis();
-  g_lastVoltageSampleAt = now;
-  g_measuredVoltageState = sampleVoltageState();
-  if (g_measuredVoltageState != VoltageState::Normal)
-    applyVoltageState(g_measuredVoltageState, now);
+  const VoltageState previousState = voltageMonitor.state();
+  voltageMonitor.begin(now, sampleVoltageState());
+  if (voltageMonitor.state() != VoltageState::Normal)
+    applyVoltageTransition(previousState, now);
   else
     setBacklightTarget(kBacklightNormal);
 
-  if (!g_lowBatteryMode)
+  if (!voltageMonitor.isCritical())
     game.startStartupAnimation();
   buttons.clearFlags();
   noteInteraction();
@@ -787,7 +711,7 @@ void loop()
   updateButtonBeep(now);
   updateVoltageState(now);
   const bool ready = g_sdReady && g_gameReady && game.isReady();
-  if (g_lowBatteryMode)
+  if (voltageMonitor.isCritical())
   {
     if (ready) synchronizeGameTime();
     return;
@@ -809,8 +733,30 @@ void loop()
       }
     }
     else
-      buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton,
-                                  playButtonBeep);
+    {
+#if ENABLE_INSTRUCTION_RESPONSE
+      static bool captured = false;
+      if (game.capturesInstructionInput())
+      {
+        captured = true;
+        uint8_t held = 0, pressed = 0; uint32_t timestamp = 0;
+        for (uint8_t edge = 0; edge < 3; ++edge)
+        {
+          buttons.instructionSample(held, pressed, timestamp);
+          game.instructionInput(held, pressed, timestamp);
+        }
+        game.instructionPending(buttons.instructionPending(), buttons.instructionPendingAt(), buttons.instructionRawMask());
+        if (held) noteInteraction();
+      }
+      else
+      {
+        if (captured) { buttons.clearFlags(); captured = false; }
+#endif
+        buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton, playButtonBeep);
+#if ENABLE_INSTRUCTION_RESPONSE
+      }
+#endif
+    }
   }
   else
     buttons.clearFlags(); // Fatal screens discard gestures.

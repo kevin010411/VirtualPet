@@ -7,9 +7,9 @@ namespace RuntimeTableInternal
 namespace
 {
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// v21 binds BGM to logical animation identity.
+// v26 adds Instruction Response settings, normal/no-go weights and deferred effects.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 22;
+constexpr uint16_t kVersion = 26;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -26,6 +26,8 @@ uint16_t recordSizeFor(uint16_t type)
 {
     switch (type)
     {
+    case InstructionResponseConfig: return 24;
+    case InstructionResponseEffects: return 12;
     case Profile: return 38;
     case Persistence: return 16;
     case AssetRefs: return 12;

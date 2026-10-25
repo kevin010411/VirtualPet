@@ -11,7 +11,7 @@
 #include "pet/PetSaveController.h"
 #include "resources/RuntimeContractLoader.h"
 #include "pet/PetSession.h"
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
 #include "controller/MinigameController.h"
 #endif
 #include "pet/PetClock.h"
@@ -63,6 +63,11 @@ public:
     void endBatteryAnimation();
     void updateBatteryAnimation(unsigned long now);
 
+#if ENABLE_INSTRUCTION_RESPONSE
+    bool capturesInstructionInput() const;
+    void instructionInput(uint8_t held, uint8_t pressed, uint32_t timestamp);
+    void instructionPending(bool pending, uint32_t at, uint8_t raw);
+#endif
     void OnLeftKey();
     void OnRightKey();
     void OnConfirmKey();
@@ -106,13 +111,14 @@ private:
 #if ENABLE_APPEARANCE_SELECTION
     std::unique_ptr<AppearanceSelectionController> appearanceSelection;
 #endif
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     std::unique_ptr<MinigameController> minigame;
 #endif
 
     PetClock petClock;
     uint32_t latestRtcSeconds = 0;
     bool clockStarted = false;
+    // Settle one event boundary before skipping a stable catch-up interval.
     bool catchUpPrimed = false;
     bool dirtySelect = true;
     bool cheatEvolutionPending = false;
@@ -141,8 +147,8 @@ private:
     void handleCommandResult(const CommandResult &result);
     void handleAppliedUserAction();
     void handleSystemCommandRequest(const CommandResult &result);
-    enum class DayResult : uint8_t { Blocked, Consumed, ConsumedWithError, Fatal };
-    DayResult maybeTickPet(uint32_t &days);
+    // Returns clock consumption; blocked or fatal work consumes no backlog.
+    uint32_t settlePetDays(uint32_t dueDays);
     EvolutionResult handleEvolution();
     void handleEvolutionResult(EvolutionResult result);
     // State-only: prepare runs before display initialization.
@@ -154,7 +160,7 @@ private:
     void enterCommand();
     bool updateCollectionProgress(bool immediate = false);
 #if ENABLE_COLLECTION_CATALOG
-    bool finishCollectionSave(bool saved);
+    bool finishCollectionSave(PetSaveResult result);
 #endif
 #if ENABLE_GUESS_GAME
     void onGuessOutcomeApplied() override;

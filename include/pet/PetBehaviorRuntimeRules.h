@@ -39,4 +39,9 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
                                   PetBehaviorGuessOutcome outcome,
                                   PetBehaviorStatValues &state);
 #endif
+#if ENABLE_INSTRUCTION_RESPONSE
+bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
+                                        uint32_t correctMask, uint8_t count,
+                                        PetBehaviorStatValues &state);
+#endif
 #endif // PET_BEHAVIOR_RUNTIME_RULES_H

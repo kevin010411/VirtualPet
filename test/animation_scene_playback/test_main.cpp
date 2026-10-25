@@ -269,8 +269,74 @@ void testAppearanceRedraw()
     assert(events.size() == 8);
 }
 
+void testPreparedFrameLifecycle()
+{
+    PetBehaviorConfig config = {};
+    config.systemAnimations[static_cast<uint8_t>(FirmwarePlaybackRole::Battery)] = animation(3);
+    Renderer renderer(nullptr, nullptr);
+    AnimationController animations(renderer);
+    animations.configureRuntimeContract(config);
+    animations.setup(animation(1));
+
+    events.clear();
+    animations.preparePlayback(1000);
+    assert(events.size() == 1 && events[0].kind == RenderEventKind::AnimationRecord);
+    animations.preparePlayback(2000); // Preparing twice must not advance the scene.
+    assert(events.size() == 1);
+    animations.tick(1000);
+    assert(events.size() == 3 && events.back().kind == RenderEventKind::AnimationFrame);
+
+    events.clear();
+    animations.preparePlayback(1000);
+    animations.tick(1000); // Neither the target nor frame interval changed.
+    assert(events.empty());
+    animations.preparePlayback(1001);
+    assert(events.empty()); // Advancing pixels belongs to tick, after layout sync.
+    animations.tick(1001);
+    assert(events.size() == 2 && events.back().animationId == 1);
+
+    events.clear();
+    animations.preparePlayback(1001);
+    animations.setBaseAnimation(animation(2));
+    animations.tick(1001);
+    assert(events.size() == 3 && events.back().animationId == 2);
+
+    Animation fixed(animation(4), 1000, false, 1);
+    animations.preparePlayback(1001);
+    assert(animations.replace({&fixed, 1}) == PlaybackResult::Accepted);
+    events.clear();
+    animations.preparePlayback(1001);
+    assert(events.size() == 1 && events[0].animationId == 4);
+    animations.cancelAll(); // A prepared but cancelled frame must never appear.
+    events.clear();
+    animations.tick(1001);
+    assert(events.size() == 3 && events.back().animationId == 2);
+
+    animations.preparePlayback(1001);
+    animations.requestFullRedraw();
+    events.clear();
+    animations.tick(1001);
+    assert(events.size() == 3 && events.back().animationId == 2);
+
+    assert(animations.replace({&fixed, 1}) == PlaybackResult::Accepted);
+    events.clear();
+    animations.preparePlayback(1001);
+    animations.tick(1001);
+    assert(events.size() == 3 && events.back().animationId == 4 && events.back().frame == 1);
+    events.clear();
+    animations.preparePlayback(1002);
+    animations.tick(1002); // A held fixed frame is not transferred every interval.
+    assert(events.empty());
+
+    animations.startBatteryAnimation();
+    events.clear();
+    animations.tick(1002);
+    assert(events.size() == 2 && events.back().animationId == 3);
+}
+
 int main(int argc, char **argv)
 {
+    testPreparedFrameLifecycle();
     if (argc == 2 && strcmp(argv[1], "--appearance-redraw") == 0)
     {
         testAppearanceRedraw();

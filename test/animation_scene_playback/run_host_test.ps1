@@ -25,6 +25,8 @@ $sources = @(
     'src/pet/PetBehaviorRuntimeRules.cpp',
     'src/pet/RuntimeValueResolver.cpp',
     'src/resources/RuntimeTableBehavior.cpp',
+    'src/resources/RuntimeTableBehaviorDecoder.cpp',
+    'src/resources/RuntimeTablePresentationDecoder.cpp',
     'src/appearance/RuntimeTableAppearance.cpp',
     'src/resources/RuntimeTableReader.cpp',
     'src/resources/RuntimeTableFile.cpp',

@@ -15,6 +15,7 @@ $sources = @(
  'src/appearance/SdAppearanceLoader.cpp', 'src/appearance/RuntimeTableAppearance.cpp',
  'src/resources/BundleReader.cpp', 'src/resources/AssetRuntimeContract.cpp',
  'src/resources/RuntimeTableBehavior.cpp', 'src/resources/RuntimeTableReader.cpp',
+ 'src/resources/RuntimeTableBehaviorDecoder.cpp', 'src/resources/RuntimeTablePresentationDecoder.cpp',
  'src/resources/RuntimeTableFile.cpp', 'src/resources/RuntimeContractLoader.cpp',
  'src/display/Renderer.cpp', 'src/display/FrameDecoder.cpp', 'src/display/LayoutRenderer.cpp',
  'src/pet/Pet.cpp', 'src/pet/PetStorage.cpp', 'src/pet/PetSession.cpp',

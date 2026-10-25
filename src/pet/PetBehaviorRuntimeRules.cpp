@@ -281,3 +281,27 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
     return true;
 }
 #endif
+
+#if ENABLE_INSTRUCTION_RESPONSE
+bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
+                                        uint32_t correctMask, uint8_t count,
+                                        PetBehaviorStatValues &state)
+{
+    PetBehaviorStatValues next = state;
+    for (uint8_t round = 0; round < count; ++round)
+    {
+        const uint8_t group = (correctMask & (1UL << round)) ? 0 : 1;
+        for (uint8_t index = 0; index < config.instructionEffectCount; ++index)
+        {
+            const auto &effect = config.instructionEffects[index];
+            if (effect.group != group) continue;
+            const auto &stat = config.stats[effect.statSlot];
+            next.values[effect.statSlot] = clampedChange(
+                effect.operation == PetBehaviorEffectOperation::Set ? 0 : next.values[effect.statSlot],
+                effect.value, stat.minValue, stat.maxValue);
+        }
+    }
+    state = next;
+    return true;
+}
+#endif

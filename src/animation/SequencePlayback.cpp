@@ -32,16 +32,15 @@ void AnimationController::prepareBasePlayback(unsigned long now)
         dirtyAnimation = false;
     }
     const uint16_t frame = uint16_t(elapsed / frameInterval + 1);
-    preparedTargetChanged = restart || dirtyAnimation;
-    preparedFrameDue = preparedTargetChanged || frame != baseFrame;
+    const bool frameDue = restart || dirtyAnimation || frame != baseFrame;
+    preparedFrame = frameDue ? PreparedFrame::Advance : PreparedFrame::Hold;
     baseFrame = frame;
     dirtyAnimation = false;
-    playbackPrepared = true;
 }
 
 PlaybackTickResult AnimationController::tickBasePlayback()
 {
-    if (preparedFrameDue && !renderer.ShowAnimationFrame(showAnimation, showVersionIndex, baseFrame))
+    if (preparedFrame == PreparedFrame::Advance && !renderer.ShowAnimationFrame(showAnimation, showVersionIndex, baseFrame))
         playbackFailedThisTick = true;
     if (!baseStarted)
     {
@@ -51,7 +50,7 @@ PlaybackTickResult AnimationController::tickBasePlayback()
         audioPlayer.start(millis());
         baseStarted = true;
     }
-    playbackPrepared = false;
+    preparedFrame = PreparedFrame::Unprepared;
     return {playbackFailedThisTick ? PlaybackResult::PlaybackFailed : PlaybackResult::Accepted,
             FirmwarePlaybackRole::None};
 }
@@ -85,7 +84,7 @@ void AnimationController::prepareSynchronizedPlayback(unsigned long now)
                 animationQueueCount = 0;
                 hasActiveAnimation = false;
                 dirtyAnimation = true;
-                playbackPrepared = false;
+                preparedFrame = PreparedFrame::Unprepared;
                 lastPlaybackUpdateTime = now;
                 preparePlayback(now);
                 return;
@@ -102,21 +101,21 @@ void AnimationController::prepareSynchronizedPlayback(unsigned long now)
     const uint32_t interval = synchronizedIntervalMs[synchronizedSegment];
     const uint16_t frame = activeAnimation.isFixedFrame() ? activeAnimation.frameIndex :
         uint16_t(elapsed / interval + 1);
-    preparedTargetChanged = synchronizedTargetPending;
-    preparedFrameDue = preparedTargetChanged || frame != synchronizedFrame;
-    if (preparedTargetChanged)
+    const bool targetChanged = synchronizedTargetPending;
+    preparedFrame = targetChanged || frame != synchronizedFrame
+        ? PreparedFrame::Advance : PreparedFrame::Hold;
+    if (targetChanged)
     {
         audioPlayer.prepare(sdCard(), audioFor(showAnimation));
         renderer.setAnimation(showAnimation, showVersionIndex, true);
         synchronizedTargetPending = false;
     }
     synchronizedFrame = frame;
-    playbackPrepared = true;
 }
 
 PlaybackTickResult AnimationController::tickSynchronizedPlayback()
 {
-    if (preparedFrameDue && !renderer.ShowAnimationFrame(
+    if (preparedFrame == PreparedFrame::Advance && !renderer.ShowAnimationFrame(
             showAnimation, showVersionIndex, synchronizedFrame))
     {
         playbackFailedThisTick = true;
@@ -129,7 +128,7 @@ PlaybackTickResult AnimationController::tickSynchronizedPlayback()
         audioPlayer.start(millis());
         sequenceStarted = true;
     }
-    playbackPrepared = false;
+    preparedFrame = PreparedFrame::Unprepared;
     return {playbackFailedThisTick ? PlaybackResult::PlaybackFailed : PlaybackResult::Accepted,
             playbackFailedRoleThisTick};
 }

@@ -10,11 +10,13 @@ $sources = @($testSource, 'src/audio/SequenceAudio.cpp',
     'src/pet/PetBehaviorRuntime.cpp', 'src/pet/PetBehaviorRuntimeRules.cpp',
     'src/pet/PetStateClassifier.cpp', 'src/pet/RuntimeValueResolver.cpp',
     'src/resources/RuntimeTableBehavior.cpp', 'src/resources/RuntimeTableReader.cpp',
+    'src/resources/RuntimeTableBehaviorDecoder.cpp', 'src/resources/RuntimeTablePresentationDecoder.cpp',
     'src/resources/RuntimeTableFile.cpp', 'src/appearance/RuntimeTableAppearance.cpp',
     'src/controller/SystemCommandCatalog.cpp', 'src/controller/StatusSetContract.cpp',
     'src/common/FirmwareRandom.cpp', 'src/resources/AssetRuntimeContract.cpp', 'src/resources/BundleReader.cpp', 'src/common/CopyResourceName.cpp')
 if ($Disabled) {
     $sources = @($testSource, 'src/resources/RuntimeTableBehavior.cpp', 'src/resources/RuntimeTableReader.cpp',
+        'src/resources/RuntimeTableBehaviorDecoder.cpp', 'src/resources/RuntimeTablePresentationDecoder.cpp',
         'src/resources/RuntimeTableFile.cpp', 'src/appearance/RuntimeTableAppearance.cpp',
         'src/pet/RuntimeValueResolver.cpp', 'src/pet/PetBehaviorRuntimeRules.cpp', 'src/controller/SystemCommandCatalog.cpp',
         'src/controller/StatusSetContract.cpp', 'src/resources/AssetRuntimeContract.cpp',

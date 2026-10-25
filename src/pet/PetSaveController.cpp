@@ -16,12 +16,12 @@ PetSaveController::PetSaveController(Pet &petRef, PetStorage &petStorageRef, Ren
 {
 }
 
-bool PetSaveController::saveNow()
+PetSaveResult PetSaveController::requestSave()
 {
     return saveCollectionProgress(true);
 }
 
-bool PetSaveController::saveCollectionProgress(bool forceSave, bool immediate)
+PetSaveResult PetSaveController::saveCollectionProgress(bool forceSave, bool immediate)
 {
     if (pet.isDead()) return saveSnapshot(true);
 #if ENABLE_COLLECTION_CATALOG
@@ -31,21 +31,21 @@ bool PetSaveController::saveCollectionProgress(bool forceSave, bool immediate)
     if (config != nullptr && !evaluateCollectionCatalog(renderer.sdCard(), *config, pet, changed))
     {
         renderer.recordAssetDataErrorResource("runtime.bin");
-        return false;
+        return PetSaveResult::Failed;
     }
-    if (!forceSave && !changed) return true;
+    if (!forceSave && !changed) return PetSaveResult::NotNeeded;
 #else
-    if (!forceSave) return true;
+    if (!forceSave) return PetSaveResult::NotNeeded;
 #endif
     return saveSnapshot(immediate);
 }
 
-bool PetSaveController::saveSnapshot(bool immediate)
+PetSaveResult PetSaveController::saveSnapshot(bool immediate)
 {
     if (batching && !immediate)
     {
         batchDirty = true;
-        return true;
+        return PetSaveResult::Deferred;
     }
     const bool saved = petStorage.save(pet);
 #if ENABLE_DEBUG
@@ -66,30 +66,31 @@ bool PetSaveController::saveSnapshot(bool immediate)
         saveCounter = 0;
         batchDirty = false;
     }
-    return saved;
+    return saved ? PetSaveResult::Persisted : PetSaveResult::Failed;
 }
 
-bool PetSaveController::saveDailyProgress(bool forceSave)
+PetSaveResult PetSaveController::saveDailyProgress(bool forceSave)
 {
     // One call per completed two-second pet day. Evaluate acquisitions every
     // day, but ordinary progress writes only after two days (four seconds).
     if (saveCounter < savePeriodTicks) ++saveCounter;
     if (batching) batchDirty = true;
-    return saveCollectionProgress(forceSave || saveCounter >= savePeriodTicks);
+    const PetSaveResult result = saveCollectionProgress(forceSave || saveCounter >= savePeriodTicks);
+    return batching && result == PetSaveResult::NotNeeded ? PetSaveResult::Deferred : result;
 }
 
-void PetSaveController::maybeSave()
+PetSaveResult PetSaveController::maybeSave()
 {
     if (saveCounter < savePeriodTicks) ++saveCounter;
     if (batching)
     {
         batchDirty = true;
-        return;
+        return PetSaveResult::Deferred;
     }
     if (saveCounter < savePeriodTicks)
-        return;
+        return PetSaveResult::NotNeeded;
 
-    saveNow();
+    return requestSave();
 }
 
 bool PetSaveController::applyCollectionGrants()
@@ -101,9 +102,9 @@ bool PetSaveController::applyCollectionGrants()
 #endif
 }
 
-void PetSaveController::endBatch()
+PetSaveResult PetSaveController::endBatch()
 {
     const bool flush = batching && batchDirty;
     batching = false;
-    if (flush) saveSnapshot();
+    return flush ? saveSnapshot() : PetSaveResult::NotNeeded;
 }

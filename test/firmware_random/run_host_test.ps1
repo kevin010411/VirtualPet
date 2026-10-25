@@ -14,7 +14,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] Firmware random: bounds, deterministic seed, zero seed and zero bound'
+    Write-Host '[PASS] Firmware random: preserved 16-bit sequence; 32-bit bounds, deterministic seed, zero cases and rejection tail'
     exit 0
 }
 finally {

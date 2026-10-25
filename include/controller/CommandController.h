@@ -10,6 +10,7 @@
 enum class AppCommandId : uint8_t
 {
     None = APP_COMMAND_NONE,
+    InstructionResponse = APP_COMMAND_INSTRUCTION_RESPONSE,
     Predict = APP_COMMAND_PREDICT,
     GuessGame = APP_COMMAND_GUESS_GAME,
     ChangeOutfit = APP_COMMAND_CHANGE_OUTFIT,

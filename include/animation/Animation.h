@@ -43,10 +43,19 @@ enum class FirmwarePlaybackRole : uint8_t
     Evolution,
     StartIntro,
     FirstStart,
+    InstructionPrompt1,
+    InstructionPrompt2,
+    InstructionPrompt3,
+    InstructionCorrect,
+    InstructionWrong,
+    InstructionNoGo1,
+    InstructionNoGo2,
+    InstructionNoGo3,
     Count
 };
 
-constexpr size_t kFirmwarePlaybackRoleCount = static_cast<size_t>(FirmwarePlaybackRole::Count);
+constexpr size_t kFirmwarePlaybackRoleCount = static_cast<size_t>(
+    ENABLE_INSTRUCTION_RESPONSE ? FirmwarePlaybackRole::Count : FirmwarePlaybackRole::InstructionPrompt1);
 
 enum class PlaybackResult : uint8_t
 {

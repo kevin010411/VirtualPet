@@ -31,8 +31,9 @@ constexpr size_t kIoScratchBytes = 512;
 
 constexpr bool validFrameDimensions(uint16_t width, uint16_t height)
 {
-    return width >= 16 && width <= kMaxWidth && height >= 16 && height <= kMaxHeight &&
-           width % 16 == 0 && height % 16 == 0;
+    return (width == 42 && height == 32) ||
+           (width >= 16 && width <= kMaxWidth && height >= 16 && height <= kMaxHeight &&
+            width % 16 == 0 && height % 16 == 0);
 }
 
 struct BundleId

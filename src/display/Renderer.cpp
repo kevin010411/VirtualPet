@@ -344,3 +344,21 @@ const char *Renderer::firstAssetDataErrorResource() const
     const char *pack = state->bundleReader.firstErrorResource();
     return pack != nullptr && pack[0] != '\0' ? pack : state->externalErrorResource;
 }
+
+#if ENABLE_INSTRUCTION_RESPONSE
+void Renderer::clearInstructionOptions() { tft->fillRect(0, 128, 128, 32, ST77XX_BLACK); }
+void Renderer::showInstructionFeedback(bool correct)
+{
+    tft->fillRect(0, 32, 128, 96, ST77XX_BLACK);
+    if (correct)
+    {
+        tft->drawLine(36, 80, 56, 100, ST77XX_GREEN);
+        tft->drawLine(56, 100, 92, 56, ST77XX_GREEN);
+    }
+    else
+    {
+        tft->drawLine(40, 56, 88, 104, ST77XX_RED);
+        tft->drawLine(88, 56, 40, 104, ST77XX_RED);
+    }
+}
+#endif

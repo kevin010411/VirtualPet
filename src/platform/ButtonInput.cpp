@@ -28,6 +28,10 @@ void ButtonInput::begin()
 
 void ButtonInput::clearFlags()
 {
+#if ENABLE_INSTRUCTION_RESPONSE
+    instructionObserved = 255;
+    instructionStable = 7;
+#endif
     stableMask = readMask();
     gestureMask = 0;
     holdStartedAt = 0;
@@ -174,3 +178,54 @@ CheatButtonEvent ButtonInput::handleStableInput(unsigned long now,
 // The interrupt wakes STOP mode; update() owns all button interpretation.
 volatile uint32_t ButtonInput::wakeCount = 0;
 void ButtonInput::handleWakeInterrupt() { ++wakeCount; }
+
+#if ENABLE_INSTRUCTION_RESPONSE
+void ButtonInput::instructionSample(uint8_t &held, uint8_t &pressed, uint32_t &timestamp)
+{
+    timestamp = millis();
+    pressed = 0;
+    const uint8_t raw = readMask();
+    // Board previous is screen-right, next is screen-left.
+    const uint8_t positions = ((raw & 2) ? 1 : 0) | ((raw & 4) ? 2 : 0) | ((raw & 1) ? 4 : 0);
+    for (uint8_t position = 0; position < 3; ++position)
+    {
+        if ((positions ^ instructionObserved) & (1 << position))
+            instructionChangedAt[position] = timestamp;
+    }
+    instructionObserved = positions;
+    uint8_t candidate = 3;
+    uint32_t longest = 0;
+    for (uint8_t position = 0; position < 3; ++position)
+    {
+        const uint32_t age = static_cast<uint32_t>(timestamp - instructionChangedAt[position]);
+        if (((positions ^ instructionStable) & (1 << position)) && age >= 20 &&
+            (candidate == 3 || age > longest))
+        {
+            candidate = position;
+            longest = age;
+        }
+    }
+    if (candidate != 3)
+    {
+        const uint8_t bit = 1 << candidate;
+        const uint8_t previous = instructionStable;
+        instructionStable = (instructionStable & ~bit) | (positions & bit);
+        pressed = instructionStable & ~previous;
+        timestamp = instructionChangedAt[candidate];
+    }
+    held = instructionStable;
+}
+
+uint32_t ButtonInput::instructionPendingAt() const
+{
+    const uint32_t now = millis();
+    uint32_t longest = 0;
+    for (uint8_t position = 0; position < 3; ++position)
+        if ((instructionObserved ^ instructionStable) & (1 << position))
+        {
+            const uint32_t age = static_cast<uint32_t>(now - instructionChangedAt[position]);
+            if (age > longest) longest = age;
+        }
+    return now - longest;
+}
+#endif
