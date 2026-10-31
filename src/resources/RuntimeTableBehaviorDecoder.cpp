@@ -11,35 +11,6 @@ namespace RuntimeTableInternal
 {
 namespace
 {
-void clearOwnedBehavior(PetBehaviorConfig &config)
-{
-#if ENABLE_INSTRUCTION_RESPONSE
-    config.instructionEffectCount = 0;
-#endif
-    memset(config.stats, 0, sizeof(config.stats));
-    memset(config.petStates, 0, sizeof(config.petStates));
-    memset(config.actions, 0, sizeof(config.actions));
-    memset(config.actionOutcomes, 0, sizeof(config.actionOutcomes));
-    memset(config.actionConditions, 0, sizeof(config.actionConditions));
-    memset(config.actionEffects, 0, sizeof(config.actionEffects));
-#if ENABLE_GUESS_GAME
-    memset(config.guessEffects, 0, sizeof(config.guessEffects));
-#endif
-    memset(config.buttons, 0, sizeof(config.buttons));
-    memset(&config.statusSets, 0, sizeof(config.statusSets));
-    config.statCount = 0;
-    config.petStateCount = 0;
-    config.idleAnimation = {};
-    config.actionCount = 0;
-    config.actionConditionCount = 0;
-    config.actionEffectCount = 0;
-    config.actionOutcomeCount = 0;
-#if ENABLE_GUESS_GAME
-    config.guessEffectCount = 0;
-#endif
-    config.buttonCount = 0;
-}
-
 bool decodeStats(const Source &source, const Section &section, PetBehaviorConfig &config)
 {
     if (section.count == 0 || section.count > kPetBehaviorSlotCount)
@@ -101,11 +72,7 @@ bool decodePetStates(const Source &source,
             return false;
         const RuntimeRangePredicate predicate = {
             readU16(record + 2), readI64(record + 4), readI64(record + 12)};
-        if (readU16(record) != index || readU16(record + 22) != 0 ||
-            !isRuntimeBehaviorRange(predicate) ||
-            (isRuntimeValueIdPetStat(predicate.valueId) &&
-             runtimePetStatSlot(predicate.valueId) >= config.statCount) ||
-            !resolveAnimation(source, assets, animations, readU16(record + 20), scope, animation))
+        if (!resolveAnimation(source, assets, animations, readU16(record + 20), scope, animation))
             return false;
 
         RuntimePetStateConfig &state = config.petStates[index];
@@ -115,7 +82,6 @@ bool decodePetStates(const Source &source,
 
     uint8_t record[4] = {};
     if (!readRecord(source, *defaultState, 0, record) ||
-        readU16(record + 2) != 0 ||
         !resolveAnimation(source, assets, animations, readU16(record), scope,
                           config.idleAnimation))
         return false;
@@ -185,10 +151,7 @@ bool decodeActions(const Source &source,
         const uint8_t outcomeCount = actionRecord[6];
         const uint8_t conditionCount = actionRecord[10];
         const bool hasFallback = (actionRecord[3] & 1U) != 0;
-        if (mode > static_cast<uint8_t>(PetBehaviorActionMode::RandomOutcome) ||
-            (mode == 2 ? (outcomeCount < kMinPetBehaviorRandomOutcomesPerAction ||
-                          outcomeCount > kMaxPetBehaviorLotteryOutcomesPerAction)
-                       : outcomeCount != 1) ||
+        if (outcomeCount > kMaxPetBehaviorLotteryOutcomesPerAction ||
             conditionCount > kMaxPetBehaviorActionConditionsPerAction ||
             static_cast<uint32_t>(nextOutcome) + outcomeCount > outcomes.count ||
             (conditionCount != 0 && conditions == nullptr) ||
@@ -210,10 +173,8 @@ bool decodeActions(const Source &source,
         {
             uint8_t outcomeRecord[10] = {};
             if (!readRecord(source, outcomes, nextOutcome, outcomeRecord) ||
-                readU16(outcomeRecord + 4) != nextEffect ||
                 static_cast<uint32_t>(nextEffect) + readU16(outcomeRecord + 6) >
-                    (effects == nullptr ? 0 : effects->count) ||
-                readU16(outcomeRecord + 8) > AssetData::kMaxVersions)
+                    (effects == nullptr ? 0 : effects->count))
                 return false;
             const uint8_t weight = outcomeRecord[0];
             const uint8_t playbackCount = outcomeRecord[1];
@@ -260,12 +221,6 @@ bool decodeActions(const Source &source,
             const RuntimeRangePredicate predicate = {
                 readU16(conditionRecord + 2), readI64(conditionRecord + 8),
                 readI64(conditionRecord + 16)};
-            if (conditionRecord[1] != 0 || conditionRecord[5] != 0 ||
-                conditionRecord[4] > 5 ||
-                !isRuntimeBehaviorRange(predicate) ||
-                (isRuntimeValueIdPetStat(predicate.valueId) &&
-                 runtimePetStatSlot(predicate.valueId) >= config.statCount))
-                return false;
             PetBehaviorActionConditionConfig &condition =
                 config.actionConditions[nextCondition];
             condition.priority = conditionRecord[0];
@@ -282,9 +237,7 @@ bool decodeActions(const Source &source,
     config.actionOutcomeCount = static_cast<uint8_t>(nextOutcome);
     config.actionConditionCount = static_cast<uint8_t>(nextCondition);
     config.actionEffectCount = nextEffect;
-    return nextOutcome == outcomes.count &&
-           nextCondition == (conditions == nullptr ? 0 : conditions->count) &&
-           nextEffect == (effects == nullptr ? 0 : effects->count);
+    return true;
 }
 
 bool decodeFollowingAnimations(const Source &source, const Section *playbacks,
@@ -331,26 +284,19 @@ bool decodeButtons(const Source &source, const Section &buttons, PetBehaviorConf
     for (uint16_t index = 0; index < buttons.count; ++index)
     {
         uint8_t record[8] = {};
-        if (!readRecord(source, buttons, index, record) || record[0] != index + 1 ||
-            record[1] > static_cast<uint8_t>(PetBehaviorButtonKind::SystemCommand) ||
-            readU32(record + 4) != 0)
+        if (!readRecord(source, buttons, index, record))
             return false;
         PetBehaviorButtonConfig &button = config.buttons[index];
         button.active = true;
         button.kind = static_cast<PetBehaviorButtonKind>(record[1]);
         const uint16_t target = readU16(record + 2);
-        if (button.kind == PetBehaviorButtonKind::Empty)
-        {
-            if (target != kNone16)
-                return false;
-        }
-        else if (button.kind == PetBehaviorButtonKind::UserAction)
+        if (button.kind == PetBehaviorButtonKind::UserAction)
         {
             if (target >= config.actionCount)
                 return false;
             button.actionSlot = static_cast<uint8_t>(target);
         }
-        else
+        else if (button.kind == PetBehaviorButtonKind::SystemCommand)
         {
             if (findCompiledSystemCommand(static_cast<RuntimeSystemCommandId>(target)) == nullptr)
                 return false;
@@ -381,29 +327,19 @@ bool decodeStatus(const Source &source,
     {
         uint8_t setRecord[12] = {};
         if (!readRecord(source, *sets, setIndex, setRecord) ||
-            setRecord[0] != setIndex ||
             setRecord[1] > kMaxStatusConditions ||
-            readU16(setRecord + 4) != nextCondition ||
             static_cast<uint32_t>(nextCondition) + setRecord[1] > conditions->count)
             return false;
         StatusSetConfig &set = config.statusSets.sets[setIndex];
         set.conditionCount = setRecord[1];
         set.versionCount = readU16(setRecord + 6);
-        if (set.versionCount == 0 || set.versionCount > AssetData::kMaxVersions ||
-            setRecord[8] != 1 ||
-            setRecord[9] != 0 || readU16(setRecord + 10) != 0)
-            return false;
         if (!resolveAnimation(source, assets, animations, readU16(setRecord + 2),
                               scope, set.animation))
             return false;
-        uint16_t versionProduct = 1;
         for (uint8_t conditionIndex = 0; conditionIndex < set.conditionCount; ++conditionIndex)
         {
             uint8_t conditionRecord[20] = {};
-            if (!readRecord(source, *conditions, nextCondition, conditionRecord) ||
-                conditionRecord[3] == 0 || conditionRecord[3] > 32 ||
-                conditionRecord[0] > 1 ||
-                readI64(conditionRecord + 4) > readI64(conditionRecord + 12))
+            if (!readRecord(source, *conditions, nextCondition, conditionRecord))
                 return false;
             StatusSetCondition &condition = set.conditions[conditionIndex];
             condition.kind = static_cast<StatusConditionKind>(conditionRecord[0]);
@@ -417,39 +353,11 @@ bool decodeStatus(const Source &source,
             condition.levels = conditionRecord[3];
             condition.minValue = readI64(conditionRecord + 4);
             condition.maxValue = readI64(conditionRecord + 12);
-            if (condition.kind == StatusConditionKind::PetStatusAxis)
-            {
-                const uint16_t allowedMask = config.petStateCount >= 16
-                                                   ? 0xFFFFU
-                                                   : static_cast<uint16_t>((1U << config.petStateCount) - 1U);
-                const uint16_t selectedMask = condition.petStateMask;
-                uint8_t selectedCount = 0;
-                for (uint16_t mask = selectedMask; mask != 0; mask >>= 1)
-                    selectedCount = static_cast<uint8_t>(selectedCount + (mask & 1U));
-                if (selectedMask == 0 || (selectedMask & ~allowedMask) != 0 ||
-                    condition.levels != static_cast<uint8_t>(selectedCount + 1))
-                    return false;
-            }
-            else
-            {
-                const RuntimeRangePredicate predicate = {
-                    condition.valueId, condition.minValue, condition.maxValue};
-                if (!isRuntimeBehaviorRange(predicate) ||
-                    (isRuntimeValueIdPetStat(condition.valueId) &&
-                     runtimePetStatSlot(condition.valueId) >= config.statCount))
-                    return false;
-            }
-            versionProduct = static_cast<uint16_t>(
-                versionProduct * condition.levels);
-            if (versionProduct > AssetData::kMaxVersions)
-                return false;
             ++nextCondition;
         }
-        if (versionProduct != set.versionCount)
-            return false;
     }
     config.statusSets.count = static_cast<uint8_t>(sets->count);
-    return nextCondition == conditions->count;
+    return true;
 }
 
 bool decodeAnimationAudio(const RuntimeTable &table, const Section &animations,
@@ -503,10 +411,7 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         outcomes == nullptr || buttons == nullptr)
         return false;
 
-    // The caller discards this configuration when decoding fails.  Decode
-    // directly into it to keep the STM32 startup stack bounded.
-    config = {};
-    clearOwnedBehavior(config);
+    // The caller owns initialization and discards the configuration on failure.
     config.assetManifest = manifest;
     config.activeSpeciesSlot = speciesSlot;
     config.activeOutfitSlot = outfitSlot;

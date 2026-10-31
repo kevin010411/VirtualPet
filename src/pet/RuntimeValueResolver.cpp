@@ -45,8 +45,6 @@ bool resolveRuntimeValue(RuntimeValueId valueId,
 bool matchesRuntimeRange(const RuntimeRangePredicate &predicate,
                          const RuntimeValueContext &context)
 {
-    if (!isRuntimeRangeWellFormed(predicate))
-        return false;
     int64_t value = 0;
     return resolveRuntimeValue(predicate.valueId, context, value) &&
            value >= predicate.minimum && value <= predicate.maximum;

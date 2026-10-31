@@ -6,7 +6,7 @@
 namespace RuntimeTableInternal
 {
 // Decode into the caller's storage using the same open table snapshot.
-// Behavior initializes config; presentation follows it and uses the decoded
+// Caller zero-initializes config; presentation follows behavior and uses the decoded
 // stat slots. A failed decode invalidates the in-progress configuration.
 bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                                 const AssetData::RuntimeManifest &manifest,

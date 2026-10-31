@@ -89,9 +89,6 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         readU32(header + 8) != 0x01020304UL || readU32(header + 16) != source.size ||
         readU16(header + 26) != kSectionEntrySize)
         return false;
-    for (size_t index = 52; index < sizeof(header); ++index)
-        if (header[index] != 0)
-            return false;
 
     featureFlags = readU32(header + 12);
     if ((featureFlags & kPetBehaviorFeature) == 0 ||
@@ -115,6 +112,8 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
     uint32_t directoryEnd = 0;
     if (!addU32(kHeaderSize, directoryBytes, directoryEnd) || directoryEnd > source.size)
         return false;
+    if (sections == nullptr)
+        return true;
 
     for (uint16_t index = 0; index < sectionCount; ++index)
     {
@@ -128,15 +127,15 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         section.offset = readU32(entry + 4);
         section.count = readU16(entry + 8);
         section.recordSize = readU16(entry + 10);
-        section.length = readU32(entry + 12);
+        const uint32_t length = readU32(entry + 12);
         const uint16_t expectedRecordSize = recordSizeFor(section.type);
         const uint32_t expectedLength =
             static_cast<uint32_t>(section.count) * section.recordSize;
         uint32_t end = 0;
         if (expectedRecordSize == 0 ||
-            section.recordSize != expectedRecordSize || section.length != expectedLength ||
+            section.recordSize != expectedRecordSize || length != expectedLength ||
             section.offset < directoryEnd ||
-            !addU32(section.offset, section.length, end) || end > source.size)
+            !addU32(section.offset, length, end) || end > source.size)
             return false;
     }
     return true;
@@ -180,13 +179,12 @@ bool readRuntimeTable(const Source &source,
 bool readRuntimeManifest(const Source &source, AssetData::RuntimeManifest &manifest)
 {
     manifest = {};
-    Section sections[kMaxSections] = {};
     uint16_t sectionCount = 0;
     uint32_t featureFlags = 0;
     uint32_t schemaFingerprint = 0;
     uint32_t fileCrc32 = 0;
     AssetData::BundleId bundleId = {};
-    if (!readEnvelope(source, sections, sectionCount, featureFlags,
+    if (!readEnvelope(source, nullptr, sectionCount, featureFlags,
                       schemaFingerprint, bundleId, fileCrc32))
         return false;
     manifest.bundleId = bundleId;
@@ -239,13 +237,10 @@ bool resolveAssetReference(const Source &source, const Section &assets,
     if (reference >= assets.count)
         return false;
     uint8_t asset[12] = {};
-    if (!readRecord(source, assets, reference, asset) || readU16(asset) != reference)
+    if (!readRecord(source, assets, reference, asset))
         return false;
     const uint8_t scope = asset[2];
     if (scope != 1 && scope != 2)
-        return false;
-    if ((scope == 2 && (asset[3] != 0 || asset[4] != 0)) ||
-        (scope == 1 && (asset[3] == 0 || asset[4] == 0)))
         return false;
     resolved.speciesSlot = scope == 2 ? 0 : asset[3];
     resolved.outfitSlot = scope == 2 ? 0 : asset[4];

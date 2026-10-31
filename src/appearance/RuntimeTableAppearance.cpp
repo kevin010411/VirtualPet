@@ -70,7 +70,7 @@ struct EvolutionRecord
 };
 
 bool readEvolutionRecord(const Source &source, const Section &evolutions,
-                         const Section *conditions, const Section &animations,
+                         const Section *conditions,
                          uint16_t index, uint16_t expectedFirstCondition,
                          EvolutionRecord &decoded)
 {
@@ -86,26 +86,10 @@ bool readEvolutionRecord(const Source &source, const Section &evolutions,
     decoded.mode = static_cast<EvolutionAnimationMode>(record[12]);
     decoded.sourcePlaybackCount = record[13];
     decoded.targetPlaybackCount = record[14];
-    const bool playbackCountsValid =
-        (decoded.sourceAnimationRef == kNone16 ? decoded.sourcePlaybackCount == 0
-            : decoded.sourcePlaybackCount >= 1 && decoded.sourcePlaybackCount <= 5) &&
-        (decoded.targetAnimationRef == kNone16 ? decoded.targetPlaybackCount == 0
-            : decoded.targetPlaybackCount >= 1 && decoded.targetPlaybackCount <= 5);
-    const bool referencesMatchMode =
-        (decoded.mode == EvolutionAnimationMode::Disabled &&
-         decoded.sourceAnimationRef == kNone16 && decoded.targetAnimationRef == kNone16) ||
-        (decoded.mode == EvolutionAnimationMode::Single &&
-         decoded.sourceAnimationRef != kNone16 && decoded.targetAnimationRef == kNone16) ||
-        (decoded.mode == EvolutionAnimationMode::TwoPhase &&
-         decoded.sourceAnimationRef != kNone16 && decoded.targetAnimationRef != kNone16);
     // Evolution predicates are streamed from the section; their wire count is
     // uint8, independent of the four-condition Outfit unlock limit.
-    return readU16(record + 6) == expectedFirstCondition &&
-           static_cast<uint32_t>(expectedFirstCondition) + decoded.conditionCount <=
-               (conditions == nullptr ? 0 : conditions->count) &&
-           (decoded.sourceAnimationRef == kNone16 || decoded.sourceAnimationRef < animations.count) &&
-           (decoded.targetAnimationRef == kNone16 || decoded.targetAnimationRef < animations.count) &&
-           referencesMatchMode && playbackCountsValid && record[15] == 0;
+    return static_cast<uint32_t>(expectedFirstCondition) + decoded.conditionCount <=
+               (conditions == nullptr ? 0 : conditions->count);
 }
 
 RuntimeValueContext runtimeValueContext(const PetStatSnapshot &stats,
@@ -120,14 +104,10 @@ RuntimeValueContext runtimeValueContext(const PetStatSnapshot &stats,
     return context;
 }
 
-bool readRuntimePredicate(const uint8_t *record, bool allowAppearanceValues,
-                          RuntimeRangePredicate &predicate)
+RuntimeRangePredicate readRuntimePredicate(const uint8_t *record)
 {
-    predicate = {
+    return {
         readU16(record), readI64(record + 2), readI64(record + 10)};
-    return readU16(record + 18) == 0 &&
-           (allowAppearanceValues ? isRuntimeRangeWellFormed(predicate)
-                                  : isRuntimeBehaviorRange(predicate));
 }
 
 struct SpeciesOutfitRange
@@ -172,7 +152,7 @@ bool decodeEvolutionQuery(const RuntimeTable &table, BundleReader &bundleReader,
     for (uint16_t index = 0; index < evolutions->count; ++index)
     {
         EvolutionRecord evolution = {};
-        if (!readEvolutionRecord(source, *evolutions, conditions, *animations,
+        if (!readEvolutionRecord(source, *evolutions, conditions,
                                  index, nextCondition, evolution))
             return false;
         if (evolution.mode != EvolutionAnimationMode::Disabled &&
@@ -182,11 +162,10 @@ bool decodeEvolutionQuery(const RuntimeTable &table, BundleReader &bundleReader,
         for (uint8_t offset = 0; offset < evolution.conditionCount; ++offset)
         {
             uint8_t condition[20] = {};
-            RuntimeRangePredicate predicate = {};
             if (conditions == nullptr ||
-                !readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition) ||
-                !readRuntimePredicate(condition, true, predicate))
+                !readRecord(source, *conditions, static_cast<uint16_t>(nextCondition + offset), condition))
                 return false;
+            const RuntimeRangePredicate predicate = readRuntimePredicate(condition);
             matched = matched && matchesRuntimeRange(
                                      predicate,
                                      runtimeValueContext(stats, activeSlots));
@@ -338,11 +317,10 @@ bool decodeOutfitUnlocks(const RuntimeTable &table, uint8_t speciesSlot,
         for (uint8_t conditionIndex = 0; conditionIndex < unlock[7]; ++conditionIndex)
         {
             uint8_t condition[20] = {};
-            RuntimeRangePredicate predicate = {};
             if (!readRecord(source, *unlockConditions,
-                            static_cast<uint16_t>(readU16(unlock + 5) + conditionIndex), condition) ||
-                !readRuntimePredicate(condition, false, predicate))
+                            static_cast<uint16_t>(readU16(unlock + 5) + conditionIndex), condition))
                 return false;
+            const RuntimeRangePredicate predicate = readRuntimePredicate(condition);
             matching = matching && matchesRuntimeRange(
                                        predicate,
                                        runtimeValueContext(stats, activeSlots));
@@ -383,12 +361,11 @@ bool decodeConsumableOutfitUnlock(const RuntimeTable &table,
     for (uint8_t offset = 0; offset < unlock[7]; ++offset)
     {
         uint8_t condition[20] = {};
-        RuntimeRangePredicate predicate = {};
         if (!readRecord(source, *unlockConditions,
-                        static_cast<uint16_t>(readU16(unlock + 5) + offset), condition) ||
-            !readRuntimePredicate(condition, false, predicate) ||
-            !matchesRuntimeRange(
-                predicate, runtimeValueContext(stats, activeSlots)))
+                        static_cast<uint16_t>(readU16(unlock + 5) + offset), condition))
+            return false;
+        const RuntimeRangePredicate predicate = readRuntimePredicate(condition);
+        if (!matchesRuntimeRange(predicate, runtimeValueContext(stats, activeSlots)))
             return false;
         const RuntimeValueId valueId = readU16(condition);
         const int64_t cost = readI64(condition + 2);

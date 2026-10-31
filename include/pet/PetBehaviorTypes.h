@@ -113,10 +113,11 @@ struct ScreenBlockConfig
 
 struct ScreenRuleConfig
 {
-    int64_t minimum;
-    int64_t maximum;
+    uint32_t minimum;
+    uint32_t maximum;
     uint16_t frame;
 };
+static_assert(sizeof(ScreenRuleConfig) == 12, "Screen rules store exported unsigned Stat ranges.");
 
 struct PetBehaviorConfig
 {
@@ -159,7 +160,6 @@ struct PetBehaviorConfig
     uint8_t screenBlockCount;
     ScreenRuleConfig screenRules[kMaxScreenRules];
     uint16_t screenRuleCount;
-    uint16_t screenProductFrameCount;
     StatusSetsConfig statusSets;
     AssetData::AnimationRef idleAnimation;
     uint8_t activeSpeciesSlot;

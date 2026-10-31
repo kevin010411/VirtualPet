@@ -69,10 +69,11 @@ struct PetBehaviorActionConfig
 struct PetBehaviorActionOutcomeConfig
 {
     PetBehaviorAnimationPlaybackConfig animationPlayback;
-    uint8_t weight;
     uint16_t firstEffect;
+    uint8_t weight;
     uint8_t effectCount;
 };
+static_assert(sizeof(PetBehaviorActionOutcomeConfig) == 12, "Outcome storage must remain compact.");
 
 struct PetBehaviorActionConditionConfig
 {

@@ -24,26 +24,25 @@ bool resolvePetStateStatusLevel(
     int64_t &level)
 {
     const uint16_t selectedPetStateMask = condition.petStateMask;
-    if (selectedPetStateMask == 0 ||
+    if (condition.levels == 0 ||
         (!activePetState.isDefault && activePetState.slot >= 16))
-        return false;
-
-    uint8_t selectedCount = 0;
-    uint8_t rank = 0;
-    for (uint8_t slot = 0; slot < 16; ++slot)
-    {
-        if ((selectedPetStateMask & static_cast<uint16_t>(1U << slot)) == 0)
-            continue;
-        if (slot < activePetState.slot)
-            ++rank;
-        ++selectedCount;
-    }
-    if (condition.levels != static_cast<uint8_t>(selectedCount + 1U))
         return false;
 
     const bool selected = !activePetState.isDefault &&
         (selectedPetStateMask & static_cast<uint16_t>(1U << activePetState.slot)) != 0;
-    level = selected ? rank : static_cast<int64_t>(selectedCount);
+    if (!selected)
+    {
+        level = condition.levels - 1U;
+        return true;
+    }
+    uint8_t rank = 0;
+    for (uint8_t slot = 0; slot < activePetState.slot; ++slot)
+    {
+        if ((selectedPetStateMask & static_cast<uint16_t>(1U << slot)) == 0)
+            continue;
+        ++rank;
+    }
+    level = rank;
     return true;
 }
 
@@ -59,8 +58,6 @@ bool resolveStatusSet(
     resolution.animation = set.animation;
     if (set.conditionCount == 0)
     {
-        if (set.versionCount != 1)
-            return false;
         resolution.playOnce = true;
         resolution.requiredVersions = 1;
         return true;
@@ -69,7 +66,6 @@ bool resolveStatusSet(
         return false;
 
     uint16_t version = 0;
-    uint16_t requiredVersions = 1;
     for (uint8_t index = 0; index < set.conditionCount; ++index)
     {
         const StatusSetCondition &condition = set.conditions[index];
@@ -81,15 +77,12 @@ bool resolveStatusSet(
         version = static_cast<uint16_t>(
             version * condition.levels +
             levelForValue(value, condition.minValue, condition.maxValue, condition.levels));
-        requiredVersions = static_cast<uint16_t>(requiredVersions * condition.levels);
-        if (requiredVersions > AssetData::kMaxVersions)
-            return false;
     }
 
-    if (requiredVersions != set.versionCount || version >= requiredVersions)
+    if (version >= AssetData::kMaxVersions)
         return false;
     resolution.versionIndex = static_cast<uint8_t>(version);
-    resolution.requiredVersions = requiredVersions;
+    resolution.requiredVersions = set.versionCount;
     resolution.playOnce = true;
     return true;
 }

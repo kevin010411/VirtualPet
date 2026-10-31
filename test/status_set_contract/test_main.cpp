@@ -75,21 +75,40 @@ void testLowerSelectedSlotCountDeterminesRank()
     assert(level == 1);
 }
 
-void testPetStateLevelShapeFailsClosed()
+void testPetStateExecutionBounds()
 {
     int64_t level = -1;
     StatusSetCondition condition = {};
-    condition.levels = 1;
+    condition.levels = 0;
     ActivePetState active = {};
     active.isDefault = false;
     active.slot = 0;
     assert(!resolvePetStateStatusLevel(condition, active, level));
     condition.petStateMask = 0x0005U;
-    condition.levels = 2;
-    assert(!resolvePetStateStatusLevel(condition, active, level));
     condition.levels = 3;
     active.slot = 16;
     assert(!resolvePetStateStatusLevel(condition, active, level));
+}
+
+void testFullVersionCapacityAndExecutionBounds()
+{
+    StatusSetConfig set = {};
+    set.animation.animationId = 1;
+    set.conditionCount = 2;
+    set.versionCount = 256;
+    for (uint8_t index = 0; index < set.conditionCount; ++index)
+    {
+        set.conditions[index].valueId = runtimeValueIdForPetStat(0);
+        set.conditions[index].levels = 16;
+        set.conditions[index].maxValue = 100;
+    }
+    StatusSetResolution resolution = {};
+    assert(resolveStatusSet(set, readValue, nullptr, resolution));
+    assert(resolution.versionIndex == 255 && resolution.requiredVersions == 256);
+    set.conditions[0].levels = 0;
+    assert(!resolveStatusSet(set, readValue, nullptr, resolution));
+    set.conditionCount = kMaxStatusConditions + 1;
+    assert(!resolveStatusSet(set, readValue, nullptr, resolution));
 }
 } // namespace
 
@@ -98,6 +117,7 @@ int main()
     testRuntimeContractStatusResolution();
     testPetStateSubsetRanksAndOtherFallback();
     testLowerSelectedSlotCountDeterminesRank();
-    testPetStateLevelShapeFailsClosed();
+    testPetStateExecutionBounds();
+    testFullVersionCapacityAndExecutionBounds();
     return 0;
 }

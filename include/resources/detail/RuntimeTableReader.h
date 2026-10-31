@@ -74,7 +74,6 @@ struct Section
     uint16_t count;
     uint16_t recordSize;
     uint32_t offset;
-    uint32_t length;
 };
 
 struct ActiveAssetScope

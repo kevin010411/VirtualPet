@@ -96,18 +96,12 @@ void prepareAndTick(AnimationController &animations, LayoutRenderer &layout,
 
 void assertAtomicSceneBeforeFrame(uint8_t layoutVersion, uint16_t centerId)
 {
-    assert(events.size() == 23);
+    assert(events.size() == 21);
     assert(events[0].channel == RenderEventChannel::SdRead);
     assert(events[0].kind == RenderEventKind::AnimationRecord);
-    for (size_t index = 1; index <= 2; ++index)
-    {
-        assert(events[index].channel == RenderEventChannel::SdRead);
-        assert(events[index].kind == RenderEventKind::LayoutMetadata);
-        assert(events[index].version == layoutVersion);
-    }
     for (size_t index = 0; index < 9; ++index)
     {
-        const size_t readIndex = 3 + index * 2;
+        const size_t readIndex = 1 + index * 2;
         const size_t drawIndex = readIndex + 1;
         assert(events[readIndex].channel == RenderEventChannel::SdRead);
         assert(events[readIndex].kind == RenderEventKind::LayoutFrame);
@@ -116,11 +110,11 @@ void assertAtomicSceneBeforeFrame(uint8_t layoutVersion, uint16_t centerId)
         assert(events[drawIndex].version == layoutVersion);
         assert(events[drawIndex].frame == (index == 0 ? 1 : index + 2));
     }
-    assert(events[21].channel == RenderEventChannel::SdRead);
-    assert(events[21].kind == RenderEventKind::AnimationFrame);
-    assert(events[22].channel == RenderEventChannel::TftDraw);
-    assert(events[22].kind == RenderEventKind::AnimationFrame);
-    assert(events[22].animationId == centerId);
+    assert(events[19].channel == RenderEventChannel::SdRead);
+    assert(events[19].kind == RenderEventKind::AnimationFrame);
+    assert(events[20].channel == RenderEventChannel::TftDraw);
+    assert(events[20].kind == RenderEventKind::AnimationFrame);
+    assert(events[20].animationId == centerId);
 }
 } // namespace
 
@@ -165,16 +159,6 @@ bool Renderer::currentLayoutId(uint8_t &layoutId) const
     layoutId = selectedLayoutId;
     return true;
 }
-bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &unselected,
-                                     const AssetData::AnimationRef &selected,
-                                     uint8_t layoutId, uint8_t, uint16_t)
-{
-    recordEvent(RenderEventChannel::SdRead, RenderEventKind::LayoutMetadata,
-                unselected.animationId, layoutId, 0);
-    recordEvent(RenderEventChannel::SdRead, RenderEventKind::LayoutMetadata,
-                selected.animationId, layoutId, 0);
-    return unselected.shared() && selected.shared();
-}
 AssetData::BundleError Renderer::firstAssetDataError() const
 {
     return AssetData::BundleError::None;
@@ -217,7 +201,6 @@ void testAppearanceRedraw()
     config.layoutUnselected = {0, 0, 10};
     config.layoutSelected = {0, 0, 11};
     config.screenBlockCount = 3;
-    config.screenProductFrameCount = 6;
     config.screenBlocks[0] = {ScreenBlockKind::Animation, 0, 0, 20, 128, 96};
     config.screenBlocks[1] = {ScreenBlockKind::Button, 1, 0, 0, 16, 16};
     config.screenBlocks[2] = {ScreenBlockKind::Stat, 16, 16, 0, 16, 16, 0, 2, 5};
@@ -255,18 +238,33 @@ void testAppearanceRedraw()
     // A different composed layout redraws before the next central frame.
     selectedLayoutId = 1;
     assert(layout.syncPlayback(snapshot));
-    assert(events.size() == 8);
+    assert(events.size() == 6);
     events.clear();
 
     // The same layout ID in another bundle must not reuse old pixels.
     config.assetManifest.bundleId.bytes[0] = 1;
     layout.configureRuntimeContract(config);
     assert(layout.syncPlayback(snapshot));
-    assert(events.size() == 8);
+    assert(events.size() == 6);
     events.clear();
     layout.begin();
     assert(layout.syncPlayback(snapshot));
-    assert(events.size() == 8);
+    assert(events.size() == 6);
+
+    // Compact ranges preserve the full unsigned Pet Stat domain.
+    config.screenRules[0] = {0, UINT32_MAX - 1, 5};
+    config.screenRules[1] = {UINT32_MAX, UINT32_MAX, 6};
+    snapshot.customStats[0] = UINT32_MAX - 1;
+    events.clear();
+    layout.updateValues(snapshot);
+    assert(events.size() == 2 && events.back().frame == 5);
+    snapshot.customStats[0] = UINT32_MAX;
+    events.clear();
+    layout.updateValues(snapshot);
+    assert(events.size() == 2 && events.back().frame == 6);
+    events.clear();
+    layout.updateValues(snapshot);
+    assert(events.empty());
 }
 
 void testPreparedFrameLifecycle()
@@ -425,18 +423,14 @@ int main(int argc, char **argv)
     assert(events[3].kind == RenderEventKind::LayoutFrame);
     assert(events[3].frame == 4);
 
-    // Appearance changes invalidate cached layout metadata before the next frame.
+    // Appearance changes redraw before the next frame without pre-scanning products.
     events.clear();
     layout.begin();
     assert(layout.updatePlayback(1));
-    assert(events.size() == 20);
-    assert(events[0].channel == RenderEventChannel::SdRead);
-    assert(events[0].kind == RenderEventKind::LayoutMetadata);
-    assert(events[1].channel == RenderEventChannel::SdRead);
-    assert(events[1].kind == RenderEventKind::LayoutMetadata);
+    assert(events.size() == 18);
     for (size_t index = 0; index < 9; ++index)
     {
-        const size_t readIndex = 2 + index * 2;
+        const size_t readIndex = index * 2;
         const size_t drawIndex = readIndex + 1;
         assert(events[readIndex].channel == RenderEventChannel::SdRead);
         assert(events[readIndex].kind == RenderEventKind::LayoutFrame);

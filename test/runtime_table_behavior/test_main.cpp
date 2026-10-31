@@ -230,12 +230,14 @@ void testEvolutionPlaybackRecords(const std::vector<uint8_t> &exported)
         AppearanceSelection selection = {};
         const bool accepted = findRuntimeTableEvolutionTarget(
             &sd, manifest, reader, activeSlots, stats, selection);
-        assert(accepted == (variant < 2));
+        // Playback-count semantics are exporter-owned; the missing execution
+        // feature remains a firmware compatibility failure.
+        assert(accepted == (variant != 4));
         if (accepted)
         {
             assert(selection.speciesSlot == 2 && selection.outfitSlot == 1);
-            assert(selection.sourceEvolutionPlaybackCount == (variant == 1 ? 1 : 3));
-            assert(selection.targetEvolutionPlaybackCount == 5);
+            assert(selection.sourceEvolutionPlaybackCount == fixture[evolutionOffset + 13]);
+            assert(selection.targetEvolutionPlaybackCount == fixture[evolutionOffset + 14]);
         }
     }
 }
@@ -375,7 +377,8 @@ void testDecodedActionRanges(const std::vector<uint8_t> &exported)
     assert(applyPetBehaviorAction(config, 2, state, pauses, playback, selectLastOutcome));
     assert(state.values[0] == 4);
 
-    // A second Outcome cannot borrow effects from the first one.
+    // Exporter validates child ownership. The firmware decodes canonical
+    // contiguous effects without repeating that semantic comparison.
     for (size_t entry = 64; entry < 64U + fixture[24] * 16U; entry += 16)
     {
         if (fixture[entry] != 13) continue;
@@ -383,10 +386,11 @@ void testDecodedActionRanges(const std::vector<uint8_t> &exported)
         putFixtureU16(fixture, offset + 10 + 4, 0);
         break;
     }
-    config.schemaFingerprint = 0xA5A5A5A5UL;
-    assert(!parseRuntimeTableBehavior(fixture.data(), fixture.size(),
-                                      releaseFixtureManifest(fixture), 1, 1, config));
-    assert(config.schemaFingerprint == 0xA5A5A5A5UL);
+    assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(),
+                                     releaseFixtureManifest(fixture), 1, 1, config));
+    state.values[0] = 10;
+    assert(applyPetBehaviorAction(config, 1, state, pauses, playback));
+    assert(state.values[0] == 2);
 }
 struct StatusContext
 {
@@ -992,14 +996,23 @@ int main(int argc, char **argv)
     const auto &animatedOutcome = config.actionOutcomes[config.actions[2].firstOutcome + 1];
     assert(animatedOutcome.animationPlayback.animation.valid());
     assert(animatedOutcome.animationPlayback.playbackCount == 3);
+    // Backend layout tests own geometry, source and uniqueness validation.
+    // The reader still rejects rule ranges beyond storage, capacity and missing sections.
+    const bool expectedAcceptance[] = {true, true, true, false, true, false, false};
+    assert(argc - 7 == static_cast<int>(sizeof(expectedAcceptance) / sizeof(bool)));
     for (int argument = 5; argument < argc - 2; ++argument)
     {
         const std::vector<uint8_t> invalid = readFixture(argv[argument]);
         unpublished.screenBlockCount = 0xAA;
-        assert(!parseRuntimeTableBehavior(invalid.data(), invalid.size(),
-                                          releaseFixtureManifest(invalid), 1, 1, unpublished));
-        assert(unpublished.screenBlockCount == 0xAA);
-        assert(unpublished.schemaFingerprint == 0xA5A5A5A5UL);
+        const uint32_t fingerprintBefore = unpublished.schemaFingerprint;
+        const bool accepted = parseRuntimeTableBehavior(invalid.data(), invalid.size(),
+            releaseFixtureManifest(invalid), 1, 1, unpublished);
+        assert(accepted == expectedAcceptance[argument - 5]);
+        if (!accepted)
+        {
+            assert(unpublished.screenBlockCount == 0xAA);
+            assert(unpublished.schemaFingerprint == fingerprintBefore);
+        }
     }
 #elif RUNTIME_TABLE_FULL_FEATURE
     assert(argc == 5);

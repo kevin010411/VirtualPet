@@ -258,19 +258,11 @@ bool BundleReader::readHeader(SdBaseFile &file, PackHeader &header)
     if (memcmp(data, kMagic, sizeof(kMagic)) != 0 ||
         readU16(data + 8) != AssetData::kVersion ||
         readU16(data + 10) != AssetData::kHeaderSize ||
-        readU16(data + 14) != 0 ||
         readU16(data + 56) != AssetData::kAnimationRecordSize ||
-        readU16(data + 58) != AssetData::kFrameRecordSize ||
-        readU32(data + 60) != 0)
+        readU16(data + 58) != AssetData::kFrameRecordSize)
     {
         return false;
     }
-    for (size_t index = 68; index < AssetData::kHeaderSize; ++index)
-    {
-        if (data[index] != 0)
-            return false;
-    }
-
     header.packKind = data[12];
     header.speciesSlot = data[13];
     memcpy(header.bundleId, data + 16, sizeof(header.bundleId));
@@ -363,8 +355,7 @@ bool BundleReader::readAnimation(SdBaseFile &file,
         return false;
     uint8_t data[AssetData::kAnimationRecordSize];
     const uint32_t offset = header.animationTableOffset + index * AssetData::kAnimationRecordSize;
-    if (!readExact(file, offset, data, sizeof(data)) ||
-        data[13] != 0 || data[14] != 0 || data[15] != 0)
+    if (!readExact(file, offset, data, sizeof(data)))
         return false;
 
     animation.animationId = readU16(data);
@@ -399,8 +390,7 @@ bool BundleReader::readDescriptor(SdBaseFile &file,
         return false;
     uint8_t data[AssetData::kFrameRecordSize];
     const uint32_t offset = header.frameTableOffset + index * AssetData::kFrameRecordSize;
-    if (!readExact(file, offset, data, sizeof(data)) || data[1] != 0 ||
-        readU16(data + 6) != 0 || readU32(data + 20) != 0)
+    if (!readExact(file, offset, data, sizeof(data)))
     {
         return false;
     }

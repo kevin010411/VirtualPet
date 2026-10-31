@@ -95,10 +95,6 @@ bool LayoutRenderer::updatePlayback(uint8_t layoutId)
         return false;
     if (hasActiveLayout && activeLayoutId == layoutId)
         return true;
-    if (!renderer.validateLayoutVersion(runtimeContract->layoutUnselected,
-                                        runtimeContract->layoutSelected, layoutId,
-                                        runtimeContract->screenBlockCount, runtimeContract->screenProductFrameCount))
-        return false;
     activeLayoutId = layoutId;
     hasActiveLayout = true;
     drawAll();
