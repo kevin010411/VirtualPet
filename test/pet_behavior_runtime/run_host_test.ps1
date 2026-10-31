@@ -19,6 +19,14 @@ try {
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host "[PASS] Action ranges, selection, atomic effects and daily pauses (Stats=$statCapacity)"
     }
+    & g++ -std=c++17 -Wall -Wextra -DENABLE_GUESS_GAME=1 -DAPP_MAX_PET_STATS=12 `
+        -DAPP_MAX_ACTION_OUTCOMES=224 -DAPP_MAX_ACTION_EFFECTS=12 -Itest/host_stubs -Iinclude `
+        test/pet_behavior_runtime/test_main.cpp src/pet/PetBehaviorRuntimeRules.cpp `
+        src/pet/RuntimeValueResolver.cpp -o $outputPath
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    & $outputPath
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host '[PASS] Eight Actions x 28 weighted results x 12 streamed effects, exact Version mapping and atomic read failure'
     foreach ($catalogEnabled in @(0, 1)) {
         & g++ -std=c++17 -Wall -Wextra "-DENABLE_COLLECTION_CATALOG=$catalogEnabled" -DENABLE_GUESS_GAME=0 -DAPP_MAX_PET_STATS=6 `
             -Itest/host_stubs -Itest/animation_scene_playback -Iinclude `

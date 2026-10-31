@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <algorithm>
 #include <cstring>
+#include <cstdio>
 #include <fstream>
 #include <iterator>
 #include <vector>
@@ -11,6 +12,7 @@
 #include "appearance/SdAppearanceLoader.h"
 #include "pet/PetBehaviorRuntimeRules.h"
 #include "resources/RuntimeTableBehavior.h"
+#include "resources/detail/RuntimeTableReader.h"
 
 namespace AssetData
 {
@@ -758,7 +760,77 @@ int main(int argc, char **argv)
     assert(AssetData::isValidFrameAddress(ninthSpecies));
     ninthSpecies.outfitSlot = 9;
     assert(!AssetData::isValidFrameAddress(ninthSpecies));
-#if RUNTIME_TABLE_V8
+#if RUNTIME_TABLE_LOTTERY
+    assert(argc == 2);
+    const auto bytes = readFixture(argv[1]);
+    AssetData::RuntimeManifest manifest = fixtureManifest(bytes);
+    memcpy(manifest.bundleId.bytes, bytes.data() + 28, 16);
+    PetBehaviorConfig config = {};
+    assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, 1, config));
+    assert(config.actionCount == 8 && config.actionOutcomeCount == 224);
+    assert(config.actionEffectCount == 2688 && config.actionEffectsStreamed);
+    uint8_t exportedOutfitCount = 0;
+    const uint16_t sectionCount = RuntimeTableInternal::readU16(bytes.data() + 24);
+    for (uint16_t section = 0; section < sectionCount; ++section)
+    {
+        const uint8_t *entry = bytes.data() + 64 + section * 16;
+        if (RuntimeTableInternal::readU16(entry) == RuntimeTableInternal::Outfits)
+            exportedOutfitCount = RuntimeTableInternal::readU16(entry + 8);
+    }
+    assert(exportedOutfitCount >= 1 && exportedOutfitCount <= 8);
+    for (uint8_t outfit = 2; outfit <= exportedOutfitCount; ++outfit)
+    {
+        PetBehaviorConfig alternate = {};
+        assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, outfit, alternate));
+        for (uint16_t index = 0; index < 224; ++index)
+        {
+            const auto &primary = alternate.actionOutcomes[index].animationPlayback;
+            assert(primary.versionSelection == config.actionOutcomes[index].animationPlayback.versionSelection);
+            assert(primary.animation.animationId == config.actionOutcomes[index].animationPlayback.animation.animationId);
+            assert(primary.animation.outfitSlot == outfit);
+        }
+    }
+    printf("[PASS] Maximum lottery mappings resolved for %u exported Outfits\n", exportedOutfitCount);
+    struct Effects { const std::vector<uint8_t> &bytes; uint32_t offset; unsigned reads; } effects = {bytes, config.actionEffectsOffset, 0};
+    const auto reader = [](void *context, uint16_t row, PetBehaviorActionEffectConfig &effect) -> bool {
+        auto &source = *static_cast<Effects *>(context);
+        const auto *record = source.bytes.data() + source.offset + row * 12;
+        ++source.reads;
+        effect = {record[0], static_cast<PetBehaviorEffectOperation>(record[1]), RuntimeTableInternal::readI64(record + 2)};
+        return true;
+    };
+    static uint16_t draw;
+    const auto random = [](uint16_t) -> uint16_t { return draw; };
+    for (uint8_t actionSlot = 0; actionSlot < 8; ++actionSlot)
+    {
+        const auto &action = config.actions[actionSlot];
+        assert(action.outcomeCount == 28);
+        uint16_t weight = 0;
+        for (uint8_t option = 0; option < 28; ++option)
+        {
+            const auto &outcome = config.actionOutcomes[action.firstOutcome + option];
+            PetBehaviorStatValues values = {};
+            initializePetBehaviorStats(config, values);
+            auto expected = values;
+            for (uint8_t effect = 0; effect < 12; ++effect)
+            {
+                const auto *record = bytes.data() + config.actionEffectsOffset + (outcome.firstEffect + effect) * 12;
+                const uint8_t stat = record[0];
+                const auto delta = RuntimeTableInternal::readI64(record + 2);
+                const int64_t value = (record[1] == 1 ? 0 : expected.values[stat]) + delta;
+                expected.values[stat] = value < 0 ? 0 : value > config.stats[stat].maxValue ? config.stats[stat].maxValue : value;
+            }
+            PetBehaviorDailyChangePauses pauses = {};
+            PetBehaviorActionPlayback playback = {};
+            effects.reads = 0;
+            draw = weight;
+            assert(applyPetBehaviorAction(config, actionSlot, values, pauses, playback, random, reader, &effects));
+            assert(effects.reads == 12 && playback.versionSelection == option + 1);
+            assert(memcmp(values.values, expected.values, sizeof(values.values)) == 0);
+            weight += outcome.weight;
+        }
+    }
+#elif RUNTIME_TABLE_V8
     assert(argc >= 5);
     const std::vector<uint8_t> valid = readFixture(argv[1]);
     testDeathCapability(valid);

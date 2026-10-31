@@ -271,6 +271,79 @@ void testWeightedOutcomeBoundariesAndEffects()
         config.actionOutcomes[index].weight = 0;
     assertRejected(config);
 }
+#if APP_MAX_ACTION_OUTCOMES >= 224
+struct StreamedEffects
+{
+    uint16_t first;
+    uint16_t count;
+    uint16_t failAt;
+};
+bool readMaximumEffect(void *context, uint16_t index, PetBehaviorActionEffectConfig &effect)
+{
+    auto &reads = *static_cast<StreamedEffects *>(context);
+    assert(index == reads.first + reads.count++);
+    if (index == reads.failAt) return false;
+    effect = {static_cast<uint8_t>(index % kPetBehaviorSlotCount), Operation::Set,
+              static_cast<int64_t>(index / kPetBehaviorSlotCount + 1)};
+    return true;
+}
+void testMaximumStreamedLottery()
+{
+    PetBehaviorConfig config = {};
+    for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
+        config.stats[slot] = {true, 10, 0, 1000, 0};
+    config.statCount = kPetBehaviorSlotCount;
+    config.actionCount = 8;
+    config.actionOutcomeCount = 224;
+    config.actionEffectCount = 224 * kPetBehaviorSlotCount;
+    config.actionEffectsStreamed = true;
+    for (uint8_t slot = 0; slot < 8; ++slot)
+    {
+        auto &action = config.actions[slot];
+        action.active = true;
+        action.mode = PetBehaviorActionMode::RandomOutcome;
+        action.firstOutcome = slot * 28;
+        action.outcomeCount = 28;
+        action.suspendDailyChangeDays = 7;
+        for (uint8_t option = 0; option < 28; ++option)
+        {
+            const uint8_t row = slot * 28 + option;
+            auto &outcome = config.actionOutcomes[row];
+            outcome.weight = option + 1;
+            outcome.animationPlayback = {{1, 1, static_cast<uint16_t>(slot + 1)}, 5,
+                                         static_cast<uint16_t>(option + 1)};
+            outcome.firstEffect = row * kPetBehaviorSlotCount;
+            outcome.effectCount = kPetBehaviorSlotCount;
+        }
+    }
+    for (uint8_t slot = 0; slot < 8; ++slot)
+    for (uint8_t option = 0; option < 28; ++option)
+    for (uint8_t edge = 0; edge < 2; ++edge)
+    {
+        randomValue = option * (option + 1) / 2 + (edge ? option : 0);
+        PetBehaviorStatValues state = {};
+        initializePetBehaviorStats(config, state);
+        PetBehaviorDailyChangePauses pauses = {};
+        PetBehaviorActionPlayback playback = {};
+        const uint16_t row = slot * 28 + option;
+        StreamedEffects reads = {static_cast<uint16_t>(row * kPetBehaviorSlotCount), 0, UINT16_MAX};
+        assert(applyPetBehaviorAction(config, slot, state, pauses, playback, deterministicRandom,
+                                      readMaximumEffect, &reads));
+        assert(randomBound == 406 && reads.count == kPetBehaviorSlotCount);
+        assert(playback.animation.animationId == slot + 1 && playback.versionSelection == option + 1);
+        for (uint8_t stat = 0; stat < kPetBehaviorSlotCount; ++stat)
+            assert(state.values[stat] == static_cast<uint32_t>(row + 1) && pauses.remainingDays[stat] == 7);
+        const auto before = state;
+        const auto beforePauses = pauses;
+        reads.count = 0;
+        reads.failAt = reads.first + kPetBehaviorSlotCount - 1;
+        assert(!applyPetBehaviorAction(config, slot, state, pauses, playback, deterministicRandom,
+                                       readMaximumEffect, &reads));
+        assert(memcmp(&before, &state, sizeof(state)) == 0);
+        assert(memcmp(&beforePauses, &pauses, sizeof(pauses)) == 0);
+    }
+}
+#endif
 } // namespace
 
 int main()
@@ -309,5 +382,8 @@ int main()
     testRejectedEffectsAreAtomic();
     testConditionalUsesOwnedRangePriorityAndPreEffectValues();
     testWeightedOutcomeBoundariesAndEffects();
+#if APP_MAX_ACTION_OUTCOMES >= 224
+    testMaximumStreamedLottery();
+#endif
     return 0;
 }

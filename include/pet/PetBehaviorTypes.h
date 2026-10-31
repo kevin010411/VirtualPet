@@ -148,7 +148,9 @@ struct PetBehaviorConfig
     PetBehaviorAnimationPlaybackConfig followingAnimations[kMaxPetBehaviorFollowingAnimations];
     PetBehaviorActionOutcomeConfig actionOutcomes[kMaxPetBehaviorActionOutcomes];
     PetBehaviorActionConditionConfig actionConditions[kMaxPetBehaviorActionConditions];
-    PetBehaviorActionEffectConfig actionEffects[kMaxPetBehaviorActionEffects];
+    PetBehaviorActionEffectConfig actionEffects[kStoredPetBehaviorActionEffects];
+    uint32_t actionEffectsOffset;
+    bool actionEffectsStreamed;
 #if ENABLE_GUESS_GAME
     PetBehaviorGuessEffectConfig guessEffects[kMaxPetBehaviorGuessEffects];
 #endif

@@ -171,6 +171,8 @@ bool decodeActions(const Source &source,
         (conditions != nullptr && conditions->count > kMaxPetBehaviorActionConditions) ||
         (effects != nullptr && effects->count > kMaxPetBehaviorActionEffects))
         return false;
+    config.actionEffectsStreamed = effects != nullptr && effects->count > kStoredPetBehaviorActionEffects;
+    config.actionEffectsOffset = effects == nullptr ? 0 : effects->offset;
     uint16_t nextOutcome = 0;
     uint16_t nextCondition = 0;
     uint16_t nextEffect = 0;
@@ -185,7 +187,7 @@ bool decodeActions(const Source &source,
         const bool hasFallback = (actionRecord[3] & 1U) != 0;
         if (mode > static_cast<uint8_t>(PetBehaviorActionMode::RandomOutcome) ||
             (mode == 2 ? (outcomeCount < kMinPetBehaviorRandomOutcomesPerAction ||
-                          outcomeCount > kMaxPetBehaviorRandomOutcomesPerAction)
+                          outcomeCount > kMaxPetBehaviorLotteryOutcomesPerAction)
                        : outcomeCount != 1) ||
             conditionCount > kMaxPetBehaviorActionConditionsPerAction ||
             static_cast<uint32_t>(nextOutcome) + outcomeCount > outcomes.count ||
@@ -211,7 +213,7 @@ bool decodeActions(const Source &source,
                 readU16(outcomeRecord + 4) != nextEffect ||
                 static_cast<uint32_t>(nextEffect) + readU16(outcomeRecord + 6) >
                     (effects == nullptr ? 0 : effects->count) ||
-                readU16(outcomeRecord + 8) != 0)
+                readU16(outcomeRecord + 8) > AssetData::kMaxVersions)
                 return false;
             const uint8_t weight = outcomeRecord[0];
             const uint8_t playbackCount = outcomeRecord[1];
@@ -228,20 +230,22 @@ bool decodeActions(const Source &source,
             outcome.weight = weight;
             outcome.animationPlayback.animation = animation;
             outcome.animationPlayback.playbackCount = playbackCount;
+            outcome.animationPlayback.versionSelection = readU16(outcomeRecord + 8);
             outcome.firstEffect = nextEffect;
             outcome.effectCount = static_cast<uint8_t>(effectCount);
 
             for (uint16_t effectOffset = 0; effectOffset < effectCount; ++effectOffset)
             {
-                uint8_t effectRecord[12] = {};
-                if (effects == nullptr || !readRecord(source, *effects, nextEffect, effectRecord) ||
-                    effectRecord[0] >= config.statCount || effectRecord[1] > 1 ||
-                    readU16(effectRecord + 10) != 0)
-                    return false;
-                PetBehaviorActionEffectConfig &effect = config.actionEffects[nextEffect];
-                effect.statSlot = effectRecord[0];
-                effect.operation = static_cast<PetBehaviorEffectOperation>(effectRecord[1]);
-                effect.value = readI64(effectRecord + 2);
+                if (!config.actionEffectsStreamed)
+                {
+                    uint8_t effectRecord[12] = {};
+                    if (effects == nullptr || !readRecord(source, *effects, nextEffect, effectRecord))
+                        return false;
+                    PetBehaviorActionEffectConfig &effect = config.actionEffects[nextEffect];
+                    effect.statSlot = effectRecord[0];
+                    effect.operation = static_cast<PetBehaviorEffectOperation>(effectRecord[1]);
+                    effect.value = readI64(effectRecord + 2);
+                }
                 ++nextEffect;
             }
             ++nextOutcome;
@@ -288,7 +292,8 @@ bool decodeFollowingAnimations(const Source &source, const Section *playbacks,
                                const ActiveAssetScope &scope, PetBehaviorConfig &config)
 {
     if (playbacks == nullptr) return true;
-    if (playbacks->count > kMaxPetBehaviorFollowingAnimations) return false;
+    if (playbacks->count > kMaxPetBehaviorFollowingAnimations + kMaxPetBehaviorActions) return false;
+    uint8_t followingCount = 0;
     // Ordering, ordinal ownership and playback semantics are exporter-owned.
     // Firmware only bounds the referenced storage and resolves used resources.
     for (uint16_t index = 0; index < playbacks->count; ++index)
@@ -297,11 +302,19 @@ bool decodeFollowingAnimations(const Source &source, const Section *playbacks,
         if (!readRecord(source, *playbacks, index, record) || record[0] >= config.actionCount)
             return false;
         PetBehaviorActionConfig &action = config.actions[record[0]];
-        if (action.followingAnimationCount >= kMaxPetBehaviorFollowingAnimationsPerAction)
+        if (record[5] == 1)
+        {
+            action.prelude.playbackCount = record[4];
+            if (!resolveAnimation(source, assets, animations, readU16(record + 2), scope,
+                                  action.prelude.animation)) return false;
+            continue;
+        }
+        if (followingCount >= kMaxPetBehaviorFollowingAnimations ||
+            action.followingAnimationCount >= kMaxPetBehaviorFollowingAnimationsPerAction)
             return false;
         if (action.followingAnimationCount == 0)
-            action.firstFollowingAnimation = static_cast<uint8_t>(index);
-        PetBehaviorAnimationPlaybackConfig &playback = config.followingAnimations[index];
+            action.firstFollowingAnimation = followingCount;
+        PetBehaviorAnimationPlaybackConfig &playback = config.followingAnimations[followingCount++];
         playback.playbackCount = record[4];
         if (!resolveAnimation(source, assets, animations, readU16(record + 2), scope,
                               playback.animation))

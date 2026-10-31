@@ -49,7 +49,7 @@ const PetBehaviorActionOutcomeConfig *selectOutcome(
     if (action.mode != PetBehaviorActionMode::RandomOutcome)
         return action.outcomeCount == 1 ? outcomes : nullptr;
     if (action.outcomeCount < kMinPetBehaviorRandomOutcomesPerAction ||
-        action.outcomeCount > kMaxPetBehaviorRandomOutcomesPerAction || randomSource == nullptr)
+        action.outcomeCount > kMaxPetBehaviorLotteryOutcomesPerAction || randomSource == nullptr)
         return nullptr;
 
     uint16_t totalWeight = 0;
@@ -111,7 +111,8 @@ bool selectPlayback(const PetBehaviorConfig &config,
 
 bool applyOutcomeEffects(const PetBehaviorConfig &config,
                          const PetBehaviorActionOutcomeConfig &outcome,
-                         PetBehaviorStatValues &state, bool *affectedSlots)
+                         PetBehaviorStatValues &state, bool *affectedSlots,
+                         PetBehaviorEffectReader reader, void *context)
 {
     if (outcome.effectCount > kPetBehaviorSlotCount ||
         !validRange(outcome.firstEffect, outcome.effectCount,
@@ -119,7 +120,17 @@ bool applyOutcomeEffects(const PetBehaviorConfig &config,
         return false;
     for (uint8_t index = 0; index < outcome.effectCount; ++index)
     {
-        const auto &effect = config.actionEffects[outcome.firstEffect + index];
+        PetBehaviorActionEffectConfig effect = {};
+        const uint16_t row = outcome.firstEffect + index;
+        if (config.actionEffectsStreamed)
+        {
+            if (reader == nullptr || !reader(context, row, effect)) return false;
+        }
+        else
+        {
+            if (row >= kStoredPetBehaviorActionEffects) return false;
+            effect = config.actionEffects[row];
+        }
         if (!applyEffect(config, effect.statSlot, effect.operation, effect.value, state, affectedSlots))
             return false;
     }
@@ -232,7 +243,8 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
                             PetBehaviorStatValues &state,
                             PetBehaviorDailyChangePauses &pauses,
                             PetBehaviorActionPlayback &playback,
-                            PetBehaviorRandomBoundedSource randomSource)
+                            PetBehaviorRandomBoundedSource randomSource,
+                            PetBehaviorEffectReader effectReader, void *effectContext)
 {
     playback = {};
     if (actionSlot >= kMaxPetBehaviorActions || !config.actions[actionSlot].active)
@@ -247,7 +259,7 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
     // Outcome to a temporary state. Publish values and pauses only on success.
     PetBehaviorStatValues next = state;
     bool affectedSlots[kPetBehaviorSlotCount] = {};
-    if (!applyOutcomeEffects(config, *outcome, next, affectedSlots))
+    if (!applyOutcomeEffects(config, *outcome, next, affectedSlots, effectReader, effectContext))
         return false;
 
     for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)

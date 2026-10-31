@@ -7,6 +7,7 @@
 #include "display/Renderer.h"
 #include "common/FirmwareRandom.h"
 #include "appearance/AppearanceLoader.h"
+#include "common/SdBinaryRead.h"
 
 namespace
 {
@@ -41,8 +42,40 @@ PlaybackResult resolveActionAnimation(const PetBehaviorActionPlayback &playback,
     if (versionCount == 0)
         return PlaybackResult::AnimationMissing;
     animation = Animation::complete(playback.animation, playback.playbackCount);
-    animation.versionIndex = versionCount == 1 ? 0 : static_cast<uint8_t>(FirmwareRandom::below(versionCount));
+    if (playback.versionSelection > versionCount) return PlaybackResult::AnimationMissing;
+    animation.versionIndex = playback.versionSelection != 0 ? playback.versionSelection - 1 :
+        (versionCount == 1 ? 0 : static_cast<uint8_t>(FirmwareRandom::below(versionCount)));
     return PlaybackResult::Accepted;
+}
+struct ActionEffectFile
+{
+    SdBaseFile file;
+    uint32_t offset;
+    SdFat *sd;
+    bool opened = false;
+    bool failed = false;
+    ~ActionEffectFile() { file.close(); }
+};
+
+bool readActionEffect(void *context, uint16_t row, PetBehaviorActionEffectConfig &effect)
+{
+    auto &source = *static_cast<ActionEffectFile *>(context);
+    uint8_t record[12];
+    if (!source.opened)
+    {
+        if (source.sd == nullptr || !source.file.open("/runtime.bin", FILE_READ))
+        { source.failed = true; return false; }
+        source.opened = true;
+    }
+    if (!source.file.seekSet(source.offset + static_cast<uint32_t>(row) * sizeof(record)) ||
+        readSdBinary(source.file, record, sizeof(record)) != static_cast<int>(sizeof(record)))
+    { source.failed = true; return false; }
+    effect.statSlot = record[0];
+    effect.operation = static_cast<PetBehaviorEffectOperation>(record[1]);
+    uint64_t value = 0;
+    for (uint8_t byte = 0; byte < 8; ++byte) value |= static_cast<uint64_t>(record[2 + byte]) << (8 * byte);
+    effect.value = static_cast<int64_t>(value);
+    return true;
 }
 } // namespace
 
@@ -94,9 +127,13 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     PetBehaviorStatValues state = readStats(pet);
     PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
     PetBehaviorActionPlayback playback = {};
+    ActionEffectFile effectSource;
+    effectSource.offset = config.actionEffectsOffset;
+    effectSource.sd = renderer.sdCard();
     if (!applyPetBehaviorAction(
-            config, actionSlot, state, nextPauses, playback, firmwareRandomBelow))
-        return PetBehaviorActionResult::Rejected;
+            config, actionSlot, state, nextPauses, playback, firmwareRandomBelow,
+            readActionEffect, &effectSource))
+        return effectSource.failed ? PetBehaviorActionResult::ResourceReadFailed : PetBehaviorActionResult::Rejected;
     if (!writeStats(state, pet))
         return PetBehaviorActionResult::Rejected;
     dailyChangePauses = nextPauses;
@@ -107,12 +144,19 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     if (pet.isDead()) return PetBehaviorActionResult::Applied;
 
     const PetBehaviorActionConfig &action = config.actions[actionSlot];
-    Animation sequence[1 + kMaxPetBehaviorFollowingAnimationsPerAction];
+    Animation sequence[2 + kMaxPetBehaviorFollowingAnimationsPerAction];
     uint8_t count = 0;
     if (action.followingAnimationCount > kMaxPetBehaviorFollowingAnimationsPerAction ||
         static_cast<uint16_t>(action.firstFollowingAnimation) + action.followingAnimationCount >
             kMaxPetBehaviorFollowingAnimations)
         return PetBehaviorActionResult::Applied;
+    if (action.prelude.animation.valid())
+    {
+        const PlaybackResult result = resolveActionAnimation(action.prelude, renderer, sequence[count]);
+        if (result == PlaybackResult::AnimationMissing) return PetBehaviorActionResult::AppliedAnimationMissing;
+        if (result != PlaybackResult::Accepted) return PetBehaviorActionResult::Applied;
+        ++count;
+    }
     for (uint8_t index = 0; index <= action.followingAnimationCount; ++index)
     {
         const auto &segment = index == 0 ? playback :

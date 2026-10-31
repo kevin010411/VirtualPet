@@ -15,6 +15,8 @@ struct PetBehaviorDailyChangePauses
 };
 
 using PetBehaviorActionPlayback = PetBehaviorAnimationPlaybackConfig;
+using PetBehaviorEffectReader = bool (*)(void *, uint16_t, PetBehaviorActionEffectConfig &);
+
 using PetBehaviorRandomBoundedSource = uint16_t (*)(uint16_t upperExclusive);
 
 void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStatValues &state);
@@ -33,7 +35,8 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
                             PetBehaviorStatValues &state,
                             PetBehaviorDailyChangePauses &pauses,
                             PetBehaviorActionPlayback &playback,
-                            PetBehaviorRandomBoundedSource randomSource = nullptr);
+                            PetBehaviorRandomBoundedSource randomSource = nullptr,
+                            PetBehaviorEffectReader effectReader = nullptr, void *effectContext = nullptr);
 #if ENABLE_GUESS_GAME
 bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
                                   PetBehaviorGuessOutcome outcome,

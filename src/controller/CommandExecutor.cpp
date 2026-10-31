@@ -66,8 +66,10 @@ CommandResult CommandExecutor::execute(const CommandController &commands)
     {
     case AppCommandId::UserAction:
         result.actionResult = petBehaviorRuntime.executeAction(commands.currentActionSlot());
-        result.executed = result.actionResult != PetBehaviorActionResult::Rejected;
-        result.resourceError = result.actionResult == PetBehaviorActionResult::AppliedAnimationMissing;
+        result.executed = result.actionResult != PetBehaviorActionResult::Rejected &&
+            result.actionResult != PetBehaviorActionResult::ResourceReadFailed;
+        result.resourceError = result.actionResult == PetBehaviorActionResult::AppliedAnimationMissing ||
+            result.actionResult == PetBehaviorActionResult::ResourceReadFailed;
         break;
 #if ENABLE_INSTRUCTION_RESPONSE
     case AppCommandId::InstructionResponse:

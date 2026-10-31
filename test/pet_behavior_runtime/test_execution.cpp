@@ -10,6 +10,8 @@ namespace
 uint16_t renderedAnimation;
 unsigned animationLookups;
 unsigned missingLookups;
+uint8_t renderedVersion;
+SdFat *effectCard;
 
 PetBehaviorConfig effectsOnlyConfig()
 {
@@ -152,14 +154,72 @@ void testReferencedMissingAnimationRetainsCommit()
     assert(!animations.isBusy());
     assert(runtime.advancePetDay() && pet.customStat(0) == 15);
 }
+void testFixedVersionReplaysAndPrelude()
+{
+    auto config = effectsOnlyConfig();
+    config.actionOutcomes[0].animationPlayback = {{1, 1, 4}, 3, 28};
+    config.actions[0].prelude = {{1, 1, 3}, 1};
+    config.actions[0].followingAnimationCount = 1;
+    config.followingAnimations[0] = {{1, 1, 5}, 1};
+    Pet pet;
+    Renderer renderer(nullptr, nullptr);
+    AnimationController animations(renderer);
+    animations.setup(config.idleAnimation);
+    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    runtime.initializeStats();
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+    bool sawPrelude = false, sawResult = false, sawFollowing = false;
+    for (unsigned tick = 0; tick < 30; ++tick)
+    {
+        animations.preparePlayback(tick);
+        animations.tick(tick);
+        sawPrelude |= renderedAnimation == 3;
+        if (renderedAnimation == 4) { sawResult = true; assert(renderedVersion == 27); }
+        sawFollowing |= renderedAnimation == 5;
+        assert(pet.customStat(0) == 15);
+    }
+    assert(sawPrelude && sawResult && sawFollowing && !animations.isBusy());
+    config.actionOutcomes[0].animationPlayback.versionSelection = 29;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::AppliedAnimationMissing);
+    assert(pet.customStat(0) == 20);
+}
+void testActualEffectFileReadAndFailureAreAtomic()
+{
+    auto config = effectsOnlyConfig();
+    config.actionEffectsStreamed = true;
+    config.actionEffectCount = config.actionOutcomes[0].effectCount = 2;
+    config.actionEffectsOffset = 3;
+    config.stats[1] = {true, 25, 0, 100, 0};
+    uint8_t bytes[27] = {};
+    bytes[3] = 0; bytes[4] = 1; bytes[5] = 40; // Stat0 set40
+    bytes[15] = 1; bytes[16] = 1; bytes[17] = 50; // Stat1 set50
+    SdFat card(bytes, sizeof(bytes));
+    effectCard = &card;
+    Pet pet;
+    Renderer renderer(nullptr, nullptr);
+    AnimationController animations(renderer);
+    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    runtime.initializeStats();
+    const auto opens = HostSd::openCount;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+    assert(pet.customStat(0) == 40 && pet.customStat(1) == 50);
+    assert(HostSd::openCount == opens + 1);
+    config.actionEffectsOffset = 15; // first record succeeds, second physically truncated
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::ResourceReadFailed);
+    assert(pet.customStat(0) == 40 && pet.customStat(1) == 50);
+    effectCard = nullptr;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::ResourceReadFailed);
+    assert(pet.customStat(0) == 40 && pet.customStat(1) == 50);
+}
 } // namespace
 
 Renderer::Renderer(Adafruit_ST7735 *, SdFat *) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
-bool Renderer::setAnimation(const AssetData::AnimationRef &reference, uint8_t, bool)
+bool Renderer::setAnimation(const AssetData::AnimationRef &reference, uint8_t version, bool)
 {
     renderedAnimation = reference.animationId;
+    renderedVersion = version;
     return true;
 }
 bool Renderer::advanceAnimationFrame() { return true; }
@@ -172,11 +232,11 @@ uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &reference)
 {
     ++animationLookups;
     if (reference.animationId == 2) { ++missingLookups; return 0; }
-    return 1;
+    return reference.animationId == 4 ? 28 : 1;
 }
 unsigned long Renderer::frameIntervalFor(const AssetData::AnimationRef &, uint8_t,
                                         unsigned long) { return 1; }
-SdFat *Renderer::sdCard() const { return nullptr; }
+SdFat *Renderer::sdCard() const { return effectCard; }
 
 int main()
 {
@@ -187,5 +247,7 @@ int main()
     testRandomEffectsOnly();
     testEmptyPrimaryWithFollowing();
     testReferencedMissingAnimationRetainsCommit();
+    testFixedVersionReplaysAndPrelude();
+    testActualEffectFileReadAndFailureAreAtomic();
     return 0;
 }

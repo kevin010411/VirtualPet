@@ -103,6 +103,13 @@
 #endif
 
 // Generated per Project; do not reserve the maximum for every firmware build.
+#ifndef APP_MAX_ACTION_OUTCOMES
+#define APP_MAX_ACTION_OUTCOMES 24
+#endif
+#ifndef APP_MAX_ACTION_EFFECTS
+#define APP_MAX_ACTION_EFFECTS (24 * APP_MAX_PET_STATS)
+#endif
+
 #ifndef APP_MAX_SCREEN_RULES
 #define APP_MAX_SCREEN_RULES 64
 #endif

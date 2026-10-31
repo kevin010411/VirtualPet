@@ -14,6 +14,7 @@ class AppearanceLoader;
 enum class PetBehaviorActionResult : uint8_t
 {
     Rejected,
+    ResourceReadFailed,
     Applied,
     AppliedAnimationMissing,
 };

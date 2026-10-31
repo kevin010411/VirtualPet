@@ -623,11 +623,10 @@ void Game::synchronizePlaybackClock()
 void Game::handleCommandResult(const CommandResult &result)
 {
     if (enterDeathIfNeeded()) return;
-    if (!result.executed)
-        return;
-
     if (result.resourceError)
         renderer.showResourceError();
+    if (!result.executed)
+        return;
 
     if (result.actionResult != PetBehaviorActionResult::Rejected)
     {

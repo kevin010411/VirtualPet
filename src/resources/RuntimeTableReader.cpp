@@ -7,9 +7,9 @@ namespace RuntimeTableInternal
 namespace
 {
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// v26 adds Instruction Response settings, normal/no-go weights and deferred effects.
+// v27 adds managed fixed-Version Action outcomes and bounded streamed effects.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 26;
+constexpr uint16_t kVersion = 27;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
