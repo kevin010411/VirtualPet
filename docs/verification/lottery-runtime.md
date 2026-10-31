@@ -14,7 +14,7 @@ ARM Cortex-M3 sizeof probe: AnimationRef4, PlaybackConfig8, ActionConfig18, Outc
 
 - `test/pet_behavior_runtime/run_host_test.ps1`: existing Stats6/10/12 rules and CatalogOFF/ON execution passed. Additional maximum-profile run covers all224results and both ends of each deterministic weight range, all12effects, exact Version correspondence and atomic final-record failure. Execution coverage verifies prelude/result/following order, fixed Version27 repeating three times, retained effects on missing Version, actual SD stub reads, truncated file and unavailable SD without partial commit.
 - `test/game_startup/run_host_test.ps1 -DeathOnly -DeathEnabled 1`: passed saved Dead, gating, reset/save rollback and new life.
-- `test/runtime_table_behavior/run_host_test.ps1 -LotteryFixture <Web maximum runtime.bin>`: actual Editor API save/export fixture passed224fixed-Version results and2688effects; selected Stat values agree with actual exported bytes. The fixture available at this run exported one Outfit. The host reports the actual exported Outfit count and checks every exported Outfit; an eight-Outfit re-export remains required evidence.
+- `test/runtime_table_behavior/run_host_test.ps1 -LotteryFixture <Web maximum runtime.bin>`: actual Editor API save/export fixture passed224fixed-Version results and2688effects; selected Stat values agree with actual exported bytes. The first fixture emitted only one Outfit because appearance selection was disabled. After correcting the generator to enable appearance selection, the re-export contains eight OUTFITS records; the actual reader passed all224 result mappings in all eight Outfits. This supersedes the earlier one-Outfit evidence.
 
 ## Linked target
 
@@ -30,4 +30,4 @@ Maximum lottery costs3288static RAM bytes and408Flash bytes versus the same-feat
 
 A rerunnable profile generator/build entry is `test/lottery_capacity/run_target_build.ps1 [-LibraryRoot <cached compatible libraries>] [-AllFeatures]`. It writes only `.pio/lottery-capacity` and preserves the user's ini. This script was syntax-reviewed; the measurements above came from the equivalent generated `.pio/lottery-target.ini` profile used during development, with final baseline/max incremental builds rerun after source edits.
 
-Pending: eight-Outfit actual-export host after the fixture is regenerated; ordinary v27 full fixture hosts after canonical Web fixture generation; simultaneous maximum screen/Status/other feature content, allfeatures Flash feasibility, peak stack/heap, and physical SD/TFT/button/death/interruption acceptance. Hosts and links do not establish device acceptance.
+Pending: ordinary v27 full fixture hosts after canonical Web fixture generation; simultaneous maximum screen/Status/other feature content, allfeatures Flash feasibility, peak stack/heap, and physical SD/TFT/button/death/interruption acceptance. Hosts and links do not establish device acceptance.
