@@ -4,6 +4,7 @@
 
 class Pet;
 class Renderer;
+class AssetResources;
 
 // Runtime records stay on SD. Only the active page/focus and a bounded record
 // buffer live in RAM; no framebuffer or array of 64 resolved image references.
@@ -16,7 +17,7 @@ bool applyCollectionOutfitGrants(SdFat *sd, const PetBehaviorConfig &config, Pet
 class CollectionCatalog
 {
 public:
-    CollectionCatalog(Pet &pet, Renderer &renderer, const PetBehaviorConfig &config);
+    CollectionCatalog(Pet &pet, Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config);
     bool start();
     bool active() const { return opened; }
     bool move(bool right);
@@ -27,6 +28,7 @@ public:
 private:
     Pet &pet;
     Renderer &renderer;
+    AssetResources &resources;
     const PetBehaviorConfig &config;
     uint8_t count = 0;
     uint8_t focus = 0;

@@ -27,6 +27,7 @@ class Pet;
 class PetBehaviorRuntime;
 class PetStorage;
 class Renderer;
+class AssetResources;
 class CollectionCatalog;
 
 class Game : private EvolutionHost, private PetSessionHost
@@ -35,7 +36,7 @@ class Game : private EvolutionHost, private PetSessionHost
 #endif
 {
 public:
-    Game(Pet &pet, PetStorage &petStorage, Renderer &renderer, AppearanceLoader &appearanceLoader);
+    Game(Pet &pet, PetStorage &petStorage, Renderer &renderer, AssetResources &resources, AppearanceLoader &appearanceLoader);
     ~Game();
 
     Game(const Game &) = delete;
@@ -92,6 +93,7 @@ private:
 
     Pet &pet;
     Renderer &renderer;
+    AssetResources &resources;
     AppearanceLoader &appearanceLoader;
     AppFlowController flow;
     PetBehaviorConfig petBehaviorConfig = {};

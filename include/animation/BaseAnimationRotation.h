@@ -4,14 +4,14 @@
 #include <Arduino.h>
 #include "resources/AssetRuntimeContract.h"
 
-class Renderer;
+class AssetResources;
 
 class BaseAnimationRotation
 {
 public:
     void reset();
-    bool setBaseAnimation(const AssetData::AnimationRef &baseAnimation, Renderer &renderer);
-    bool onLoopCompletedAndRotateIfDue(Renderer &renderer);
+    bool setBaseAnimation(const AssetData::AnimationRef &baseAnimation, AssetResources &resources);
+    bool onLoopCompletedAndRotateIfDue(AssetResources &resources);
     AssetData::AnimationRef selectedAnimation() const;
     uint8_t selectedVersion() const;
 
@@ -22,7 +22,7 @@ private:
     uint8_t completedLoops = 0;
 
     bool selectVersion(const AssetData::AnimationRef &animation,
-                       Renderer &renderer,
+                       AssetResources &resources,
                        uint8_t &versionIndex) const;
 };
 

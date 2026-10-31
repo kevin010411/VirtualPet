@@ -1,7 +1,7 @@
 #include "pet/PetSession.h"
 
 #include "appearance/AppearanceLoader.h"
-#include "display/Renderer.h"
+#include "resources/AssetResources.h"
 #include "pet/Pet.h"
 #include "pet/PetStorage.h"
 #include "pet/PetBehaviorRuntime.h"
@@ -10,17 +10,18 @@
 #include "collection/CollectionCatalog.h"
 #endif
 
-PetSession::PetSession(Pet &petRef, PetStorage &storageRef, Renderer &rendererRef,
+PetSession::PetSession(Pet &petRef, PetStorage &storageRef, AssetResources &resourcesRef,
                        AppearanceLoader &loaderRef, PetBehaviorConfig &configRef,
                        PetBehaviorRuntime &runtimeRef, AppearanceChangeController &changesRef,
                        PetSessionHost &hostRef)
-    : pet(petRef), storage(storageRef), renderer(rendererRef), loader(loaderRef),
+    : pet(petRef), storage(storageRef), resources(resourcesRef), loader(loaderRef),
       config(configRef), runtime(runtimeRef), changes(changesRef), host(hostRef)
 {
 }
 
-bool PetSession::prepare(SdFat *sd)
+bool PetSession::prepare()
 {
+    SdFat *sd = resources.sdCard();
     // Runtime preparation failure is terminal until reboot. Pet-state failure
     // remains retryable, as in the existing two-stage startup flow.
     if (preparationState != State::NotPrepared && preparationState != State::Ready &&
@@ -34,7 +35,7 @@ bool PetSession::prepare(SdFat *sd)
     {
         if (resolved)
         {
-            renderer.recordAssetDataErrorResource(resource);
+            resources.recordAssetDataErrorResource(resource);
             preparationState = State::ActiveAppearanceFailed;
         }
         return false;
@@ -100,13 +101,13 @@ AppearanceChangeResult PetSession::reset()
             {
 #if ENABLE_COLLECTION_CATALOG
                 bool changed = false;
-                if (!evaluateCollectionCatalog(renderer.sdCard(), config, pet, changed))
+                if (!evaluateCollectionCatalog(resources.sdCard(), config, pet, changed))
                     result = AppearanceChangeResult::ConfigurationFailed;
                 else
 #endif
                     result = storage.save(pet) ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;
             }
-            else renderer.recordAssetDataErrorResource(loader.firstAssetDataErrorResource());
+            else resources.recordAssetDataErrorResource(loader.firstAssetDataErrorResource());
         }
     }
     if (result != AppearanceChangeResult::Applied)

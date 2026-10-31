@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include "resources/AssetResources.h"
 #include <assert.h>
 #include <fstream>
 #include <iterator>
@@ -63,6 +65,7 @@ void paint(std::vector<uint16_t> &screen, const Frame &frame)
 void verify(const std::string &root)
 {
     CustomLayoutHost::root = root;
+    CustomLayoutHost::opens = CustomLayoutHost::reads = CustomLayoutHost::bytesRead = 0;
     const auto frames = readFrames(root);
     SdFat sd;
     uint8_t scratch[AssetData::kIoScratchBytes] = {};
@@ -78,8 +81,9 @@ void verify(const std::string &root)
     assert(loadCompleteRuntimeTable(&sd, manifest, reader, 1, 1, config));
 #endif
     Adafruit_ST7735 display;
-    Renderer renderer(&display, &sd);
-    assert(renderer.configureAssetBundle(manifest.bundleId));
+    AssetResources resources(&sd);
+    Renderer renderer(&display, resources);
+    assert(resources.configureBundle(manifest.bundleId));
     // Consume every real exported frame, including both selection products and outfit previews.
     for (const Frame &frame : frames)
     {
@@ -104,7 +108,7 @@ void verify(const std::string &root)
     CommandController commands;
     commands.configure(config);
     commands.resetSelection();
-    LayoutRenderer layout(renderer, commands);
+    LayoutRenderer layout(renderer, resources, commands);
     layout.configureRuntimeContract(config);
     PetStatSnapshot snapshot = {};
     const AssetData::AnimationRef active = config.idleAnimation;
@@ -238,7 +242,17 @@ void verify(const std::string &root)
     assert(layout.syncPlayback(snapshot));
     assert(renderer.ShowAnimationFrame(active, 0, 1));
     assert(display.screen == expectedScreen());
-    assert(renderer.firstAssetDataError() == AssetData::BundleError::None);
+    assert(resources.firstAssetDataError() == AssetData::BundleError::None);
+    printf("[IO] %zu opens / %zu reads / %zu bytes\n", CustomLayoutHost::opens, CustomLayoutHost::reads, CustomLayoutHost::bytesRead);
+    // Metadata remains usable without creating or retaining a display/Renderer.
+    AssetResources metadata(&sd);
+    assert(metadata.configureBundle(manifest.bundleId));
+    const Frame &first = frames.front();
+    const AssetData::AnimationRef ref{static_cast<uint8_t>(first.species),
+        static_cast<uint8_t>(first.outfit), static_cast<uint16_t>(first.animation)};
+    const uint16_t count = metadata.frameCountFor(ref, first.version);
+    assert(count > first.index && metadata.frameCountFor(ref, first.version) == count);
+    assert(metadata.firstAssetDataError() == AssetData::BundleError::None);
 }
 }
 

@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include "platform/BoardConfig.h"
 #include "platform/ButtonInput.h"
 #include "platform/CalibratedST7735.h"
@@ -60,9 +61,10 @@ CalibratedST7735 tft(&SPI_2, BoardConfig::TftCsPin, BoardConfig::TftDcPin, -1);
 SdFat SD;
 Pet pet;
 PetStorage petStorage(&SD);
-Renderer renderer(&tft, &SD);
+AssetResources resources(&SD);
+Renderer renderer(&tft, resources);
 SdAppearanceLoader appearanceLoader(&SD);
-Game game(pet, petStorage, renderer, appearanceLoader);
+Game game(pet, petStorage, renderer, resources, appearanceLoader);
 ButtonInput buttons(
     BoardConfig::PreviousCommandButtonPin,
     BoardConfig::NextCommandButtonPin,

@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include <assert.h>
 #include <string.h>
 
@@ -139,11 +140,15 @@ BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t scratchSize)
 {
 }
 
-Renderer::Renderer(Adafruit_ST7735 *, SdFat *) {}
+AssetResources::AssetResources(SdFat *sd)
+    : sd_(sd), reader_(sd, readBuffer_, AssetData::kIoScratchBytes) {}
+
+Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef)
+    : tft(display), resources(resourceRef), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
 void Renderer::setAnimationArea(uint8_t, uint8_t, uint8_t, uint8_t) {}
-void Renderer::recordAssetDataErrorResource(const char *) {}
+void AssetResources::recordAssetDataErrorResource(const char *) {}
 bool Renderer::setAnimation(
     const AssetData::AnimationRef &reference, uint8_t versionIndex, bool)
 {
@@ -159,7 +164,7 @@ bool Renderer::currentLayoutId(uint8_t &layoutId) const
     layoutId = selectedLayoutId;
     return true;
 }
-AssetData::BundleError Renderer::firstAssetDataError() const
+AssetData::BundleError AssetResources::firstAssetDataError() const
 {
     return AssetData::BundleError::None;
 }
@@ -183,17 +188,16 @@ bool Renderer::ShowAnimationFrame(
 }
 bool Renderer::willRestartAnimationLoop() const { return false; }
 bool Renderer::animationFrameFailed() const { return false; }
-uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &, uint8_t)
+uint16_t AssetResources::frameCountFor(const AssetData::AnimationRef &, uint8_t)
 {
     return 1;
 }
-uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &) { return 1; }
-unsigned long Renderer::frameIntervalFor(
+uint16_t AssetResources::versionCountFor(const AssetData::AnimationRef &) { return 1; }
+unsigned long AssetResources::frameIntervalFor(
     const AssetData::AnimationRef &, uint8_t, unsigned long)
 {
     return 1;
 }
-SdFat *Renderer::sdCard() const { return nullptr; }
 
 void testAppearanceRedraw()
 {
@@ -210,9 +214,10 @@ void testAppearanceRedraw()
     config.statCount = 1;
     config.buttons[0].active = true;
     config.buttons[0].kind = PetBehaviorButtonKind::UserAction;
-    Renderer renderer(nullptr, nullptr);
+    AssetResources resources(nullptr);
+    Renderer renderer(nullptr, resources);
     CommandController commands;
-    LayoutRenderer layout(renderer, commands);
+    LayoutRenderer layout(renderer, resources, commands);
     commands.configure(config);
     layout.configureRuntimeContract(config);
     selectedLayoutId = 0;
@@ -271,8 +276,9 @@ void testPreparedFrameLifecycle()
 {
     PetBehaviorConfig config = {};
     config.systemAnimations[static_cast<uint8_t>(FirmwarePlaybackRole::Battery)] = animation(3);
-    Renderer renderer(nullptr, nullptr);
-    AnimationController animations(renderer);
+    AssetResources resources(nullptr);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
     animations.configureRuntimeContract(config);
     animations.setup(animation(1));
 
@@ -355,10 +361,12 @@ int main(int argc, char **argv)
     assert(fixtureLayoutIds[0] == 0 && fixtureLayoutIds[1] == 1);
     config.buttons[1] = config.buttons[0];
 
-    Renderer renderer(nullptr, nullptr);
+    AssetResources resources(nullptr);
+
+    Renderer renderer(nullptr, resources);
     CommandController commands;
-    AnimationController animations(renderer);
-    LayoutRenderer layout(renderer, commands);
+    AnimationController animations(renderer, resources);
+    LayoutRenderer layout(renderer, resources, commands);
     commands.configure(config);
     animations.configureRuntimeContract(config);
     layout.configureRuntimeContract(config);

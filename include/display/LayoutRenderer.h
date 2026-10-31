@@ -6,13 +6,14 @@
 
 class CommandController;
 class Renderer;
+class AssetResources;
 struct PetBehaviorConfig;
 struct PetStatSnapshot;
 
 class LayoutRenderer
 {
 public:
-    LayoutRenderer(Renderer &renderer, CommandController &commands);
+    LayoutRenderer(Renderer &renderer, AssetResources &resources, CommandController &commands);
 
     void configureRuntimeContract(const PetBehaviorConfig &config);
     void begin();
@@ -25,6 +26,7 @@ public:
 
 private:
     Renderer &renderer;
+    AssetResources &resources;
     CommandController &commands;
     const PetBehaviorConfig *runtimeContract = nullptr;
     AssetData::BundleId layoutBundleId = {};

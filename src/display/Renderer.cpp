@@ -9,16 +9,10 @@
 #endif
 #include "display/FrameDecoder.h"
 #include "display/RenderStatsReporter.h"
-#include "common/CopyResourceName.h"
-
+#include "resources/AssetResources.h"
 
 struct Renderer::AnimationState
 {
-    explicit AnimationState(SdFat *sd)
-        : bundleReader(sd, readBuffer, AssetData::kIoScratchBytes)
-    {
-    }
-
     AssetData::AnimationRef animation = {};
     uint8_t versionIndex = 0;
     uint16_t nextFrame = 0;
@@ -26,14 +20,11 @@ struct Renderer::AnimationState
     uint8_t layoutId = 0;
     bool playOnce = false;
     bool animationFrameFailed = false;
-    char externalErrorResource[20] = {};
     uint8_t animationX = 0;
     uint8_t animationY = 32;
     uint8_t animationWidth = 128;
     uint8_t animationHeight = 96;
-    alignas(uint16_t) uint8_t readBuffer[FrameDecoder::kDataReadBufferBytes] = {};
-    BundleReader bundleReader;
-    uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
+    alignas(uint64_t) uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
 #if ENABLE_DEBUG
     bool hasRenderedFrame = false;
 #endif
@@ -55,8 +46,8 @@ AssetData::AssetFrameAddress frameAddress(const AssetData::AnimationRef &animati
 }
 } // namespace
 
-Renderer::Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD)
-    : tft(ref_tft), SD(ref_SD), state(new AnimationState(ref_SD))
+Renderer::Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resourcesRef)
+    : tft(ref_tft), resources(resourcesRef), state(new AnimationState)
 #if ENABLE_DEBUG
       , debug(ref_tft)
 #endif
@@ -87,26 +78,19 @@ void Renderer::setAnimationArea(uint8_t x, uint8_t y, uint8_t width, uint8_t hei
     state->animationHeight = height;
 }
 
-bool Renderer::configureAssetBundle(const AssetData::BundleId &bundleId)
-{
-    return state->bundleReader.configureBundle(bundleId);
-}
-
-SdFat *Renderer::sdCard() const { return SD; }
-
 bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
                              int xmin,
                              int ymin,
                              int batch_lines, uint16_t expectedWidth, uint16_t expectedHeight)
 {
     const bool ok = FrameDecoder::showDataFrame(
-        state->bundleReader, address, tft, state->readBuffer, sizeof(state->readBuffer),
+        resources.frameReader(), address, tft, resources.readBuffer(), AssetData::kDataReadBufferBytes,
         state->lineBuffer, FrameDecoder::kLineBufferPixels,
         xmin < 0 ? state->animationX : xmin,
         ymin < 0 ? state->animationY : ymin, batch_lines, expectedWidth, expectedHeight);
     if (!ok)
     {
-        FrameDecoder::showAssetDataError(tft, state->bundleReader.firstErrorResource());
+        FrameDecoder::showAssetDataError(tft, resources.frameReader().firstErrorResource());
 #if ENABLE_DEBUG
         showAssetDataDebug();
 #endif
@@ -152,8 +136,7 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation,
     state->animation = {};
     state->maxFrame = 0;
     AssetData::AnimationRecord record = {};
-    if (!animation.valid() ||
-        !state->bundleReader.resolveAnimation(frameAddress(animation, versionIndex, 0), record))
+    if (!resources.resolveAnimation(animation, versionIndex, record))
         return false;
     state->animation = animation;
     state->versionIndex = versionIndex;
@@ -207,11 +190,9 @@ bool Renderer::animationFrameFailed() const
 
 void Renderer::showResourceError()
 {
-    const char *pack = state->bundleReader.firstErrorResource();
-    FrameDecoder::showAssetDataError(
-        tft, pack != nullptr && pack[0] != '\0' ? pack : state->externalErrorResource);
+    FrameDecoder::showAssetDataError(tft, resources.firstAssetDataErrorResource());
 #if ENABLE_DEBUG
-    showAssetDataDebug(state->externalErrorResource);
+    showAssetDataDebug(resources.firstAssetDataErrorResource());
 #endif
 }
 
@@ -227,7 +208,7 @@ void Renderer::showResourceError(const char *resource)
 void Renderer::showStartupResourceError(const char *fallbackResource,
                                         const char *debugStage)
 {
-    const char *recordedResource = firstAssetDataErrorResource();
+    const char *recordedResource = resources.firstAssetDataErrorResource();
     const char *resource = recordedResource != nullptr && recordedResource[0] != '\0'
                                ? recordedResource
                                : fallbackResource;
@@ -236,20 +217,13 @@ void Renderer::showStartupResourceError(const char *fallbackResource,
 }
 #endif
 
-void Renderer::recordAssetDataErrorResource(const char *resource)
-{
-    if (state->externalErrorResource[0] != '\0' || resource == nullptr || resource[0] == '\0')
-        return;
-    copyResourceName(state->externalErrorResource, sizeof(state->externalErrorResource), resource);
-}
-
 #if ENABLE_DEBUG
 DebugDisplay &Renderer::debugDisplay() { return debug; }
 
 void Renderer::showAssetDataDebug(const char *fallbackResource,
                                   const char *debugStage)
 {
-    if (state->bundleReader.firstError() == AssetData::BundleError::None)
+    if (resources.frameReader().firstError() == AssetData::BundleError::None)
     {
         debug.showMessage(debugStage != nullptr && debugStage[0] != '\0'
                               ? debugStage
@@ -260,70 +234,17 @@ void Renderer::showAssetDataDebug(const char *fallbackResource,
         return;
     }
 
-    const AssetData::AssetFrameAddress address = state->bundleReader.firstErrorAddress();
+    const AssetData::AssetFrameAddress address = resources.frameReader().firstErrorAddress();
     char detail[21] = {};
     snprintf(detail, sizeof(detail), "s%u o%u a%u v%u f%u",
              address.speciesSlot, address.outfitSlot, address.animationId,
              address.versionIndex, address.frameIndex);
-    debug.showMessage(state->bundleReader.firstErrorName(), detail);
+    debug.showMessage(resources.frameReader().firstErrorName(), detail);
 }
 
 void Renderer::renderDebugOverlay() { debug.render(); }
 bool Renderer::hasRenderedFrame() const { return state->hasRenderedFrame; }
 #endif
-
-uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &animation,
-                                 uint8_t versionIndex)
-{
-    AssetData::AnimationRecord record = {};
-    return animation.valid() &&
-                   state->bundleReader.tryResolveAnimation(frameAddress(animation, versionIndex, 0), record)
-               ? record.frameCount
-               : 0;
-}
-
-uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &animation)
-{
-    uint16_t count = 0;
-    for (uint16_t version = 0; version < AssetData::kMaxVersions; ++version)
-    {
-        AssetData::AnimationRecord record = {};
-        if (!animation.valid() ||
-            !state->bundleReader.tryResolveAnimation(
-                frameAddress(animation, static_cast<uint8_t>(version), 0), record))
-            break;
-        ++count;
-    }
-    return count;
-}
-
-unsigned long Renderer::frameIntervalFor(const AssetData::AnimationRef &animation,
-                                         uint8_t versionIndex,
-                                         unsigned long defaultIntervalMs)
-{
-    AssetData::AnimationRecord record = {};
-    if (!animation.valid() ||
-        !state->bundleReader.tryResolveAnimation(frameAddress(animation, versionIndex, 0), record) ||
-        record.frameMs == 0)
-        return defaultIntervalMs;
-    return static_cast<unsigned long>(record.frameMs);
-}
-
-AssetData::BundleError Renderer::firstAssetDataError() const
-{
-    const AssetData::BundleError readerError = state->bundleReader.firstError();
-    return readerError != AssetData::BundleError::None
-               ? readerError
-               : (state->externalErrorResource[0] != '\0'
-                      ? AssetData::BundleError::InvalidPack
-                      : AssetData::BundleError::None);
-}
-
-const char *Renderer::firstAssetDataErrorResource() const
-{
-    const char *pack = state->bundleReader.firstErrorResource();
-    return pack != nullptr && pack[0] != '\0' ? pack : state->externalErrorResource;
-}
 
 #if ENABLE_INSTRUCTION_RESPONSE
 void Renderer::clearInstructionOptions() { tft->fillRect(0, 128, 128, 32, ST77XX_BLACK); }

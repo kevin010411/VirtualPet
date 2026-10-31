@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include "animation/AnimationController.h"
 #if ENABLE_SEQUENCE_AUDIO
 #include "display/Renderer.h"
@@ -12,22 +13,22 @@ void AnimationController::prepareBasePlayback(unsigned long now)
     {
         // Rotation keeps its existing ten complete loops per Version selection.
         // A late tick skips frames within this loop, not whole authored loops.
-        baseRotation.onLoopCompletedAndRotateIfDue(renderer);
+        baseRotation.onLoopCompletedAndRotateIfDue(resources);
         restart = true;
     }
     if (restart)
     {
         audioPlayer.stop();
-        audioPlayer.prepare(sdCard(), baseAudio);
+        audioPlayer.prepare(resources.sdCard(), baseAudio);
         synchronizedBase = true;
         baseStarted = false;
         elapsed = 0;
         showAnimation = baseRotation.selectedAnimation();
         showVersionIndex = baseRotation.selectedVersion();
         showPlaybackRole = FirmwarePlaybackRole::None;
-        frameInterval = renderer.frameIntervalFor(showAnimation, showVersionIndex, frameIntervalSlow);
+        frameInterval = resources.frameIntervalFor(showAnimation, showVersionIndex, frameIntervalSlow);
         if (frameInterval == 0) frameInterval = 1;
-        baseLoopDuration = uint32_t(renderer.frameCountFor(showAnimation, showVersionIndex)) * frameInterval;
+        baseLoopDuration = uint32_t(resources.frameCountFor(showAnimation, showVersionIndex)) * frameInterval;
         animateDone = !renderer.setAnimation(showAnimation, showVersionIndex, false);
         dirtyAnimation = false;
     }
@@ -106,7 +107,7 @@ void AnimationController::prepareSynchronizedPlayback(unsigned long now)
         ? PreparedFrame::Advance : PreparedFrame::Hold;
     if (targetChanged)
     {
-        audioPlayer.prepare(sdCard(), audioFor(showAnimation));
+        audioPlayer.prepare(resources.sdCard(), audioFor(showAnimation));
         renderer.setAnimation(showAnimation, showVersionIndex, true);
         synchronizedTargetPending = false;
     }

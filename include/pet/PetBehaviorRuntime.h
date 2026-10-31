@@ -8,7 +8,7 @@
 
 class AnimationController;
 class Pet;
-class Renderer;
+class AssetResources;
 class AppearanceLoader;
 
 enum class PetBehaviorActionResult : uint8_t
@@ -25,7 +25,7 @@ public:
     PetBehaviorRuntime(const PetBehaviorConfig &config,
                        Pet &pet,
                        AnimationController &animations,
-                       Renderer &renderer);
+                       AssetResources &resources);
 
     bool hasAction(uint8_t actionSlot) const;
     void initializeStats();
@@ -48,7 +48,7 @@ private:
     const PetBehaviorConfig &config;
     Pet &pet;
     AnimationController &animations;
-    Renderer &renderer;
+    AssetResources &resources;
     PetBehaviorDailyChangePauses dailyChangePauses;
 };
 

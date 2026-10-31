@@ -6,7 +6,7 @@
 class Pet;
 class PetSaveController;
 class PetStorage;
-class Renderer;
+class AssetResources;
 class AppearanceLoader;
 
 // Game distributes the loaded contract to its playback, commands and layout.
@@ -35,7 +35,7 @@ public:
     enum class ContractState : uint8_t { Reload, AlreadyActivated };
 
     AppearanceChangeController(Pet &pet, PetSaveController &saves, PetStorage &storage,
-                               Renderer &renderer, AppearanceLoader &loader,
+                               AssetResources &resources, AppearanceLoader &loader,
                                AppearanceChangeHost &host);
 
     // Rejection/save failure retains every mutation already made, including
@@ -51,7 +51,7 @@ private:
     Pet &pet;
     PetSaveController &saves;
     PetStorage &storage;
-    Renderer &renderer;
+    AssetResources &resources;
     AppearanceLoader &loader;
     AppearanceChangeHost &host;
 

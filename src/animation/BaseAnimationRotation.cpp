@@ -1,7 +1,7 @@
 #include "animation/BaseAnimationRotation.h"
 
 #include <string.h>
-#include "display/Renderer.h"
+#include "resources/AssetResources.h"
 #include "common/FirmwareRandom.h"
 
 
@@ -13,7 +13,7 @@ void BaseAnimationRotation::reset()
 }
 
 bool BaseAnimationRotation::setBaseAnimation(const AssetData::AnimationRef &animation,
-                                             Renderer &renderer)
+                                             AssetResources &resources)
 {
     if (!animation.valid() ||
         (baseAnimation.speciesSlot == animation.speciesSlot &&
@@ -21,7 +21,7 @@ bool BaseAnimationRotation::setBaseAnimation(const AssetData::AnimationRef &anim
          baseAnimation.animationId == animation.animationId))
         return false;
     uint8_t version = 0;
-    if (!selectVersion(animation, renderer, version))
+    if (!selectVersion(animation, resources, version))
         return false;
     baseAnimation = animation;
     selectedVersionIndex = version;
@@ -29,13 +29,13 @@ bool BaseAnimationRotation::setBaseAnimation(const AssetData::AnimationRef &anim
     return true;
 }
 
-bool BaseAnimationRotation::onLoopCompletedAndRotateIfDue(Renderer &renderer)
+bool BaseAnimationRotation::onLoopCompletedAndRotateIfDue(AssetResources &resources)
 {
     if (!baseAnimation.valid() || ++completedLoops < kLoopsPerSelection)
         return false;
     completedLoops = 0;
     uint8_t nextVersion = 0;
-    if (!selectVersion(baseAnimation, renderer, nextVersion))
+    if (!selectVersion(baseAnimation, resources, nextVersion))
         return false;
     const bool changed = nextVersion != selectedVersionIndex;
     selectedVersionIndex = nextVersion;
@@ -53,10 +53,10 @@ uint8_t BaseAnimationRotation::selectedVersion() const
 }
 
 bool BaseAnimationRotation::selectVersion(const AssetData::AnimationRef &animation,
-                                          Renderer &renderer,
+                                          AssetResources &resources,
                                           uint8_t &versionIndex) const
 {
-    const uint16_t count = renderer.versionCountFor(animation);
+    const uint16_t count = resources.versionCountFor(animation);
     if (count == 0)
         return false;
     versionIndex = count == 1 ? 0 : static_cast<uint8_t>(FirmwareRandom::below(count));

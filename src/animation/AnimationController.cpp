@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include "animation/AnimationController.h"
 
 #include <limits.h>
@@ -12,7 +13,8 @@ constexpr unsigned long kCompletePlaybackSafetyMs = 3000;
 } // namespace
 
 
-AnimationController::AnimationController(Renderer &rendererRef) : renderer(rendererRef) {}
+AnimationController::AnimationController(Renderer &rendererRef, AssetResources &resourcesRef)
+    : renderer(rendererRef), resources(resourcesRef) {}
 
 void AnimationController::configureRuntimeContract(const PetBehaviorConfig &config)
 {
@@ -77,7 +79,7 @@ void AnimationController::resetPlaybackState()
 
 void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAnimation)
 {
-    bool changed = baseRotation.setBaseAnimation(baseAnimation, renderer);
+    bool changed = baseRotation.setBaseAnimation(baseAnimation, resources);
 #if ENABLE_SEQUENCE_AUDIO
     const auto mappedAudio = audioFor(baseRotation.selectedAnimation());
     changed = changed || baseAudio.offset != mappedAudio.offset ||
@@ -103,7 +105,7 @@ bool AnimationController::hasAnimation(FirmwarePlaybackRole id) const
 
 bool AnimationController::hasAnimation(const AssetData::AnimationRef &animation) const
 {
-    return animation.valid() && renderer.frameCountFor(animation) > 0;
+    return animation.valid() && resources.frameCountFor(animation) > 0;
 }
 
 bool AnimationController::hasAnimations(const FirmwarePlaybackRole *ids, size_t count) const
@@ -125,7 +127,7 @@ PlaybackResult AnimationController::validate(const Animation &animation) const
     const AssetData::AnimationRef reference = resolvedAnimation(animation);
     if (!reference.valid())
         return PlaybackResult::AnimationMissing;
-    const uint16_t frameCount = renderer.frameCountFor(reference, animation.versionIndex);
+    const uint16_t frameCount = resources.frameCountFor(reference, animation.versionIndex);
     if (frameCount == 0 || (animation.isFixedFrame() && animation.frameIndex > frameCount))
         return PlaybackResult::AnimationMissing;
     return PlaybackResult::Accepted;
@@ -159,10 +161,10 @@ PlaybackResult AnimationController::replace(const AnimationSequence &sequence)
         {
             const auto &item = sequence.items[index];
             const auto reference = resolvedAnimation(item);
-            const uint32_t interval = renderer.frameIntervalFor(reference, item.versionIndex, frameIntervalSlow);
+            const uint32_t interval = resources.frameIntervalFor(reference, item.versionIndex, frameIntervalSlow);
             synchronizedIntervalMs[index] = interval ? interval : 1;
             synchronizedPassMs[index] = item.isFixedFrame() ? item.durationMs :
-                uint32_t(renderer.frameCountFor(reference, item.versionIndex)) * synchronizedIntervalMs[index];
+                uint32_t(resources.frameCountFor(reference, item.versionIndex)) * synchronizedIntervalMs[index];
             if (synchronizedPassMs[index] == 0) synchronizedPassMs[index] = 1;
             synchronizedDurationMs[index] = (item.durationMs ? item.durationMs : synchronizedPassMs[index]) * item.repeatCount;
         }
@@ -299,8 +301,8 @@ unsigned long AnimationController::resolvedDuration(const Animation &animation) 
         return animation.durationMs;
     const AssetData::AnimationRef reference = resolvedAnimation(animation);
     return completePlaybackDuration(
-        renderer.frameCountFor(reference, animation.versionIndex),
-        renderer.frameIntervalFor(
+        resources.frameCountFor(reference, animation.versionIndex),
+        resources.frameIntervalFor(
             reference, animation.versionIndex, frameIntervalSlow));
 }
 
@@ -364,7 +366,7 @@ void AnimationController::preparePlayback(unsigned long now)
             showPlaybackRole = FirmwarePlaybackRole::None;
         }
 
-        frameInterval = renderer.frameIntervalFor(
+        frameInterval = resources.frameIntervalFor(
             showAnimation, showVersionIndex, frameIntervalSlow);
         animateDone = !renderer.setAnimation(
             showAnimation, showVersionIndex, playOnce);
@@ -373,7 +375,7 @@ void AnimationController::preparePlayback(unsigned long now)
     }
     else if (frameDue && !hasActiveAnimation &&
              renderer.willRestartAnimationLoop() &&
-             baseRotation.onLoopCompletedAndRotateIfDue(renderer))
+             baseRotation.onLoopCompletedAndRotateIfDue(resources))
     {
         showAnimation = baseRotation.selectedAnimation();
         showVersionIndex = baseRotation.selectedVersion();
@@ -441,7 +443,7 @@ void AnimationController::startBatteryAnimation()
     showPlaybackRole = FirmwarePlaybackRole::Battery;
     showAnimation = systemAnimation(FirmwarePlaybackRole::Battery);
     showVersionIndex = 0;
-    frameInterval = renderer.frameIntervalFor(
+    frameInterval = resources.frameIntervalFor(
         showAnimation, showVersionIndex, frameIntervalSlow);
     lastFrameTime = 0;
     animateDone = !renderer.setAnimation(showAnimation, showVersionIndex, false);
@@ -459,7 +461,7 @@ void AnimationController::updateBatteryAnimation(unsigned long now)
 
 unsigned long AnimationController::frameIntervalFor(FirmwarePlaybackRole id) const
 {
-    return renderer.frameIntervalFor(systemAnimation(id), 0, frameIntervalSlow);
+    return resources.frameIntervalFor(systemAnimation(id), 0, frameIntervalSlow);
 }
 
 uint16_t AnimationController::frameCountFor(FirmwarePlaybackRole id) const
@@ -470,16 +472,11 @@ uint16_t AnimationController::frameCountFor(FirmwarePlaybackRole id) const
 uint16_t AnimationController::frameCountFor(
     const AssetData::AnimationRef &animation) const
 {
-    return renderer.frameCountFor(animation);
+    return resources.frameCountFor(animation);
 }
 
 uint16_t AnimationController::versionCountFor(
     const AssetData::AnimationRef &animation) const
 {
-    return renderer.versionCountFor(animation);
-}
-
-SdFat *AnimationController::sdCard() const
-{
-    return renderer.sdCard();
+    return resources.versionCountFor(animation);
 }

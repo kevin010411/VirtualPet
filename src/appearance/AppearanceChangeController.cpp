@@ -4,12 +4,12 @@
 #include "pet/Pet.h"
 #include "pet/PetSaveController.h"
 #include "pet/PetStorage.h"
-#include "display/Renderer.h"
+#include "resources/AssetResources.h"
 
 AppearanceChangeController::AppearanceChangeController(
     Pet &petRef, PetSaveController &savesRef, PetStorage &storageRef,
-    Renderer &rendererRef, AppearanceLoader &loaderRef, AppearanceChangeHost &hostRef)
-    : pet(petRef), saves(savesRef), storage(storageRef), renderer(rendererRef),
+    AssetResources &resourcesRef, AppearanceLoader &loaderRef, AppearanceChangeHost &hostRef)
+    : pet(petRef), saves(savesRef), storage(storageRef), resources(resourcesRef),
       loader(loaderRef), host(hostRef)
 {
 }
@@ -22,18 +22,18 @@ AppearanceChangeResult AppearanceChangeController::changeSpecies(
         return AppearanceChangeResult::ConfigurationFailed;
     if (!pet.setSpeciesSlot(speciesSlot) || !pet.setOutfitSlot(entryOutfitSlot))
     {
-        renderer.recordAssetDataErrorResource("pet appearance");
+        resources.recordAssetDataErrorResource("pet appearance");
         return AppearanceChangeResult::PetStateRejected;
     }
     if (pet.evaluateDeath()) return AppearanceChangeResult::Applied;
     if (!resolveUnlockState(true))
     {
-        renderer.recordAssetDataErrorResource(loader.firstAssetDataErrorResource());
+        resources.recordAssetDataErrorResource(loader.firstAssetDataErrorResource());
         return AppearanceChangeResult::UnlockFailed;
     }
     if (saves.requestSave() == PetSaveResult::Failed)
     {
-        renderer.recordAssetDataErrorResource(
+        resources.recordAssetDataErrorResource(
             storage.lastSaveSlot() == 'B' ? "state_b.bin" : "state_a.bin");
         return AppearanceChangeResult::SaveFailed;
     }

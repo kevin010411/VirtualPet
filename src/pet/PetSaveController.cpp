@@ -2,17 +2,27 @@
 
 #include <stdio.h>
 #include "pet/Pet.h"
-#include "display/Renderer.h"
+#include "resources/AssetResources.h"
+#if ENABLE_DEBUG
+#include "common/DebugDisplay.h"
+#endif
 #include "pet/PetStorage.h"
 #include "common/AppProfile.h"
 #if ENABLE_COLLECTION_CATALOG
 #include "collection/CollectionCatalog.h"
 #endif
 
-PetSaveController::PetSaveController(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef)
+PetSaveController::PetSaveController(Pet &petRef, PetStorage &petStorageRef, AssetResources &resourcesRef
+#if ENABLE_DEBUG
+                                    , DebugDisplay &debugRef
+#endif
+)
     : pet(petRef),
       petStorage(petStorageRef),
-      renderer(rendererRef)
+      resources(resourcesRef)
+#if ENABLE_DEBUG
+      , debug(debugRef)
+#endif
 {
 }
 
@@ -28,9 +38,9 @@ PetSaveResult PetSaveController::saveCollectionProgress(bool forceSave, bool imm
     // Evaluate against the complete mutation before committing one A/B snapshot.
     // Appearance, effects, counters, acquisition and unlock bits travel together.
     bool changed = false;
-    if (config != nullptr && !evaluateCollectionCatalog(renderer.sdCard(), *config, pet, changed))
+    if (config != nullptr && !evaluateCollectionCatalog(resources.sdCard(), *config, pet, changed))
     {
-        renderer.recordAssetDataErrorResource("runtime.bin");
+        resources.recordAssetDataErrorResource("runtime.bin");
         return PetSaveResult::Failed;
     }
     if (!forceSave && !changed) return PetSaveResult::NotNeeded;
@@ -59,7 +69,7 @@ PetSaveResult PetSaveController::saveSnapshot(bool immediate)
         petStorage.lastSaveSlot(),
         static_cast<unsigned long>(petStorage.lastSaveSequence()));
     snprintf(detail, sizeof(detail), "%u/%u", pet.speciesSlot(), pet.outfitSlot());
-    renderer.debugDisplay().showMessage(title, detail);
+    debug.showMessage(title, detail);
 #endif
     if (saved)
     {
@@ -96,7 +106,7 @@ PetSaveResult PetSaveController::maybeSave()
 bool PetSaveController::applyCollectionGrants()
 {
 #if ENABLE_COLLECTION_CATALOG
-    return config == nullptr || applyCollectionOutfitGrants(renderer.sdCard(), *config, pet);
+    return config == nullptr || applyCollectionOutfitGrants(resources.sdCard(), *config, pet);
 #else
     return true;
 #endif

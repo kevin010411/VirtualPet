@@ -6,7 +6,7 @@
 
 class Pet;
 class PetStorage;
-class Renderer;
+class AssetResources;
 class AppearanceLoader;
 class PetBehaviorRuntime;
 struct PetBehaviorConfig;
@@ -33,12 +33,12 @@ public:
         PetStateFailed, RestoredAppearanceFailed, UnlockFailed,
     };
 
-    PetSession(Pet &pet, PetStorage &storage, Renderer &renderer,
+    PetSession(Pet &pet, PetStorage &storage, AssetResources &resources,
                AppearanceLoader &loader, PetBehaviorConfig &config,
                PetBehaviorRuntime &runtime, AppearanceChangeController &changes,
                PetSessionHost &host);
 
-    bool prepare(SdFat *sd);
+    bool prepare();
     // Reset uses the validated startup selection and reloads its
     // contract before initializing unlocks/saving. A failed attempt restores
     // the preceding pet and appearance; only the final new snapshot is saved.
@@ -50,7 +50,7 @@ private:
     enum class InitialState : uint8_t { Failed, Fresh, Restored };
     Pet &pet;
     PetStorage &storage;
-    Renderer &renderer;
+    AssetResources &resources;
     AppearanceLoader &loader;
     PetBehaviorConfig &config;
     PetBehaviorRuntime &runtime;

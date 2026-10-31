@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include <assert.h>
 #include <filesystem>
 #include <fstream>
@@ -48,8 +49,9 @@ static void verifyClassicGuess(const std::filesystem::path &root)
         hostMillis = 0;
         SdFat sd; mountBundle(sd, root);
         Adafruit_ST7735 display; Pet pet; PetStorage storage(&sd);
-        Renderer renderer(&display, &sd); SdAppearanceLoader loader(&sd);
-        Game game(pet, storage, renderer, loader);
+        AssetResources resources(&sd);
+        Renderer renderer(&display, resources); SdAppearanceLoader loader(&sd);
+        Game game(pet, storage, renderer, resources, loader);
         game.synchronizeTime(0);
         assert(game.setup_game());
         game.OnRightKey(); FirmwareRandom::seed(1); game.OnConfirmKey();
@@ -282,8 +284,9 @@ int main(int argc, char **argv)
             const auto fixture = std::filesystem::path(argv[1]) / name;
             SdFat damaged; mountBundle(damaged, fixture);
             Adafruit_ST7735 display; Pet pet; PetStorage storage(&damaged);
-            Renderer renderer(&display, &damaged); SdAppearanceLoader loader(&damaged);
-            Game game(pet, storage, renderer, loader);
+            AssetResources resources(&damaged);
+            Renderer renderer(&display, resources); SdAppearanceLoader loader(&damaged);
+            Game game(pet, storage, renderer, resources, loader);
             assert(!game.setup_game());
             assert(!damaged.exists("/state_a.bin") && !damaged.exists("/state_b.bin"));
             printf("[PASS] Production startup rejects compiled capacity overflow: %s\n", name);
@@ -298,9 +301,10 @@ int main(int argc, char **argv)
     Adafruit_ST7735 display;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(&display, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(&display, resources);
     SdAppearanceLoader loader(&sd);
-    Game game(pet, storage, renderer, loader);
+    Game game(pet, storage, renderer, resources, loader);
     assert(game.setup_game());
     if (argc == 3 && std::string(argv[2]) == "guess")
     {
@@ -346,8 +350,9 @@ int main(int argc, char **argv)
         const auto boot = [&](const char *variant, bool owned, uint16_t count, int16_t stat, uint32_t days) {
             mountBundle(sd, std::filesystem::path(argv[1]) / variant);
             Pet restored; PetStorage rebootStorage(&sd);
-            Renderer rebootRenderer(&display, &sd); SdAppearanceLoader rebootLoader(&sd);
-            Game reboot(restored, rebootStorage, rebootRenderer, rebootLoader);
+            AssetResources rebootRendererResources(&sd);
+            Renderer rebootRenderer(&display, rebootRendererResources); SdAppearanceLoader rebootLoader(&sd);
+            Game reboot(restored, rebootStorage, rebootRenderer, rebootRendererResources, rebootLoader);
             assert(reboot.setup_game());
             assert(restored.isCollectionOwned(0) == owned && restored.actionCount(0) == count);
             assert(restored.customStat(0) == stat && restored.stageDays() == days);
@@ -418,10 +423,10 @@ int main(int argc, char **argv)
         // including a valid action whose optional playback is absent.
         PetBehaviorConfig config = {}; char resource[20] = {};
         assert(loadRuntimeContract(&sd, 1, 1, config, resource, sizeof(resource)));
-        AnimationController animations(renderer);
+        AnimationController animations(renderer, resources);
         animations.configureRuntimeContract(config);
         Pet isolated;
-        PetBehaviorRuntime runtime(config, isolated, animations, renderer);
+        PetBehaviorRuntime runtime(config, isolated, animations, resources);
         runtime.initializeStats();
         for (uint8_t slot = 0; slot < 8; ++slot)
         {
@@ -514,9 +519,10 @@ int main(int argc, char **argv)
         assert(pet.outfitSlot() == 2 && pet.actionCount(0) == 0);
         Pet restored;
         PetStorage rebootStorage(&sd);
-        Renderer rebootRenderer(&display, &sd);
+        AssetResources rebootRendererResources(&sd);
+        Renderer rebootRenderer(&display, rebootRendererResources);
         SdAppearanceLoader rebootLoader(&sd);
-        Game reboot(restored, rebootStorage, rebootRenderer, rebootLoader);
+        Game reboot(restored, rebootStorage, rebootRenderer, rebootRendererResources, rebootLoader);
         assert(reboot.setup_game());
         assert(restored.speciesSlot() == 2 && restored.outfitSlot() == 2 && restored.isOutfitUnlocked(2));
         assert(restored.customStat(0) == 1 && restored.isCollectionOwned(0));
@@ -575,9 +581,10 @@ int main(int argc, char **argv)
     // Reboot uses the production A/B persistence snapshot, no catalog sidecar.
     Pet restored;
     PetStorage rebootStorage(&sd);
-    Renderer rebootRenderer(&display, &sd);
+    AssetResources rebootRendererResources(&sd);
+    Renderer rebootRenderer(&display, rebootRendererResources);
     SdAppearanceLoader rebootLoader(&sd);
-    Game reboot(restored, rebootStorage, rebootRenderer, rebootLoader);
+    Game reboot(restored, rebootStorage, rebootRenderer, rebootRendererResources, rebootLoader);
     assert(reboot.setup_game());
     assert(restored.stageDays() == 2 && restored.isCollectionOwned(0));
     // Failed next-slot write keeps the previous complete Pet+catalog transaction.

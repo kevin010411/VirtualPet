@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include "controller/Game.h"
 
 #include "animation/AnimationController.h"
@@ -28,7 +29,7 @@ bool Game::prepare_game()
     initialized = false;
     cheatEvolutionPending = false;
     if (runtimeLoadState == RuntimeLoadState::Failed ||
-        !petSession.prepare(animations->sdCard()))
+        !petSession.prepare())
     {
         enterFatalState();
         return false;
@@ -72,7 +73,7 @@ bool Game::finish_setup_game()
         // Preserve the distinct pet-state and unprepared diagnostics.
         if (runtimeFailed)
         {
-            const char *recordedResource = renderer.firstAssetDataErrorResource();
+            const char *recordedResource = resources.firstAssetDataErrorResource();
             if (recordedResource != nullptr && recordedResource[0] != '\0')
                 resource = recordedResource;
         }
@@ -97,7 +98,7 @@ bool Game::finish_setup_game()
         enterRuntimeFatal();
         return false;
     }
-    if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+    if (resources.firstAssetDataError() != AssetData::BundleError::None)
     {
         enterRuntimeFatal();
         return false;

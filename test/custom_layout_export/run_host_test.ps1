@@ -20,7 +20,7 @@ $sources = @(
     'test/custom_layout_export/test_main.cpp',
     'src/resources/BundleReader.cpp', 'src/resources/AssetRuntimeContract.cpp',
     'src/common/CopyResourceName.cpp',
-    'src/display/Renderer.cpp',
+    'src/resources/AssetResources.cpp', 'src/display/Renderer.cpp',
     'src/display/FrameDecoder.cpp',
     'src/display/LayoutRenderer.cpp',
     'src/controller/CommandController.cpp',

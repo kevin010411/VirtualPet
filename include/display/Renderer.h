@@ -3,22 +3,22 @@
 
 #include <Arduino.h>
 #include <Adafruit_ST7735.h>
-#include <SdFat.h>
 #include "resources/AssetRuntimeContract.h"
 #include "common/AppProfile.h"
 #if ENABLE_DEBUG
 #include "display/TftDebugDisplay.h"
 #endif
 
+class AssetResources;
+
 class Renderer
 {
 public:
-    Renderer(Adafruit_ST7735 *ref_tft, SdFat *ref_SD);
+    Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resources);
     ~Renderer();
 
     void initAnimations();
     void setAnimationArea(uint8_t x, uint8_t y, uint8_t width = 128, uint8_t height = 96);
-    bool configureAssetBundle(const AssetData::BundleId &bundleId);
     bool ShowDataFrame(const AssetData::AssetFrameAddress &address,
                        int xmin = -1,
                        int ymin = -1,
@@ -46,21 +46,11 @@ public:
     void showStartupResourceError(const char *fallbackResource,
                                   const char *debugStage);
 #endif
-    void recordAssetDataErrorResource(const char *resource);
 #if ENABLE_DEBUG
     DebugDisplay &debugDisplay();
     void renderDebugOverlay();
     bool hasRenderedFrame() const;
 #endif
-    uint16_t frameCountFor(const AssetData::AnimationRef &animation,
-                           uint8_t versionIndex = 0);
-    uint16_t versionCountFor(const AssetData::AnimationRef &animation);
-    unsigned long frameIntervalFor(const AssetData::AnimationRef &animation,
-                                   uint8_t versionIndex,
-                                   unsigned long defaultIntervalMs);
-    AssetData::BundleError firstAssetDataError() const;
-    const char *firstAssetDataErrorResource() const;
-    SdFat *sdCard() const;
 
 private:
     struct AnimationState;
@@ -70,7 +60,7 @@ private:
 #endif
 
     Adafruit_ST7735 *tft;
-    SdFat *SD;
+    AssetResources &resources;
     AnimationState *state;
 #if ENABLE_DEBUG
     TftDebugDisplay debug;

@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include "display/LayoutRenderer.h"
 
 #include "controller/CommandController.h"
@@ -5,8 +6,8 @@
 #include "pet/PetBehaviorTypes.h"
 #include "display/Renderer.h"
 
-LayoutRenderer::LayoutRenderer(Renderer &rendererRef, CommandController &commandsRef)
-    : renderer(rendererRef), commands(commandsRef)
+LayoutRenderer::LayoutRenderer(Renderer &rendererRef, AssetResources &resourcesRef, CommandController &commandsRef)
+    : renderer(rendererRef), resources(resourcesRef), commands(commandsRef)
 {
 }
 
@@ -82,7 +83,7 @@ bool LayoutRenderer::syncPlayback(const PetStatSnapshot &snapshot)
     uint8_t layoutId = 0;
     if (!renderer.currentLayoutId(layoutId))
     {
-        renderer.recordAssetDataErrorResource("asset data");
+        resources.recordAssetDataErrorResource("asset data");
         return false;
     }
     updateValues(snapshot);
@@ -98,7 +99,7 @@ bool LayoutRenderer::updatePlayback(uint8_t layoutId)
     activeLayoutId = layoutId;
     hasActiveLayout = true;
     drawAll();
-    return renderer.firstAssetDataError() == AssetData::BundleError::None;
+    return resources.firstAssetDataError() == AssetData::BundleError::None;
 }
 
 bool LayoutRenderer::drawSlot(int slot, bool selected)

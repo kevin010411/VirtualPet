@@ -7,7 +7,7 @@
 
 class AnimationController;
 class Pet;
-class Renderer;
+class AssetResources;
 
 // Existing appearance operations; callers never receive Evolution stages.
 class EvolutionHost
@@ -35,7 +35,7 @@ class EvolutionController
 {
 public:
     EvolutionController(Pet &pet, AnimationController &animations,
-                        AppearanceLoader &appearanceLoader, Renderer &renderer,
+                        AppearanceLoader &appearanceLoader, AssetResources &resources,
                         EvolutionHost &host);
 
     EvolutionResult check();
@@ -56,7 +56,7 @@ private:
     Pet &pet;
     AnimationController &animations;
     AppearanceLoader &appearanceLoader;
-    Renderer &renderer;
+    AssetResources &resources;
     EvolutionHost &host;
     Phase phase = Phase::None;
     uint8_t targetSpeciesSlot = 0;

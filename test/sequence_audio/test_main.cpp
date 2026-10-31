@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include <assert.h>
 #include <fstream>
 #include <iterator>
@@ -112,7 +113,11 @@ void stop(bool fade)
     amplifier = false;
 }
 }
-Renderer::Renderer(Adafruit_ST7735 *, SdFat *) {}
+AssetResources::AssetResources(SdFat *sd)
+    : sd_(sd), reader_(sd, readBuffer_, AssetData::kIoScratchBytes) {}
+
+Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef)
+    : tft(display), resources(resourceRef), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
 bool Renderer::setAnimation(const AssetData::AnimationRef &ref, uint8_t, bool) { return ref.valid(); }
@@ -127,10 +132,9 @@ bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &ref, uint8_t, u
 bool Renderer::advanceAnimationFrame() { ++rendered; return true; }
 bool Renderer::animationFrameFailed() const { return false; }
 bool Renderer::willRestartAnimationLoop() const { return false; }
-uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &ref, uint8_t version) { return metadata(ref, version).frameCount; }
-uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &) { ++versionQueries; return 1; }
-unsigned long Renderer::frameIntervalFor(const AssetData::AnimationRef &ref, uint8_t version, unsigned long) { return metadata(ref, version).frameMs; }
-SdFat *Renderer::sdCard() const { return nullptr; }
+uint16_t AssetResources::frameCountFor(const AssetData::AnimationRef &ref, uint8_t version) { return metadata(ref, version).frameCount; }
+uint16_t AssetResources::versionCountFor(const AssetData::AnimationRef &) { ++versionQueries; return 1; }
+unsigned long AssetResources::frameIntervalFor(const AssetData::AnimationRef &ref, uint8_t version, unsigned long) { return metadata(ref, version).frameMs; }
 
 int main(int argc, char **argv)
 {
@@ -153,8 +157,9 @@ int main(int argc, char **argv)
         const auto followingAudio = config.animationAudio[following.animationId - 1];
         assert(primaryAudio.bound() && followingAudio.bound());
         assert(primaryAudio.offset != followingAudio.offset);
-        Renderer renderer(nullptr, nullptr);
-        AnimationController controller(renderer);
+        AssetResources resources(nullptr);
+        Renderer renderer(nullptr, resources);
+        AnimationController controller(renderer, resources);
         controller.configureRuntimeContract(config);
         controller.setup(primary);
         tick(controller, 1000);
@@ -192,7 +197,7 @@ int main(int argc, char **argv)
         primaryAudio = originalAudio;
         controller.cancelAll();
         Pet pet;
-        PetBehaviorRuntime runtime(config, pet, controller, renderer);
+        PetBehaviorRuntime runtime(config, pet, controller, resources);
         runtime.initializeStats();
         pet.setCustomStat(0, 20);
         assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
@@ -225,11 +230,11 @@ int main(int argc, char **argv)
         // Exercise current Action music failures without reverting committed effects.
         controller.cancelAll();
         auto failureCase = [&](SequenceAudioError expected, uint32_t origin) {
-            AnimationController failed(renderer);
+            AnimationController failed(renderer, resources);
             failed.configureRuntimeContract(config);
             failed.setup(config.idleAnimation);
             Pet failedPet;
-            PetBehaviorRuntime failedRuntime(config, failedPet, failed, renderer);
+            PetBehaviorRuntime failedRuntime(config, failedPet, failed, resources);
             failedRuntime.initializeStats();
             failedPet.setCustomStat(0, 20);
             failRead = expected == SequenceAudioError::ReadFailed;
@@ -270,12 +275,13 @@ int main(int argc, char **argv)
     // silent export coverage through the same public Action execution seam.
     assert(silentFixture);
     const uint8_t slot = 0;
-    Renderer renderer(nullptr, nullptr);
-    AnimationController controller(renderer);
+    AssetResources resources(nullptr);
+    Renderer renderer(nullptr, resources);
+    AnimationController controller(renderer, resources);
     controller.configureRuntimeContract(config);
     controller.setup(config.idleAnimation);
     Pet pet;
-    PetBehaviorRuntime runtime(config, pet, controller, renderer);
+    PetBehaviorRuntime runtime(config, pet, controller, resources);
     runtime.initializeStats();
     pet.setCustomStat(0, 20);
     config.trackedActionCount = 1;

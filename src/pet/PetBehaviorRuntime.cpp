@@ -4,7 +4,7 @@
 #include "animation/Animation.h"
 #include "pet/Pet.h"
 #include "pet/PetBehaviorRuntimeRules.h"
-#include "display/Renderer.h"
+#include "resources/AssetResources.h"
 #include "common/FirmwareRandom.h"
 #include "appearance/AppearanceLoader.h"
 #include "common/SdBinaryRead.h"
@@ -33,12 +33,12 @@ uint16_t firmwareRandomBelow(uint16_t upperExclusive)
 }
 
 PlaybackResult resolveActionAnimation(const PetBehaviorActionPlayback &playback,
-                                      Renderer &renderer,
+                                      AssetResources &resources,
                                       Animation &animation)
 {
     if (!playback.animation.valid() || playback.playbackCount == 0)
         return PlaybackResult::PlaybackFailed;
-    const uint16_t versionCount = renderer.versionCountFor(playback.animation);
+    const uint16_t versionCount = resources.versionCountFor(playback.animation);
     if (versionCount == 0)
         return PlaybackResult::AnimationMissing;
     animation = Animation::complete(playback.animation, playback.playbackCount);
@@ -82,11 +82,11 @@ bool readActionEffect(void *context, uint16_t row, PetBehaviorActionEffectConfig
 PetBehaviorRuntime::PetBehaviorRuntime(const PetBehaviorConfig &configRef,
                                        Pet &petRef,
                                        AnimationController &animationsRef,
-                                       Renderer &rendererRef)
+                                       AssetResources &resourcesRef)
     : config(configRef),
       pet(petRef),
       animations(animationsRef),
-      renderer(rendererRef),
+      resources(resourcesRef),
       dailyChangePauses{}
 {
 }
@@ -129,7 +129,7 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     PetBehaviorActionPlayback playback = {};
     ActionEffectFile effectSource;
     effectSource.offset = config.actionEffectsOffset;
-    effectSource.sd = renderer.sdCard();
+    effectSource.sd = resources.sdCard();
     if (!applyPetBehaviorAction(
             config, actionSlot, state, nextPauses, playback, firmwareRandomBelow,
             readActionEffect, &effectSource))
@@ -152,7 +152,7 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
         return PetBehaviorActionResult::Applied;
     if (action.prelude.animation.valid())
     {
-        const PlaybackResult result = resolveActionAnimation(action.prelude, renderer, sequence[count]);
+        const PlaybackResult result = resolveActionAnimation(action.prelude, resources, sequence[count]);
         if (result == PlaybackResult::AnimationMissing) return PetBehaviorActionResult::AppliedAnimationMissing;
         if (result != PlaybackResult::Accepted) return PetBehaviorActionResult::Applied;
         ++count;
@@ -163,7 +163,7 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
             config.followingAnimations[action.firstFollowingAnimation + index - 1];
         if (index == 0 && !segment.animation.valid())
             continue;
-        const PlaybackResult buildResult = resolveActionAnimation(segment, renderer, sequence[count]);
+        const PlaybackResult buildResult = resolveActionAnimation(segment, resources, sequence[count]);
         if (buildResult == PlaybackResult::AnimationMissing)
             return PetBehaviorActionResult::AppliedAnimationMissing;
         if (buildResult != PlaybackResult::Accepted)

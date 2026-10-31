@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include "collection/CollectionCatalog.h"
 #include "resources/detail/RuntimeTableFile.h"
 #include "pet/Pet.h"
@@ -156,15 +157,15 @@ bool applyCollectionOutfitGrants(SdFat *sd, const PetBehaviorConfig &config, Pet
     return updateCollectionCatalog(sd, config, pet, nullptr);
 }
 
-CollectionCatalog::CollectionCatalog(Pet &petRef, Renderer &rendererRef, const PetBehaviorConfig &configRef)
-    : pet(petRef), renderer(rendererRef), config(configRef) {}
+CollectionCatalog::CollectionCatalog(Pet &petRef, Renderer &rendererRef, AssetResources &resourcesRef, const PetBehaviorConfig &configRef)
+    : pet(petRef), renderer(rendererRef), resources(resourcesRef), config(configRef) {}
 
 bool CollectionCatalog::start()
 {
     if (config.collectionFingerprint == 0) return false;
     RuntimeTableFile file;
     uint8_t cfg[24];
-    if (!file.open(renderer.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
+    if (!file.open(resources.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
     count = static_cast<uint8_t>(readU16(cfg + 16));
     opened = true;
     targetSpecies = targetOutfit = 0;
@@ -197,7 +198,7 @@ bool CollectionCatalog::redraw()
     if (!opened) return true;
     RuntimeTableFile file;
     uint8_t cfg[24];
-    if (!file.open(renderer.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
+    if (!file.open(resources.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
     if (!show(renderer, file.table(), cfg + 4, 0, 0, 128, 160)) return false;
     for (uint8_t cell = 0; cell < 16; ++cell)
         if (!drawCell(file.table(), cell, cell == focus)) return false;
@@ -231,7 +232,7 @@ bool CollectionCatalog::move(bool right)
     }
     focus = right ? focus + 1 : focus - 1;
     RuntimeTableFile file;
-    return file.open(renderer.sdCard(), config.assetManifest) &&
+    return file.open(resources.sdCard(), config.assetManifest) &&
         drawCell(file.table(), previous, false) && drawCell(file.table(), focus, true);
 }
 
@@ -241,7 +242,7 @@ bool CollectionCatalog::confirm()
     {
         RuntimeTableFile file;
         uint8_t item[36];
-        if (!file.open(renderer.sdCard(), config.assetManifest) ||
+        if (!file.open(resources.sdCard(), config.assetManifest) ||
             !readItem(file.table(), page * 15 + focus - 1, item)) return false;
         const uint16_t pages = readU16(item + (pet.isCollectionOwned(page * 15 + focus - 1) ? 34 : 32));
         if (++detailPage < pages) return redraw();
@@ -252,7 +253,7 @@ bool CollectionCatalog::confirm()
     const uint8_t slot = page * 15 + focus - 1;
     RuntimeTableFile file;
     uint8_t item[36];
-    if (!file.open(renderer.sdCard(), config.assetManifest) ||
+    if (!file.open(resources.sdCard(), config.assetManifest) ||
         !readItem(file.table(), slot, item)) return false;
     if (pet.isCollectionOwned(slot))
     {

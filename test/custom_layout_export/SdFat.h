@@ -7,12 +7,13 @@
 #include <cstring>
 #include <stdint.h>
 constexpr uint8_t FILE_READ = 0;
-namespace CustomLayoutHost { inline std::string root; }
+namespace CustomLayoutHost { inline std::string root; inline size_t opens = 0, reads = 0, bytesRead = 0; }
 class File
 {
 public:
     bool open(const char *path, uint8_t)
     {
+        ++CustomLayoutHost::opens;
         std::ifstream input(CustomLayoutHost::root + path, std::ios::binary);
         if (!input) return false;
         data.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
@@ -22,6 +23,8 @@ public:
     int read(void *destination, size_t count)
     {
         if (count > data.size() - position) return -1;
+        ++CustomLayoutHost::reads;
+        CustomLayoutHost::bytesRead += count;
         memcpy(destination, data.data() + position, count);
         position += count;
         return static_cast<int>(count);

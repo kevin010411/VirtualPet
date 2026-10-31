@@ -17,7 +17,7 @@ $sources = @(
  'src/resources/RuntimeTableBehavior.cpp', 'src/resources/RuntimeTableReader.cpp',
  'src/resources/RuntimeTableBehaviorDecoder.cpp', 'src/resources/RuntimeTablePresentationDecoder.cpp',
  'src/resources/RuntimeTableFile.cpp', 'src/resources/RuntimeContractLoader.cpp',
- 'src/display/Renderer.cpp', 'src/display/FrameDecoder.cpp', 'src/display/LayoutRenderer.cpp',
+ 'src/resources/AssetResources.cpp', 'src/display/Renderer.cpp', 'src/display/FrameDecoder.cpp', 'src/display/LayoutRenderer.cpp',
  'src/pet/Pet.cpp', 'src/pet/PetStorage.cpp', 'src/pet/PetSession.cpp',
  'src/pet/PetSaveController.cpp', 'src/pet/PetBehaviorRuntime.cpp',
  'src/pet/PetBehaviorRuntimeRules.cpp', 'src/pet/PetStateClassifier.cpp',

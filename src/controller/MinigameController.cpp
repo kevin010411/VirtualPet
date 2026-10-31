@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include "controller/MinigameController.h"
 #include "pet/PetBehaviorRuntime.h"
 #if ENABLE_INSTRUCTION_RESPONSE
@@ -185,11 +186,12 @@ void MinigameController::settleOutcome(GuessItemOutcome outcome)
 #endif // ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
 
 #if ENABLE_INSTRUCTION_RESPONSE
-void MinigameController::startInstruction(Renderer &renderer, const PetBehaviorConfig &config)
+void MinigameController::startInstruction(Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config)
 {
     reset();
     animations.cancelAll();
     instructionRenderer = &renderer;
+    instructionResources = &resources;
     instructionConfig = &config;
     instructionHeld = 7;
     drawnPhase = InstructionResponse::Phase::Idle;
@@ -238,8 +240,8 @@ bool MinigameController::renderInstruction()
             prompt = instructionConfig->systemAnimations[static_cast<uint8_t>(feedbackRole)];
         if (prompt.valid())
         {
-            promptVersion = static_cast<uint8_t>(FirmwareRandom::below(renderer.versionCountFor(prompt)));
-            frameMs = renderer.frameIntervalFor(prompt, promptVersion, 167);
+            promptVersion = static_cast<uint8_t>(FirmwareRandom::below(instructionResources->versionCountFor(prompt)));
+            frameMs = instructionResources->frameIntervalFor(prompt, promptVersion, 167);
             if (phase == InstructionResponse::Phase::Feedback)
                 instruction.waitForFeedbackAnimation();
             if (!renderer.setAnimation(prompt, promptVersion, phase == InstructionResponse::Phase::Feedback))

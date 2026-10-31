@@ -9,6 +9,7 @@
 #if ENABLE_INSTRUCTION_RESPONSE
 #include "game/InstructionResponse.h"
 class Renderer;
+class AssetResources;
 struct PetBehaviorConfig;
 #endif
 #if ENABLE_COMMAND_PREDICT
@@ -47,7 +48,7 @@ public:
     bool startPredict();
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
-    void startInstruction(Renderer &renderer, const PetBehaviorConfig &config);
+    void startInstruction(Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config);
     bool capturesInstructionInput() const;
     void instructionInput(uint8_t held, uint8_t pressed, uint32_t timestamp);
     void instructionPending(bool pending, uint32_t at, uint8_t raw)
@@ -71,6 +72,7 @@ private:
     InstructionResponse instruction;
     InstructionResponse::Phase drawnPhase = InstructionResponse::Phase::Idle;
     Renderer *instructionRenderer = nullptr;
+    AssetResources *instructionResources = nullptr;
     const PetBehaviorConfig *instructionConfig = nullptr;
     uint8_t instructionHeld = 7;
     uint8_t promptVersion = 0;

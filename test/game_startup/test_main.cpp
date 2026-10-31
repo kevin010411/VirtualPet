@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -249,24 +250,24 @@ public:
 class SessionHost : public PetSessionHost
 {
 public:
-    SessionHost(PetBehaviorConfig &configRef, Renderer &rendererRef,
+    SessionHost(PetBehaviorConfig &configRef, AssetResources &resourcesRef,
                 AnimationController &animationsRef, AppearanceLoader &loaderRef)
-        : config(configRef), renderer(rendererRef), animations(animationsRef), loader(loaderRef) {}
+        : config(configRef), resources(resourcesRef), animations(animationsRef), loader(loaderRef) {}
     bool activateLoadedAppearance(uint8_t species, uint8_t outfit) override
     {
-        if (!renderer.configureAssetBundle(config.assetManifest.bundleId)) return false;
+        if (!resources.configureBundle(config.assetManifest.bundleId)) return false;
         loader.configureRuntimeContract(config);
         animations.configureRuntimeContract(config);
         return true;
     }
     bool configureActiveAppearance(uint8_t species, uint8_t outfit) override
     {
-        return loadRuntimeContract(renderer.sdCard(), species, outfit, config) &&
+        return loadRuntimeContract(resources.sdCard(), species, outfit, config) &&
                activateLoadedAppearance(species, outfit);
     }
 private:
     PetBehaviorConfig &config;
-    Renderer &renderer;
+    AssetResources &resources;
     AnimationController &animations;
     AppearanceLoader &loader;
 };
@@ -292,19 +293,20 @@ void testPetSession()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
-        AnimationController animations(renderer);
+        AnimationController animations(renderer, resources);
         PetBehaviorConfig config = {};
-        PetBehaviorRuntime runtime(config, pet, animations, renderer);
-        PetSaveController saves(pet, storage, renderer);
-        SessionHost host(config, renderer, animations, loader);
-        AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
-        PetSession session(pet, storage, renderer, loader, config, runtime, changes, host);
+        PetBehaviorRuntime runtime(config, pet, animations, resources);
+        PetSaveController saves(pet, storage, resources);
+        SessionHost host(config, resources, animations, loader);
+        AppearanceChangeController changes(pet, saves, storage, resources, loader, host);
+        PetSession session(pet, storage, resources, loader, config, runtime, changes, host);
         assert(session.state() == PetSession::State::NotPrepared &&
                session.reset() == AppearanceChangeResult::PetStateRejected);
         assert(data.initialLoads == 0 && data.saves == 0);
-        assert(session.prepare(&sd) && session.state() == PetSession::State::Ready);
+        assert(session.prepare() && session.state() == PetSession::State::Ready);
         const bool restored = mode == 1 || mode == 2 || mode == 5;
         assert(pet.stageDays() == (restored ? 9u : 0u));
         assert(pet.customStat(0) == (restored ? 8 : 2));
@@ -348,28 +350,29 @@ void testPetSession()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
-        AnimationController animations(renderer);
+        AnimationController animations(renderer, resources);
         PetBehaviorConfig config = {};
-        PetBehaviorRuntime runtime(config, pet, animations, renderer);
-        PetSaveController saves(pet, storage, renderer);
-        SessionHost host(config, renderer, animations, loader);
-        AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
-        PetSession session(pet, storage, renderer, loader, config, runtime, changes, host);
-        assert(!session.prepare(&sd) && session.state() == expected[mode]);
+        PetBehaviorRuntime runtime(config, pet, animations, resources);
+        PetSaveController saves(pet, storage, resources);
+        SessionHost host(config, resources, animations, loader);
+        AppearanceChangeController changes(pet, saves, storage, resources, loader, host);
+        PetSession session(pet, storage, resources, loader, config, runtime, changes, host);
+        assert(!session.prepare() && session.state() == expected[mode]);
         assert(session.errorStage() != nullptr &&
                session.reset() == AppearanceChangeResult::PetStateRejected);
         const int loads = data.initialLoads;
         if (mode != 3)
         {
-            assert(!session.prepare(&sd));
+            assert(!session.prepare());
             assert(data.initialLoads == loads); // Terminal runtime failure.
         }
         else
         {
             data.initialSpecies = 1;
-            assert(session.prepare(&sd)); // Pet-state failure remains retryable.
+            assert(session.prepare()); // Pet-state failure remains retryable.
         }
     }
 }
@@ -403,9 +406,10 @@ void testExportedEvolutionPlaybackCounts()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader appearance;
-        Game game(pet, storage, renderer, appearance);
+        Game game(pet, storage, renderer, resources, appearance);
         assert(game.setup_game());
         assert(game.setStageDaysForCheat(1));
         const int savesBefore = data.saves;
@@ -430,11 +434,12 @@ void testEvolutionResults()
     SdFat sd;
     Pet pet;
     pet.setSpeciesSlot(1);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader loader;
-    AnimationController animations(renderer);
+    AnimationController animations(renderer, resources);
     EvolutionTestHost host;
-    EvolutionController evolution(pet, animations, loader, renderer, host);
+    EvolutionController evolution(pet, animations, loader, resources, host);
     assert(evolution.check() == EvolutionResult::NoChange);
     assert(evolution.update(PlaybackResult::Accepted) == EvolutionResult::NoChange);
     data.evolutionResult = EvolutionLookupResult::LoadFailed;
@@ -499,11 +504,12 @@ void testAppearanceChanges()
         data.unlockSucceeds = failure != 2;
         data.saveSucceeds = failure != 3;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
-        PetSaveController saves(pet, storage, renderer);
+        PetSaveController saves(pet, storage, resources);
         ChangeHost host;
-        AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
+        AppearanceChangeController changes(pet, saves, storage, resources, loader, host);
         const auto result = changes.changeSpecies(2, failure == 1 ? 0 : 1,
             failure == 5 ? AppearanceChangeController::ContractState::AlreadyActivated
                          : AppearanceChangeController::ContractState::Reload);
@@ -546,11 +552,12 @@ void testAppearanceChanges()
         data.invalidConsumedStats = failure == 2;
         data.saveSucceeds = failure != 3 && failure != 5;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
-        PetSaveController saves(pet, storage, renderer);
+        PetSaveController saves(pet, storage, resources);
         ChangeHost host;
-        AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
+        AppearanceChangeController changes(pet, saves, storage, resources, loader, host);
         const auto result = changes.applyOutfit(2, failure < 5);
         const AppearanceChangeResult expected[] = {
             AppearanceChangeResult::ConfigurationFailed, AppearanceChangeResult::UnlockFailed,
@@ -579,11 +586,12 @@ void testUnlockRefreshAndSaveCadence()
     pet.setOutfitSlot(1);
     pet.initializeOutfitUnlockMask(1);
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader loader;
-    PetSaveController saves(pet, storage, renderer);
+    PetSaveController saves(pet, storage, resources);
     ChangeHost host;
-    AppearanceChangeController changes(pet, saves, storage, renderer, loader, host);
+    AppearanceChangeController changes(pet, saves, storage, resources, loader, host);
     assert(changes.refreshUnlockState(false) && data.saves == 0);
     saves.maybeSave();
     assert(data.saves == 0);
@@ -616,9 +624,10 @@ void testFreshStartup()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(game.prepare_game());
     assert(data.initialLoads == 1 && data.reloads == 0);
@@ -647,9 +656,10 @@ void testRestoredAppearance(bool different)
     assert(data.savedPet.setSpeciesSlot(different ? 2 : 1));
     assert(data.savedPet.setOutfitSlot(1));
     data.hasSave = true;
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(game.prepare_game());
     assert(data.initialLoads == 1 && data.reloads == (different ? 1 : 0));
@@ -676,9 +686,10 @@ void testInvalidSaveFallsBackToFresh()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(game.prepare_game());
     assert(data.discards == 1 && data.reloads == 0);
@@ -699,9 +710,10 @@ void testFingerprintMismatchStartsFresh()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(game.prepare_game());
     assert(data.reloads == 0 && data.saves == 1);
@@ -718,9 +730,10 @@ void testFreshSaveFailure()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(!game.prepare_game());
     assert(data.saves == 1);
@@ -738,9 +751,10 @@ void testInvalidInitialState()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(!game.prepare_game());
     assert(data.saves == 0);
@@ -758,9 +772,10 @@ void testInitialLoadFailure(bool appearanceResolved)
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(!game.prepare_game());
     assert(data.resourceShows == 0); // TFT is initialized between prepare and finish.
@@ -784,9 +799,10 @@ void testFinishWithoutPreparation()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(!game.finish_setup_game());
     assert(strcmp(data.lastShownResource, "startup") == 0);
@@ -804,9 +820,10 @@ void testStartupActivationFailure(bool bundleFailure)
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(!game.setup_game());
     assert(strcmp(data.lastShownResource, bundleFailure ? "runtime.bin" : "appearance") == 0);
@@ -823,9 +840,10 @@ void testResetReloadFailure()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(game.setup_game());
     data.reloadSucceeds = false;
@@ -851,9 +869,10 @@ void testRestoredReloadFailure()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(!game.prepare_game());
     assert(data.reloads == 1);
@@ -873,9 +892,10 @@ void testEvolutionLookup(EvolutionLookupResult result, uint8_t targetSpecies)
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(game.prepare_game());
     assert(game.finish_setup_game());
@@ -916,9 +936,10 @@ void testEvolutionLoadFailureDuringPetTick()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
 
     assert(game.prepare_game());
     assert(game.finish_setup_game());
@@ -957,9 +978,10 @@ void testAnimatedEvolution(EvolutionAnimationMode mode, EvolutionFailure failure
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     assert(game.setup_game());
     assert(game.setStageDaysForCheat(1));
     const int savesBefore = data.saves;
@@ -1059,9 +1081,10 @@ void testEvolutionInterrupted(bool battery, bool afterCommit)
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     assert(game.setup_game() && game.setStageDaysForCheat(1));
     rtcLoop(game);
     if (afterCommit) rtcLoop(game);
@@ -1093,8 +1116,9 @@ void testBehaviorTransactionsUseLivePet()
     scenario = &data;
     SdFat sd;
     Pet pet;
-    Renderer renderer(nullptr, &sd);
-    AnimationController animations(renderer);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
     PetBehaviorConfig config = {};
     config.stats[0] = {true, 2, 0, 10, -1};
     config.stats[1] = {true, 3, 0, 10, 1};
@@ -1108,7 +1132,7 @@ void testBehaviorTransactionsUseLivePet()
     config.actionEffectCount = 2;
     config.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
     config.actionEffects[1] = {1, PetBehaviorEffectOperation::Change, 2};
-    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
     assert(pet.customStat(0) == 2 && pet.customStat(1) == 3);
 
@@ -1144,8 +1168,9 @@ void testUserActionPlaybackSequence()
     scenario = &data;
     SdFat sd;
     Pet pet;
-    Renderer renderer(nullptr, &sd);
-    AnimationController animations(renderer);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
     PetBehaviorConfig config = {};
     config.stats[0] = {true, 0, 0, 100, 0};
     config.idleAnimation = {1, 1, 5};
@@ -1161,7 +1186,7 @@ void testUserActionPlaybackSequence()
     config.followingAnimations[1] = {{1, 1, 3}, 2};
     config.followingAnimations[2] = {{1, 1, 4}, 1};
     animations.setup(config.idleAnimation);
-    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
     assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
     assert(pet.customStat(0) == 10);
@@ -1203,9 +1228,10 @@ void testCommandReplacesSequenceAcrossDayBoundary()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
-        Game game(pet, storage, renderer, loader);
+        Game game(pet, storage, renderer, resources, loader);
         game.synchronizeTime(10);
         assert(game.setup_game());
         game.OnConfirmKey();
@@ -1246,9 +1272,10 @@ void testActionPlaybackPausesPetTime()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
-        Game game(pet, storage, renderer, loader);
+        Game game(pet, storage, renderer, resources, loader);
         game.synchronizeTime(10);
         assert(game.setup_game());
         game.synchronizeTime(11); // Preserve the second before the action.
@@ -1292,9 +1319,10 @@ void testGameRoutesUserActionResult()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
-        Game game(pet, storage, renderer, loader);
+        Game game(pet, storage, renderer, resources, loader);
         assert(game.prepare_game() && game.finish_setup_game());
         const int unlocks = data.unlocks;
         const int errors = data.resourceShows;
@@ -1317,8 +1345,9 @@ void testUnifiedCommandExecution()
     scenario = &data;
     SdFat sd;
     Pet pet;
-    Renderer renderer(nullptr, &sd);
-    AnimationController animations(renderer);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
     PetBehaviorConfig config = {};
     config.stats[0] = {true, 2, 0, 10, -1};
     config.actions[0].active = true;
@@ -1341,7 +1370,7 @@ void testUnifiedCommandExecution()
         config.screenBlocks[index].source = index + 4;
     }
     animations.configureRuntimeContract(config);
-    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
     CommandExecutor executor(pet, animations, runtime);
     executor.configureRuntimeContract(config);
@@ -1385,8 +1414,9 @@ void testStatusReadsActionCommittedPet()
     data.statusVersions = 2;
     SdFat sd;
     Pet pet;
-    Renderer renderer(nullptr, &sd);
-    AnimationController animations(renderer);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
     PetBehaviorConfig config = {};
     config.stats[0] = {true, 2, 0, 10, 0};
     config.actions[0].active = true;
@@ -1405,7 +1435,7 @@ void testStatusReadsActionCommittedPet()
     set.conditions[0] = {StatusConditionKind::RuntimeValue,
                          runtimeValueIdForPetStat(0), 0, 2, 0, 10};
     animations.configureRuntimeContract(config);
-    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
     CommandExecutor executor(pet, animations, runtime);
     executor.configureRuntimeContract(config);
@@ -1443,9 +1473,10 @@ void testFirstStartRecord()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader appearance;
-        Game game(pet, storage, renderer, appearance);
+        Game game(pet, storage, renderer, resources, appearance);
         assert(game.prepare_game() && game.finish_setup_game());
         assert(!pet.isFirstStartCompleted());
         assert(!pet.isFirstLaunchComplete());
@@ -1478,7 +1509,7 @@ void testFirstStartRecord()
             game.OnConfirmKey();
             assert(pet.customStat(0) == 8);
             // Restore keeps the completion record, while reset starts a new life.
-            Game restored(pet, storage, renderer, appearance);
+            Game restored(pet, storage, renderer, resources, appearance);
             assert(restored.prepare_game() && restored.finish_setup_game());
             assert(pet.isFirstStartCompleted());
             assert(!restored.startStartupAnimation());
@@ -1499,9 +1530,10 @@ void testResetStartupFatal()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     assert(game.setup_game());
     data.firstStartAvailable = false;
     assert(!game.resetPet());
@@ -1553,9 +1585,10 @@ void testForegroundInputOwnership()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader appearance;
-        Game game(pet, storage, renderer, appearance);
+        Game game(pet, storage, renderer, resources, appearance);
         assert(game.setup_game());
         game.OnConfirmKey();
         int previews = data.previewQueries;
@@ -1637,9 +1670,10 @@ void testFatalPublicEntries()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader appearance;
-        Game game(pet, storage, renderer, appearance);
+        Game game(pet, storage, renderer, resources, appearance);
         assert(game.setup_game());
         game.OnConfirmKey();
         if (mode == 2)
@@ -1659,7 +1693,7 @@ void testFatalPublicEntries()
         else
         {
             data.frameFailed = true;
-            renderer.recordAssetDataErrorResource("shared.data");
+            resources.recordAssetDataErrorResource("shared.data");
             rtcLoop(game);
         }
         assertFatalBlocksPublicEntries(game, pet, data);
@@ -1673,9 +1707,10 @@ void testFinishLayoutFailure()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     assert(game.prepare_game());
     assert(data.resourceShows == 0);
     data.layoutSucceeds = false;
@@ -1697,9 +1732,10 @@ void testIdleMusicGameLifecycle()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     game.synchronizeTime(10);
     assert(game.setup_game());
     game.loop_game();
@@ -1737,8 +1773,9 @@ void testIdleMusicGameLifecycle()
     chooser.commandAction = chooser.commandOutfit = chooser.idleMusic = true;
     Pet menuPet;
     PetStorage menuStorage(&sd);
-    Renderer menuRenderer(nullptr, &sd);
-    Game menuGame(menuPet, menuStorage, menuRenderer, appearance);
+    AssetResources menuRendererResources(&sd);
+    Renderer menuRenderer(nullptr, menuRendererResources);
+    Game menuGame(menuPet, menuStorage, menuRenderer, menuRendererResources, appearance);
     assert(menuGame.setup_game());
     menuGame.loop_game();
     assert(menuGame.audioActive());
@@ -1761,9 +1798,10 @@ void testRtcCatchUp()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader appearance;
-        Game game(pet, storage, renderer, appearance);
+        Game game(pet, storage, renderer, resources, appearance);
         game.synchronizeTime(10);
         assert(game.setup_game());
         const int savesBefore = data.saves;
@@ -1813,9 +1851,10 @@ void testRtcSnapshotAndReset()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     game.synchronizeTime(10);
     assert(game.setup_game());
     game.synchronizeTime(14);
@@ -1850,9 +1889,10 @@ void testNavigationDuringRtcCatchUp()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     game.synchronizeTime(10);
     assert(game.setup_game());
     game.synchronizeTime(30);
@@ -1875,9 +1915,10 @@ void testFourSecondPeriodicSave()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     game.synchronizeTime(0);
     assert(game.setup_game());
     const int initialSaves = data.saves;
@@ -1900,9 +1941,10 @@ void testDailyPostProcessingDisabled()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     game.synchronizeTime(0);
     assert(game.setup_game());
     const int initialSaves = data.saves;
@@ -1933,8 +1975,9 @@ void testDailySaveRetry()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
-    PetSaveController saves(pet, storage, renderer);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
+    PetSaveController saves(pet, storage, resources);
     assert(saves.saveDailyProgress() == PetSaveResult::NotNeeded && data.saves == 0);
     data.saveSucceeds = false;
     assert(saves.saveDailyProgress() == PetSaveResult::Failed && data.saves == 1);
@@ -1957,8 +2000,9 @@ void testSaveRequestResults()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
-    PetSaveController saves(pet, storage, renderer);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
+    PetSaveController saves(pet, storage, resources);
     assert(saves.endBatch() == PetSaveResult::NotNeeded && data.saves == 0);
     assert(saves.maybeSave() == PetSaveResult::NotNeeded && data.saves == 0);
 
@@ -2000,9 +2044,10 @@ void testDeathCompileFlag()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader loader;
-    Game game(pet, storage, renderer, loader);
+    Game game(pet, storage, renderer, resources, loader);
     assert(game.setup_game());
     assert(pet.setCustomStat(0, 0));
     game.loop_game();
@@ -2030,9 +2075,10 @@ void testSavedDeathReset()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader loader;
-    Game game(pet, storage, renderer, loader);
+    Game game(pet, storage, renderer, resources, loader);
     assert(game.setup_game() && game.isDead());
     assert(!pet.setCustomStat(0, 5));
     data.saveSucceeds = false;
@@ -2064,9 +2110,10 @@ void testBatchedCatchUpMatchesDailyEvents()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
-        Game game(pet, storage, renderer, loader);
+        Game game(pet, storage, renderer, resources, loader);
         assert(game.setup_game());
         game.synchronizeTime(0);
         int steps = 0;
@@ -2110,9 +2157,10 @@ void testBatchedCatchUpMatchesDailyEvents()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader loader;
-    Game game(pet, storage, renderer, loader);
+    Game game(pet, storage, renderer, resources, loader);
     assert(game.setup_game());
     game.synchronizeTime(0);
     game.synchronizeTime(1000); // First day settles existing matches.
@@ -2133,8 +2181,8 @@ bool evaluateCollectionCatalog(SdFat *, const PetBehaviorConfig &, Pet &, bool &
     return true;
 }
 bool applyCollectionOutfitGrants(SdFat *, const PetBehaviorConfig &, Pet &) { return true; }
-CollectionCatalog::CollectionCatalog(Pet &p, Renderer &r, const PetBehaviorConfig &c)
-    : pet(p), renderer(r), config(c) {}
+CollectionCatalog::CollectionCatalog(Pet &p, Renderer &r, AssetResources &a, const PetBehaviorConfig &c)
+    : pet(p), renderer(r), resources(a), config(c) {}
 bool CollectionCatalog::start() { return false; }
 bool CollectionCatalog::move(bool) { return false; }
 bool CollectionCatalog::confirm() { return false; }
@@ -2320,7 +2368,13 @@ void PetStorage::discard() { ++scenario->discards; scenario->hasSave = false; }
 char PetStorage::lastSaveSlot() const { return 'A'; }
 uint32_t PetStorage::lastSaveSequence() const { return 1; }
 
-Renderer::Renderer(Adafruit_ST7735 *display, SdFat *sd) : tft(display), SD(sd), state(nullptr) {}
+AssetResources::AssetResources(SdFat *sd)
+    : sd_(sd), reader_(sd, readBuffer_, AssetData::kIoScratchBytes) {}
+BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t size)
+    : sd_(sd), scratch_(scratch), scratchSize_(size) {}
+
+Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef)
+    : tft(display), resources(resourceRef), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
 void Renderer::setAnimationArea(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
@@ -2332,7 +2386,7 @@ bool AssetData::sameBundleId(const BundleId &left, const BundleId &right)
 {
     return memcmp(left.bytes, right.bytes, sizeof(left.bytes)) == 0;
 }
-bool Renderer::configureAssetBundle(const AssetData::BundleId &) { return scenario->bundleSucceeds; }
+bool AssetResources::configureBundle(const AssetData::BundleId &) { return scenario->bundleSucceeds; }
 bool Renderer::setAnimation(const AssetData::AnimationRef &animation, uint8_t, bool once)
 {
     scenario->displayedAnimation = animation;
@@ -2375,7 +2429,7 @@ bool Renderer::advanceAnimationFrame()
     scenario->frameFailed = id != 0 && id == scenario->failedAnimationId;
     if (scenario->frameFailed && scenario->evolutionMode != EvolutionAnimationMode::Disabled &&
         scenario->assetError)
-        recordAssetDataErrorResource(id == 3 ? "source.data" : "target.data");
+        resources.recordAssetDataErrorResource(id == 3 ? "source.data" : "target.data");
     if (id == 95) return scenario->frameFailed;
 #if ENABLE_GUESS_GAME
     // A looping item prompt does not finish after the fake display's first frame.
@@ -2389,7 +2443,7 @@ bool Renderer::advanceAnimationFrame()
     return scenario->heldAnimationId == 0 || id != scenario->heldAnimationId;
 }
 bool Renderer::animationFrameFailed() const { return scenario->frameFailed; }
-uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &animation, uint8_t)
+uint16_t AssetResources::frameCountFor(const AssetData::AnimationRef &animation, uint8_t)
 {
     if (animation.animationId == 6)
     {
@@ -2406,13 +2460,13 @@ uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &animation, uint8
     if (animation.animationId == 4 && !scenario->targetAvailable) return 0;
     return 1;
 }
-uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &animation)
+uint16_t AssetResources::versionCountFor(const AssetData::AnimationRef &animation)
 {
     if (animation.animationId == 2) ++scenario->statusVersionQueries;
     return animation.animationId == 1 ? scenario->actionVersions
          : animation.animationId == 2 ? scenario->statusVersions : 1;
 }
-unsigned long Renderer::frameIntervalFor(const AssetData::AnimationRef &, uint8_t,
+unsigned long AssetResources::frameIntervalFor(const AssetData::AnimationRef &, uint8_t,
                                          unsigned long defaultInterval)
 {
     return scenario->commandInstruction ? scenario->instructionFrameMs : defaultInterval;
@@ -2428,18 +2482,17 @@ void Renderer::showResourceError(const char *resource)
     ++scenario->resourceShows;
     copyName(scenario->lastShownResource, sizeof(scenario->lastShownResource), resource);
 }
-void Renderer::recordAssetDataErrorResource(const char *resource)
+void AssetResources::recordAssetDataErrorResource(const char *resource)
 {
     if (scenario->firstRecordedResource[0] == '\0')
         copyName(scenario->firstRecordedResource, sizeof(scenario->firstRecordedResource), resource);
 }
-AssetData::BundleError Renderer::firstAssetDataError() const
+AssetData::BundleError AssetResources::firstAssetDataError() const
 {
     return scenario->assetError && scenario->frameFailed
                ? static_cast<AssetData::BundleError>(1) : AssetData::BundleError::None;
 }
-const char *Renderer::firstAssetDataErrorResource() const { return scenario->firstRecordedResource; }
-SdFat *Renderer::sdCard() const { return SD; }
+const char *AssetResources::firstAssetDataErrorResource() const { return scenario->firstRecordedResource; }
 
 #if ENABLE_COMMAND_PREDICT
 void testPredictMinigame()
@@ -2456,9 +2509,10 @@ void testPredictMinigame()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader appearance;
-        Game game(pet, storage, renderer, appearance);
+        Game game(pet, storage, renderer, resources, appearance);
         game.synchronizeTime(10);
         assert(game.setup_game());
         game.OnConfirmKey();
@@ -2554,13 +2608,14 @@ void testPredictMinigame()
     scenario = &data;
     data.commandPredict = true;
     SdFat sd;
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     PetBehaviorConfig config = {};
     AppearanceSelection selection;
     bool resolved = false;
     char resource[20] = {};
     assert(loadInitialRuntimeContract(&sd, selection, config, resolved, resource, sizeof(resource)));
-    AnimationController animations(renderer);
+    AnimationController animations(renderer, resources);
     animations.configureRuntimeContract(config);
     animations.setup(config.idleAnimation);
     PredictGame predict(animations);
@@ -2583,7 +2638,7 @@ void testPredictMinigame()
     // Timed system animations use their own v21 BGM and keep the original
     // 40-second introduction / 4.8-second result across animation loop boundaries.
     for (uint8_t id = 10; id <= 21; ++id) config.animationAudio[id - 1] = {0, 800};
-    AnimationController musical(renderer);
+    AnimationController musical(renderer, resources);
     musical.configureRuntimeContract(config);
     musical.setup(config.idleAnimation);
     PredictGame musicalPredict(musical);
@@ -2621,9 +2676,10 @@ void testSwitchFromGuessToPredict()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     assert(game.setup_game());
     game.OnConfirmKey();
     const int16_t expectedStat = 2 + (ENABLE_GUESS_GAME_SINGLE_ROUND ? 1 : 3);
@@ -2663,9 +2719,10 @@ void testInstructionResetOwnership()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     assert(game.setup_game());
     game.OnConfirmKey();
     assert(game.capturesInstructionInput());
@@ -2702,9 +2759,10 @@ void testInstructionDeferredEffects()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader appearance;
-        Game game(pet, storage, renderer, appearance);
+        Game game(pet, storage, renderer, resources, appearance);
         assert(game.setup_game());
         const int savesBefore = data.saves;
         game.OnConfirmKey();
@@ -2804,9 +2862,10 @@ void testInstructionBatteryReturn()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     assert(game.setup_game());
     game.synchronizeTime(0);
     const auto before = pet.statSnapshot();
@@ -2850,9 +2909,10 @@ void testInstructionFeedbackInterruption()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader appearance;
-        Game game(pet, storage, renderer, appearance);
+        Game game(pet, storage, renderer, resources, appearance);
         assert(game.setup_game());
         const int saves = data.saves;
         game.OnConfirmKey();
@@ -2901,9 +2961,10 @@ void testInstructionFeedbackDrawLatency()
     SdFat sd;
     Pet pet;
     PetStorage storage(&sd);
-    Renderer renderer(nullptr, &sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
     FakeAppearanceLoader appearance;
-    Game game(pet, storage, renderer, appearance);
+    Game game(pet, storage, renderer, resources, appearance);
     assert(game.setup_game());
     const int saves = data.saves;
     game.OnConfirmKey();
@@ -2961,9 +3022,10 @@ void testInstructionLifecycle()
         SdFat sd;
         Pet pet;
         PetStorage storage(&sd);
-        Renderer renderer(nullptr, &sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
         FakeAppearanceLoader appearance;
-        Game game(pet, storage, renderer, appearance);
+        Game game(pet, storage, renderer, resources, appearance);
         assert(game.setup_game());
         game.synchronizeTime(0);
         const auto before = pet.statSnapshot();

@@ -5,12 +5,13 @@
 #include "appearance/AppearanceLoader.h"
 
 class Renderer;
+class AssetResources;
 class LayoutRenderer;
 
 class AppearanceSelectionController
 {
 public:
-    AppearanceSelectionController(Renderer &renderer, AppearanceLoader &appearanceLoader,
+    AppearanceSelectionController(Renderer &renderer, AssetResources &resources, AppearanceLoader &appearanceLoader,
                                   LayoutRenderer &layout);
 
     bool start(uint8_t speciesSlot, uint8_t currentOutfitSlot, uint8_t unlockMask);
@@ -27,6 +28,7 @@ private:
     static constexpr unsigned long frameIntervalSlow = 600;
 
     Renderer &renderer;
+    AssetResources &resources;
     AppearanceLoader &appearanceLoader;
     LayoutRenderer &layout;
     bool selectingOutfit = false;

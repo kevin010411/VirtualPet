@@ -28,6 +28,7 @@ constexpr uint16_t kMaxHeight = 160;
 constexpr uint32_t kMaxDecodedBytes = 128UL * 160UL * 2UL;
 constexpr uint32_t kMaxPackBytes = 20UL * 1024UL * 1024UL;
 constexpr size_t kIoScratchBytes = 512;
+constexpr size_t kDataReadBufferBytes = 1024;
 
 constexpr bool validFrameDimensions(uint16_t width, uint16_t height)
 {

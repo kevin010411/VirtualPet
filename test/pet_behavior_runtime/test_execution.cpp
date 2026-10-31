@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include <assert.h>
 #include "animation/AnimationController.h"
 #include "common/FirmwareRandom.h"
@@ -35,11 +36,12 @@ PetBehaviorConfig effectsOnlyConfig()
 void assertActionApplied(PetBehaviorConfig &config, bool hasFollowing = false)
 {
     Pet pet;
-    Renderer renderer(nullptr, nullptr);
-    AnimationController animations(renderer);
+    AssetResources resources(nullptr);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
     animations.configureRuntimeContract(config);
     animations.setup(config.idleAnimation);
-    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
     animationLookups = 0;
     missingLookups = 0;
@@ -80,9 +82,10 @@ void testUnchangedEffectRefreshesThroughRuntimeCommit()
         config.actionEffects[0] = {0, operation,
             static_cast<int16_t>(operation == PetBehaviorEffectOperation::Set ? 100 : 5)};
         Pet pet;
-        Renderer renderer(nullptr, nullptr);
-        AnimationController animations(renderer);
-        PetBehaviorRuntime runtime(config, pet, animations, renderer);
+        AssetResources resources(nullptr);
+        Renderer renderer(nullptr, resources);
+        AnimationController animations(renderer, resources);
+        PetBehaviorRuntime runtime(config, pet, animations, resources);
         runtime.initializeStats();
         assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
         assert(runtime.advancePetDay() && pet.customStat(0) == 100);
@@ -144,10 +147,11 @@ void testReferencedMissingAnimationRetainsCommit()
     auto config = effectsOnlyConfig();
     config.actionOutcomes[0].animationPlayback = {{1, 1, 2}, 1};
     Pet pet;
-    Renderer renderer(nullptr, nullptr);
-    AnimationController animations(renderer);
+    AssetResources resources(nullptr);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
     animations.setup(config.idleAnimation);
-    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
     assert(runtime.executeAction(0) == PetBehaviorActionResult::AppliedAnimationMissing);
     assert(pet.customStat(0) == 15 && pet.actionCount(0) == ENABLE_COLLECTION_CATALOG);
@@ -162,10 +166,11 @@ void testFixedVersionReplaysAndPrelude()
     config.actions[0].followingAnimationCount = 1;
     config.followingAnimations[0] = {{1, 1, 5}, 1};
     Pet pet;
-    Renderer renderer(nullptr, nullptr);
-    AnimationController animations(renderer);
+    AssetResources resources(nullptr);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
     animations.setup(config.idleAnimation);
-    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
     assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
     bool sawPrelude = false, sawResult = false, sawFollowing = false;
@@ -196,9 +201,10 @@ void testActualEffectFileReadAndFailureAreAtomic()
     SdFat card(bytes, sizeof(bytes));
     effectCard = &card;
     Pet pet;
-    Renderer renderer(nullptr, nullptr);
-    AnimationController animations(renderer);
-    PetBehaviorRuntime runtime(config, pet, animations, renderer);
+    AssetResources resources(nullptr);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
     const auto opens = HostSd::openCount;
     assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
@@ -213,7 +219,13 @@ void testActualEffectFileReadAndFailureAreAtomic()
 }
 } // namespace
 
-Renderer::Renderer(Adafruit_ST7735 *, SdFat *) {}
+AssetResources::AssetResources(SdFat *sd)
+    : sd_(effectCard), reader_(sd, readBuffer_, AssetData::kIoScratchBytes) {}
+BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t size)
+    : sd_(sd), scratch_(scratch), scratchSize_(size) {}
+
+Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef)
+    : tft(display), resources(resourceRef), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
 bool Renderer::setAnimation(const AssetData::AnimationRef &reference, uint8_t version, bool)
@@ -227,16 +239,15 @@ bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &, uint8_t, uint
                                   int, int, int, uint16_t, uint16_t) { return true; }
 bool Renderer::willRestartAnimationLoop() const { return false; }
 bool Renderer::animationFrameFailed() const { return false; }
-uint16_t Renderer::frameCountFor(const AssetData::AnimationRef &, uint8_t) { return 1; }
-uint16_t Renderer::versionCountFor(const AssetData::AnimationRef &reference)
+uint16_t AssetResources::frameCountFor(const AssetData::AnimationRef &, uint8_t) { return 1; }
+uint16_t AssetResources::versionCountFor(const AssetData::AnimationRef &reference)
 {
     ++animationLookups;
     if (reference.animationId == 2) { ++missingLookups; return 0; }
     return reference.animationId == 4 ? 28 : 1;
 }
-unsigned long Renderer::frameIntervalFor(const AssetData::AnimationRef &, uint8_t,
+unsigned long AssetResources::frameIntervalFor(const AssetData::AnimationRef &, uint8_t,
                                         unsigned long) { return 1; }
-SdFat *Renderer::sdCard() const { return effectCard; }
 
 int main()
 {

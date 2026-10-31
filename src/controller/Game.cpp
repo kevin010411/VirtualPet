@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include "controller/Game.h"
 
 #include "animation/AnimationController.h"
@@ -18,29 +19,34 @@
 #include "collection/CollectionCatalog.h"
 #endif
 
-Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AppearanceLoader &appearanceLoaderRef)
+Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AssetResources &resourcesRef, AppearanceLoader &appearanceLoaderRef)
     : pet(petRef),
       renderer(rendererRef),
+      resources(resourcesRef),
       appearanceLoader(appearanceLoaderRef),
-      petSaves(pet, petStorageRef, renderer),
-      appearanceChanges(pet, petSaves, petStorageRef, renderer, appearanceLoader,
+      petSaves(pet, petStorageRef, resources
+#if ENABLE_DEBUG
+               , renderer.debugDisplay()
+#endif
+      ),
+      appearanceChanges(pet, petSaves, petStorageRef, resources, appearanceLoader,
                         static_cast<AppearanceChangeHost &>(*this)),
-      animations(std::make_unique<AnimationController>(renderer)),
+      animations(std::make_unique<AnimationController>(renderer, resources)),
       evolution(std::make_unique<EvolutionController>(
-          pet, *animations, appearanceLoader, renderer, static_cast<EvolutionHost &>(*this))),
-      petBehaviorRuntime(std::make_unique<PetBehaviorRuntime>(petBehaviorConfig, pet, *animations, renderer)),
-      petSession(pet, petStorageRef, renderer, appearanceLoader, petBehaviorConfig,
+          pet, *animations, appearanceLoader, resources, static_cast<EvolutionHost &>(*this))),
+      petBehaviorRuntime(std::make_unique<PetBehaviorRuntime>(petBehaviorConfig, pet, *animations, resources)),
+      petSession(pet, petStorageRef, resources, appearanceLoader, petBehaviorConfig,
                  *petBehaviorRuntime, appearanceChanges, static_cast<PetSessionHost &>(*this)),
       commandExecutor(std::make_unique<CommandExecutor>(
           pet, *animations, *petBehaviorRuntime)),
       commands(std::make_unique<CommandController>()),
-      layout(std::make_unique<LayoutRenderer>(renderer, *commands))
+      layout(std::make_unique<LayoutRenderer>(renderer, resources, *commands))
 #if ENABLE_COLLECTION_CATALOG
-      , collectionCatalog(std::make_unique<CollectionCatalog>(pet, renderer, petBehaviorConfig))
+      , collectionCatalog(std::make_unique<CollectionCatalog>(pet, renderer, resources, petBehaviorConfig))
 #endif
 #if ENABLE_APPEARANCE_SELECTION
       ,
-      appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, appearanceLoader, *layout))
+      appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, resources, appearanceLoader, *layout))
 #endif
 #if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
       ,
@@ -61,7 +67,7 @@ void Game::loop_game()
     if (!initialized)
         return;
 
-    if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+    if (resources.firstAssetDataError() != AssetData::BundleError::None)
     {
         enterRuntimeFatal();
         return;
@@ -225,10 +231,10 @@ void Game::redrawAllNow()
 bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
     char errorResource[20] = {};
-    if (!loadRuntimeContract(animations->sdCard(), speciesSlot, outfitSlot,
+    if (!loadRuntimeContract(resources.sdCard(), speciesSlot, outfitSlot,
                              petBehaviorConfig, errorResource, sizeof(errorResource)))
     {
-        renderer.recordAssetDataErrorResource(errorResource);
+        resources.recordAssetDataErrorResource(errorResource);
         return false;
     }
     return activateLoadedAppearance(speciesSlot, outfitSlot);
@@ -237,7 +243,7 @@ bool Game::configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
 {
     pet.configureDeath(petBehaviorConfig.deathEnabled, petBehaviorConfig.deathStatMask);
-    if (!renderer.configureAssetBundle(petBehaviorConfig.assetManifest.bundleId))
+    if (!resources.configureBundle(petBehaviorConfig.assetManifest.bundleId))
     {
         return false;
     }
@@ -335,7 +341,7 @@ bool Game::finishCollectionSave(PetSaveResult result)
         // A failed commit keeps pending progress for the next complete mutation.
         // Contract failure remains terminal, distinct from storage failure.
         collectionSavePending = true;
-        if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+        if (resources.firstAssetDataError() != AssetData::BundleError::None)
             enterRuntimeFatal();
         else
             renderer.showResourceError("pet state");
@@ -686,7 +692,7 @@ void Game::handleSystemCommandRequest(const CommandResult &result)
         if (result.kind == CommandResultKind::Instruction)
         {
             petClock.pause(latestRtcSeconds);
-            minigame->startInstruction(renderer, petBehaviorConfig);
+            minigame->startInstruction(renderer, resources, petBehaviorConfig);
             flow.enter(AppStage::Minigame);
             return;
         }
@@ -712,7 +718,7 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
     latestRtcSeconds = rtcSeconds;
     if (!initialized) return;
     if (enterDeathIfNeeded()) return;
-    if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+    if (resources.firstAssetDataError() != AssetData::BundleError::None)
     {
         enterRuntimeFatal();
         return;
@@ -919,7 +925,7 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
     if (playbackResult != PlaybackResult::PlaybackFailed)
         return;
 
-    if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+    if (resources.firstAssetDataError() != AssetData::BundleError::None)
     {
         enterRuntimeFatal();
         return;

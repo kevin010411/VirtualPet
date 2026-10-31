@@ -11,7 +11,7 @@ namespace FrameDecoder
 constexpr uint16_t kDefaultAnimWidth = 128;
 constexpr uint16_t kDefaultAnimHeight = 96;
 constexpr uint16_t kWorkingBatchLines = 12;
-constexpr size_t kDataReadBufferBytes = 1024;
+constexpr size_t kDataReadBufferBytes = AssetData::kDataReadBufferBytes;
 constexpr size_t kLineBufferPixels = static_cast<size_t>(kDefaultAnimWidth) * kWorkingBatchLines;
 
 void showAssetDataError(Adafruit_ST7735 *tft, const char *resource);

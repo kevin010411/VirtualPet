@@ -1,3 +1,4 @@
+#include "resources/AssetResources.h"
 #include "display/Renderer.h"
 
 #include <assert.h>
@@ -19,8 +20,23 @@ bool contains(const Adafruit_ST7735 &tft, const char *expected)
 int main()
 {
     {
+        AssetResources resources(nullptr);
+        resources.recordAssetDataErrorResource("runtime.bin");
+        resources.recordAssetDataErrorResource("later error");
+        assert(resources.firstAssetDataError() == AssetData::BundleError::InvalidPack);
+        assert(std::string(resources.firstAssetDataErrorResource()) == "runtime.bin");
         Adafruit_ST7735 tft;
-        Renderer renderer(&tft, nullptr);
+        {
+            Renderer renderer(&tft, resources);
+            renderer.showStartupResourceError("startup", "active appearance");
+            assert(contains(tft, "runtime.bin"));
+        }
+        assert(std::string(resources.firstAssetDataErrorResource()) == "runtime.bin");
+    }
+    {
+        Adafruit_ST7735 tft;
+        AssetResources resources(nullptr);
+        Renderer renderer(&tft, resources);
         renderer.showStartupResourceError("startup", "prepare game");
 
         assert(contains(tft, "prepare game"));
@@ -30,7 +46,8 @@ int main()
 
     {
         Adafruit_ST7735 tft;
-        Renderer renderer(&tft, nullptr);
+        AssetResources resources(nullptr);
+        Renderer renderer(&tft, resources);
         renderer.showStartupResourceError("runtime.bin", "runtime manifest");
 
         assert(contains(tft, "runtime manifest"));
@@ -40,8 +57,9 @@ int main()
 
     {
         Adafruit_ST7735 tft;
-        Renderer renderer(&tft, nullptr);
-        renderer.recordAssetDataErrorResource("species_1.data");
+        AssetResources resources(nullptr);
+        Renderer renderer(&tft, resources);
+        resources.recordAssetDataErrorResource("species_1.data");
         renderer.showStartupResourceError("runtime.bin", "active appearance");
 
         assert(contains(tft, "active appearance"));
@@ -51,7 +69,8 @@ int main()
 
     {
         Adafruit_ST7735 tft;
-        Renderer renderer(&tft, nullptr);
+        AssetResources resources(nullptr);
+        Renderer renderer(&tft, resources);
         renderer.ShowAnimationFrame({}, 0, 0);
 
         assert(contains(tft, "invalid asset ref"));

@@ -7,12 +7,13 @@
 #include "animation/Animation.h"
 
 class Renderer;
+class AssetResources;
 struct PetBehaviorConfig;
 
 class AnimationController
 {
 public:
-    explicit AnimationController(Renderer &renderer);
+    AnimationController(Renderer &renderer, AssetResources &resources);
 
     void configureRuntimeContract(const PetBehaviorConfig &config);
     void setup(const AssetData::AnimationRef &baseAnimation);
@@ -41,13 +42,13 @@ public:
     uint16_t frameCountFor(FirmwarePlaybackRole id) const;
     uint16_t frameCountFor(const AssetData::AnimationRef &animation) const;
     uint16_t versionCountFor(const AssetData::AnimationRef &animation) const;
-    SdFat *sdCard() const;
 
 private:
     static constexpr unsigned long frameIntervalSlow = 600;
     static constexpr uint8_t kMaxQueuedAnimations = 8;
 
     Renderer &renderer;
+    AssetResources &resources;
     Animation animationQueue[kMaxQueuedAnimations] = {};
     uint8_t animationQueueCount = 0;
     Animation activeAnimation = {};

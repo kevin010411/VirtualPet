@@ -15,6 +15,7 @@ try {
         src/resources/BundleReader.cpp `
         src/common/CopyResourceName.cpp `
         src/display/FrameDecoder.cpp `
+        src/resources/AssetResources.cpp `
         src/display/Renderer.cpp `
         src/display/TftDebugDisplay.cpp `
         -o $outputPath

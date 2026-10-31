@@ -1,11 +1,13 @@
+#include "resources/AssetResources.h"
 #include "appearance/AppearanceSelectionController.h"
 
 #include "display/Renderer.h"
 #include "display/LayoutRenderer.h"
 
-AppearanceSelectionController::AppearanceSelectionController(Renderer &rendererRef,
+AppearanceSelectionController::AppearanceSelectionController(Renderer &rendererRef, AssetResources &resourcesRef,
     AppearanceLoader &appearanceLoaderRef, LayoutRenderer &layoutRef)
     : renderer(rendererRef),
+      resources(resourcesRef),
       appearanceLoader(appearanceLoaderRef), layout(layoutRef)
 {
 }
@@ -136,8 +138,8 @@ bool AppearanceSelectionController::loadSelectedOutfitPreview()
         (unlockMask & (1U << (selectedSlot - 1U))) == 0, selectedOutfitPreview);
     if (hasSelectedOutfitPreview)
     {
-        selectedOutfitPreview.frameCount = renderer.frameCountFor(selectedOutfitPreview.animation);
-        outfitPreviewInterval = renderer.frameIntervalFor(
+        selectedOutfitPreview.frameCount = resources.frameCountFor(selectedOutfitPreview.animation);
+        outfitPreviewInterval = resources.frameIntervalFor(
             selectedOutfitPreview.animation, 0, frameIntervalSlow);
         hasSelectedOutfitPreview = selectedOutfitPreview.frameCount > 0;
     }

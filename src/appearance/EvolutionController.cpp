@@ -2,13 +2,13 @@
 
 #include "animation/AnimationController.h"
 #include "pet/Pet.h"
-#include "display/Renderer.h"
+#include "resources/AssetResources.h"
 
 namespace
 {
-EvolutionResult playbackFailure(const Renderer &renderer)
+EvolutionResult playbackFailure(const AssetResources &resources)
 {
-    return renderer.firstAssetDataError() == AssetData::BundleError::None
+    return resources.firstAssetDataError() == AssetData::BundleError::None
         ? EvolutionResult::Failed : EvolutionResult::FatalFailure;
 }
 }
@@ -16,9 +16,9 @@ EvolutionResult playbackFailure(const Renderer &renderer)
 EvolutionController::EvolutionController(Pet &petRef,
                                          AnimationController &animationsRef,
                                          AppearanceLoader &appearanceLoaderRef,
-                                         Renderer &rendererRef, EvolutionHost &hostRef)
+                                         AssetResources &resourcesRef, EvolutionHost &hostRef)
     : pet(petRef), animations(animationsRef),
-      appearanceLoader(appearanceLoaderRef), renderer(rendererRef), host(hostRef)
+      appearanceLoader(appearanceLoaderRef), resources(resourcesRef), host(hostRef)
 {
 }
 
@@ -32,7 +32,7 @@ EvolutionResult EvolutionController::check()
         appearanceLoader.findEvolutionTarget(pet.statSnapshot(), selection);
     if (result == EvolutionLookupResult::LoadFailed)
     {
-        renderer.recordAssetDataErrorResource(appearanceLoader.firstAssetDataErrorResource());
+        resources.recordAssetDataErrorResource(appearanceLoader.firstAssetDataErrorResource());
         return EvolutionResult::FatalFailure;
     }
     if (result != EvolutionLookupResult::Found || selection.speciesSlot == pet.speciesSlot())
@@ -48,7 +48,7 @@ EvolutionResult EvolutionController::check()
         return EvolutionResult::Completed;
     }
 
-    return begin(selection) ? EvolutionResult::InProgress : playbackFailure(renderer);
+    return begin(selection) ? EvolutionResult::InProgress : playbackFailure(resources);
 }
 
 bool EvolutionController::begin(const AppearanceSelection &selection)
@@ -79,7 +79,7 @@ EvolutionResult EvolutionController::update(PlaybackResult result)
     if (result == PlaybackResult::PlaybackFailed)
     {
         animations.cancelAll();
-        if (renderer.firstAssetDataError() != AssetData::BundleError::None)
+        if (resources.firstAssetDataError() != AssetData::BundleError::None)
         {
             cancel();
             return EvolutionResult::FatalFailure;
@@ -127,7 +127,7 @@ EvolutionResult EvolutionController::advance()
             return EvolutionResult::InProgress;
         }
         finish();
-        return playbackFailure(renderer);
+        return playbackFailure(resources);
     }
     finish();
     return EvolutionResult::Completed;
