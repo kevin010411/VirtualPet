@@ -53,8 +53,8 @@ void AnimationController::resetPlaybackState()
 {
 #if ENABLE_SEQUENCE_AUDIO
     audioPlayer.stop();
-    synchronizedSequence = sequenceStarted = false;
-    synchronizedBase = baseStarted = false;
+    synchronizedMode = SynchronizedMode::None;
+    timelineStarted = false;
     baseAudio = {};
 #endif
     animationQueueCount = 0;
@@ -85,10 +85,11 @@ void AnimationController::setBaseAnimation(const AssetData::AnimationRef &baseAn
     changed = changed || baseAudio.offset != mappedAudio.offset ||
         baseAudio.sampleCount != mappedAudio.sampleCount;
     baseAudio = mappedAudio;
-    if (changed && synchronizedBase)
+    if (changed && (synchronizedMode == SynchronizedMode::Base))
     {
         audioPlayer.stop();
-        synchronizedBase = baseStarted = false;
+        synchronizedMode = SynchronizedMode::None;
+        timelineStarted = false;
     }
 #endif
     if (changed)
@@ -145,17 +146,17 @@ PlaybackResult AnimationController::replace(const AnimationSequence &sequence)
     }
 #if ENABLE_SEQUENCE_AUDIO
     audioPlayer.stop();
-    synchronizedBase = baseStarted = false;
-    synchronizedSequence = sequence.loop;
+    bool synchronize = sequence.loop;
     for (uint8_t index = 0; index < sequence.count; ++index)
-        synchronizedSequence = synchronizedSequence || audioFor(resolvedAnimation(sequence.items[index])).bound();
-    sequenceStarted = false;
+        synchronize = synchronize || audioFor(resolvedAnimation(sequence.items[index])).bound();
+    synchronizedMode = synchronize ? SynchronizedMode::Sequence : SynchronizedMode::None;
+    timelineStarted = false;
     sequenceLoops = sequence.loop;
-    synchronizedSegment = synchronizedRepeat = 0;
+    synchronizedSegment = 0;
     synchronizedSegmentElapsedMs = 0;
     synchronizedTargetPending = true;
     synchronizedFrame = 0;
-    if (synchronizedSequence)
+    if ((synchronizedMode == SynchronizedMode::Sequence))
     {
         for (uint8_t index = 0; index < sequence.count; ++index)
         {
@@ -185,8 +186,8 @@ void AnimationController::cancelAll()
 {
 #if ENABLE_SEQUENCE_AUDIO
     audioPlayer.stop();
-    synchronizedSequence = sequenceStarted = false;
-    synchronizedBase = baseStarted = false;
+    synchronizedMode = SynchronizedMode::None;
+    timelineStarted = false;
 #endif
     animationQueueCount = 0;
     hasActiveAnimation = false;
@@ -204,7 +205,7 @@ bool AnimationController::isBusy() const
 bool AnimationController::hasFinitePlayback() const
 {
 #if ENABLE_SEQUENCE_AUDIO
-    if (synchronizedSequence) return !sequenceLoops;
+    if ((synchronizedMode == SynchronizedMode::Sequence)) return !sequenceLoops;
 #endif
     return animationQueueCount > 0 || (hasActiveAnimation &&
         (activeAnimation.playOnce || activeAnimation.durationMs > 0));
@@ -322,7 +323,7 @@ void AnimationController::preparePlayback(unsigned long now)
         return;
 #if ENABLE_SEQUENCE_AUDIO
     audioPlayer.timelineMs(now); // Also services a finishing fade after the sequence.
-    if (synchronizedSequence)
+    if ((synchronizedMode == SynchronizedMode::Sequence))
     {
         prepareSynchronizedPlayback(now);
         return;
@@ -390,8 +391,8 @@ PlaybackTickResult AnimationController::tick(unsigned long now)
     if (preparedFrame == PreparedFrame::Unprepared)
         preparePlayback(now);
 #if ENABLE_SEQUENCE_AUDIO
-    if (synchronizedSequence) return tickSynchronizedPlayback();
-    if (synchronizedBase) return tickBasePlayback();
+    if ((synchronizedMode == SynchronizedMode::Sequence)) return tickSynchronizedPlayback();
+    if ((synchronizedMode == SynchronizedMode::Base)) return tickBasePlayback();
 #endif
     renderPrepared();
     if (hasActiveAnimation && activeAnimation.playOnce &&

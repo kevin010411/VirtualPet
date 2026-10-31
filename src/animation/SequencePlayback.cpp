@@ -7,9 +7,9 @@ void AnimationController::prepareBasePlayback(unsigned long now)
 {
     playbackFailedThisTick = false;
     playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
-    uint32_t elapsed = synchronizedBase && baseStarted ? audioPlayer.timelineMs(now) : 0;
-    bool restart = !synchronizedBase;
-    if (!restart && baseStarted && elapsed >= baseLoopDuration)
+    uint32_t elapsed = (synchronizedMode == SynchronizedMode::Base) && timelineStarted ? audioPlayer.timelineMs(now) : 0;
+    bool restart = synchronizedMode != SynchronizedMode::Base;
+    if (!restart && timelineStarted && elapsed >= baseLoopDuration)
     {
         // Rotation keeps its existing ten complete loops per Version selection.
         // A late tick skips frames within this loop, not whole authored loops.
@@ -20,8 +20,8 @@ void AnimationController::prepareBasePlayback(unsigned long now)
     {
         audioPlayer.stop();
         audioPlayer.prepare(resources.sdCard(), baseAudio);
-        synchronizedBase = true;
-        baseStarted = false;
+        synchronizedMode = SynchronizedMode::Base;
+        timelineStarted = false;
         elapsed = 0;
         showAnimation = baseRotation.selectedAnimation();
         showVersionIndex = baseRotation.selectedVersion();
@@ -43,13 +43,13 @@ PlaybackTickResult AnimationController::tickBasePlayback()
 {
     if (preparedFrame == PreparedFrame::Advance && !renderer.ShowAnimationFrame(showAnimation, showVersionIndex, baseFrame))
         playbackFailedThisTick = true;
-    if (!baseStarted)
+    if (!timelineStarted)
     {
         // Buffer preparation and the first TFT transfer precede the sample clock.
         // On SD failure the existing player preserves the visual millis timeline;
         // retry happens at a full animation loop, never every update.
         audioPlayer.start(millis());
-        baseStarted = true;
+        timelineStarted = true;
     }
     preparedFrame = PreparedFrame::Unprepared;
     return {playbackFailedThisTick ? PlaybackResult::PlaybackFailed : PlaybackResult::Accepted,
@@ -60,19 +60,16 @@ void AnimationController::prepareSynchronizedPlayback(unsigned long now)
 {
     playbackFailedThisTick = false;
     playbackFailedRoleThisTick = FirmwarePlaybackRole::None;
-    uint32_t elapsed = sequenceStarted ? audioPlayer.timelineMs(now) : 0;
+    uint32_t elapsed = timelineStarted ? audioPlayer.timelineMs(now) : 0;
     const uint32_t remaining = synchronizedDurationMs[synchronizedSegment] - synchronizedSegmentElapsedMs;
     const uint32_t passDuration = remaining < synchronizedPassMs[synchronizedSegment] ? remaining : synchronizedPassMs[synchronizedSegment];
-    if (sequenceStarted && elapsed >= passDuration)
+    if (timelineStarted && elapsed >= passDuration)
     {
         audioPlayer.stop(true);
-        sequenceStarted = false;
+        timelineStarted = false;
         synchronizedSegmentElapsedMs += passDuration;
-        if (synchronizedSegmentElapsedMs < synchronizedDurationMs[synchronizedSegment])
-            ++synchronizedRepeat;
-        else
+        if (synchronizedSegmentElapsedMs >= synchronizedDurationMs[synchronizedSegment])
         {
-            synchronizedRepeat = 0;
             synchronizedSegmentElapsedMs = 0;
             ++synchronizedSegment;
         }
@@ -81,7 +78,7 @@ void AnimationController::prepareSynchronizedPlayback(unsigned long now)
             if (sequenceLoops) synchronizedSegment = 0;
             else
             {
-                synchronizedSequence = false;
+                synchronizedMode = SynchronizedMode::None;
                 animationQueueCount = 0;
                 hasActiveAnimation = false;
                 dirtyAnimation = true;
@@ -122,12 +119,12 @@ PlaybackTickResult AnimationController::tickSynchronizedPlayback()
         playbackFailedThisTick = true;
         playbackFailedRoleThisTick = showPlaybackRole;
     }
-    if (!sequenceStarted)
+    if (!timelineStarted)
     {
         // Display transfer completes before the sample clock begins. Render
         // failures remain visual failures; they do not roll back Action Effects.
         audioPlayer.start(millis());
-        sequenceStarted = true;
+        timelineStarted = true;
     }
     preparedFrame = PreparedFrame::Unprepared;
     return {playbackFailedThisTick ? PlaybackResult::PlaybackFailed : PlaybackResult::Accepted,

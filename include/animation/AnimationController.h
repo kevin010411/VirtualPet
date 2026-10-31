@@ -76,21 +76,19 @@ private:
 #if ENABLE_SEQUENCE_AUDIO
     SequenceAudioPlayer audioPlayer;
     SequenceAudioRef baseAudio;
-    bool synchronizedBase = false;
-    bool baseStarted = false;
+    enum class SynchronizedMode : uint8_t { None, Base, Sequence };
+    SynchronizedMode synchronizedMode = SynchronizedMode::None;
+    bool timelineStarted = false;
     uint32_t baseLoopDuration = 0;
     uint16_t baseFrame = 0;
     void prepareBasePlayback(unsigned long now);
     PlaybackTickResult tickBasePlayback();
-    bool synchronizedSequence = false;
-    bool sequenceStarted = false;
     bool sequenceLoops = false;
     uint32_t synchronizedPassMs[kMaxQueuedAnimations] = {};
     uint32_t synchronizedDurationMs[kMaxQueuedAnimations] = {};
     uint32_t synchronizedSegmentElapsedMs = 0;
     uint16_t synchronizedIntervalMs[kMaxQueuedAnimations] = {};
     uint8_t synchronizedSegment = 255;
-    uint8_t synchronizedRepeat = 255;
     uint16_t synchronizedFrame = 0;
     bool synchronizedTargetPending = false;
     SequenceAudioRef audioFor(const AssetData::AnimationRef &animation) const;
