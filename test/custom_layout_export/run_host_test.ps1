@@ -11,7 +11,7 @@ if ($Numeric) {
     }
 }
 $outputPath = Join-Path $repoRoot '.pio\custom_layout_export_host.exe'
-foreach ($case in $(if ($Numeric) { @() } else { @('moved', 'enlarged', 'shrunk-duplicates', 'animation-only', 'buttons-only', 'empty') })) {
+foreach ($case in $(if ($Numeric) { @() } else { @('horizontal-thirds', 'moved', 'enlarged', 'shrunk-duplicates', 'animation-only', 'buttons-only', 'empty') })) {
     if (-not (Test-Path -LiteralPath (Join-Path $fixtures "$case\frames.tsv") -PathType Leaf)) {
         throw 'Run Web scripts/generate_custom_layout_fixtures.py at ticket 05 first.'
     }
@@ -38,7 +38,7 @@ try {
     New-Item -ItemType Directory -Path (Split-Path -Parent $outputPath) -Force | Out-Null
     $ruleCapacity = if ($RejectRuleCapacity) { 64 } else { 200 }
     $rejectCapacity = [int][bool]$RejectRuleCapacity
-    & g++ -std=c++17 -DENABLE_DEBUG=0 -DAPP_MAX_PET_STATS=10 "-DAPP_MAX_SCREEN_RULES=$ruleCapacity" "-DEXPECT_RULE_CAPACITY_REJECTION=$rejectCapacity" -DENABLE_COMMAND_OUTFIT=1 `
+    & g++ -std=c++17 -DENABLE_DEBUG=0 -DAPP_MAX_PET_STATS=10 "-DAPP_MAX_SCREEN_RULES=$ruleCapacity" "-DEXPECT_RULE_CAPACITY_REJECTION=$rejectCapacity" -DENABLE_COMMAND_OUTFIT=1 -DENABLE_APPEARANCE_SELECTION=1 `
         -DENABLE_COMMAND_PREDICT=1 -DENABLE_GUESS_GAME=1 `
         -DENABLE_STARTUP_ANIMATION=1 -DENABLE_FIRST_START_ANIMATION=1 -DENABLE_OUTFIT_CHOOSE_ANIMATION=1 `
         -Itest/custom_layout_export -Itest/host_stubs -Iinclude @sources -o $outputPath

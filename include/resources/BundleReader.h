@@ -32,9 +32,8 @@ constexpr size_t kDataReadBufferBytes = 1024;
 
 constexpr bool validFrameDimensions(uint16_t width, uint16_t height)
 {
-    return (width == 42 && height == 32) ||
-           (width >= 16 && width <= kMaxWidth && height >= 16 && height <= kMaxHeight &&
-            width % 16 == 0 && height % 16 == 0);
+    return width >= 16 && width <= kMaxWidth && height >= 16 && height <= kMaxHeight &&
+           height % 16 == 0;
 }
 
 struct BundleId

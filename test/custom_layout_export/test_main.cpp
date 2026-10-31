@@ -265,6 +265,6 @@ int main(int argc, char **argv)
         verify(argv[1]);
         return 0;
     }
-    for (const char *name : {"moved", "enlarged", "shrunk-duplicates", "animation-only", "buttons-only", "empty"})
+    for (const char *name : {"horizontal-thirds", "moved", "enlarged", "shrunk-duplicates", "animation-only", "buttons-only", "empty"})
         verify(std::string(argv[1]) + "/" + name);
 }
