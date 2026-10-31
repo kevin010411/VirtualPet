@@ -128,11 +128,10 @@ void LayoutRenderer::updateValues(const PetStatSnapshot &snapshot)
 {
     if (runtimeContract == nullptr)
         return;
-    RuntimeValueContext values = {};
-    values.petStats = snapshot.customStats;
-    values.stageDays = snapshot.stage_days;
+    uint16_t activeMask = 0;
     for (uint8_t slot = 0; slot < runtimeContract->statCount && slot < PetStatSnapshot::kCustomStatCount; ++slot)
-        values.activePetStatMask |= static_cast<uint16_t>(1U << slot);
+        activeMask |= static_cast<uint16_t>(1U << slot);
+    const auto values = makeRuntimeValueContext(snapshot.customStats, activeMask, snapshot.stage_days);
     for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
     {
         const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];

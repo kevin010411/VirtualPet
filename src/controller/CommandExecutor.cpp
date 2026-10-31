@@ -37,10 +37,8 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
         return resolvePetStateStatusLevel(condition, status.activePetState, value);
     if (condition.kind != StatusConditionKind::RuntimeValue)
         return false;
-    RuntimeValueContext runtimeValueContext = {};
-    runtimeValueContext.petStats = status.stats.customStats;
-    runtimeValueContext.activePetStatMask = activePetBehaviorStatMask(status.config);
-    runtimeValueContext.stageDays = status.stats.stage_days;
+    const auto runtimeValueContext = makeRuntimeValueContext(status.stats.customStats,
+        activePetBehaviorStatMask(status.config), status.stats.stage_days);
     return resolveRuntimeValue(condition.valueId, runtimeValueContext, value);
 }
 } // namespace

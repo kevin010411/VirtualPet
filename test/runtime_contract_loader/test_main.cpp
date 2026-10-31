@@ -58,6 +58,9 @@ bool loadCompleteRuntimeTable(SdFat *, const AssetData::RuntimeManifest &manifes
                               AppearanceSelection *selection, bool *initialAppearanceResolved)
 {
     ++completeTableReads;
+    config = {};
+    if (selection != nullptr) *selection = {};
+    if (initialAppearanceResolved != nullptr) *initialAppearanceResolved = false;
     observedManifest = manifest;
     if (selection != nullptr)
     {
@@ -101,6 +104,7 @@ int main()
     assert(!loadInitialRuntimeContract(&sd, initial, config,
                                        initialResolved, error, sizeof(error)));
     assert(!initialResolved && strcmp(error, "runtime.bin") == 0);
+    assert(config.activeSpeciesSlot == 0 && initial.speciesSlot == 0);
     assert(bundleConfigurations == 0 && completeTableReads == 0);
 
     reset();
@@ -109,6 +113,7 @@ int main()
     assert(!loadInitialRuntimeContract(&sd, initial, config,
                                        initialResolved, error, sizeof(error)));
     assert(!initialResolved && strcmp(error, "shared.data") == 0);
+    assert(config.activeSpeciesSlot == 0 && initial.speciesSlot == 0);
     assert(manifestReads == 1 && completeTableReads == 0);
 
     reset();

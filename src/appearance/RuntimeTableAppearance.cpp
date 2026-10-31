@@ -95,13 +95,8 @@ bool readEvolutionRecord(const Source &source, const Section &evolutions,
 RuntimeValueContext runtimeValueContext(const PetStatSnapshot &stats,
                                         const ActivePetBehaviorStatSlots &activeSlots)
 {
-    RuntimeValueContext context = {};
-    context.petStats = stats.customStats;
-    context.activePetStatMask = activeSlots.mask();
-    context.stageDays = stats.stage_days;
-    context.speciesSlot = stats.speciesSlot;
-    context.outfitSlot = stats.outfitSlot;
-    return context;
+    return makeRuntimeValueContext(stats.customStats, activeSlots.mask(),
+        stats.stage_days, stats.speciesSlot, stats.outfitSlot);
 }
 
 RuntimeRangePredicate readRuntimePredicate(const uint8_t *record)

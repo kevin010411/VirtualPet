@@ -6,12 +6,9 @@
 ActivePetState PetStateClassifier::classify(const PetBehaviorConfig &config,
                                              const PetStatSnapshot &snapshot)
 {
-    RuntimeValueContext context = {};
-    context.petStats = snapshot.customStats;
-    context.activePetStatMask = activePetBehaviorStatMask(config);
-    context.stageDays = snapshot.stage_days;
-    context.speciesSlot = snapshot.speciesSlot;
-    context.outfitSlot = snapshot.outfitSlot;
+    const auto context = makeRuntimeValueContext(snapshot.customStats,
+        activePetBehaviorStatMask(config), snapshot.stage_days,
+        snapshot.speciesSlot, snapshot.outfitSlot);
 
     for (uint8_t slot = 0; slot < config.petStateCount; ++slot)
     {

@@ -18,24 +18,25 @@ bool loadFromManifest(SdFat *sd,
 {
     uint8_t ioScratch[AssetData::kIoScratchBytes] = {};
     BundleReader bundleReader(sd, ioScratch, sizeof(ioScratch));
-    if (!bundleReader.configureBundle(manifest.bundleId))
+    const char *fallback = "asset data";
+    if (bundleReader.configureBundle(manifest.bundleId))
     {
-        const char *resource = bundleReader.firstErrorResource();
-        copyResourceName(errorResource, errorResourceCapacity,
-                      resource != nullptr && resource[0] != '\0' ? resource : "asset data");
-        return false;
+        if (loadCompleteRuntimeTable(sd, manifest, bundleReader,
+                                     speciesSlot, outfitSlot, config,
+                                     selection, initialAppearanceResolved))
+            return true;
+        fallback = "runtime.bin";
     }
-
-    if (!loadCompleteRuntimeTable(sd, manifest, bundleReader,
-                                  speciesSlot, outfitSlot, config,
-                                  selection, initialAppearanceResolved))
+    else
     {
-        const char *resource = bundleReader.firstErrorResource();
-        copyResourceName(errorResource, errorResourceCapacity,
-                      resource != nullptr && resource[0] != '\0' ? resource : "runtime.bin");
-        return false;
+        config = {};
+        if (selection != nullptr) *selection = {};
+        if (initialAppearanceResolved != nullptr) *initialAppearanceResolved = false;
     }
-    return true;
+    const char *resource = bundleReader.firstErrorResource();
+    copyResourceName(errorResource, errorResourceCapacity,
+                     resource != nullptr && resource[0] != '\0' ? resource : fallback);
+    return false;
 }
 
 } // namespace
@@ -47,13 +48,13 @@ bool loadRuntimeContract(SdFat *sd,
                          char *errorResource,
                          size_t errorResourceCapacity)
 {
-    config = {};
     if (errorResource != nullptr && errorResourceCapacity != 0)
         errorResource[0] = '\0';
 
     AssetData::RuntimeManifest manifest = {};
     if (speciesSlot == 0 || outfitSlot == 0 || !loadRuntimeManifest(sd, manifest))
     {
+        config = {};
         copyResourceName(errorResource, errorResourceCapacity, "runtime.bin");
         return false;
     }
@@ -68,14 +69,14 @@ bool loadInitialRuntimeContract(SdFat *sd,
                                 char *errorResource,
                                 size_t errorResourceCapacity)
 {
-    config = {};
-    selection = {};
-    initialAppearanceResolved = false;
     if (errorResource != nullptr && errorResourceCapacity != 0)
         errorResource[0] = '\0';
     AssetData::RuntimeManifest manifest = {};
     if (!loadRuntimeManifest(sd, manifest))
     {
+        config = {};
+        selection = {};
+        initialAppearanceResolved = false;
         copyResourceName(errorResource, errorResourceCapacity, "runtime.bin");
         return false;
     }

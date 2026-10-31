@@ -58,6 +58,13 @@ struct RuntimeValueContext
     uint8_t outfitSlot = 0;
 };
 
+constexpr RuntimeValueContext makeRuntimeValueContext(
+    const uint32_t *stats, uint16_t activeMask, uint32_t stageDays,
+    uint8_t speciesSlot = 0, uint8_t outfitSlot = 0)
+{
+    return {stats, activeMask, stageDays, speciesSlot, outfitSlot};
+}
+
 bool resolveRuntimeValue(RuntimeValueId valueId,
                          const RuntimeValueContext &context,
                          int64_t &value);

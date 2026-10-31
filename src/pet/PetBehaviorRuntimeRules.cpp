@@ -88,10 +88,8 @@ bool selectPlayback(const PetBehaviorConfig &config,
                     config.actionConditionCount, kMaxPetBehaviorActionConditions))
         return false;
 
-    RuntimeValueContext context = {};
-    context.petStats = state.values;
-    context.activePetStatMask = activePetBehaviorStatMask(config);
-    context.stageDays = state.stageDays;
+    const auto context = makeRuntimeValueContext(state.values,
+        activePetBehaviorStatMask(config), state.stageDays);
     const PetBehaviorActionConditionConfig *selected = nullptr;
     for (uint8_t index = 0; index < action.conditionCount; ++index)
     {
