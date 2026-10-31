@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$LibraryRoot = "", [switch]$AllFeatures)
+param([string]$LibraryRoot = "", [switch]$AllFeatures, [switch]$Independent, [string]$Pio = "$env:USERPROFILE/.platformio/penv/Scripts/pio.exe")
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -27,15 +27,18 @@ $dependencies
 build_flags = `${env.build_flags} -DAPP_MAX_ACTION_OUTCOMES=1 -DAPP_MAX_ACTION_EFFECTS=1
 [env:lottery_max]
 build_flags = `${env.build_flags} -DAPP_MAX_ACTION_OUTCOMES=224 -DAPP_MAX_ACTION_EFFECTS=12
+[env:lottery_independent]
+build_flags = `${env.build_flags} -DAPP_MAX_ACTIONS=16 -DAPP_MAX_ACTION_OUTCOMES=248 -DAPP_MAX_ACTION_EFFECTS=12
 [env:lottery_allfeatures]
 build_flags = `${env.build_flags} -DAPP_MAX_ACTION_OUTCOMES=224 -DAPP_MAX_ACTION_EFFECTS=12 -DENABLE_SEQUENCE_AUDIO=1 -DENABLE_GUESS_GAME=1 -DENABLE_COMMAND_OUTFIT=1 -DENABLE_APPEARANCE_SELECTION=1 -DENABLE_COLLECTION_CATALOG=1 -DENABLE_INSTRUCTION_RESPONSE=1 -DENABLE_COMMAND_PREDICT=1 -DENABLE_DEATH=1 -DENABLE_FIRST_START_ANIMATION=1 -DENABLE_GUESS_GAME_SINGLE_ROUND=1 -DENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT=1
 "@
 Set-Content -LiteralPath $configPath -Value $config -Encoding utf8
 $environments = @('-e', 'lottery_baseline', '-e', 'lottery_max')
+if ($Independent) { $environments = @('-e', 'lottery_independent') }
 if ($AllFeatures) { $environments += @('-e', 'lottery_allfeatures') }
 Push-Location $repoRoot
 try {
-    & pio run -c $configPath @environments
+    & $Pio run -c $configPath @environments
     exit $LASTEXITCODE
 }
 finally { Pop-Location }

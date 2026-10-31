@@ -6,20 +6,21 @@
 #include "common/AppProfile.h"
 #include "pet/RuntimeValueResolver.h"
 
-constexpr uint8_t kMaxPetBehaviorActions = 8;
+constexpr uint8_t kMaxPetBehaviorActions = APP_MAX_ACTIONS;
 constexpr uint8_t kMaxPetBehaviorFollowingAnimationsPerAction = 3;
 constexpr uint8_t kMaxPetBehaviorFollowingAnimations =
     kMaxPetBehaviorActions * kMaxPetBehaviorFollowingAnimationsPerAction;
 constexpr uint8_t kMaxPetBehaviorActionConditionsPerAction = 4;
 constexpr uint8_t kMaxPetBehaviorActionConditions =
-    kMaxPetBehaviorActions * kMaxPetBehaviorActionConditionsPerAction;
+    8 * kMaxPetBehaviorActionConditionsPerAction;
 constexpr uint8_t kMinPetBehaviorRandomOutcomesPerAction = 2;
 constexpr uint8_t kMaxPetBehaviorRandomOutcomesPerAction = 3;
 constexpr uint8_t kMaxPetBehaviorLotteryOutcomesPerAction = 28;
 constexpr uint8_t kMaxPetBehaviorActionOutcomes = APP_MAX_ACTION_OUTCOMES;
-constexpr uint16_t kMaxPetBehaviorActionEffects = 8 * 28 * 12;
+constexpr uint16_t kMaxPetBehaviorActionEffects = (8 * 28 + 8 * 3) * 12;
 constexpr uint16_t kStoredPetBehaviorActionEffects = APP_MAX_ACTION_EFFECTS;
-static_assert(kMaxPetBehaviorActionOutcomes > 0 && kMaxPetBehaviorActionOutcomes <= 224,
+static_assert(kMaxPetBehaviorActions > 0 && kMaxPetBehaviorActions <= 16, "Action storage must fit the exported profile.");
+static_assert(kMaxPetBehaviorActionOutcomes > 0 && kMaxPetBehaviorActionOutcomes <= 248,
               "Action outcome storage must fit the exported profile.");
 static_assert(kStoredPetBehaviorActionEffects > 0 && kStoredPetBehaviorActionEffects <= kMaxPetBehaviorActionEffects,
               "Action effect cache must fit the runtime contract.");

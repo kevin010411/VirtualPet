@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet(0, 1)][int]$DeathEnabled = 0, [string]$WebFixturesRoot = "", [string]$LotteryFixture = "")
+param([ValidateSet(0, 1)][int]$DeathEnabled = 0, [string]$WebFixturesRoot = "", [string]$LotteryFixture = "", [string]$IndependentLotteryFixture = "")
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -16,7 +16,7 @@ $appliedFixtures = @('valid', 'bad_geometry', 'bad_button_source', 'unsupported_
     'unsupported_rules', 'duplicate_animation', 'over_capacity', 'missing_screen_blocks') |
     ForEach-Object { Join-Path $appliedFixtureRoot "$_\runtime.bin" }
 $outputPath = Join-Path $repoRoot '.pio\runtime_table_behavior_host.exe'
-if (-not $LotteryFixture) {
+if (-not $LotteryFixture -and -not $IndependentLotteryFixture) {
     foreach ($fixturePath in @($validFixture, $legacyFixture, $startupFixture, $sequenceFixture, $optionalFixture) + $appliedFixtures) {
         if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) {
             throw "Web exporter fixture is missing: $fixturePath"
@@ -40,6 +40,14 @@ $sources = @(
 )
 Push-Location $repoRoot
 try {
+    if ($IndependentLotteryFixture) {
+        & g++ -std=c++17 -DRUNTIME_TABLE_INDEPENDENT_LOTTERY=1 -DENABLE_GUESS_GAME=1 -DENABLE_STARTUP_ANIMATION=1 `
+            -DAPP_MAX_PET_STATS=12 -DAPP_MAX_ACTIONS=16 -DAPP_MAX_ACTION_OUTCOMES=248 -DAPP_MAX_ACTION_EFFECTS=12 `
+            -DAPP_MAX_SCREEN_RULES=64 -Itest/host_stubs -Iinclude @sources -o $outputPath
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & $outputPath $IndependentLotteryFixture
+        exit $LASTEXITCODE
+    }
     if ($LotteryFixture) {
         & g++ -std=c++17 -DRUNTIME_TABLE_LOTTERY=1 -DENABLE_GUESS_GAME=1 -DENABLE_STARTUP_ANIMATION=1 `
             -DAPP_MAX_PET_STATS=12 -DAPP_MAX_ACTION_OUTCOMES=224 -DAPP_MAX_ACTION_EFFECTS=12 `

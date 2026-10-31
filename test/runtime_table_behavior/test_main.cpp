@@ -760,7 +760,27 @@ int main(int argc, char **argv)
     assert(AssetData::isValidFrameAddress(ninthSpecies));
     ninthSpecies.outfitSlot = 9;
     assert(!AssetData::isValidFrameAddress(ninthSpecies));
-#if RUNTIME_TABLE_LOTTERY
+#if RUNTIME_TABLE_INDEPENDENT_LOTTERY
+    assert(argc == 2);
+    const auto bytes = readFixture(argv[1]);
+    AssetData::RuntimeManifest manifest = fixtureManifest(bytes);
+    memcpy(manifest.bundleId.bytes, bytes.data() + 28, 16);
+    PetBehaviorConfig config = {};
+    assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, 1, config));
+    assert(config.actionCount == 16 && config.actionOutcomeCount == 248);
+    assert(config.buttons[1].actionSlot == 15);
+    for (uint8_t slot = 0; slot < 16; ++slot)
+    {
+        PetBehaviorStatValues values = {};
+        initializePetBehaviorStats(config, values);
+        PetBehaviorDailyChangePauses pauses = {};
+        PetBehaviorActionPlayback playback = {};
+        assert(applyPetBehaviorAction(config, slot, values, pauses, playback, [](uint16_t) -> uint16_t { return 0; }));
+        assert(config.actions[slot].outcomeCount == (slot < 8 ? 3 : 28));
+        assert(playback.versionSelection == (slot < 8 ? 0 : 1));
+    }
+    puts("[PASS] Actual Web export: eight ordinary actions plus eight independent lotteries, 248 outcomes and button slot15");
+#elif RUNTIME_TABLE_LOTTERY
     assert(argc == 2);
     const auto bytes = readFixture(argv[1]);
     AssetData::RuntimeManifest manifest = fixtureManifest(bytes);

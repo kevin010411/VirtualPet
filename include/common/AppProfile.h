@@ -103,6 +103,9 @@
 #endif
 
 // Generated per Project; do not reserve the maximum for every firmware build.
+#ifndef APP_MAX_ACTIONS
+#define APP_MAX_ACTIONS 8
+#endif
 #ifndef APP_MAX_ACTION_OUTCOMES
 #define APP_MAX_ACTION_OUTCOMES 24
 #endif
