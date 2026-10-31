@@ -1348,38 +1348,33 @@ void testUnifiedCommandExecution()
     CommandController commands;
     commands.configure(config);
     // Selection starts on an invisible slot; it cannot apply effects.
-    assert(!executor.execute(commands).executed);
+    assert(executor.execute(commands).kind == CommandResultKind::None);
     assert(pet.customStat(0) == 2);
     commands.resetSelection();
     assert(commands.selectedSlot() == 3);
     const CommandResult applied = executor.execute(commands);
-    assert(applied.executed && applied.commandId == AppCommandId::UserAction);
-    assert(applied.actionResult == PetBehaviorActionResult::Applied && !applied.resourceError);
-    assert(!applied.requestedOutfit && !applied.requestedMinigame);
+    assert(applied.kind == CommandResultKind::UserAction);
+    assert(!applied.resourceError);
     assert(pet.customStat(0) == 8 && animations.isBusy());
     assert(runtime.advancePetDay() && pet.customStat(0) == 8);
     assert(runtime.advancePetDay() && pet.customStat(0) == 7);
     animations.cancelAll();
     data.actionVersions = 0;
     const CommandResult missing = executor.execute(commands);
-    assert(missing.executed && missing.resourceError);
-    assert(missing.actionResult == PetBehaviorActionResult::AppliedAnimationMissing);
+    assert(missing.kind == CommandResultKind::UserAction && missing.resourceError);
     assert(pet.customStat(0) == 8 && !animations.isBusy());
     assert(runtime.advancePetDay() && pet.customStat(0) == 8);
     commands.next();
     const CommandResult rejected = executor.execute(commands);
-    assert(!rejected.executed && !rejected.resourceError);
-    assert(rejected.actionResult == PetBehaviorActionResult::Rejected);
+    assert(rejected.kind == CommandResultKind::None && !rejected.resourceError);
     assert(pet.customStat(0) == 8);
     // A subsequent System Command starts with a fresh result.
     commands.next();
     const CommandResult status = executor.execute(commands);
-    assert(status.executed && status.commandId == AppCommandId::Status && status.resourceError);
-    assert(status.actionResult == PetBehaviorActionResult::Rejected);
-    assert(!status.requestedOutfit && !status.requestedMinigame);
+    assert(status.kind == CommandResultKind::Playback && status.resourceError);
     config.buttons[5].active = false;
     commands.configure(config);
-    assert(!executor.execute(commands).executed);
+    assert(executor.execute(commands).kind == CommandResultKind::None);
     assert(data.saves == 0);
 }
 
@@ -1545,6 +1540,85 @@ void assertFatalBlocksPublicEntries(Game &game, Pet &pet, Scenario &data)
     assert(data.saves == saves && data.reloads == reloads && data.evolutionLookups == lookups);
     assert(pet.stageDays() == days && pet.outfitSlot() == outfit);
 }
+
+#if ENABLE_COMMAND_OUTFIT
+void testForegroundInputOwnership()
+{
+    for (uint8_t mode = 0; mode < 4; ++mode)
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.commandOutfit = true;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        Renderer renderer(nullptr, &sd);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, appearance);
+        assert(game.setup_game());
+        game.OnConfirmKey();
+        int previews = data.previewQueries;
+        game.OnRightKey();
+        assert(data.previewQueries == previews + 1);
+        if (mode == 0)
+        {
+            game.startBatteryAnimation();
+            previews = data.previewQueries;
+            const uint8_t outfit = pet.outfitSlot();
+            game.OnRightKey();
+            game.OnConfirmKey();
+            assert(data.previewQueries == previews && pet.outfitSlot() == outfit);
+            game.endBatteryAnimation();
+            game.OnLeftKey();
+            assert(data.previewQueries == previews + 1);
+        }
+        else if (mode == 1)
+        {
+            game.startStartupAnimation();
+            previews = data.previewQueries;
+            game.OnLeftKey();
+            game.OnConfirmKey();
+            assert(data.previewQueries == previews);
+            for (uint8_t tick = 0; tick < 20 && game.hasTransientAnimation(); ++tick)
+            {
+                hostMillis += 1000;
+                game.loop_game();
+            }
+            game.loop_game();
+            game.OnConfirmKey();
+            assert(data.previewQueries > previews); // A new chooser, no stale owner.
+        }
+        else
+        {
+            // Evolution owns input and closes the old-species chooser; battery returns to commands.
+            data.evolutionResult = EvolutionLookupResult::Found;
+            data.evolutionMode = mode == 2 ? EvolutionAnimationMode::TwoPhase : EvolutionAnimationMode::Disabled;
+            game.synchronizeTime(2);
+            previews = data.previewQueries;
+            if (mode == 3)
+            {
+                assert(pet.speciesSlot() == 2);
+                game.OnLeftKey();
+                assert(data.previewQueries == previews);
+                game.OnConfirmKey();
+                assert(data.previewQueries > previews);
+                continue;
+            }
+            game.OnLeftKey();
+            game.OnConfirmKey();
+            assert(data.previewQueries == previews && pet.speciesSlot() == 1);
+            game.startBatteryAnimation();
+            game.endBatteryAnimation();
+            game.OnLeftKey();
+            assert(data.previewQueries == previews);
+            game.OnConfirmKey();
+            assert(data.previewQueries > previews); // Reopens with current appearance data.
+        }
+    }
+    puts("[PASS] One foreground input owner: chooser/battery/startup/evolution interruption and return");
+}
+#endif
 
 void testFatalPublicEntries()
 {
@@ -2271,8 +2345,6 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation, uint8_t, b
     return true;
 }
 bool Renderer::currentLayoutId(uint8_t &layout) const { layout = 0; return scenario->layoutSucceeds; }
-bool Renderer::validateLayoutVersion(const AssetData::AnimationRef &,
-                                     const AssetData::AnimationRef &, uint8_t, uint8_t, uint16_t) { return true; }
 bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation, uint8_t,
                                   uint16_t frame, int x, int, int, uint16_t, uint16_t)
 {
@@ -2417,6 +2489,14 @@ void testPredictMinigame()
         else if (mode == 3)
         {
             assert(game.resetPet());
+            // New-life reset retains the configured FirstStart sequence, not Predict.
+            assert(game.hasTransientAnimation() == bool(ENABLE_STARTUP_ANIMATION && ENABLE_FIRST_START_ANIMATION));
+            for (uint8_t tick = 0; tick < 20 && game.hasTransientAnimation(); ++tick)
+            {
+                hostMillis += 1000;
+                game.loop_game();
+            }
+            game.loop_game();
             assert(!game.hasTransientAnimation());
         }
         else if (mode == 4)
@@ -2441,6 +2521,13 @@ void testPredictMinigame()
             assert(game.isDead() && !game.hasTransientAnimation());
             game.OnConfirmKey();
             assert(!game.isDead());
+            for (uint8_t tick = 0; tick < 20 && game.hasTransientAnimation(); ++tick)
+            {
+                hostMillis += 1000;
+                game.loop_game();
+            }
+            game.loop_game();
+            assert(!game.hasTransientAnimation());
         }
 #endif
         else
@@ -2458,6 +2545,7 @@ void testPredictMinigame()
         }
         game.OnRightKey();
         game.OnConfirmKey();
+        if (pet.customStat(0) != 8) fprintf(stderr, "Predict route mode=%d transient=%d\n", mode, game.hasTransientAnimation());
         assert(pet.customStat(0) == 8); // Completion, failure and reset all release minigame routing.
     }
 
@@ -2566,6 +2654,36 @@ void Renderer::showInstructionFeedback(bool)
     ++scenario->instructionFeedbackDraws;
     hostMillis += scenario->feedbackFirstDrawMs;
 }
+void testInstructionResetOwnership()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.commandAction = data.commandInstruction = true;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    Renderer renderer(nullptr, &sd);
+    FakeAppearanceLoader appearance;
+    Game game(pet, storage, renderer, appearance);
+    assert(game.setup_game());
+    game.OnConfirmKey();
+    assert(game.capturesInstructionInput());
+    game.loop_game();
+    assert(game.resetPet());
+    assert(!game.capturesInstructionInput() && pet.customStat(0) == 2);
+    for (uint8_t tick = 0; tick < 20 && game.hasTransientAnimation(); ++tick)
+    {
+        hostMillis += 1000;
+        game.loop_game();
+    }
+    game.loop_game();
+    assert(!game.hasTransientAnimation());
+    game.OnConfirmKey();
+    assert(game.capturesInstructionInput() && pet.customStat(0) == 2);
+    puts("[PASS] Reset discards Instruction session, preserves new-life startup, and accepts a fresh session");
+}
+
 void testInstructionDeferredEffects()
 {
     // Complete, cancelled, precommit read failure, failed save, postcommit visual failure, death.
@@ -2927,6 +3045,7 @@ int main(int argc, char **argv)
 #if ENABLE_INSTRUCTION_RESPONSE
     if (argc == 2 && strcmp(argv[1], "--instruction") == 0)
     {
+        testInstructionResetOwnership();
         testInstructionLifecycle();
         testInstructionBatteryReturn();
         testInstructionFeedbackInterruption();
@@ -2994,6 +3113,9 @@ int main(int argc, char **argv)
     testNavigationDuringRtcCatchUp();
     testRtcCatchUp();
     testRtcSnapshotAndReset();
+#if ENABLE_COMMAND_OUTFIT
+    testForegroundInputOwnership();
+#endif
     testFatalPublicEntries();
     testFinishLayoutFailure();
 #if ENABLE_FIRST_START_ANIMATION

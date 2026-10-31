@@ -11,27 +11,27 @@ enum class AppStage : uint8_t
     Minigame,
     Battery,
     FatalError,
+    Appearance,
+    Collection,
+    Evolution,
 };
 
 class AppFlowController
 {
 public:
-    bool isStartup() const;
-    bool isCommand() const;
-    bool isMinigame() const;
-    bool isFatalError() const;
-
-    void enterCommand();
-    void enterMinigame();
-    void onMinigameEnded();
+    bool is(AppStage stage) const { return currentStage == stage; }
+    void enter(AppStage stage) { currentStage = stage; }
+    bool allowsPetTime() const;
+    bool allowsMenuNavigation() const;
+    void beginEvolution();
+    void endEvolution();
     void enterBattery();
     void leaveBattery();
-    void enterFatalError();
-    bool requestStartup();
 
 private:
     AppStage currentStage = AppStage::Command;
     AppStage stageBeforeBattery = AppStage::Command;
+    AppStage stageBeforeEvolution = AppStage::Command;
 };
 
 #endif // APP_FLOW_CONTROLLER_H

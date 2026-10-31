@@ -1,38 +1,25 @@
 #include "controller/AppFlowController.h"
 
-bool AppFlowController::isStartup() const
+bool AppFlowController::allowsPetTime() const
 {
-    return currentStage == AppStage::Startup;
+    return is(AppStage::Command) || is(AppStage::Minigame) || is(AppStage::Appearance) || is(AppStage::Evolution);
 }
 
-bool AppFlowController::isCommand() const
+bool AppFlowController::allowsMenuNavigation() const
 {
-    return currentStage == AppStage::Command;
+    return is(AppStage::Command) || is(AppStage::Appearance) || is(AppStage::Collection);
 }
 
-bool AppFlowController::isMinigame() const
+void AppFlowController::beginEvolution()
 {
-    return currentStage == AppStage::Minigame;
+    if (is(AppStage::Evolution) || is(AppStage::Battery) || is(AppStage::FatalError)) return;
+    stageBeforeEvolution = currentStage;
+    enter(AppStage::Evolution);
 }
 
-bool AppFlowController::isFatalError() const
+void AppFlowController::endEvolution()
 {
-    return currentStage == AppStage::FatalError;
-}
-
-void AppFlowController::enterCommand()
-{
-    currentStage = AppStage::Command;
-}
-
-void AppFlowController::enterMinigame()
-{
-    currentStage = AppStage::Minigame;
-}
-
-void AppFlowController::onMinigameEnded()
-{
-    enterCommand();
+    if (is(AppStage::Evolution)) enter(stageBeforeEvolution);
 }
 
 void AppFlowController::enterBattery()
@@ -47,17 +34,4 @@ void AppFlowController::leaveBattery()
 {
     if (currentStage == AppStage::Battery)
         currentStage = stageBeforeBattery;
-}
-
-void AppFlowController::enterFatalError()
-{
-    currentStage = AppStage::FatalError;
-}
-
-bool AppFlowController::requestStartup()
-{
-    if (currentStage == AppStage::Battery || currentStage == AppStage::FatalError)
-        return false;
-    currentStage = AppStage::Startup;
-    return true;
 }

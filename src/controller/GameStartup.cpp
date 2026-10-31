@@ -23,7 +23,7 @@ bool Game::setup_game()
 
 bool Game::prepare_game()
 {
-    if (flow.isFatalError())
+    if (flow.is(AppStage::FatalError))
         return false;
     initialized = false;
     cheatEvolutionPending = false;
@@ -33,22 +33,12 @@ bool Game::prepare_game()
         enterFatalState();
         return false;
     }
+    cancelForeground();
     commands->resetSelection();
-#if ENABLE_COLLECTION_CATALOG
-    collectionCatalog->exit();
-#endif
     layout->begin();
-
     dirtySelect = true;
-    evolution->cancel();
     pendingFirstStartCompletion = false;
     clockStarted = false;
-#if ENABLE_APPEARANCE_SELECTION
-    appearanceSelection->exit();
-#endif
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
-    minigame->reset();
-#endif
 
     animations->setup(petBehaviorRuntime->baseAnimation());
     refreshBaseAnimation();
@@ -92,7 +82,7 @@ bool Game::finish_setup_game()
     }
 
     // Session readiness cannot recover a Game that failed after preparation.
-    if (flow.isFatalError())
+    if (flow.is(AppStage::FatalError))
     {
         renderer.showResourceError();
         return false;
@@ -114,7 +104,7 @@ bool Game::finish_setup_game()
     }
 
     initialized = true;
-    if (enterDeathIfNeeded()) return !flow.isFatalError();
+    if (enterDeathIfNeeded()) return !flow.is(AppStage::FatalError);
     enterCommand();
     petClock.reset(latestRtcSeconds);
     clockStarted = true;
@@ -123,15 +113,17 @@ bool Game::finish_setup_game()
 
 bool Game::resetPet()
 {
-    if (runtimeLoadState != RuntimeLoadState::Ready || flow.isFatalError())
+    if (runtimeLoadState != RuntimeLoadState::Ready || flow.is(AppStage::FatalError))
         return false;
     const bool wasDead = pet.isDead();
     initialized = false;
 #if ENABLE_COLLECTION_CATALOG
     collectionCatalog->exit();
+    if (flow.is(AppStage::Collection)) enterCommand();
 #endif
     cheatEvolutionPending = false;
     evolution->cancel();
+    flow.endEvolution();
     pendingFirstStartCompletion = false;
     const AppearanceChangeResult resetResult = petSession.reset();
     if (resetResult != AppearanceChangeResult::Applied)
@@ -160,16 +152,10 @@ bool Game::resetPet()
     petSaves.resetTransientState();
     commands->resetSelection();
     layout->setCommandsVisible(true);
-#if ENABLE_APPEARANCE_SELECTION
-    appearanceSelection->exit();
-#endif
 #if ENABLE_COLLECTION_CATALOG
     collectionSavePending = false;
 #endif
-    animations->cancelAll();
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT
-    minigame->reset();
-#endif
+    cancelForeground();
     refreshBaseAnimation();
     animations->requestFullRedraw();
     // startStartupAnimation() deliberately rejects calls before the game is

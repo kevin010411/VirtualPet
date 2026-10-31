@@ -324,7 +324,8 @@ int main(int argc, char **argv)
         // Reset and fail the final snapshot after a successful round snapshot.
         assert(game.resetPet());
         FirmwareRandom::seed(1);
-        game.OnConfirmKey(); // reset preserves the Guess command selection
+        game.OnRightKey(); // Reset selects the first button (catalog); select Guess again.
+        game.OnConfirmKey();
         tick(game, 102);
         sd.limitWriteAfter(1, 12);
         game.OnRightKey();

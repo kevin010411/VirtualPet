@@ -145,7 +145,8 @@ private:
     bool completePlaybackTick(const PlaybackTickResult &playbackResult);
     void routeDirectionKey(KeyDirection direction);
     void handleCommandResult(const CommandResult &result);
-    void handleAppliedUserAction();
+    enum class Settlement : uint8_t { UserAction, GuessOutcome, InstructionCompletion, DailyProgress };
+    EvolutionResult settleMutation(Settlement source);
     void handleSystemCommandRequest(const CommandResult &result);
     // Returns clock consumption; blocked or fatal work consumes no backlog.
     uint32_t settlePetDays(uint32_t dueDays);
@@ -158,6 +159,7 @@ private:
     void handlePlaybackResult(PlaybackResult playbackResult);
     void completeFirstStartIfReady(const PlaybackTickResult &playbackResult);
     void enterCommand();
+    void cancelForeground();
     bool updateCollectionProgress(bool immediate = false);
 #if ENABLE_COLLECTION_CATALOG
     bool finishCollectionSave(PetSaveResult result);

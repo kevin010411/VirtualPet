@@ -11,14 +11,21 @@ class Pet;
 struct PetBehaviorConfig;
 class PetBehaviorRuntime;
 
+enum class CommandResultKind : uint8_t
+{
+    None,
+    UserAction,
+    Playback,
+    Outfit,
+    Collection,
+    Guess,
+    Predict,
+    Instruction,
+};
+
 struct CommandResult
 {
-    bool executed = false;
-    AppCommandId commandId = AppCommandId::None;
-    PetBehaviorActionResult actionResult = PetBehaviorActionResult::Rejected;
-    bool requestedOutfit = false;
-    bool requestedCollection = false;
-    bool requestedMinigame = false;
+    CommandResultKind kind = CommandResultKind::None;
     bool resourceError = false;
 };
 

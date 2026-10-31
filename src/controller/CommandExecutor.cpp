@@ -58,49 +58,47 @@ CommandExecutor::CommandExecutor(
 CommandResult CommandExecutor::execute(const CommandController &commands)
 {
     CommandResult result = {};
-    result.commandId = commands.currentCommandId();
     if (!commands.isSlotVisible(commands.selectedSlot()))
         return result;
 
-    switch (result.commandId)
+    switch (commands.currentCommandId())
     {
     case AppCommandId::UserAction:
-        result.actionResult = petBehaviorRuntime.executeAction(commands.currentActionSlot());
-        result.executed = result.actionResult != PetBehaviorActionResult::Rejected &&
-            result.actionResult != PetBehaviorActionResult::ResourceReadFailed;
-        result.resourceError = result.actionResult == PetBehaviorActionResult::AppliedAnimationMissing ||
-            result.actionResult == PetBehaviorActionResult::ResourceReadFailed;
+    {
+        const auto action = petBehaviorRuntime.executeAction(commands.currentActionSlot());
+        if (action != PetBehaviorActionResult::Rejected && action != PetBehaviorActionResult::ResourceReadFailed)
+            result.kind = CommandResultKind::UserAction;
+        result.resourceError = action == PetBehaviorActionResult::AppliedAnimationMissing ||
+            action == PetBehaviorActionResult::ResourceReadFailed;
         break;
+    }
 #if ENABLE_INSTRUCTION_RESPONSE
     case AppCommandId::InstructionResponse:
-        result.executed = result.requestedMinigame = true;
+        result.kind = CommandResultKind::Instruction;
         break;
 #endif
     case AppCommandId::Status:
-        result.executed = true;
+        result.kind = CommandResultKind::Playback;
         result.resourceError = !queueStatusSetsAnimation();
         break;
 #if ENABLE_COLLECTION_CATALOG
     case AppCommandId::CollectionCatalog:
-        result.executed = result.requestedCollection = true;
+        result.kind = CommandResultKind::Collection;
         break;
 #endif
 #if ENABLE_COMMAND_PREDICT
     case AppCommandId::Predict:
-        result.requestedMinigame = PredictGame::canStart(animations);
-        result.executed = result.requestedMinigame;
+        if (PredictGame::canStart(animations)) result.kind = CommandResultKind::Predict;
         break;
 #endif
 #if ENABLE_GUESS_GAME
     case AppCommandId::GuessGame:
-        result.requestedMinigame = canPlayGuessItemGame();
-        result.executed = result.requestedMinigame;
+        if (canPlayGuessItemGame()) result.kind = CommandResultKind::Guess;
         break;
 #endif
 #if ENABLE_COMMAND_OUTFIT
     case AppCommandId::ChangeOutfit:
-        result.requestedOutfit = true;
-        result.executed = true;
+        result.kind = CommandResultKind::Outfit;
         break;
 #endif
     default:
