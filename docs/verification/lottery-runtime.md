@@ -31,3 +31,9 @@ Maximum lottery costs3288static RAM bytes and408Flash bytes versus the same-feat
 A rerunnable profile generator/build entry is `test/lottery_capacity/run_target_build.ps1 [-LibraryRoot <cached compatible libraries>] [-AllFeatures]`. It writes only `.pio/lottery-capacity` and preserves the user's ini. This script was syntax-reviewed; the measurements above came from the equivalent generated `.pio/lottery-target.ini` profile used during development, with final baseline/max incremental builds rerun after source edits.
 
 Pending: ordinary v27 full fixture hosts after canonical Web fixture generation; simultaneous maximum screen/Status/other feature content, allfeatures Flash feasibility, peak stack/heap, and physical SD/TFT/button/death/interruption acceptance. Hosts and links do not establish device acceptance.
+
+## All-features capacity comparison
+
+A second link used the same frozen source, libraries and all-feature flags, but only one outcome and one local effect entry. It also failed: Flash overflow 9,976 bytes, data 112 + bss 11,880 = 11,992 static RAM bytes in the rejected map. Maximum storage overflows by 10,072 bytes and has data+bss 15,288 bytes. Thus maximum capacity adds 96 Flash bytes and 3,296 static RAM bytes under those flags. Both images fail the 64 KiB Flash limit; reducing lottery capacity does not close this gap. This compares storage configurations of the new runtime, not the pre-feature firmware revision.
+
+Evidence: `lottery-allfeatures-baseline.ini`, `.log` and `.map` under the task visualization directory. No target image was accepted or flashed from either failed all-feature configuration.
