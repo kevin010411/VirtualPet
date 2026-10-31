@@ -7,7 +7,7 @@
 
 #include "animation/AnimationController.h"
 #if ENABLE_INSTRUCTION_RESPONSE
-#include "game/InstructionResponse.h"
+#include "game/InstructionPresentation.h"
 class Renderer;
 class AssetResources;
 struct PetBehaviorConfig;
@@ -69,15 +69,7 @@ public:
 private:
     enum class Kind : uint8_t { None, GuessItem, Predict, Instruction };
 #if ENABLE_INSTRUCTION_RESPONSE
-    InstructionResponse instruction;
-    InstructionResponse::Phase drawnPhase = InstructionResponse::Phase::Idle;
-    Renderer *instructionRenderer = nullptr;
-    AssetResources *instructionResources = nullptr;
-    const PetBehaviorConfig *instructionConfig = nullptr;
-    uint8_t instructionHeld = 7;
-    uint8_t promptVersion = 0;
-    uint32_t frameAt = 0, frameMs = 167;
-    bool renderInstruction();
+    InstructionPresentation instruction;
 #endif
     Kind activeGame = Kind::None;
     AnimationController &animations;

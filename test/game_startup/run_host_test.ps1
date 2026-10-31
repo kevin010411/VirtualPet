@@ -45,7 +45,7 @@ $sources = @(
 )
 if ($EnableAppearanceSelection) { $sources += 'src/appearance/AppearanceSelectionController.cpp' }
 if ($EnableSequenceAudio) { $sources += @('src/audio/SequenceAudio.cpp', 'src/animation/SequencePlayback.cpp') }
-if ($EnableInstructionResponse) { $sources += 'src/game/InstructionResponse.cpp' }
+if ($EnableInstructionResponse) { $sources += @('src/game/InstructionResponse.cpp', 'src/game/InstructionPresentation.cpp') }
 if ($EnableInstructionResponse -or $EnablePredict -or $EnableGuessGame) { $sources += 'src/controller/MinigameController.cpp' }
 if ($EnablePredict) { $sources += 'src/game/PredictGame.cpp' }
 if ($EnableGuessGame) { $sources += 'src/game/GuessItemGame.cpp' }
