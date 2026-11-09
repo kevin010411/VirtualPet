@@ -1,6 +1,8 @@
 #include "display/FrameDecoder.h"
 
 #include "common/SdBinaryRead.h"
+#include "display/FrameTiming.h"
+#include "platform/TftDmaTransfer.h"
 
 namespace FrameDecoder
 {
@@ -97,13 +99,16 @@ public:
 
     ~TftFrameWriteSession()
     {
-        if (tft != nullptr)
-            tft->endWrite();
+        finish();
     }
 
-    bool active() const
+    void finish()
     {
-        return tft != nullptr;
+        if (tft != nullptr)
+        {
+            tft->endWrite();
+            tft = nullptr;
+        }
     }
 
 private:
@@ -130,8 +135,11 @@ bool showDataFrame(BundleReader &bundleReader,
                    size_t lineBufferPixels,
                    int xmin,
                    int ymin,
-                   int batchLines, uint16_t expectedWidth, uint16_t expectedHeight)
+                   int batchLines, uint16_t expectedWidth, uint16_t expectedHeight, SPIClass *pixelSpi)
 {
+#if TFT_FRAME_TIMING_ENABLED
+    const uint32_t frameStarted = micros();
+#endif
     if (tft == nullptr || readBuffer == nullptr ||
         readBufferSize < kDataReadBufferBytes || lineBuffer == nullptr)
     {
@@ -189,20 +197,37 @@ bool showDataFrame(BundleReader &bundleReader,
                                    static_cast<uint32_t>(ymin) + descriptor.height <= static_cast<uint32_t>(tft->height());
     TftFrameWriteSession writeSession(tft, frameFullyVisible, xmin, ymin,
                                       descriptor.width, descriptor.height);
+    int rowsPerBatch = safeBatchLines;
+    uint16_t *batchBuffer = lineBuffer;
+#if defined(STM32F103xB)
+    const size_t dmaRows = lineBufferPixels / (2 * descriptor.width);
+    TftDmaTransfer dma(frameFullyVisible && dmaRows != 0 ? pixelSpi : nullptr);
+    if (frameFullyVisible)
+    {
+        if (!dma.active())
+        {
+            frame.file.close();
+            return false;
+        }
+        if (dmaRows < static_cast<size_t>(rowsPerBatch))
+            rowsPerBatch = static_cast<int>(dmaRows);
+    }
+    const size_t dmaBufferPixels = static_cast<size_t>(rowsPerBatch) * descriptor.width;
+#endif
 
     uint16_t packetRemaining = 0;
     bool packetIsRun = false;
     uint16_t runPixel = 0;
     uint32_t producedPixels = 0;
     for (uint16_t batchStartRow = 0; batchStartRow < descriptor.height;
-         batchStartRow = static_cast<uint16_t>(batchStartRow + safeBatchLines))
+         batchStartRow = static_cast<uint16_t>(batchStartRow + rowsPerBatch))
     {
-        const int actualLines = batchStartRow + safeBatchLines > descriptor.height
+        const int actualLines = batchStartRow + rowsPerBatch > descriptor.height
                                     ? descriptor.height - batchStartRow
-                                    : safeBatchLines;
+                                    : rowsPerBatch;
         for (int rowOffset = 0; rowOffset < actualLines; ++rowOffset)
         {
-            uint16_t *destination = &lineBuffer[static_cast<size_t>(rowOffset) * descriptor.width];
+            uint16_t *destination = &batchBuffer[static_cast<size_t>(rowOffset) * descriptor.width];
             size_t lineCount = 0;
             while (lineCount < descriptor.width)
             {
@@ -246,14 +271,36 @@ bool showDataFrame(BundleReader &bundleReader,
             }
         }
 
-        if (writeSession.active())
-            tft->writePixels(lineBuffer, static_cast<uint32_t>(descriptor.width) * actualLines);
-        else
-            tft->drawRGBBitmap(xmin, ymin + batchStartRow, lineBuffer, descriptor.width, actualLines);
+        if (!frameFullyVisible)
+        {
+            tft->drawRGBBitmap(xmin, ymin + batchStartRow, batchBuffer, descriptor.width, actualLines);
+            continue;
+        }
+        const size_t pixels = static_cast<size_t>(descriptor.width) * actualLines;
+#if defined(STM32F103xB)
+        // send() waits for the preceding batch before giving its buffer back.
+        if (!dma.send(batchBuffer, pixels))
+        {
+            frame.file.close();
+            return false;
+        }
+        batchBuffer = batchBuffer == lineBuffer ? lineBuffer + dmaBufferPixels : lineBuffer;
+#else
+        tft->writePixels(batchBuffer, pixels);
+#endif
     }
 
     const bool complete = producedPixels == pixelCount && packetRemaining == 0 && reader.exhausted();
     frame.file.close();
+#if defined(STM32F103xB)
+    if (!dma.finish())
+        return false;
+#endif
+    writeSession.finish();
+#if TFT_FRAME_TIMING_ENABLED
+    if (complete && frameFullyVisible)
+        recordFrameTiming(address, descriptor, dma.transferUs(), micros() - frameStarted);
+#endif
     if (!complete)
         bundleReader.rejectDecodedFrame(address);
     return complete;

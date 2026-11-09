@@ -10,11 +10,12 @@
 #endif
 
 class AssetResources;
+class SPIClass;
 
 class Renderer
 {
 public:
-    Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resources);
+    Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resources, SPIClass *pixelSpi = nullptr);
     ~Renderer();
 
     void initAnimations();
@@ -61,6 +62,7 @@ private:
 
     Adafruit_ST7735 *tft;
     AssetResources &resources;
+    SPIClass *pixelSpi;
     AnimationState *state;
 #if ENABLE_DEBUG
     TftDebugDisplay debug;

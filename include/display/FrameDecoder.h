@@ -6,6 +6,8 @@
 #include <SdFat.h>
 #include "resources/BundleReader.h"
 
+class SPIClass;
+
 namespace FrameDecoder
 {
 constexpr uint16_t kDefaultAnimWidth = 128;
@@ -26,7 +28,8 @@ bool showDataFrame(BundleReader &bundleReader,
                    int ymin,
                    int batchLines,
                    uint16_t expectedWidth = 0,
-                   uint16_t expectedHeight = 0);
+                   uint16_t expectedHeight = 0,
+                   SPIClass *pixelSpi = nullptr);
 } // namespace FrameDecoder
 
 #endif

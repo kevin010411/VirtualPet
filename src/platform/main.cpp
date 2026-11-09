@@ -11,6 +11,7 @@
 #include "appearance/SdAppearanceLoader.h"
 #include "pet/Pet.h"
 #include "display/Renderer.h"
+#include "display/FrameTiming.h"
 #include "pet/PetStorage.h"
 #include "common/FirmwareRandom.h"
 #include <SdFat.h>
@@ -25,7 +26,7 @@ SdFat SD;
 Pet pet;
 PetStorage petStorage(&SD);
 AssetResources resources(&SD);
-Renderer renderer(&tft, resources);
+Renderer renderer(&tft, resources, &SPI_2);
 SdAppearanceLoader appearanceLoader(&SD);
 Game game(pet, petStorage, renderer, resources, appearanceLoader);
 ButtonInput buttons(
@@ -718,6 +719,10 @@ void loop()
 #if ENABLE_DEBUG
   if (renderer.hasRenderedFrame() && !g_startupTiming.written)
     writeStartupTiming(millis() - g_startupTiming.startedAt);
+#endif
+#if TFT_FRAME_TIMING_ENABLED
+  if (g_sdReady)
+    flushFrameTimings(SD, millis());
 #endif
 
   if (g_restoreBacklightAfterRender &&

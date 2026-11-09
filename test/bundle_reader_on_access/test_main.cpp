@@ -1,5 +1,6 @@
 #include "resources/BundleReader.h"
 #include "display/FrameDecoder.h"
+#include "SPI.h"
 
 #include <assert.h>
 #include <string.h>
@@ -72,7 +73,9 @@ std::vector<uint8_t> packWithInvalidUnselectedRows(const AssetData::BundleId &bu
 
 std::vector<uint8_t> packForPayload(const AssetData::BundleId &bundleId,
                                     uint8_t codec,
-                                    const std::vector<uint8_t> &payload)
+                                    const std::vector<uint8_t> &payload,
+                                    uint16_t width,
+                                    uint16_t height)
 {
     constexpr uint32_t kAnimationOffset = 80;
     constexpr uint32_t kFrameOffset = kAnimationOffset + 16;
@@ -94,32 +97,39 @@ std::vector<uint8_t> packForPayload(const AssetData::BundleId &bundleId,
     writeU16(bytes, 58, 24);
     writeAnimation(bytes, kAnimationOffset, 1, 0);
     bytes[kFrameOffset] = codec;
-    writeU16(bytes, kFrameOffset + 2, 32);
-    writeU16(bytes, kFrameOffset + 4, 32);
+    writeU16(bytes, kFrameOffset + 2, width);
+    writeU16(bytes, kFrameOffset + 4, height);
     writeU32(bytes, kFrameOffset + 8, kPayloadOffset);
     writeU32(bytes, kFrameOffset + 12, static_cast<uint32_t>(payload.size()));
-    writeU32(bytes, kFrameOffset + 16, 32 * 32 * 2);
+    writeU32(bytes, kFrameOffset + 16, static_cast<uint32_t>(width) * height * 2);
     memcpy(bytes.data() + kPayloadOffset, payload.data(), payload.size());
     return bytes;
 }
 
 bool decodePayload(const AssetData::BundleId &bundleId,
                    uint8_t codec,
-                   const std::vector<uint8_t> &payload)
+                   const std::vector<uint8_t> &payload,
+                   SPIClass *pixelSpi = nullptr,
+                   uint16_t width = 32, uint16_t height = 32)
 {
-    const std::vector<uint8_t> bytes = packForPayload(bundleId, codec, payload);
+    const std::vector<uint8_t> bytes = packForPayload(bundleId, codec, payload, width, height);
     SdFat sd(bytes.data(), bytes.size());
     uint8_t scratch[AssetData::kIoScratchBytes] = {};
     BundleReader reader(&sd, scratch, sizeof(scratch));
     if (!reader.configureBundle(bundleId))
         return false;
     uint8_t readBuffer[FrameDecoder::kDataReadBufferBytes] = {};
-    uint16_t lineBuffer[32] = {};
+    uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
     Adafruit_ST7735 display;
     AssetData::AssetFrameAddress address{0, 0, 1, 0, 0};
+#if defined(STM32F103xB)
+    SPIClass localSpi;
+    if (pixelSpi == nullptr)
+        pixelSpi = &localSpi;
+#endif
     return FrameDecoder::showDataFrame(
         reader, address, &display, readBuffer, sizeof(readBuffer),
-        lineBuffer, 32, 0, 0, 1);
+        lineBuffer, width * size_t{12}, 0, 0, 12, width, height, pixelSpi);
 }
 } // namespace
 
@@ -163,6 +173,26 @@ int main()
         validPayload.push_back(0x12);
     }
     assert(decodePayload(bundleId, AssetData::kCodecRgb565RunLiteral, validPayload));
+#if defined(STM32F103xB)
+    std::vector<uint8_t> fullScreenPayload;
+    for (int row = 0; row < 160; ++row)
+    {
+        fullScreenPayload.push_back(0xFF); // One RGB565 run per row.
+        fullScreenPayload.push_back(static_cast<uint8_t>(row));
+        fullScreenPayload.push_back(0x12);
+    }
+    SPIClass pixelSpi;
+    assert(decodePayload(bundleId, AssetData::kCodecRgb565RunLiteral, fullScreenPayload, &pixelSpi, 128, 160));
+    auto expectedSizes = std::vector<size_t>(26, 128 * 6 * 2);
+    expectedSizes.push_back(128 * 4 * 2);
+    assert(pixelSpi.transferSizes == expectedSizes);
+    assert(pixelSpi.bytes.size() == 128 * 160 * 2);
+    for (size_t index = 0; index < pixelSpi.bytes.size(); index += 2)
+    {
+        assert(pixelSpi.bytes[index] == 0x12);
+        assert(pixelSpi.bytes[index + 1] == index / (128 * 2));
+    }
+#endif
 
     std::vector<uint8_t> trailingPayload = validPayload;
     trailingPayload.push_back(0);

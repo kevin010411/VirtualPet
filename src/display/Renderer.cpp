@@ -46,8 +46,8 @@ AssetData::AssetFrameAddress frameAddress(const AssetData::AnimationRef &animati
 }
 } // namespace
 
-Renderer::Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resourcesRef)
-    : tft(ref_tft), resources(resourcesRef), state(new AnimationState)
+Renderer::Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resourcesRef, SPIClass *pixelSpi)
+    : tft(ref_tft), resources(resourcesRef), pixelSpi(pixelSpi), state(new AnimationState)
 #if ENABLE_DEBUG
       , debug(ref_tft)
 #endif
@@ -87,7 +87,7 @@ bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
         resources.frameReader(), address, tft, resources.readBuffer(), AssetData::kDataReadBufferBytes,
         state->lineBuffer, FrameDecoder::kLineBufferPixels,
         xmin < 0 ? state->animationX : xmin,
-        ymin < 0 ? state->animationY : ymin, batch_lines, expectedWidth, expectedHeight);
+        ymin < 0 ? state->animationY : ymin, batch_lines, expectedWidth, expectedHeight, pixelSpi);
     if (!ok)
     {
         FrameDecoder::showAssetDataError(tft, resources.frameReader().firstErrorResource());
