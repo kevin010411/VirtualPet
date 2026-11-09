@@ -2,6 +2,7 @@
 #include "platform/BoardConfig.h"
 #include "platform/ButtonInput.h"
 #include "platform/CalibratedST7735.h"
+#include "platform/McuPower.h"
 #include "platform/RtcClock.h"
 #include "platform/SessionClock.h"
 #include "platform/PowerController.h"
@@ -13,44 +14,6 @@
 #include "pet/PetStorage.h"
 #include "common/FirmwareRandom.h"
 #include <SdFat.h>
-#include "stm32f1xx.h"
-#include "stm32f1xx_hal.h"
-
-// The stock Arduino main unconditionally calls serialEventRun(), which pulls
-// the complete HardwareSerial/Stream/String stack although this firmware has
-// no serial event callbacks. Keep the framework's early init ordering and the
-// normal setup/loop lifecycle, but omit that unused hook.
-__attribute__((constructor(101))) static void firmwarePremain()
-{
-#ifdef NVIC_PRIORITYGROUP_4
-  HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
-#endif
-#if (__CORTEX_M == 0x07U)
-#ifndef I_CACHE_DISABLED
-  SCB_EnableICache();
-#endif
-#ifndef D_CACHE_DISABLED
-  SCB_EnableDCache();
-#endif
-#endif
-  init();
-}
-
-void setup();
-void loop();
-
-int main(void)
-{
-  initVariant();
-  setup();
-  for (;;)
-  {
-#if defined(CORE_CALLBACK)
-    CoreCallback();
-#endif
-    loop();
-  }
-}
 
 // 建立 TFT 顯示物件
 SPIClass SPI_2(PB15, BoardConfig::TftRstPin, PB13);
@@ -79,9 +42,6 @@ static bool g_rtcReady = false;
 static SessionClock sessionClock;
 static PowerController powerController;
 static VoltageMonitor voltageMonitor;
-static const unsigned long kPvdSettleUs = 50;
-static const uint8_t kPvdLevelDimmed = 7;
-static const uint8_t kPvdLevelCritical = 6;
 
 static const uint8_t kBacklightNormal = 255;
 static const uint8_t kBacklightDimmed = 128;
@@ -209,47 +169,6 @@ static void updateBacklightRamp(unsigned long now)
   writeBacklightPwm(g_backlightBrightness);
 }
 
-static void setPvdThreshold(uint8_t level)
-{
-  PWR->CR = (PWR->CR & ~(7U << 5)) | ((static_cast<uint32_t>(level) & 7U) << 5);
-}
-
-static void initLowBatteryDetector()
-{
-  // 開啟 PWR 模組時鐘
-  RCC->APB1ENR |= RCC_APB1ENR_PWREN;
-
-  // 正常時保持最高 PLS 門檻，量測函式會短暫切到 PLS6。
-  setPvdThreshold(kPvdLevelDimmed);
-
-  // 啟用 PVD
-  PWR->CR |= PWR_CR_PVDE;
-}
-
-static bool isVddBelowPvdThreshold(uint8_t level)
-{
-  // Restart the comparator so hysteresis from the previous PLS level cannot
-  // leak into this measurement when sampling PLS7 and PLS6 back-to-back.
-  PWR->CR &= ~PWR_CR_PVDE;
-  setPvdThreshold(level);
-  PWR->CR |= PWR_CR_PVDE;
-  delayMicroseconds(kPvdSettleUs);
-  return (PWR->CSR & PWR_CSR_PVDO) != 0; // PVDO = 1 表示 VDD 低於門檻
-}
-
-static VoltageState sampleVoltageState()
-{
-  const bool belowDimmed = isVddBelowPvdThreshold(kPvdLevelDimmed);
-  const bool belowCritical = isVddBelowPvdThreshold(kPvdLevelCritical);
-  setPvdThreshold(kPvdLevelDimmed);
-
-  if (belowCritical)
-    return VoltageState::Critical;
-  if (belowDimmed)
-    return VoltageState::Dimmed;
-  return VoltageState::Normal;
-}
-
 static uint8_t desiredBacklight(unsigned long now);
 
 static void showSdInitError()
@@ -322,7 +241,7 @@ static bool confirmVoltageRecoveredFromCritical()
   while (millis() - recoveredSince < VoltageMonitor::kRecoveryConfirmMs)
   {
     delay(VoltageMonitor::kSampleIntervalMs);
-    if (sampleVoltageState() == VoltageState::Critical)
+    if (McuPower::sampleVoltage() == VoltageState::Critical)
       return false;
   }
 
@@ -352,17 +271,9 @@ void enterSleep()
 
   while (true)
   {
-    // The display is already dark, so PVD is not needed while all clocks stop.
-    PWR->CR &= ~PWR_CR_PVDE;
-    HAL_SuspendTick();
-    // A pending EXTI wakes WFI even with PRIMASK set. Do not clear a late edge.
-    __disable_irq();
-    if (!buttons.isHeld() && buttons.wakeGeneration() == lastWake)
-      HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-    __enable_irq();
-    SystemClock_Config();
-    HAL_ResumeTick();
-    PWR->CR |= PWR_CR_PVDE;
+    McuPower::sleepIfIdle(
+        [](uint32_t generation) { return !buttons.isHeld() && buttons.wakeGeneration() == generation; },
+        lastWake);
     const uint32_t currentWake = buttons.wakeGeneration();
     const bool buttonWake = currentWake != lastWake || buttons.isHeld();
     lastWake = currentWake;
@@ -371,7 +282,7 @@ void enterSleep()
     // Consume the button that woke the MCU. It must not execute a game action.
     buttons.clearFlags();
 
-    const VoltageMonitor::WakeResult wake = voltageMonitor.observeWake(sampleVoltageState());
+    const VoltageMonitor::WakeResult wake = voltageMonitor.observeWake(McuPower::sampleVoltage());
     if (wake == VoltageMonitor::WakeResult::Retry)
     {
       if (buttons.isHeld()) delay(VoltageMonitor::kSampleIntervalMs);
@@ -380,11 +291,11 @@ void enterSleep()
 
     if (wake == VoltageMonitor::WakeResult::ConfirmRecovery)
     {
-      // Keep the screen dark while verifying that PLS6 has recovered.
+      // Keep the screen dark while checking that voltage has recovered.
       if (!confirmVoltageRecoveredFromCritical())
         continue;
 
-      const VoltageState recoveredSample = sampleVoltageState();
+      const VoltageState recoveredSample = McuPower::sampleVoltage();
       game.endBatteryAnimation();
       voltageMonitor.completeWakeRecovery(recoveredSample, millis());
     }
@@ -563,7 +474,7 @@ static void updateVoltageState(unsigned long now)
   if (voltageMonitor.sampleDue(now))
   {
     const VoltageState previousState = voltageMonitor.state();
-    voltageMonitor.observe(now, sampleVoltageState());
+    voltageMonitor.observe(now, McuPower::sampleVoltage());
     applyVoltageTransition(previousState, now);
   }
 
@@ -607,7 +518,7 @@ void setup()
   const unsigned long tftResetLowStartedAt = millis();
 
   // 初始化 low battery 偵測
-  initLowBatteryDetector();
+  McuPower::beginVoltageDetector();
 
   buttons.begin();
 
@@ -692,7 +603,7 @@ void setup()
 
   const unsigned long now = millis();
   const VoltageState previousState = voltageMonitor.state();
-  voltageMonitor.begin(now, sampleVoltageState());
+  voltageMonitor.begin(now, McuPower::sampleVoltage());
   if (voltageMonitor.state() != VoltageState::Normal)
     applyVoltageTransition(previousState, now);
   else
