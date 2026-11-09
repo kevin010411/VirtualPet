@@ -31,6 +31,10 @@ AppearanceChangeResult AppearanceChangeController::changeSpecies(
         resources.recordAssetDataErrorResource(loader.firstAssetDataErrorResource());
         return AppearanceChangeResult::UnlockFailed;
     }
+#if ENABLE_SHOP
+    bool shopChanged;
+    if (!host.prepareShopProgress(shopChanged)) return AppearanceChangeResult::ConfigurationFailed;
+#endif
     if (saves.requestSave() == PetSaveResult::Failed)
     {
         resources.recordAssetDataErrorResource(
@@ -88,6 +92,10 @@ AppearanceChangeResult AppearanceChangeController::applyCollectionTarget(uint8_t
         return AppearanceChangeResult::PetStateRejected;
     if (pet.evaluateDeath()) return AppearanceChangeResult::Applied;
     if (!resolveUnlockState(changedSpecies)) return AppearanceChangeResult::UnlockFailed;
+#if ENABLE_SHOP
+    bool shopChanged;
+    if (!host.prepareShopProgress(shopChanged)) return AppearanceChangeResult::ConfigurationFailed;
+#endif
     pet.unlockOutfit(outfitSlot);
     return saves.requestSave() == PetSaveResult::Failed
         ? AppearanceChangeResult::SaveFailed : AppearanceChangeResult::Applied;

@@ -14,6 +14,7 @@ enum class AppStage : uint8_t
     Appearance,
     Collection,
     Evolution,
+    Shop,
 };
 
 class AppFlowController

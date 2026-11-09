@@ -75,6 +75,14 @@ CommandResult CommandExecutor::execute(const CommandController &commands)
         result.kind = CommandResultKind::Instruction;
         break;
 #endif
+#if ENABLE_SHOP
+    case AppCommandId::Shop:
+        result.kind = CommandResultKind::Shop;
+        break;
+    case AppCommandId::Inventory:
+        result.kind = CommandResultKind::Inventory;
+        break;
+#endif
     case AppCommandId::Status:
         result.kind = CommandResultKind::Playback;
         result.resourceError = !queueStatusSetsAnimation();

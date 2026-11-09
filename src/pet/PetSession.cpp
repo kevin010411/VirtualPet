@@ -81,6 +81,18 @@ bool PetSession::prepare()
 #if ENABLE_COLLECTION_CATALOG
     if (collectionChanged && !storage.save(pet)) return false;
 #endif
+#if ENABLE_SHOP
+    if (initialState == InitialState::Restored)
+    {
+        bool changed;
+        if (!host.prepareShopProgress(changed)) return false;
+        if (changed && !storage.save(pet))
+        {
+            preparationState = State::PetStateFailed;
+            return false;
+        }
+    }
+#endif
     preparationState = State::Ready;
     return true;
 }
@@ -105,7 +117,15 @@ AppearanceChangeResult PetSession::reset()
                     result = AppearanceChangeResult::ConfigurationFailed;
                 else
 #endif
-                    result = storage.save(pet) ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;
+                {
+#if ENABLE_SHOP
+                    bool changed;
+                    if (!host.prepareShopProgress(changed))
+                        result = AppearanceChangeResult::ConfigurationFailed;
+                    else
+#endif
+                        result = storage.save(pet) ? AppearanceChangeResult::Applied : AppearanceChangeResult::SaveFailed;
+                }
             }
             else resources.recordAssetDataErrorResource(loader.firstAssetDataErrorResource());
         }

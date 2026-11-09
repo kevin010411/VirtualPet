@@ -18,6 +18,8 @@ enum class AppCommandId : uint8_t
     ChangeSpecies = APP_COMMAND_CHANGE_SPECIES,
     UserAction = APP_COMMAND_USER_ACTION,
     CollectionCatalog = APP_COMMAND_COLLECTION_CATALOG,
+    Shop = APP_COMMAND_SHOP,
+    Inventory = APP_COMMAND_INVENTORY,
 };
 
 class CommandController

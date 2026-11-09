@@ -41,6 +41,10 @@ public:
     void clearInstructionOptions();
     void showInstructionFeedback(bool correct);
 #endif
+#if ENABLE_SHOP
+    void drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint32_t value);
+    void highlightShopRow(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
+#endif
     void showResourceError();
     void showResourceError(const char *resource);
 #if ENABLE_DEBUG

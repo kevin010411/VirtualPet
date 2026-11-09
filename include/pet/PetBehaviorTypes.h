@@ -121,6 +121,9 @@ static_assert(sizeof(ScreenRuleConfig) == 12, "Screen rules store exported unsig
 
 struct PetBehaviorConfig
 {
+#if ENABLE_SHOP
+    bool shopEnabled;
+#endif
 #if ENABLE_INSTRUCTION_RESPONSE
     InstructionResponseSettings instructionSettings;
     AssetData::AnimationRef instructionOptions[3];

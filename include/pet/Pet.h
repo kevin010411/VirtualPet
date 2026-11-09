@@ -23,6 +23,11 @@ struct PersistedPetState
     uint64_t collectionMask;
     uint32_t trackedActionFingerprint;
     uint16_t actionCounts[kTrackedActionCount];
+#if ENABLE_SHOP
+    uint32_t shopFingerprint;
+    uint16_t shopQuantities[64];
+    uint8_t shopVisited[32];
+#endif
     uint32_t crc32;
 };
 
@@ -40,7 +45,7 @@ class Pet
 {
 public:
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = 19;
+    static constexpr uint16_t kPetStateVersion = ENABLE_SHOP ? 20 : 19;
     static constexpr uint32_t kStageDaysMax = 864000UL;
 
     Pet();
@@ -89,6 +94,7 @@ public:
     void resetActionCounts();
 
 private:
+    friend class ShopSession;
     PersistedPetState st = {};
 #if ENABLE_DEATH
     uint16_t deathStatMask = 0;

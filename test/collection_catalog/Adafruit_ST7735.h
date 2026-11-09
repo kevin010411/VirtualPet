@@ -36,7 +36,22 @@ public:
         writePixels(pixels, static_cast<uint32_t>(w) * h);
     }
     void fillRect(int, int, int, int, uint16_t) {}
-    void setTextColor(uint16_t, uint16_t) {}
+    void setTextColor(uint16_t, uint16_t = 0) {}
+    void setTextSize(uint8_t) {}
+    void write(uint8_t) {}
+    void drawRect(int x, int y, int w, int h, uint16_t color)
+    {
+        for (int i = x; i < x + w; ++i)
+        {
+            screen[y * 128 + i] = color;
+            screen[(y + h - 1) * 128 + i] = color;
+        }
+        for (int j = y; j < y + h; ++j)
+        {
+            screen[j * 128 + x] = color;
+            screen[j * 128 + x + w - 1] = color;
+        }
+    }
     void setCursor(int, int) {}
     void print(const char *) {}
 private:

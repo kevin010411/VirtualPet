@@ -9,6 +9,9 @@ namespace
 {
 bool compiledFeaturesAccept(uint32_t flags)
 {
+#if !ENABLE_SHOP
+    if ((flags & kShopFeature) != 0) return false;
+#endif
 #if !ENABLE_INSTRUCTION_RESPONSE
     if ((flags & kInstructionResponseFeature) != 0) return false;
 #endif
@@ -83,6 +86,9 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
 {
     if (speciesSlot == 0 || outfitSlot == 0)
         return false;
+#if ENABLE_SHOP
+    config.shopEnabled = (table.featureFlags & kShopFeature) != 0;
+#endif
     const Source &source = table.source;
     const uint32_t featureFlags = table.featureFlags;
     if (!compiledFeaturesAccept(featureFlags) || !decodeScreenBlocks(table, config))

@@ -263,9 +263,80 @@ static void verifyCatchUpCollectionWindow(const std::filesystem::path &root)
     puts("[PASS] Production SD catch-up acquires a one-day Collection window before skipping the remaining days");
 }
 
+#if ENABLE_SHOP
+static int verifyShop(const std::filesystem::path &root)
+{
+    SdFat sd;
+    mountBundle(sd, root);
+    Adafruit_ST7735 display;
+    Pet pet;
+    PetStorage storage(&sd);
+    AssetResources resources(&sd);
+    Renderer renderer(&display, resources);
+    SdAppearanceLoader loader(&sd);
+    Game game(pet, storage, renderer, resources, loader);
+    assert(game.setup_game());
+    assert(pet.customStat(0) == 50);
+    game.OnConfirmKey(); // Shop command
+    const auto browsing = display.screen;
+    assert(!game.preventsIdleSleep());
+    game.stopPlaybackForSleep();
+    game.redrawAllNow();
+    assert(display.screen == browsing);
+    game.OnConfirmKey(); // Confirmation defaults to cancel
+    assert(display.screen != browsing);
+    game.OnConfirmKey();
+    assert(pet.customStat(0) == 50 && pet.persistentState().shopQuantities[0] == 0);
+    game.OnConfirmKey();
+    game.OnLeftKey();
+    game.OnConfirmKey();
+    assert(pet.customStat(0) == 43 && pet.persistentState().shopQuantities[0] == 2);
+    game.OnConfirmKey(); // Receipt to shop
+    game.OnRightKey();
+    game.OnConfirmKey(); // Inventory
+    game.OnConfirmKey(); // Use confirmation
+    game.OnLeftKey();
+    game.OnConfirmKey();
+    assert(pet.customStat(0) == 46 && pet.persistentState().shopQuantities[0] == 1);
+    const auto windowsBeforePlayback = display.windows.size();
+    tick(game, 1);
+    assert(display.windows.size() > windowsBeforePlayback);
+    for (unsigned time = 250; time <= 1000; time += 250) tick(game, time);
+    game.OnConfirmKey(); // Receipt to inventory
+    game.OnLeftKey(); // Wrap to exit
+    game.OnConfirmKey();
+
+    Pet restored;
+    PetStorage restoredStorage(&sd);
+    AssetResources restoredResources(&sd);
+    Renderer restoredRenderer(&display, restoredResources);
+    SdAppearanceLoader restoredLoader(&sd);
+    Game reboot(restored, restoredStorage, restoredRenderer, restoredResources, restoredLoader);
+    assert(reboot.setup_game());
+    assert(restored.customStat(0) == 46 && restored.persistentState().shopQuantities[0] == 1);
+    reboot.OnRightKey();
+    reboot.OnConfirmKey(); // Direct inventory command
+    reboot.OnConfirmKey();
+    reboot.OnLeftKey();
+    sd.limitWrite(12, 0, 0);
+    reboot.OnConfirmKey();
+    assert(restored.customStat(0) == 46 && restored.persistentState().shopQuantities[0] == 1);
+
+    Pet recovered;
+    PetStorage recoveredStorage(&sd);
+    assert(recoveredStorage.load(recovered, restored.persistentState().schemaFingerprint));
+    assert(recovered.customStat(0) == 46 && recovered.persistentState().shopQuantities[0] == 1);
+    puts("[PASS] Exported shop: three keys, cancel, purchase, inventory, item effect/playback, reboot and interrupted commit");
+    return 0;
+}
+#endif
+
 int main(int argc, char **argv)
 {
     assert(argc == 2 || argc == 3);
+#if ENABLE_SHOP
+    if (argc == 3 && std::string(argv[2]) == "shop") return verifyShop(argv[1]);
+#endif
     if (argc == 2 || std::string(argv[2]) == "single") verifyCatchUpCollectionWindow(argv[1]);
 #if COLLECTION_USE_RTC
     if (argc == 3 && std::string(argv[2]) == "guess-classic")

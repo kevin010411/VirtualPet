@@ -15,6 +15,9 @@
 #include "controller/MinigameController.h"
 #endif
 #include "pet/PetClock.h"
+#if ENABLE_SHOP
+#include "shop/ShopSession.h"
+#endif
 
 class AnimationController;
 class CommandController;
@@ -117,6 +120,12 @@ private:
     std::unique_ptr<MinigameController> minigame;
 #endif
 
+#if ENABLE_SHOP
+    ShopSession shop;
+    bool shopPlayback = false;
+    bool prepareShopProgress(bool &changed) override { return shop.arrive(changed); }
+    void redrawShop();
+#endif
     PetClock petClock;
     uint32_t latestRtcSeconds = 0;
     bool clockStarted = false;

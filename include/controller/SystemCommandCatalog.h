@@ -20,6 +20,8 @@ enum class RuntimeSystemCommandId : uint16_t
     ChangeSpecies = 4,
     CollectionCatalog = 5,
     InstructionResponse = 6,
+    Shop = 7,
+    Inventory = 8,
 };
 
 struct CompiledSystemCommand

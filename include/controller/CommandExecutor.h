@@ -21,6 +21,8 @@ enum class CommandResultKind : uint8_t
     Guess,
     Predict,
     Instruction,
+    Shop,
+    Inventory,
 };
 
 struct CommandResult

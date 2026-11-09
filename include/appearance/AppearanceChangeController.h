@@ -2,6 +2,7 @@
 #define APPEARANCE_CHANGE_CONTROLLER_H
 
 #include <stdint.h>
+#include "common/AppProfile.h"
 
 class Pet;
 class PetSaveController;
@@ -16,6 +17,9 @@ class AppearanceChangeHost
 {
 public:
     virtual bool configureActiveAppearance(uint8_t speciesSlot, uint8_t outfitSlot) = 0;
+#if ENABLE_SHOP
+    virtual bool prepareShopProgress(bool &changed) { changed = false; return true; }
+#endif
 protected:
     ~AppearanceChangeHost() = default;
 };

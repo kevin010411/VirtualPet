@@ -41,6 +41,9 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AssetR
           pet, *animations, *petBehaviorRuntime)),
       commands(std::make_unique<CommandController>()),
       layout(std::make_unique<LayoutRenderer>(renderer, resources, *commands))
+#if ENABLE_SHOP
+      , shop(pet, petSaves, appearanceChanges, renderer, resources, petBehaviorConfig)
+#endif
 #if ENABLE_COLLECTION_CATALOG
       , collectionCatalog(std::make_unique<CollectionCatalog>(pet, renderer, resources, petBehaviorConfig))
 #endif
@@ -78,6 +81,24 @@ void Game::loop_game()
         handlePlaybackResult(tickPlayback(millis()).result);
         return;
     }
+#if ENABLE_SHOP
+    if (flow.is(AppStage::Shop))
+    {
+        if (shopPlayback)
+        {
+            const PlaybackTickResult playback = tickPlayback(millis());
+            if (playback.result == PlaybackResult::PlaybackFailed)
+                enterRuntimeFatal();
+            else if (!animations->hasFinitePlayback())
+            {
+                shopPlayback = false;
+                animations->cancelAll();
+                redrawShop();
+            }
+        }
+        return;
+    }
+#endif
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection)) return;
 #endif
@@ -161,11 +182,21 @@ void Game::loop_game()
 #endif
 }
 
+#if ENABLE_SHOP
+void Game::redrawShop()
+{
+    if (!shop.redraw()) enterRuntimeFatal();
+}
+#endif
+
 void Game::requestFullRedraw()
 {
     if (!initialized)
         return;
     dirtySelect = true;
+#if ENABLE_SHOP
+    if (flow.is(AppStage::Shop) && !shopPlayback) { redrawShop(); return; }
+#endif
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection))
     {
@@ -184,6 +215,9 @@ void Game::redrawAllNow()
 {
     if (!initialized)
         return;
+#if ENABLE_SHOP
+    if (flow.is(AppStage::Shop) && !shopPlayback) { redrawShop(); return; }
+#endif
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection))
     {
@@ -248,6 +282,9 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
         return false;
     }
 
+#if ENABLE_SHOP
+    if (!shop.configure()) return false;
+#endif
     appearanceLoader.configureRuntimeContract(petBehaviorConfig);
     animations->configureRuntimeContract(petBehaviorConfig);
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
@@ -372,6 +409,9 @@ void Game::startBatteryAnimation()
         synchronizePlaybackClock();
     }
 #endif
+#if ENABLE_SHOP
+    if (flow.is(AppStage::Shop)) shopPlayback = false;
+#endif
     evolution->cancel();
     flow.endEvolution();
     flow.enterBattery();
@@ -414,6 +454,13 @@ void Game::routeDirectionKey(KeyDirection direction)
     // historical days settle; minigame decisions still wait for catch-up.
     if (!initialized || (hasPendingTime() && !flow.allowsMenuNavigation()))
         return;
+#if ENABLE_SHOP
+    if (flow.is(AppStage::Shop))
+    {
+        if (!shopPlayback && !shop.move(direction == KeyDirection::Right)) enterRuntimeFatal();
+        return;
+    }
+#endif
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection))
     {
@@ -463,6 +510,34 @@ void Game::OnConfirmKey()
     if (!initialized || (hasPendingTime() &&
         !(flow.is(AppStage::Command) && animations->isBusy())))
         return;
+#if ENABLE_SHOP
+    if (flow.is(AppStage::Shop))
+    {
+        if (shopPlayback) return;
+        AssetData::AnimationRef animation = {};
+        if (!shop.confirm(animation)) { enterRuntimeFatal(); return; }
+        if (enterDeathIfNeeded()) return;
+        if (!shop.active())
+        {
+            enterCommand();
+            petClock.resume(latestRtcSeconds);
+            refreshBaseAnimation();
+            requestFullRedraw();
+        }
+        else if (animation.valid())
+        {
+            const Animation use = Animation::complete(animation);
+            if (animations->replace(AnimationSequence(&use, 1)) != PlaybackResult::Accepted)
+                enterRuntimeFatal();
+            else
+            {
+                animations->requestFullRedraw();
+                shopPlayback = true;
+            }
+        }
+        return;
+    }
+#endif
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection))
     {
@@ -659,6 +734,16 @@ EvolutionResult Game::settleMutation(Settlement source)
 
 void Game::handleSystemCommandRequest(const CommandResult &result)
 {
+#if ENABLE_SHOP
+    if (result.kind == CommandResultKind::Shop || result.kind == CommandResultKind::Inventory)
+    {
+        petClock.pause(latestRtcSeconds);
+        animations->cancelAll();
+        if (!shop.start(result.kind == CommandResultKind::Inventory)) enterRuntimeFatal();
+        else flow.enter(AppStage::Shop);
+        return;
+    }
+#endif
 #if ENABLE_COLLECTION_CATALOG
     if (result.kind == CommandResultKind::Collection)
     {
@@ -723,6 +808,13 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
         enterRuntimeFatal();
         return;
     }
+#if ENABLE_SHOP
+    if (flow.is(AppStage::Shop))
+    {
+        petClock.pause(rtcSeconds);
+        return;
+    }
+#endif
     if (isCollectionCatalogActive())
     {
         petClock.pause(rtcSeconds);
@@ -955,6 +1047,10 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
 
 void Game::cancelForeground()
 {
+#if ENABLE_SHOP
+    shop.close();
+    shopPlayback = false;
+#endif
     animations->cancelAll();
     evolution->cancel();
 #if ENABLE_COLLECTION_CATALOG

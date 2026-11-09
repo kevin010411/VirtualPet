@@ -27,6 +27,8 @@ namespace
 #define COMMAND_SLOT_INSTRUCTION_RESPONSE COMMAND_SLOT(AppCommandId::InstructionResponse)
 #define COMMAND_SLOT_STATUS COMMAND_SLOT(AppCommandId::Status)
 #define COMMAND_SLOT_COLLECTION_CATALOG COMMAND_SLOT(AppCommandId::CollectionCatalog)
+#define COMMAND_SLOT_SHOP COMMAND_SLOT(AppCommandId::Shop)
+#define COMMAND_SLOT_INVENTORY COMMAND_SLOT(AppCommandId::Inventory)
 } // namespace
 
 constexpr CommandController::CommandSlot CommandController::emptySlot()

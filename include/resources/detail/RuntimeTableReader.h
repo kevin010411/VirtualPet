@@ -23,7 +23,8 @@ constexpr uint32_t kEvolutionPlaybackCountsFeature = 1UL << 12;
 constexpr uint32_t kCollectionFeature = 1UL << 13;
 constexpr uint32_t kSequenceAudioFeature = 1UL << 14;
 constexpr uint32_t kInstructionResponseFeature = 1UL << 15;
-constexpr uint32_t kKnownFeatures = ((1UL << 16) - 1UL) & ~(1UL << 8);
+constexpr uint32_t kShopFeature = 1UL << 16;
+constexpr uint32_t kKnownFeatures = ((1UL << 17) - 1UL) & ~(1UL << 8);
 
 enum SectionType : uint16_t
 {

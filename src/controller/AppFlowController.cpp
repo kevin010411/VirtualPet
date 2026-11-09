@@ -7,7 +7,7 @@ bool AppFlowController::allowsPetTime() const
 
 bool AppFlowController::allowsMenuNavigation() const
 {
-    return is(AppStage::Command) || is(AppStage::Appearance) || is(AppStage::Collection);
+    return is(AppStage::Command) || is(AppStage::Appearance) || is(AppStage::Collection) || is(AppStage::Shop);
 }
 
 void AppFlowController::beginEvolution()

@@ -263,3 +263,32 @@ void Renderer::showInstructionFeedback(bool correct)
     }
 }
 #endif
+
+#if ENABLE_SHOP
+void Renderer::drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint32_t value)
+{
+    if (!width) return;
+    char digits[10];
+    uint8_t count = 0;
+    do {
+        digits[count++] = static_cast<char>('0' + value % 10);
+        value /= 10;
+    } while (value);
+    tft->fillRect(x, y, width, height, 0x1126);
+    tft->setTextColor(0xffff);
+    tft->setTextSize(1);
+    if (count * 6 > width)
+    {
+        tft->setCursor(x, y + (height - 8) / 2);
+        tft->write('+');
+        return;
+    }
+    tft->setCursor(x + width - count * 6, y + (height - 8) / 2);
+    while (count) tft->write(digits[--count]);
+}
+
+void Renderer::highlightShopRow(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
+{
+    tft->drawRect(x, y, width, height, 0x8758);
+}
+#endif
