@@ -111,10 +111,22 @@ bool PetBehaviorRuntime::catchUpDays(AppearanceLoader &loader, uint32_t limit, u
 
 bool PetBehaviorRuntime::advancePetDay(uint32_t days)
 {
+    const PersistedPetState before = pet.persistentState();
     PetBehaviorStatValues state = readStats(pet);
     PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
     applyPetBehaviorDailyChanges(config, state, nextPauses, days);
+    for (uint8_t i = 0; i < config.dayResetCount; ++i)
+    {
+        const auto &effect = config.dayResets[i];
+        state.values[effect.statSlot] = static_cast<uint32_t>(
+            effect.value > config.stats[effect.statSlot].maxValue ? config.stats[effect.statSlot].maxValue : effect.value);
+    }
     if (!pet.commitPetDay(state.values, kPetBehaviorSlotCount, days)) return false;
+    if (config.manualDays && saveMutation != nullptr && !saveMutation(saveContext))
+    {
+        pet.restoreState(before);
+        return false;
+    }
     dailyChangePauses = nextPauses;
     return true;
 }
@@ -125,6 +137,29 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
         return PetBehaviorActionResult::Rejected;
 
     PetBehaviorStatValues state = readStats(pet);
+    if (config.actionGateCount)
+    {
+        ActionEffectFile gateSource;
+        SdBaseFile &file = gateSource.file;
+        if (!file.open("/runtime.bin", FILE_READ) || !file.seekSet(config.actionGatesOffset))
+            return PetBehaviorActionResult::ResourceReadFailed;
+        for (uint16_t i = 0; i < config.actionGateCount; ++i)
+        {
+            uint8_t record[12];
+            if (readSdBinary(file, record, sizeof(record)) != sizeof(record))
+                return PetBehaviorActionResult::ResourceReadFailed;
+            if (record[0] != actionSlot) continue;
+            const uint32_t left = record[1] == 255 ? state.stageDays : state.values[record[1]];
+            uint32_t right = 0;
+            for (uint8_t b = 0; b < 4; ++b) right |= static_cast<uint32_t>(record[4 + b]) << (8 * b);
+            if (record[3]) right = right == 255 ? state.stageDays : state.values[right];
+            const bool accepted = record[2] == 0 ? left < right : record[2] == 1 ? left <= right :
+                record[2] == 2 ? left == right : record[2] == 3 ? left >= right : left > right;
+            if (!accepted) return PetBehaviorActionResult::Rejected;
+        }
+        file.close();
+    }
+    const PersistedPetState before = pet.persistentState();
     PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
     PetBehaviorActionPlayback playback = {};
     ActionEffectFile effectSource;
@@ -136,11 +171,16 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
         return effectSource.failed ? PetBehaviorActionResult::ResourceReadFailed : PetBehaviorActionResult::Rejected;
     if (!writeStats(state, pet))
         return PetBehaviorActionResult::Rejected;
-    dailyChangePauses = nextPauses;
 #if ENABLE_COLLECTION_CATALOG
     for (uint8_t index = 0; index < config.trackedActionCount; ++index)
         if (config.trackedActions[index] == actionSlot) { pet.incrementActionCount(index); break; }
 #endif
+    if (saveMutation != nullptr && !saveMutation(saveContext))
+    {
+        pet.restoreState(before);
+        return PetBehaviorActionResult::ResourceReadFailed;
+    }
+    dailyChangePauses = nextPauses;
     if (pet.isDead()) return PetBehaviorActionResult::Applied;
 
     const PetBehaviorActionConfig &action = config.actions[actionSlot];

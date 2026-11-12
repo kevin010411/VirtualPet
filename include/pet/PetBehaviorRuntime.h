@@ -28,6 +28,7 @@ public:
                        AssetResources &resources);
 
     bool hasAction(uint8_t actionSlot) const;
+    void setPersistence(bool (*save)(void *), void *context) { saveMutation = save; saveContext = context; }
     void initializeStats();
     void resetTransientState() { dailyChangePauses = {}; }
     bool isDead() const;
@@ -50,6 +51,8 @@ private:
     AnimationController &animations;
     AssetResources &resources;
     PetBehaviorDailyChangePauses dailyChangePauses;
+    bool (*saveMutation)(void *) = nullptr;
+    void *saveContext = nullptr;
 };
 
 #endif // PET_BEHAVIOR_RUNTIME_H

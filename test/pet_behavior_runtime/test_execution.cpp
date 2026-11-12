@@ -217,6 +217,42 @@ void testActualEffectFileReadAndFailureAreAtomic()
     assert(runtime.executeAction(0) == PetBehaviorActionResult::ResourceReadFailed);
     assert(pet.customStat(0) == 40 && pet.customStat(1) == 50);
 }
+
+void testQuotaGateReadAndReject()
+{
+    auto config = effectsOnlyConfig();
+    config.stats[0] = {true, 10, 0, 10, 0};
+    config.actions[0].suspendDailyChangeDays = 0;
+    config.actionEffects[0] = {0, PetBehaviorEffectOperation::Change, -1};
+    config.actionGateCount = 1;
+    uint8_t bytes[12] = {0, 0, 3, 0, 1};
+    SdFat card(bytes, sizeof(bytes));
+    effectCard = &card;
+    Pet pet;
+    AssetResources resources(nullptr);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
+    runtime.initializeStats();
+    for (int i = 0; i < 10; ++i) assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+    assert(pet.customStat(0) == 0);
+    const auto count = pet.actionCount(0);
+    const auto lookups = animationLookups;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Rejected);
+    assert(pet.customStat(0) == 0 && pet.actionCount(0) == count && animationLookups == lookups);
+    config.manualDays = true;
+    config.dayResetCount = 1;
+    config.dayResets[0] = {0, PetBehaviorEffectOperation::Set, 10};
+    assert(runtime.advancePetDay());
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied && pet.customStat(0) == 9);
+    bytes[3] = 1; bytes[4] = 255; // quota >= stage_days
+    pet.setStageDays(10);
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Rejected);
+    config.actionGatesOffset = 1;
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::ResourceReadFailed);
+    assert(pet.customStat(0) == 9);
+    effectCard = nullptr;
+}
 } // namespace
 
 AssetResources::AssetResources(SdFat *sd)
@@ -224,7 +260,7 @@ AssetResources::AssetResources(SdFat *sd)
 BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t size)
     : sd_(sd), scratch_(scratch), scratchSize_(size) {}
 
-Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef)
+Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef, SPIClass *)
     : tft(display), resources(resourceRef), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
@@ -251,6 +287,34 @@ unsigned long AssetResources::frameIntervalFor(const AssetData::AnimationRef &, 
 
 int main()
 {
+    {
+        auto config = effectsOnlyConfig();
+        config.manualDays = true;
+        config.dayResetCount = 1;
+        config.dayResets[0] = {0, PetBehaviorEffectOperation::Set, 10};
+        Pet pet;
+        AssetResources resources(nullptr);
+        Renderer renderer(nullptr, resources);
+        AnimationController animations(renderer, resources);
+        PetBehaviorRuntime runtime(config, pet, animations, resources);
+        runtime.initializeStats();
+        pet.setCustomStat(0, 0);
+        bool saveSucceeds = false;
+        runtime.setPersistence([](void *context) { return *static_cast<bool *>(context); }, &saveSucceeds);
+        assert(!runtime.advancePetDay());
+        assert(pet.stageDays() == 0 && pet.customStat(0) == 0);
+        saveSucceeds = true;
+        assert(runtime.advancePetDay());
+        assert(pet.stageDays() == 1 && pet.customStat(0) == 10);
+        saveSucceeds = false;
+        assert(runtime.executeAction(0) == PetBehaviorActionResult::ResourceReadFailed);
+        assert(pet.stageDays() == 1 && pet.customStat(0) == 10 && pet.actionCount(0) == 0);
+        saveSucceeds = true;
+        assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+        assert(pet.customStat(0) == 15 && pet.actionCount(0) == ENABLE_COLLECTION_CATALOG);
+        assert(runtime.advancePetDay());
+        assert(pet.stageDays() == 2 && pet.customStat(0) == 10);
+    }
     testStandardEffectsOnly();
     testUnchangedEffectRefreshesThroughRuntimeCommit();
     testMatchedEmptyBranchSuppressesFallback();
@@ -260,5 +324,6 @@ int main()
     testReferencedMissingAnimationRetainsCommit();
     testFixedVersionReplaysAndPrelude();
     testActualEffectFileReadAndFailureAreAtomic();
+    testQuotaGateReadAndReject();
     return 0;
 }

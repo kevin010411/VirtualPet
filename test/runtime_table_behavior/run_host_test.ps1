@@ -64,7 +64,9 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath $validFixture $legacyFixture $startupFixture @appliedFixtures $sequenceFixture $optionalFixture
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host '[PASS] Runtime Table v27 optional action animations, action ranges, applied screen, initial contract, malformed records, and legacy rejection'
+    & $outputPath --manual-day (Join-Path $webFixtures 'runtime_table_v8/manual_day/runtime.bin')
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host '[PASS] Runtime Table v28 manual day, gates, optional action animations, applied screen and legacy rejection'
     exit 0
 }
 finally {

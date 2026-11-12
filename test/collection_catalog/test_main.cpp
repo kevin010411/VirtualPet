@@ -133,7 +133,7 @@ static void verifyTransactions()
     sd.corrupt("/state_a.bin", 40);
     Pet rejected; PetStorage noValidSlot(&sd); assert(!noValidSlot.load(rejected, 123));
     assert(!sd.exists("/state_a.bin") && !sd.exists("/state_b.bin"));
-    puts("[PASS] Production v16 A/B writer: all 96 truncation boundaries, complete failed sync, newest CRC fallback and both-corrupt discard recover whole snapshots");
+    printf("[PASS] Production A/B writer: all %zu truncation boundaries, failed sync, CRC fallback and both-corrupt discard recover whole snapshots\n", sizeof(PersistedPetState) + 1);
 }
 
 static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display, bool twoPages = false)
@@ -276,6 +276,7 @@ static int verifyShop(const std::filesystem::path &root)
     SdAppearanceLoader loader(&sd);
     Game game(pet, storage, renderer, resources, loader);
     assert(game.setup_game());
+
     assert(pet.customStat(0) == 50);
     game.OnConfirmKey(); // Shop command
     const auto browsing = display.screen;
@@ -334,6 +335,7 @@ static int verifyShop(const std::filesystem::path &root)
 int main(int argc, char **argv)
 {
     assert(argc == 2 || argc == 3);
+    if (argc == 3 && std::string(argv[2]) == "transactions") { verifyTransactions(); return 0; }
 #if ENABLE_SHOP
     if (argc == 3 && std::string(argv[2]) == "shop") return verifyShop(argv[1]);
 #endif
@@ -377,6 +379,34 @@ int main(int argc, char **argv)
     SdAppearanceLoader loader(&sd);
     Game game(pet, storage, renderer, resources, loader);
     assert(game.setup_game());
+    if (argc == 3 && std::string(argv[2]) == "manual-day")
+    {
+        assert(pet.customStat(2) == 10 && pet.stageDays() == 0);
+        for (int i = 0; i < 10; ++i) game.OnConfirmKey();
+        assert(pet.customStat(2) == 0);
+        const auto exhaustedSequence = storage.lastSaveSequence();
+        game.OnConfirmKey();
+        assert(pet.customStat(2) == 0 && storage.lastSaveSequence() == exhaustedSequence);
+        tick(game, 100000);
+        assert(pet.stageDays() == 0);
+        for (int i = 0; i < 4; ++i) game.OnRightKey();
+        sd.limitWrite(12, 0, 0);
+        game.OnConfirmKey();
+        assert(pet.stageDays() == 0 && pet.customStat(2) == 0);
+        Pet old; PetStorage oldStorage(&sd);
+        assert(oldStorage.load(old, pet.persistentState().schemaFingerprint));
+        assert(old.stageDays() == 0 && old.customStat(2) == 0);
+        sd.limitWrite(static_cast<size_t>(-1), 0, 0);
+        game.OnConfirmKey();
+        assert(pet.stageDays() == 1 && pet.customStat(2) == 10);
+        Pet restored; PetStorage rebootStorage(&sd);
+        assert(rebootStorage.load(restored, pet.persistentState().schemaFingerprint));
+        assert(restored.stageDays() == 1 && restored.customStat(2) == 10);
+        tick(game, 200000);
+        assert(pet.stageDays() == 1);
+        puts("[PASS] Exported manual-day bundle: ten actions, quota rejection, RTC suppression, torn day write rollback, retry and complete A/B recovery");
+        return 0;
+    }
     if (argc == 3 && std::string(argv[2]) == "guess")
     {
         assert(!pet.isCollectionOwned(0) && !pet.isCollectionOwned(1));

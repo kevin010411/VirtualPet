@@ -7,9 +7,9 @@ namespace RuntimeTableInternal
 namespace
 {
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// v27 adds managed fixed-Version Action outcomes and bounded streamed effects.
+// v28 adds day-cycle resets and streamed numeric execution gates.
 // Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 27;
+constexpr uint16_t kVersion = 28;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -28,6 +28,9 @@ uint16_t recordSizeFor(uint16_t type)
     {
     case InstructionResponseConfig: return 24;
     case InstructionResponseEffects: return 12;
+    case DayCycle: return 4;
+    case DayResetEffects: return 12;
+    case ActionGates: return 12;
     case Profile: return 38;
     case Persistence: return 16;
     case AssetRefs: return 12;

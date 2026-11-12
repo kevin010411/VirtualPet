@@ -289,6 +289,9 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     animations->configureRuntimeContract(petBehaviorConfig);
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
     petSaves.configureRuntimeContract(petBehaviorConfig);
+    petBehaviorRuntime->setPersistence([](void *context) {
+        return static_cast<PetSaveController *>(context)->saveCollectionProgress(true, true) != PetSaveResult::Failed;
+    }, &petSaves);
     commands->configure(petBehaviorConfig);
     layout->configureRuntimeContract(petBehaviorConfig);
     runtimeLoadState = RuntimeLoadState::Ready;
@@ -734,6 +737,11 @@ EvolutionResult Game::settleMutation(Settlement source)
 
 void Game::handleSystemCommandRequest(const CommandResult &result)
 {
+    if (result.kind == CommandResultKind::AdvanceDay)
+    {
+        if (petBehaviorConfig.manualDays) settlePetDays(1);
+        return;
+    }
 #if ENABLE_SHOP
     if (result.kind == CommandResultKind::Shop || result.kind == CommandResultKind::Inventory)
     {
@@ -820,6 +828,12 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
         petClock.pause(rtcSeconds);
         return;
     }
+    if (petBehaviorConfig.manualDays)
+    {
+        petClock.reset(rtcSeconds);
+        catchUpPrimed = false;
+        return;
+    }
     if (!flow.allowsPetTime())
     {
         clockStarted = false;
@@ -862,7 +876,7 @@ uint32_t Game::settlePetDays(uint32_t dueDays)
     uint32_t days = 1;
     // Settle already-matching unlock/acquisition predicates on the first
     // day before skipping a stable interval (which may end in death).
-    if (catchUpPrimed && dueDays > 1 &&
+    if (!petBehaviorConfig.manualDays && petBehaviorConfig.dayResetCount == 0 && catchUpPrimed && dueDays > 1 &&
         !petBehaviorRuntime->catchUpDays(appearanceLoader, dueDays, days))
     {
         enterRuntimeFatal();

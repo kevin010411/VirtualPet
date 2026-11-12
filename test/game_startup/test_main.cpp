@@ -44,6 +44,7 @@ namespace
 {
 struct Scenario
 {
+    bool manualDays = false;
     bool idleMusic = false;
     bool catchUpEvents = false;
     bool batchCatchUp = false;
@@ -1162,6 +1163,40 @@ void testBehaviorTransactionsUseLivePet()
     assert(data.saves == 0);
 }
 
+void testManualDayCommand()
+{
+    hostMillis = 0;
+    Scenario data;
+    scenario = &data;
+    data.manualDays = true;
+    SdFat sd;
+    Pet pet;
+    PetStorage storage(&sd);
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
+    FakeAppearanceLoader loader;
+    Game game(pet, storage, renderer, resources, loader);
+    assert(game.setup_game());
+    game.synchronizeTime(10);
+    game.synchronizeTime(100000);
+    assert(pet.stageDays() == 0);
+    pet.setCustomStat(0, 0);
+    data.saveSucceeds = false;
+    game.OnConfirmKey();
+    assert(pet.stageDays() == 0 && pet.customStat(0) == 0);
+    data.saveSucceeds = true;
+    game.OnConfirmKey();
+    assert(pet.stageDays() == 1 && pet.customStat(0) == 10);
+    assert(data.savedPet.stageDays() == 1 && data.savedPet.customStat(0) == 10);
+    game.synchronizeTime(200000);
+    assert(pet.stageDays() == 1);
+    Pet rebooted;
+    Game resumed(rebooted, storage, renderer, resources, loader);
+    assert(resumed.setup_game());
+    resumed.synchronizeTime(300000);
+    assert(rebooted.stageDays() == 1 && rebooted.customStat(0) == 10);
+}
+
 void testUserActionPlaybackSequence()
 {
     Scenario data;
@@ -1333,8 +1368,8 @@ void testGameRoutesUserActionResult()
         assert(data.unlocks == unlocks + 1);
         assert(data.unlockInput.customStats[0] == 8);
         assert(data.resourceShows == errors + (missing ? 1 : 0));
-        // Catalog builds commit the completed action immediately.
-        assert(data.saves == saves + ENABLE_COLLECTION_CATALOG);
+        // Numeric effects persist before playback, including catalog-disabled builds.
+        assert(data.saves == saves + 1 + ENABLE_COLLECTION_CATALOG);
         assert(game.hasTransientAnimation() == !missing);
     }
 }
@@ -2208,6 +2243,17 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
     config.activeSpeciesSlot = selection.speciesSlot;
     config.activeOutfitSlot = selection.outfitSlot;
     config.idleAnimation = {selection.speciesSlot, selection.outfitSlot, 5};
+    if (scenario->manualDays)
+    {
+        config.manualDays = true;
+        config.stats[0] = {true, 10, 0, 10, -1};
+        config.dayResetCount = 1;
+        config.dayResets[0] = {0, PetBehaviorEffectOperation::Set, 10};
+        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::AdvanceDay};
+        config.screenBlockCount = 1;
+        config.screenBlocks[0].kind = ScreenBlockKind::Button;
+        config.screenBlocks[0].source = 1;
+    }
 #if ENABLE_SEQUENCE_AUDIO
     if (scenario->idleMusic) config.animationAudio[config.idleAnimation.animationId - 1] = {0, 16000};
 #endif
@@ -2373,7 +2419,7 @@ AssetResources::AssetResources(SdFat *sd)
 BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t size)
     : sd_(sd), scratch_(scratch), scratchSize_(size) {}
 
-Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef)
+Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef, SPIClass *)
     : tft(display), resources(resourceRef), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
@@ -3225,6 +3271,7 @@ int main(int argc, char **argv)
     testEvolutionInterrupted(true, false);
     testEvolutionInterrupted(true, true);
     testBehaviorTransactionsUseLivePet();
+    testManualDayCommand();
     testUserActionPlaybackSequence();
     testCommandReplacesSequenceAcrossDayBoundary();
     testGameRoutesUserActionResult();

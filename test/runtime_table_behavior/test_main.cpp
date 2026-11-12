@@ -757,6 +757,19 @@ void testDeathCapability(const std::vector<uint8_t> &base)
 
 int main(int argc, char **argv)
 {
+    if (argc == 3 && std::strcmp(argv[1], "--manual-day") == 0)
+    {
+        const auto bytes = readFixture(argv[2]);
+        PetBehaviorConfig config = {};
+        auto manifest = fixtureManifest(bytes);
+        std::memcpy(manifest.bundleId.bytes, bytes.data() + 28, 16);
+        assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, 1, config));
+        assert(config.manualDays && config.dayResetCount == 1);
+        assert(config.dayResets[0].statSlot == 2 && config.dayResets[0].value == 10);
+        assert(config.actionGateCount == 1 && config.actionGatesOffset > 0);
+        assert(config.buttons[5].systemCommandId == RuntimeSystemCommandId::AdvanceDay);
+        return 0;
+    }
     AssetData::AssetFrameAddress ninthSpecies = {};
     ninthSpecies.speciesSlot = 9;
     ninthSpecies.outfitSlot = 1;

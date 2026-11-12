@@ -87,6 +87,10 @@ CommandResult CommandExecutor::execute(const CommandController &commands)
         result.kind = CommandResultKind::Playback;
         result.resourceError = !queueStatusSetsAnimation();
         break;
+    case AppCommandId::AdvanceDay:
+        if (petBehaviorConfig != nullptr && petBehaviorConfig->manualDays)
+            result.kind = CommandResultKind::AdvanceDay;
+        break;
 #if ENABLE_COLLECTION_CATALOG
     case AppCommandId::CollectionCatalog:
         result.kind = CommandResultKind::Collection;

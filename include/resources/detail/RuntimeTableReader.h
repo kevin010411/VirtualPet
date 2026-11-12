@@ -30,6 +30,9 @@ enum SectionType : uint16_t
 {
     InstructionResponseConfig = 70,
     InstructionResponseEffects = 71,
+    DayCycle = 72,
+    DayResetEffects = 73,
+    ActionGates = 74,
     Profile = 1,
     Persistence = 2,
     AssetRefs = 3,

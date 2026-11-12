@@ -23,6 +23,7 @@ enum class CommandResultKind : uint8_t
     Instruction,
     Shop,
     Inventory,
+    AdvanceDay,
 };
 
 struct CommandResult

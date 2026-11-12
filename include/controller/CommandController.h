@@ -20,6 +20,7 @@ enum class AppCommandId : uint8_t
     CollectionCatalog = APP_COMMAND_COLLECTION_CATALOG,
     Shop = APP_COMMAND_SHOP,
     Inventory = APP_COMMAND_INVENTORY,
+    AdvanceDay = 16,
 };
 
 class CommandController

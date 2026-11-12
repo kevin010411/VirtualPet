@@ -416,6 +416,33 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     config.activeSpeciesSlot = speciesSlot;
     config.activeOutfitSlot = outfitSlot;
     config.schemaFingerprint = table.schemaFingerprint;
+    config.manualDays = false;
+    config.dayResetCount = 0;
+    config.actionGateCount = 0;
+    if (const Section *day = table.find(DayCycle))
+    {
+        uint8_t record[4];
+        if (!readRecord(source, *day, 0, record)) return false;
+        config.manualDays = record[0] != 0;
+    }
+    if (const Section *resets = table.find(DayResetEffects))
+    {
+        if (resets->count > kPetBehaviorSlotCount) return false;
+        config.dayResetCount = resets->count;
+        for (uint8_t i = 0; i < resets->count; ++i)
+        {
+            uint8_t record[12];
+            if (!readRecord(source, *resets, i, record)) return false;
+            config.dayResets[i].statSlot = record[0];
+            config.dayResets[i].operation = static_cast<PetBehaviorEffectOperation>(record[1]);
+            config.dayResets[i].value = readI64(record + 2);
+        }
+    }
+    if (const Section *gates = table.find(ActionGates))
+    {
+        config.actionGatesOffset = gates->offset;
+        config.actionGateCount = gates->count;
+    }
 #if ENABLE_COLLECTION_CATALOG
     if (!loadCollectionCatalog(table, config))
         return false;

@@ -121,6 +121,11 @@ static_assert(sizeof(ScreenRuleConfig) == 12, "Screen rules store exported unsig
 
 struct PetBehaviorConfig
 {
+    bool manualDays;
+    uint8_t dayResetCount;
+    PetBehaviorActionEffectConfig dayResets[kPetBehaviorSlotCount];
+    uint32_t actionGatesOffset;
+    uint16_t actionGateCount;
 #if ENABLE_SHOP
     bool shopEnabled;
 #endif
