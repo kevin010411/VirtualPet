@@ -16,6 +16,10 @@ void previous() { ++shorts[0]; }
 void next() { ++shorts[1]; }
 void confirm() { ++shorts[2]; }
 void beep() { ++beeps; }
+#if ENABLE_PROJECT_MENUS
+static int backs = 0;
+void back() { ++backs; }
+#endif
 
 static CheatButtonEvent tick(ButtonInput &input, unsigned long ms = 1)
 {
@@ -108,4 +112,36 @@ int main()
     pins[0] = HIGH;
     assert(tick(input) == CheatButtonEvent::Exited);
     assert(shorts[0] == previousBefore + 1);
+
+#if ENABLE_PROJECT_MENUS
+    const auto menuTick = [&](unsigned long ms)
+    {
+        clockMs += ms;
+        assert(input.update(previous, next, confirm, beep, back) == CheatButtonEvent::None);
+    };
+    const int beforeMenu = shorts[2];
+    pins[2] = LOW;
+    menuTick(251);
+    menuTick(1999);
+    assert(shorts[2] == beforeMenu && backs == 0);
+    menuTick(1);
+    menuTick(2000);
+    pins[2] = HIGH;
+    menuTick(1);
+    assert(shorts[2] == beforeMenu && backs == 1);
+
+    pins[2] = LOW;
+    menuTick(251);
+    assert(shorts[2] == beforeMenu);
+    pins[2] = HIGH;
+    menuTick(100);
+    assert(shorts[2] == beforeMenu + 1 && backs == 1);
+
+    pins[2] = LOW;
+    tick(input, 251); // Opens the menu through the normal on-press path.
+    menuTick(2000);
+    pins[2] = HIGH;
+    menuTick(1);
+    assert(shorts[2] == beforeMenu + 2 && backs == 1);
+#endif
 }

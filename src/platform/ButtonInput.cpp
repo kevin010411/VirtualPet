@@ -28,6 +28,9 @@ void ButtonInput::begin()
 
 void ButtonInput::clearFlags()
 {
+#if ENABLE_PROJECT_MENUS
+    menuConfirmPending = false;
+#endif
 #if ENABLE_INSTRUCTION_RESPONSE
     instructionObserved = 255;
     instructionStable = 7;
@@ -62,7 +65,8 @@ bool ButtonInput::takeDeathPress()
 CheatButtonEvent ButtonInput::update(ButtonCallback onPrevious,
                                      ButtonCallback onNext,
                                      ButtonCallback onConfirm,
-                                     ButtonCallback onAnyPress)
+                                     ButtonCallback onAnyPress,
+                                     ButtonCallback onConfirmHold)
 {
     const unsigned long now = millis();
     const uint8_t observed = readMask();
@@ -78,6 +82,29 @@ CheatButtonEvent ButtonInput::update(ButtonCallback onPrevious,
             gestureMask |= stableMask;
         }
     }
+#if ENABLE_PROJECT_MENUS
+    // In project menus, a short confirm fires on release so a hold can
+    // go back without first opening or executing the selected entry.
+    if (menuConfirmPending)
+    {
+        if (onConfirmHold == nullptr || (stableMask != 0 && stableMask != kConfirm))
+            menuConfirmPending = false;
+        else
+        {
+            const bool held = now - gestureStartedAt >= kLongPressMs;
+            if (stableMask == 0 || held)
+            {
+                menuConfirmPending = false;
+                waitForRelease = stableMask != 0;
+                gestureMask = 0;
+                lastShortPressAt = now;
+                const ButtonCallback callback = held ? onConfirmHold : onConfirm;
+                if (callback != nullptr) callback();
+            }
+            return CheatButtonEvent::None;
+        }
+    }
+#endif
     // Normal single buttons dispatch on the first observed down edge, without
     // debounce or release delay. Wake presses and cheat holds stay consumed.
     if (previousMask == 0 && stableMask != 0 && !waitForRelease && !cheatMode &&
@@ -90,6 +117,13 @@ CheatButtonEvent ButtonInput::update(ButtonCallback onPrevious,
         {
             lastShortPressAt = now;
             if (onAnyPress != nullptr) onAnyPress();
+#if ENABLE_PROJECT_MENUS
+            if (stableMask == kConfirm && onConfirmHold != nullptr)
+            {
+                menuConfirmPending = true;
+                return CheatButtonEvent::None;
+            }
+#endif
             callback();
         }
     }

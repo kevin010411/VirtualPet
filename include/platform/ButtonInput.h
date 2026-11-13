@@ -28,7 +28,8 @@ public:
     bool isDebouncedHeld() const { return stableMask != 0; }
     uint32_t wakeGeneration() const { return wakeCount; }
     CheatButtonEvent update(ButtonCallback onPrevious, ButtonCallback onNext,
-                            ButtonCallback onConfirm, ButtonCallback onAnyPress);
+                            ButtonCallback onConfirm, ButtonCallback onAnyPress,
+                            ButtonCallback onConfirmHold = nullptr);
 
 private:
     static void handleWakeInterrupt();
@@ -54,6 +55,9 @@ private:
     uint8_t gestureMask = 0;
     bool waitForRelease = false;
     bool cheatMode = false;
+#if ENABLE_PROJECT_MENUS
+    bool menuConfirmPending = false;
+#endif
 };
 
 #endif
