@@ -143,8 +143,8 @@ BundleReader::BundleReader(SdFat *sd, uint8_t *scratch, size_t scratchSize)
 AssetResources::AssetResources(SdFat *sd)
     : sd_(sd), reader_(sd, readBuffer_, AssetData::kIoScratchBytes) {}
 
-Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef)
-    : tft(display), resources(resourceRef), state(nullptr) {}
+Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef, SPIClass *pixelSpi)
+    : tft(display), resources(resourceRef), pixelSpi(pixelSpi), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
 void Renderer::setAnimationArea(uint8_t, uint8_t, uint8_t, uint8_t) {}
