@@ -141,6 +141,7 @@ struct PetBehaviorConfig
     uint32_t actionGatesOffset;
     uint16_t actionGateCount;
 #if ENABLE_STAT_EVENTS
+    bool persistentStatEvents;
     uint32_t statEventTriggersOffset;
     uint32_t statEventNodesOffset;
     uint32_t statEventEdgesOffset;

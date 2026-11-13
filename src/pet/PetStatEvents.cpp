@@ -8,6 +8,8 @@
 
 namespace
 {
+constexpr uint8_t kEventTerminal = 1;
+constexpr uint8_t kEventWait = 2;
 using RuntimeTableInternal::readI64;
 using RuntimeTableInternal::readU16;
 using RuntimeTableInternal::readU32;
@@ -104,23 +106,36 @@ bool applyNode(EventFile &file, const PetBehaviorConfig &config, const uint8_t (
     const uint16_t firstPage = readU16(node + 4);
     for (uint8_t offset = 0; offset < node[10]; ++offset)
         result.pages[result.pageCount++] = firstPage + offset;
-    result.terminal = (node[11] & 1) != 0;
+    result.terminal = (node[11] & kEventTerminal) != 0;
     return true;
 }
 
 bool runEvent(EventFile &file, const PetBehaviorConfig &config, uint16_t nodeIndex,
               const PetStatSnapshot &before, const PetStatSnapshot &after,
-              PetStatEventResult &result)
+              PetStatEventResult &result, bool resume = false)
 {
     const uint16_t activeMask = activePetBehaviorStatMask(config);
-    // Exported paths are acyclic. Bound traversal by the number of available records.
+    // Immediate paths are acyclic. Waiting nodes may be revisited on a later mutation.
     for (uint16_t remaining = config.statEventNodeCount; remaining != 0; --remaining)
     {
         uint8_t node[12];
         if (nodeIndex >= config.statEventNodeCount ||
-            !file.read(config.statEventNodesOffset, nodeIndex, node) ||
-            !applyNode(file, config, node, result)) return false;
-        if (result.terminal) return true;
+            !file.read(config.statEventNodesOffset, nodeIndex, node)) return false;
+        if (!resume)
+        {
+            if (!applyNode(file, config, node, result)) return false;
+            if (result.terminal)
+            {
+                result.values.activeStatEvent = kNoActiveStatEvent;
+                return true;
+            }
+            if (config.persistentStatEvents)
+            {
+                result.values.activeStatEvent = nodeIndex;
+                if ((node[11] & kEventWait) || !node[8]) return true;
+            }
+        }
+        resume = false;
 
         const uint16_t firstEdge = readU16(node);
         bool hasNext = false;
@@ -128,6 +143,8 @@ bool runEvent(EventFile &file, const PetBehaviorConfig &config, uint16_t nodeInd
         {
             uint8_t edge[8];
             if (!file.read(config.statEventEdgesOffset, firstEdge + offset, edge)) return false;
+            const uint16_t changeSlot = readU16(edge + 6);
+            if (changeSlot && before.customStats[changeSlot - 1U] == after.customStats[changeSlot - 1U]) continue;
             const PetStatSnapshot &snapshot = edge[5] == 1 ? before : edge[5] == 2 ? after : result.values;
             const RuntimeValueContext context = makeRuntimeValueContext(
                 snapshot.customStats, activeMask, snapshot.stage_days, snapshot.speciesSlot, snapshot.outfitSlot);
@@ -149,19 +166,30 @@ bool settleStatEvents(SdFat *sd, const PetBehaviorConfig &config,
                       PetStatEventResult &result)
 {
     result.values = after;
+    result.values.activeStatEvent = before.activeStatEvent;
     result.terminal = false;
     result.pageCount = 0;
     if (config.statEventTriggerCount == 0) return true;
     EventFile file;
     if (!file.open(sd)) return false;
+    if (config.persistentStatEvents && before.activeStatEvent != kNoActiveStatEvent)
+    {
+        bool changed = before.stage_days != after.stage_days;
+        for (uint8_t slot = 0; slot < config.statCount && !changed; ++slot)
+            changed = before.customStats[slot] != after.customStats[slot];
+        if (!changed) return true;
+        return runEvent(file, config, before.activeStatEvent, before, after, result, true);
+    }
     for (uint16_t index = 0; index < config.statEventTriggerCount && !result.terminal; ++index)
     {
         uint8_t trigger[8];
         if (!file.read(config.statEventTriggersOffset, index, trigger)) return false;
         const uint8_t slot = trigger[2];
         if (slot >= config.statCount) return false;
-        if (matchesTrigger(trigger[3], readU32(trigger + 4), before.customStats[slot], after.customStats[slot]) &&
-            !runEvent(file, config, readU16(trigger), before, after, result)) return false;
+        if (!matchesTrigger(trigger[3], readU32(trigger + 4), before.customStats[slot], after.customStats[slot]))
+            continue;
+        if (!runEvent(file, config, readU16(trigger), before, after, result)) return false;
+        if (config.persistentStatEvents) break;
     }
     return true;
 }

@@ -51,6 +51,7 @@ bool Game::settleStatMutation(const PetStatSnapshot &after, uint8_t actionSlot, 
 
     if (!pet.commitPetStats(events.values.customStats, kPetCustomStatCount)) return false;
     pet.setStageDays(events.values.stage_days);
+    if (petBehaviorConfig.persistentStatEvents) pet.setActiveStatEvent(events.values.activeStatEvent);
 #if ENABLE_COLLECTION_CATALOG
     for (uint8_t index = 0; index < petBehaviorConfig.trackedActionCount; ++index)
         if (petBehaviorConfig.trackedActions[index] == actionSlot)

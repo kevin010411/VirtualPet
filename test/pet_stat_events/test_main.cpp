@@ -60,10 +60,59 @@ PetBehaviorConfig fixture(std::vector<uint8_t> &bytes)
     append(bytes, {47, 0, 5, 0});
     return config;
 }
+
+void testPersistentWaitingEvent()
+{
+    std::vector<uint8_t> bytes;
+    PetBehaviorConfig config = {};
+    config.persistentStatEvents = true;
+    config.statCount = 3;
+    for (auto &stat : config.stats)
+    {
+        stat.active = true;
+        stat.maxValue = 100;
+    }
+    config.statEventTriggerCount = 1;
+    append(bytes, {0, 0, 0, 0, 0, 0, 0, 0});
+    config.statEventNodesOffset = bytes.size();
+    config.statEventNodeCount = 3;
+    append(bytes, {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0});
+    append(bytes, {1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2});
+    append(bytes, {2, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1});
+    config.statEventEdgesOffset = bytes.size();
+    append(bytes, {1, 0, 0, 0, 0, 0, 0, 0});
+    append(bytes, {2, 0, 0, 0, 1, 0, 1, 0});
+    config.statEventConditionsOffset = bytes.size();
+    append(bytes, {17, 3, 0, 0, 3, 0, 0, 0});
+    config.statEventEffectsOffset = bytes.size();
+    append(bytes, {2, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0});
+    append(bytes, {2, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0});
+    SdFat sd;
+    sd.seedReadOnly("/runtime.bin", bytes);
+    PetStatSnapshot before = {}, after = {};
+    after.customStats[0] = 1;
+    PetStatEventResult result = {};
+    assert(settleStatEvents(&sd, config, before, after, result));
+    assert(result.values.activeStatEvent == 1 && result.values.customStats[2] == 10 && result.pageCount == 1);
+    before = after = result.values;
+    after.customStats[0] = 2;
+    after.customStats[1] = 2;
+    assert(settleStatEvents(&sd, config, before, after, result));
+    assert(result.values.activeStatEvent == 1 && result.values.customStats[2] == 10 && result.pageCount == 0);
+    before = after = result.values;
+    after.customStats[1] = 4;
+    assert(settleStatEvents(&sd, config, before, after, result));
+    assert(result.values.activeStatEvent == 1 && result.values.customStats[2] == 10 && result.pageCount == 0);
+    before = after = result.values;
+    after.customStats[0] = 3;
+    assert(settleStatEvents(&sd, config, before, after, result));
+    assert(result.terminal && result.values.activeStatEvent == kNoActiveStatEvent && result.values.customStats[2] == 15);
+}
 }
 
 int main()
 {
+    testPersistentWaitingEvent();
     std::vector<uint8_t> bytes;
     PetBehaviorConfig config = fixture(bytes);
     SdFat sd;

@@ -452,6 +452,7 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         config.actionGateCount = gates->count;
     }
 #if ENABLE_STAT_EVENTS
+    config.persistentStatEvents = (table.featureFlags & kPersistentStatEventsFeature) != 0;
     config.statEventTriggerCount = 0;
     if ((table.featureFlags & kStatEventsFeature) != 0)
     {

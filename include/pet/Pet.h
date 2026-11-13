@@ -6,6 +6,7 @@
 
 static constexpr size_t kPetCustomStatCount = 12;
 static constexpr size_t kTrackedActionCount = 8;
+static constexpr uint16_t kNoActiveStatEvent = UINT16_MAX;
 
 struct PersistedPetState
 {
@@ -39,6 +40,9 @@ struct PetStatSnapshot
     uint8_t speciesSlot;
     uint8_t outfitSlot;
     uint32_t customStats[kCustomStatCount];
+#if ENABLE_STAT_EVENTS
+    uint16_t activeStatEvent = kNoActiveStatEvent;
+#endif
 };
 
 class Pet
@@ -55,6 +59,7 @@ public:
 #if ENABLE_STAT_EVENTS
     bool isRoundComplete() const;
     void completeRound();
+    void setActiveStatEvent(uint16_t node);
     void retainCollectionFrom(const PersistedPetState &previous);
 #endif
 #if ENABLE_DEATH

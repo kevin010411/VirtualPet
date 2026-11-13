@@ -30,9 +30,10 @@ constexpr uint32_t kScreenStatSumSegmentsFeature = 1UL << 19;
 constexpr uint32_t kStatEventsFeature = 1UL << 20;
 constexpr uint32_t kStageDaysEffectsFeature = 1UL << 22;
 constexpr uint32_t kShopStageDaysFeature = 1UL << 21;
+constexpr uint32_t kPersistentStatEventsFeature = 1UL << 23;
 constexpr uint32_t kKnownFeatures = (((1UL << 17) - 1UL) & ~(1UL << 8)) |
     kScreenStatSumFeature | kScreenStatDimensionsFeature | kScreenStatSumSegmentsFeature |
-    kStatEventsFeature | kShopStageDaysFeature | kStageDaysEffectsFeature;
+    kStatEventsFeature | kShopStageDaysFeature | kStageDaysEffectsFeature | kPersistentStatEventsFeature;
 
 enum SectionType : uint16_t
 {

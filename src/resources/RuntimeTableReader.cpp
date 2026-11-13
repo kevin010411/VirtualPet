@@ -107,7 +107,7 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         (featureFlags & ~kKnownFeatures) != 0)
         return false;
 #if !ENABLE_STAT_EVENTS
-    if ((featureFlags & kStatEventsFeature) != 0) return false;
+    if ((featureFlags & (kStatEventsFeature | kPersistentStatEventsFeature)) != 0) return false;
 #endif
 
     bool nonzeroBundle = false;

@@ -10,6 +10,8 @@ constexpr uint32_t kFirstStartCompletedFlag = 0x2UL;
 constexpr uint32_t kDeadFlag = 0x4UL;
 #if ENABLE_STAT_EVENTS
 constexpr uint32_t kRoundCompleteFlag = 0x8UL;
+constexpr uint8_t kStatEventShift = 4;
+constexpr uint32_t kStatEventMask = 0x1ffUL << kStatEventShift;
 #endif
 
 uint8_t parseAppearanceSlot(const char *text)
@@ -49,6 +51,11 @@ bool Pet::isDead() const { return (st.flowFlags & kDeadFlag) != 0; }
 #if ENABLE_STAT_EVENTS
 bool Pet::isRoundComplete() const { return (st.flowFlags & kRoundCompleteFlag) != 0; }
 void Pet::completeRound() { st.flowFlags |= kRoundCompleteFlag; }
+void Pet::setActiveStatEvent(uint16_t node)
+{
+    const uint32_t encoded = node == kNoActiveStatEvent ? 0U : static_cast<uint32_t>(node) + 1U;
+    st.flowFlags = (st.flowFlags & ~kStatEventMask) | ((encoded << kStatEventShift) & kStatEventMask);
+}
 void Pet::retainCollectionFrom(const PersistedPetState &previous)
 {
     st.collectionFingerprint = previous.collectionFingerprint;
@@ -178,6 +185,10 @@ void Pet::setStageDays(uint32_t value)
 PetStatSnapshot Pet::statSnapshot() const
 {
     PetStatSnapshot snapshot = {};
+#if ENABLE_STAT_EVENTS
+    const uint32_t encoded = (st.flowFlags & kStatEventMask) >> kStatEventShift;
+    if (encoded) snapshot.activeStatEvent = static_cast<uint16_t>(encoded - 1U);
+#endif
     snapshot.stage_days = st.stage_days;
     snapshot.speciesSlot = speciesSlot();
     snapshot.outfitSlot = outfitSlot();
