@@ -10,6 +10,7 @@ class AnimationController;
 class Pet;
 class AssetResources;
 class AppearanceLoader;
+struct PetStatSnapshot;
 
 enum class PetBehaviorActionResult : uint8_t
 {
@@ -29,6 +30,12 @@ public:
 
     bool hasAction(uint8_t actionSlot) const;
     void setPersistence(bool (*save)(void *), void *context) { saveMutation = save; saveContext = context; }
+#if ENABLE_STAT_EVENTS
+    void setStatEventSettlement(bool (*settle)(void *, const PetStatSnapshot &, uint8_t, bool))
+    {
+        settleStatMutation = settle;
+    }
+#endif
     void initializeStats();
     void resetTransientState() { dailyChangePauses = {}; }
     bool isDead() const;
@@ -53,6 +60,11 @@ private:
     PetBehaviorDailyChangePauses dailyChangePauses;
     bool (*saveMutation)(void *) = nullptr;
     void *saveContext = nullptr;
+#if ENABLE_STAT_EVENTS
+    bool (*settleStatMutation)(void *, const PetStatSnapshot &, uint8_t, bool) = nullptr;
+    bool usesStatEvents() const { return config.statEventTriggerCount && settleStatMutation; }
+    bool commitStatMutation(const PetBehaviorStatValues &state, uint8_t actionSlot, uint32_t days = 0);
+#endif
 };
 
 #endif // PET_BEHAVIOR_RUNTIME_H

@@ -109,6 +109,18 @@ bool PetBehaviorRuntime::catchUpDays(AppearanceLoader &loader, uint32_t limit, u
     return loader.catchUpDays(config, readStats(pet), dailyChangePauses, limit, days);
 }
 
+#if ENABLE_STAT_EVENTS
+bool PetBehaviorRuntime::commitStatMutation(const PetBehaviorStatValues &state, uint8_t actionSlot, uint32_t days)
+{
+    PetStatSnapshot after = pet.statSnapshot();
+    for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
+        after.customStats[slot] = state.values[slot];
+    const uint32_t remaining = Pet::kStageDaysMax - after.stage_days;
+    after.stage_days += days > remaining ? remaining : days;
+    return settleStatMutation(saveContext, after, actionSlot, days != 0);
+}
+#endif
+
 bool PetBehaviorRuntime::advancePetDay(uint32_t days)
 {
     const PersistedPetState before = pet.persistentState();
@@ -121,11 +133,20 @@ bool PetBehaviorRuntime::advancePetDay(uint32_t days)
         state.values[effect.statSlot] = static_cast<uint32_t>(
             effect.value > config.stats[effect.statSlot].maxValue ? config.stats[effect.statSlot].maxValue : effect.value);
     }
-    if (!pet.commitPetDay(state.values, kPetBehaviorSlotCount, days)) return false;
-    if (config.manualDays && saveMutation != nullptr && !saveMutation(saveContext))
+#if ENABLE_STAT_EVENTS
+    if (usesStatEvents())
     {
-        pet.restoreState(before);
-        return false;
+        if (!commitStatMutation(state, UINT8_MAX, days)) return false;
+    }
+    else
+#endif
+    {
+        if (!pet.commitPetDay(state.values, kPetBehaviorSlotCount, days)) return false;
+        if (config.manualDays && saveMutation != nullptr && !saveMutation(saveContext))
+        {
+            pet.restoreState(before);
+            return false;
+        }
     }
     dailyChangePauses = nextPauses;
     return true;
@@ -169,16 +190,24 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
             config, actionSlot, state, nextPauses, playback, firmwareRandomBelow,
             readActionEffect, &effectSource))
         return effectSource.failed ? PetBehaviorActionResult::ResourceReadFailed : PetBehaviorActionResult::Rejected;
-    if (!writeStats(state, pet))
-        return PetBehaviorActionResult::Rejected;
-#if ENABLE_COLLECTION_CATALOG
-    for (uint8_t index = 0; index < config.trackedActionCount; ++index)
-        if (config.trackedActions[index] == actionSlot) { pet.incrementActionCount(index); break; }
-#endif
-    if (saveMutation != nullptr && !saveMutation(saveContext))
+#if ENABLE_STAT_EVENTS
+    if (usesStatEvents())
     {
-        pet.restoreState(before);
-        return PetBehaviorActionResult::ResourceReadFailed;
+        if (!commitStatMutation(state, actionSlot)) return PetBehaviorActionResult::ResourceReadFailed;
+    }
+    else
+#endif
+    {
+        if (!writeStats(state, pet)) return PetBehaviorActionResult::Rejected;
+#if ENABLE_COLLECTION_CATALOG
+        for (uint8_t index = 0; index < config.trackedActionCount; ++index)
+            if (config.trackedActions[index] == actionSlot) { pet.incrementActionCount(index); break; }
+#endif
+        if (saveMutation != nullptr && !saveMutation(saveContext))
+        {
+            pet.restoreState(before);
+            return PetBehaviorActionResult::ResourceReadFailed;
+        }
     }
     dailyChangePauses = nextPauses;
     if (pet.isDead()) return PetBehaviorActionResult::Applied;
@@ -228,6 +257,9 @@ bool PetBehaviorRuntime::applyGuessOutcome(PetBehaviorGuessOutcome outcome)
     PetBehaviorStatValues state = readStats(pet);
     if (!applyPetBehaviorGuessOutcome(config, outcome, state))
         return false;
+#if ENABLE_STAT_EVENTS
+    if (usesStatEvents()) return commitStatMutation(state, UINT8_MAX);
+#endif
     return writeStats(state, pet);
 }
 #endif
@@ -261,6 +293,9 @@ bool PetBehaviorRuntime::applyInstructionResults(uint32_t correctMask, uint8_t c
     if (pet.isDead()) return false;
     PetBehaviorStatValues state = readStats(pet);
     if (!applyPetBehaviorInstructionResults(config, correctMask, count, state)) return false;
+#if ENABLE_STAT_EVENTS
+    if (usesStatEvents()) return commitStatMutation(state, UINT8_MAX);
+#endif
     return writeStats(state, pet);
 }
 #endif

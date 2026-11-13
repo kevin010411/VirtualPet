@@ -52,6 +52,11 @@ public:
 
     void setDefaultState();
     bool isDead() const;
+#if ENABLE_STAT_EVENTS
+    bool isRoundComplete() const;
+    void completeRound();
+    void retainCollectionFrom(const PersistedPetState &previous);
+#endif
 #if ENABLE_DEATH
     void configureDeath(bool enabled, uint16_t statMask);
     bool evaluateDeath();

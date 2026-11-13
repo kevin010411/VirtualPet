@@ -353,6 +353,14 @@ void onConfirmButton()
   noteInteraction();
 }
 
+#if ENABLE_PROJECT_MENUS
+void onProjectMenuBack()
+{
+  game.OnProjectMenuBack();
+  noteInteraction();
+}
+#endif
+
 static void TFT_Reset(unsigned long lowMs, unsigned long highMs)
 {
   pinMode(BoardConfig::TftRstPin, OUTPUT);
@@ -666,7 +674,11 @@ void loop()
       {
         if (captured) { buttons.clearFlags(); captured = false; }
 #endif
-        buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton, playButtonBeep);
+        buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton, playButtonBeep
+#if ENABLE_PROJECT_MENUS
+                                     , game.isProjectMenuActive() ? onProjectMenuBack : nullptr
+#endif
+                                     );
 #if ENABLE_INSTRUCTION_RESPONSE
       }
 #endif

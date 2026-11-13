@@ -55,15 +55,38 @@ CommandExecutor::CommandExecutor(
 
 CommandResult CommandExecutor::execute(const CommandController &commands)
 {
-    CommandResult result = {};
     if (!commands.isSlotVisible(commands.selectedSlot()))
-        return result;
+        return {};
+    return execute(commands.currentCommandId(), commands.currentTargetSlot());
+}
 
-    switch (commands.currentCommandId())
+#if ENABLE_PROJECT_MENUS
+CommandResult CommandExecutor::executeSystemCommand(RuntimeSystemCommandId command)
+{
+    const auto slot = CommandController::systemCommandSlot(command);
+    return execute(slot.id, slot.targetSlot);
+}
+
+CommandResult CommandExecutor::executeUserAction(uint8_t actionSlot)
+{
+    return execute(AppCommandId::UserAction, actionSlot);
+}
+#endif
+
+CommandResult CommandExecutor::execute(AppCommandId id, uint8_t targetSlot)
+{
+    CommandResult result = {};
+    switch (id)
     {
+#if ENABLE_PROJECT_MENUS
+    case AppCommandId::Menu:
+        result.kind = CommandResultKind::Menu;
+        result.menuSlot = targetSlot;
+        break;
+#endif
     case AppCommandId::UserAction:
     {
-        const auto action = petBehaviorRuntime.executeAction(commands.currentActionSlot());
+        const auto action = petBehaviorRuntime.executeAction(targetSlot);
         if (action != PetBehaviorActionResult::Rejected && action != PetBehaviorActionResult::ResourceReadFailed)
             result.kind = CommandResultKind::UserAction;
         result.resourceError = action == PetBehaviorActionResult::AppliedAnimationMissing ||

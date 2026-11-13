@@ -106,6 +106,13 @@ bool Game::finish_setup_game()
 
     initialized = true;
     if (enterDeathIfNeeded()) return !flow.is(AppStage::FatalError);
+#if ENABLE_STAT_EVENTS
+    if (isRoundComplete())
+    {
+        redrawStatEvents();
+        return true;
+    }
+#endif
     enterCommand();
     petClock.reset(latestRtcSeconds);
     clockStarted = true;

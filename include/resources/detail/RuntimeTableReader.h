@@ -27,8 +27,10 @@ constexpr uint32_t kShopFeature = 1UL << 16;
 constexpr uint32_t kScreenStatSumFeature = 1UL << 17;
 constexpr uint32_t kScreenStatDimensionsFeature = 1UL << 18;
 constexpr uint32_t kScreenStatSumSegmentsFeature = 1UL << 19;
+constexpr uint32_t kStatEventsFeature = 1UL << 20;
 constexpr uint32_t kKnownFeatures = (((1UL << 17) - 1UL) & ~(1UL << 8)) |
-    kScreenStatSumFeature | kScreenStatDimensionsFeature | kScreenStatSumSegmentsFeature;
+    kScreenStatSumFeature | kScreenStatDimensionsFeature | kScreenStatSumSegmentsFeature |
+    kStatEventsFeature;
 
 enum SectionType : uint16_t
 {
@@ -37,6 +39,14 @@ enum SectionType : uint16_t
     DayCycle = 72,
     DayResetEffects = 73,
     ActionGates = 74,
+    MenuDefinitions = 75,
+    MenuEntries = 76,
+    EventTriggers = 77,
+    EventNodes = 78,
+    EventEdges = 79,
+    EventConditions = 80,
+    EventEffects = 81,
+    EventPages = 82,
     Profile = 1,
     Persistence = 2,
     AssetRefs = 3,

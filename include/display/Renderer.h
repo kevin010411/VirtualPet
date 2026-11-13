@@ -37,6 +37,9 @@ public:
     bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
     bool animationFrameFailed() const;
+#if ENABLE_PROJECT_MENUS
+    void clearMenuBelow(uint8_t y);
+#endif
 #if ENABLE_INSTRUCTION_RESPONSE
     void clearInstructionOptions();
     void showInstructionFeedback(bool correct);
@@ -46,6 +49,9 @@ public:
     void highlightShopRow(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
 #endif
     void showResourceError();
+#if ENABLE_STAT_EVENTS
+    void showRoundComplete();
+#endif
     void showResourceError(const char *resource);
 #if ENABLE_DEBUG
     void showStartupResourceError(const char *fallbackResource,

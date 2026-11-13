@@ -41,6 +41,9 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AssetR
           pet, *animations, *petBehaviorRuntime)),
       commands(std::make_unique<CommandController>()),
       layout(std::make_unique<LayoutRenderer>(renderer, resources, *commands))
+#if ENABLE_PROJECT_MENUS
+      , projectMenu(renderer, resources, petBehaviorConfig)
+#endif
 #if ENABLE_SHOP
       , shop(pet, petSaves, appearanceChanges, renderer, resources, petBehaviorConfig)
 #endif
@@ -81,6 +84,9 @@ void Game::loop_game()
         handlePlaybackResult(tickPlayback(millis()).result);
         return;
     }
+#if ENABLE_STAT_EVENTS
+    if (presentStatEvents(millis())) return;
+#endif
 #if ENABLE_SHOP
     if (flow.is(AppStage::Shop))
     {
@@ -101,6 +107,9 @@ void Game::loop_game()
 #endif
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection)) return;
+#endif
+#if ENABLE_PROJECT_MENUS
+    if (flow.is(AppStage::Menu)) return;
 #endif
 
     if (cheatEvolutionPending && !animations->isBusy() &&
@@ -132,6 +141,9 @@ void Game::loop_game()
             {
                 settleMutation(Settlement::InstructionCompletion);
                 if (pet.isDead()) return;
+#if ENABLE_STAT_EVENTS
+                if (presentStatEvents(millis())) return;
+#endif
             }
         }
         if (minigame->capturesInstructionInput()) return;
@@ -189,11 +201,24 @@ void Game::redrawShop()
 }
 #endif
 
+#if ENABLE_PROJECT_MENUS
+void Game::redrawProjectMenu()
+{
+    if (!projectMenu.redraw()) enterRuntimeFatal();
+}
+#endif
+
 void Game::requestFullRedraw()
 {
     if (!initialized)
         return;
+#if ENABLE_STAT_EVENTS
+    if (redrawStatEvents()) return;
+#endif
     dirtySelect = true;
+#if ENABLE_PROJECT_MENUS
+    if (flow.is(AppStage::Menu)) { redrawProjectMenu(); return; }
+#endif
 #if ENABLE_SHOP
     if (flow.is(AppStage::Shop) && !shopPlayback) { redrawShop(); return; }
 #endif
@@ -215,6 +240,12 @@ void Game::redrawAllNow()
 {
     if (!initialized)
         return;
+#if ENABLE_STAT_EVENTS
+    if (redrawStatEvents()) return;
+#endif
+#if ENABLE_PROJECT_MENUS
+    if (flow.is(AppStage::Menu)) { redrawProjectMenu(); return; }
+#endif
 #if ENABLE_SHOP
     if (flow.is(AppStage::Shop) && !shopPlayback) { redrawShop(); return; }
 #endif
@@ -290,8 +321,13 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
     petSaves.configureRuntimeContract(petBehaviorConfig);
     petBehaviorRuntime->setPersistence([](void *context) {
-        return static_cast<PetSaveController *>(context)->saveCollectionProgress(true, true) != PetSaveResult::Failed;
-    }, &petSaves);
+        return static_cast<Game *>(context)->petSaves.saveCollectionProgress(true, true) != PetSaveResult::Failed;
+    }, this);
+#if ENABLE_STAT_EVENTS
+    petBehaviorRuntime->setStatEventSettlement([](void *context, const PetStatSnapshot &after, uint8_t actionSlot, bool daily) {
+        return static_cast<Game *>(context)->settleStatMutation(after, actionSlot, daily);
+    });
+#endif
     commands->configure(petBehaviorConfig);
     layout->configureRuntimeContract(petBehaviorConfig);
     runtimeLoadState = RuntimeLoadState::Ready;
@@ -320,6 +356,9 @@ bool Game::saveNow()
 
 bool Game::startStartupAnimation()
 {
+#if ENABLE_STAT_EVENTS
+    if (isRoundComplete()) return false;
+#endif
     if (pet.isDead()) return false;
     if (!initialized)
         return false;
@@ -330,11 +369,17 @@ bool Game::startStartupAnimation()
 
 bool Game::hasTransientAnimation() const
 {
+#if ENABLE_STAT_EVENTS
+    if (statEventPageCount || committedEvolution.speciesSlot) return true;
+#endif
     return animations->isBusy();
 }
 
 bool Game::preventsIdleSleep() const
 {
+#if ENABLE_STAT_EVENTS
+    if (statEventPageCount || committedEvolution.speciesSlot) return true;
+#endif
 #if ENABLE_INSTRUCTION_RESPONSE
     if (capturesInstructionInput()) return true;
 #endif
@@ -452,11 +497,21 @@ void Game::OnRightKey()
 
 void Game::routeDirectionKey(KeyDirection direction)
 {
+#if ENABLE_STAT_EVENTS
+    if (isRoundComplete() || statEventPageCount || committedEvolution.speciesSlot) return;
+#endif
     if (initialized && pet.isDead()) { OnDeathKey(); return; }
     // Menu selection does not mutate pet values. Keep it responsive while
     // historical days settle; minigame decisions still wait for catch-up.
     if (!initialized || (hasPendingTime() && !flow.allowsMenuNavigation()))
         return;
+#if ENABLE_PROJECT_MENUS
+    if (flow.is(AppStage::Menu))
+    {
+        if (!projectMenu.move(direction == KeyDirection::Right)) enterRuntimeFatal();
+        return;
+    }
+#endif
 #if ENABLE_SHOP
     if (flow.is(AppStage::Shop))
     {
@@ -507,12 +562,23 @@ void Game::routeDirectionKey(KeyDirection direction)
 
 void Game::OnConfirmKey()
 {
+#if ENABLE_STAT_EVENTS
+    if (statEventPageCount || committedEvolution.speciesSlot) return;
+    if (initialized && isRoundComplete()) { resetPet(); return; }
+#endif
     if (initialized && pet.isDead()) { OnDeathKey(); return; }
     // Command playback itself postpones day boundaries. Keep replacement
     // responsive while it plays; idle RTC catch-up still precedes new actions.
     if (!initialized || (hasPendingTime() &&
         !(flow.is(AppStage::Command) && animations->isBusy())))
         return;
+#if ENABLE_PROJECT_MENUS
+    if (flow.is(AppStage::Menu))
+    {
+        confirmProjectMenu();
+        return;
+    }
+#endif
 #if ENABLE_SHOP
     if (flow.is(AppStage::Shop))
     {
@@ -560,6 +626,14 @@ void Game::OnConfirmKey()
                 cheatEvolutionPending = false;
                 refreshBaseAnimation();
             }
+#if ENABLE_PROJECT_MENUS
+            if (projectMenu.active())
+            {
+                flow.enter(AppStage::Menu);
+                redrawProjectMenu();
+                return;
+            }
+#endif
             enterCommand();
             petClock.resume(latestRtcSeconds);
             requestFullRedraw();
@@ -613,6 +687,58 @@ void Game::OnConfirmKey()
     synchronizePlaybackClock();
 }
 
+#if ENABLE_PROJECT_MENUS
+void Game::confirmProjectMenu()
+{
+    ProjectMenuSession::Entry entry;
+    if (!projectMenu.confirm(entry))
+    {
+        enterRuntimeFatal();
+        return;
+    }
+    if (!projectMenu.active())
+    {
+        finishProjectMenu();
+        return;
+    }
+    CommandResult result;
+    if (entry.kind == ProjectMenuSession::Kind::UserAction)
+        result = commandExecutor->executeUserAction(static_cast<uint8_t>(entry.target));
+    else if (entry.kind == ProjectMenuSession::Kind::SystemCommand)
+        result = commandExecutor->executeSystemCommand(static_cast<RuntimeSystemCommandId>(entry.target));
+    else
+        return;
+
+    if (result.kind == CommandResultKind::Collection || result.kind == CommandResultKind::None)
+    {
+        handleCommandResult(result);
+        return;
+    }
+    projectMenu.close();
+    enterCommand();
+    handleCommandResult(result);
+    requestFullRedraw();
+    synchronizePlaybackClock();
+}
+
+void Game::OnProjectMenuBack()
+{
+    if (!isProjectMenuActive()) return;
+    if (!projectMenu.back())
+        enterRuntimeFatal();
+    else if (!projectMenu.active())
+        finishProjectMenu();
+}
+
+void Game::finishProjectMenu()
+{
+    enterCommand();
+    petClock.resume(latestRtcSeconds);
+    refreshBaseAnimation();
+    requestFullRedraw();
+}
+#endif
+
 void Game::refreshBaseAnimation()
 {
     animations->setBaseAnimation(petBehaviorRuntime->baseAnimation());
@@ -620,6 +746,9 @@ void Game::refreshBaseAnimation()
 
 bool Game::setStageDaysForCheat(uint32_t value)
 {
+#if ENABLE_STAT_EVENTS
+    if (isRoundComplete()) return false;
+#endif
     if (pet.isDead()) return false;
     if (!initialized || runtimeLoadState != RuntimeLoadState::Ready || flow.is(AppStage::FatalError) ||
         evolution->isActive())
@@ -661,6 +790,17 @@ bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
     completeFirstStartIfReady(playbackResult);
     if (flow.is(AppStage::FatalError))
         return false;
+#if ENABLE_STAT_EVENTS
+    if (playingCommittedEvolution)
+    {
+        if (!animations->hasFinitePlayback())
+        {
+            playingCommittedEvolution = false;
+            flow.endEvolution();
+        }
+    }
+    else
+#endif
     if (playbackResult.result == PlaybackResult::Accepted)
         handleEvolutionResult(evolution->update(PlaybackResult::Accepted));
     synchronizePlaybackClock();
@@ -669,6 +809,13 @@ bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
 
 void Game::synchronizePlaybackClock()
 {
+#if ENABLE_STAT_EVENTS
+    if (isRoundComplete() || statEventPageCount || committedEvolution.speciesSlot)
+    {
+        petClock.pause(latestRtcSeconds);
+        return;
+    }
+#endif
     if (!(flow.is(AppStage::Command) || flow.is(AppStage::Appearance) || flow.is(AppStage::Evolution))
 #if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
         && !(flow.is(AppStage::Minigame) && minigame->pausesPetTime())
@@ -705,6 +852,9 @@ void Game::handleCommandResult(const CommandResult &result)
 EvolutionResult Game::settleMutation(Settlement source)
 {
     if (enterDeathIfNeeded()) return EvolutionResult::NoChange;
+#if ENABLE_STAT_EVENTS
+    if (statEventsActive()) return EvolutionResult::NoChange;
+#endif
     const bool daily = source == Settlement::DailyProgress;
 #if !ENABLE_COLLECTION_CATALOG
     if (daily) (void)petSaves.maybeSave();
@@ -737,6 +887,16 @@ EvolutionResult Game::settleMutation(Settlement source)
 
 void Game::handleSystemCommandRequest(const CommandResult &result)
 {
+#if ENABLE_PROJECT_MENUS
+    if (result.kind == CommandResultKind::Menu)
+    {
+        petClock.pause(latestRtcSeconds);
+        animations->cancelAll();
+        flow.enter(AppStage::Menu);
+        if (!projectMenu.open(result.menuSlot)) enterRuntimeFatal();
+        return;
+    }
+#endif
     if (result.kind == CommandResultKind::AdvanceDay)
     {
         if (petBehaviorConfig.manualDays) settlePetDays(1);
@@ -811,11 +971,21 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
     latestRtcSeconds = rtcSeconds;
     if (!initialized) return;
     if (enterDeathIfNeeded()) return;
+#if ENABLE_STAT_EVENTS
+    if (isRoundComplete() || statEventPageCount || committedEvolution.speciesSlot) return;
+#endif
     if (resources.firstAssetDataError() != AssetData::BundleError::None)
     {
         enterRuntimeFatal();
         return;
     }
+#if ENABLE_PROJECT_MENUS
+    if (flow.is(AppStage::Menu))
+    {
+        petClock.pause(rtcSeconds);
+        return;
+    }
+#endif
 #if ENABLE_SHOP
     if (flow.is(AppStage::Shop))
     {
@@ -855,6 +1025,10 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
         if (pet.isDead()) return;
         if (consumedDays != 0) petClock.consume(consumedDays);
         catchUpPrimed = consumedDays != 0;
+#if ENABLE_STAT_EVENTS
+        if (statEventPageCount || committedEvolution.speciesSlot || isRoundComplete())
+            petClock.pause(rtcSeconds);
+#endif
     }
     // Time spent draining the snapshot must precede new input too.
     if (initialized && !petClock.pending()) petClock.observe(rtcSeconds);
@@ -877,6 +1051,9 @@ uint32_t Game::settlePetDays(uint32_t dueDays)
     // Settle already-matching unlock/acquisition predicates on the first
     // day before skipping a stable interval (which may end in death).
     if (!petBehaviorConfig.manualDays && petBehaviorConfig.dayResetCount == 0 && catchUpPrimed && dueDays > 1 &&
+#if ENABLE_STAT_EVENTS
+        !statEventsActive() &&
+#endif
         !petBehaviorRuntime->catchUpDays(appearanceLoader, dueDays, days))
     {
         enterRuntimeFatal();
@@ -884,10 +1061,16 @@ uint32_t Game::settlePetDays(uint32_t dueDays)
     }
     if (!petBehaviorRuntime->advancePetDay(days))
     {
-        renderer.showResourceError();
+        renderer.showResourceError("pet state");
+#if ENABLE_STAT_EVENTS
+        if (statEventsActive()) return 0;
+#endif
         return days;
     }
     if (enterDeathIfNeeded()) return days;
+#if ENABLE_STAT_EVENTS
+    if (statEventsActive()) return days;
+#endif
 #if ENABLE_DAILY_POST_PROCESSING
     if (settleMutation(Settlement::DailyProgress) != EvolutionResult::NoChange)
         return flow.is(AppStage::FatalError) ? 0 : days;
@@ -1061,6 +1244,12 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
 
 void Game::cancelForeground()
 {
+#if ENABLE_STAT_EVENTS
+    clearStatEventPresentation();
+#endif
+#if ENABLE_PROJECT_MENUS
+    projectMenu.close();
+#endif
 #if ENABLE_SHOP
     shop.close();
     shopPlayback = false;

@@ -62,6 +62,10 @@ CommandController::CommandSlot CommandController::buttonSlot(const PetBehaviorBu
         return {AppCommandId::UserAction, button.actionSlot, true};
     if (button.kind == PetBehaviorButtonKind::SystemCommand)
         return systemCommandSlot(button.systemCommandId);
+#if ENABLE_PROJECT_MENUS
+    if (button.kind == PetBehaviorButtonKind::Menu)
+        return {AppCommandId::Menu, button.menuSlot, true};
+#endif
     return emptySlot();
 }
 
@@ -116,9 +120,9 @@ void CommandController::prev()
     }
 }
 
-uint8_t CommandController::currentActionSlot() const
+uint8_t CommandController::currentTargetSlot() const
 {
-    return slotAt(selected).actionSlot;
+    return slotAt(selected).targetSlot;
 }
 
 AppCommandId CommandController::currentCommandId() const

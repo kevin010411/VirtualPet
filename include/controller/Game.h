@@ -15,6 +15,12 @@
 #include "controller/MinigameController.h"
 #endif
 #include "pet/PetClock.h"
+#if ENABLE_STAT_EVENTS
+#include "pet/PetStatEvents.h"
+#endif
+#if ENABLE_PROJECT_MENUS
+#include "controller/ProjectMenuSession.h"
+#endif
 #if ENABLE_SHOP
 #include "shop/ShopSession.h"
 #endif
@@ -53,6 +59,9 @@ public:
     bool hasPendingTime() const { return petClock.pending() && initialized; }
     bool isReady() const { return initialized; }
     bool isDead() const;
+#if ENABLE_STAT_EVENTS
+    bool isRoundComplete() const;
+#endif
     void OnDeathKey();
     void requestFullRedraw();
     void redrawAllNow();
@@ -75,6 +84,10 @@ public:
     void OnLeftKey();
     void OnRightKey();
     void OnConfirmKey();
+#if ENABLE_PROJECT_MENUS
+    bool isProjectMenuActive() const { return flow.is(AppStage::Menu); }
+    void OnProjectMenuBack();
+#endif
     bool resetPet();
     bool setStageDaysForCheat(uint32_t value);
 
@@ -109,6 +122,12 @@ private:
     std::unique_ptr<CommandExecutor> commandExecutor;
     std::unique_ptr<CommandController> commands;
     std::unique_ptr<LayoutRenderer> layout;
+#if ENABLE_PROJECT_MENUS
+    ProjectMenuSession projectMenu;
+    void confirmProjectMenu();
+    void redrawProjectMenu();
+    void finishProjectMenu();
+#endif
 #if ENABLE_COLLECTION_CATALOG
     std::unique_ptr<CollectionCatalog> collectionCatalog;
     bool collectionSavePending = false;
@@ -135,6 +154,21 @@ private:
     bool cheatEvolutionPending = false;
     bool pendingFirstStartCompletion = false;
     bool initialized = false;
+#if ENABLE_STAT_EVENTS
+    uint16_t statEventPages[kMaxStatEventPages] = {};
+    AppearanceSelection committedEvolution = {};
+    uint8_t statEventPageCount = 0;
+    uint8_t statEventPage = 0;
+    uint16_t statEventAnimationId = 0;
+    uint16_t statEventPageDuration = 0;
+    unsigned long statEventPageStarted = 0;
+    bool playingCommittedEvolution = false;
+    bool statEventsActive() const;
+    bool settleStatMutation(const PetStatSnapshot &after, uint8_t actionSlot, bool daily);
+    bool presentStatEvents(unsigned long now);
+    bool redrawStatEvents();
+    void clearStatEventPresentation();
+#endif
 #if ENABLE_DEATH
     bool deathPresented = false;
     bool deathSavePending = false;

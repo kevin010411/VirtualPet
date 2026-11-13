@@ -101,6 +101,13 @@ bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
     return ok;
 }
 
+#if ENABLE_PROJECT_MENUS
+void Renderer::clearMenuBelow(uint8_t y)
+{
+    tft->fillRect(0, y, 128, 160 - y, ST77XX_BLACK);
+}
+#endif
+
 bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation,
                                   uint8_t versionIndex,
                                   uint16_t frameIndex,
@@ -187,6 +194,19 @@ bool Renderer::animationFrameFailed() const
 {
     return state->animationFrameFailed;
 }
+
+#if ENABLE_STAT_EVENTS
+void Renderer::showRoundComplete()
+{
+    tft->fillRect(0, 0, 128, 160, ST77XX_BLACK);
+    tft->setTextSize(1);
+    tft->setTextColor(0xffff, ST77XX_BLACK);
+    tft->setCursor(22, 65);
+    tft->print("Round complete");
+    tft->setCursor(10, 85);
+    tft->print("Confirm: new round");
+}
+#endif
 
 void Renderer::showResourceError()
 {

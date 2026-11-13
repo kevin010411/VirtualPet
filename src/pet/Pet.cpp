@@ -8,6 +8,9 @@ namespace
 constexpr uint32_t kFirstLaunchCompleteFlag = 0x1UL;
 constexpr uint32_t kFirstStartCompletedFlag = 0x2UL;
 constexpr uint32_t kDeadFlag = 0x4UL;
+#if ENABLE_STAT_EVENTS
+constexpr uint32_t kRoundCompleteFlag = 0x8UL;
+#endif
 
 uint8_t parseAppearanceSlot(const char *text)
 {
@@ -43,6 +46,15 @@ Pet::Pet()
 }
 
 bool Pet::isDead() const { return (st.flowFlags & kDeadFlag) != 0; }
+#if ENABLE_STAT_EVENTS
+bool Pet::isRoundComplete() const { return (st.flowFlags & kRoundCompleteFlag) != 0; }
+void Pet::completeRound() { st.flowFlags |= kRoundCompleteFlag; }
+void Pet::retainCollectionFrom(const PersistedPetState &previous)
+{
+    st.collectionFingerprint = previous.collectionFingerprint;
+    st.collectionMask = previous.collectionMask;
+}
+#endif
 #if ENABLE_DEATH
 void Pet::configureDeath(bool enabled, uint16_t statMask)
 {

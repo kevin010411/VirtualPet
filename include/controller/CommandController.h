@@ -21,6 +21,7 @@ enum class AppCommandId : uint8_t
     Shop = APP_COMMAND_SHOP,
     Inventory = APP_COMMAND_INVENTORY,
     AdvanceDay = 16,
+    Menu = 17,
 };
 
 class CommandController
@@ -32,7 +33,7 @@ public:
     void resetSelection();
     void next();
     void prev();
-    uint8_t currentActionSlot() const;
+    uint8_t currentTargetSlot() const;
 
     AppCommandId currentCommandId() const;
     int commandCount() const;
@@ -41,10 +42,11 @@ public:
     bool isSlotVisible(int slot) const;
 
 private:
+    friend class CommandExecutor;
     struct CommandSlot
     {
         AppCommandId id;
-        uint8_t actionSlot;
+        uint8_t targetSlot;
         bool visible;
     };
 

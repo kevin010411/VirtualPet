@@ -1,15 +1,15 @@
 #include "resources/detail/RuntimeTableReader.h"
 #include <limits.h>
 #include <string.h>
+#include "common/AppProfile.h"
 
 namespace RuntimeTableInternal
 {
 namespace
 {
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
-// v28 adds day-cycle resets and streamed numeric execution gates.
-// Older binaries are rejected without a compatibility parser.
-constexpr uint16_t kVersion = 28;
+constexpr uint16_t kBaseVersion = 28;
+constexpr uint16_t kMenuVersion = 29;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -31,6 +31,14 @@ uint16_t recordSizeFor(uint16_t type)
     case DayCycle: return 4;
     case DayResetEffects: return 12;
     case ActionGates: return 12;
+    case MenuDefinitions: return 4;
+    case MenuEntries: return 8;
+    case EventTriggers: return 8;
+    case EventNodes: return 12;
+    case EventEdges: return 8;
+    case EventConditions: return 8;
+    case EventEffects: return 12;
+    case EventPages: return 4;
     case Profile: return 38;
     case Persistence: return 16;
     case AssetRefs: return 12;
@@ -88,7 +96,8 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
     if (source.size < kHeaderSize || source.size > kMaxFileSize ||
         !source.readAt(source.context, 0, header, sizeof(header)) ||
         memcmp(header, kMagic, sizeof(kMagic)) != 0 ||
-        readU16(header + 4) != kVersion || readU16(header + 6) != kHeaderSize ||
+        (readU16(header + 4) != kBaseVersion && readU16(header + 4) != kMenuVersion) ||
+        readU16(header + 6) != kHeaderSize ||
         readU32(header + 8) != 0x01020304UL || readU32(header + 16) != source.size ||
         readU16(header + 26) != kSectionEntrySize)
         return false;
@@ -97,6 +106,9 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
     if ((featureFlags & kPetBehaviorFeature) == 0 ||
         (featureFlags & ~kKnownFeatures) != 0)
         return false;
+#if !ENABLE_STAT_EVENTS
+    if ((featureFlags & kStatEventsFeature) != 0) return false;
+#endif
 
     bool nonzeroBundle = false;
     for (uint8_t index = 0; index < sizeof(bundleId.bytes); ++index)

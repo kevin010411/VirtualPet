@@ -302,6 +302,14 @@ bool decodeButtons(const Source &source, const Section &buttons, PetBehaviorConf
                 return false;
             button.systemCommandId = static_cast<RuntimeSystemCommandId>(target);
         }
+        else if (button.kind == PetBehaviorButtonKind::Menu)
+        {
+#if ENABLE_PROJECT_MENUS
+            button.menuSlot = static_cast<uint8_t>(target);
+#else
+            return false;
+#endif
+        }
     }
     config.buttonCount = static_cast<uint8_t>(buttons.count);
     return true;
@@ -443,6 +451,30 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         config.actionGatesOffset = gates->offset;
         config.actionGateCount = gates->count;
     }
+#if ENABLE_STAT_EVENTS
+    config.statEventTriggerCount = 0;
+    if ((table.featureFlags & kStatEventsFeature) != 0)
+    {
+        const Section *triggers = table.find(EventTriggers);
+        const Section *nodes = table.find(EventNodes);
+        const Section *edges = table.find(EventEdges);
+        const Section *conditions = table.find(EventConditions);
+        const Section *effects = table.find(EventEffects);
+        const Section *pages = table.find(EventPages);
+        if (triggers == nullptr || nodes == nullptr || edges == nullptr || conditions == nullptr ||
+            effects == nullptr || pages == nullptr)
+            return false;
+        config.statEventTriggersOffset = triggers->offset;
+        config.statEventNodesOffset = nodes->offset;
+        config.statEventEdgesOffset = edges->offset;
+        config.statEventConditionsOffset = conditions->offset;
+        config.statEventEffectsOffset = effects->offset;
+        config.statEventPagesOffset = pages->offset;
+        config.statEventTriggerCount = triggers->count;
+        config.statEventNodeCount = nodes->count;
+        config.statEventPageCount = pages->count;
+    }
+#endif
 #if ENABLE_COLLECTION_CATALOG
     if (!loadCollectionCatalog(table, config))
         return false;

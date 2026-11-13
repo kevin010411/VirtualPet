@@ -74,6 +74,7 @@ enum class PetBehaviorButtonKind : uint8_t
     Empty,
     UserAction,
     SystemCommand,
+    Menu,
 };
 
 struct PetBehaviorButtonConfig
@@ -82,6 +83,9 @@ struct PetBehaviorButtonConfig
     PetBehaviorButtonKind kind;
     uint8_t actionSlot;
     RuntimeSystemCommandId systemCommandId;
+#if ENABLE_PROJECT_MENUS
+    uint8_t menuSlot;
+#endif
 };
 
 constexpr uint8_t kMaxScreenBlocks = 32;
@@ -136,6 +140,17 @@ struct PetBehaviorConfig
     PetBehaviorActionEffectConfig dayResets[kPetBehaviorSlotCount];
     uint32_t actionGatesOffset;
     uint16_t actionGateCount;
+#if ENABLE_STAT_EVENTS
+    uint32_t statEventTriggersOffset;
+    uint32_t statEventNodesOffset;
+    uint32_t statEventEdgesOffset;
+    uint32_t statEventConditionsOffset;
+    uint32_t statEventEffectsOffset;
+    uint32_t statEventPagesOffset;
+    uint16_t statEventTriggerCount;
+    uint16_t statEventNodeCount;
+    uint16_t statEventPageCount;
+#endif
 #if ENABLE_SHOP
     bool shopEnabled;
 #endif

@@ -25,10 +25,7 @@ bool applyEffect(const PetBehaviorConfig &config,
     if (statSlot >= kPetBehaviorSlotCount || !config.stats[statSlot].active || affectedSlots[statSlot])
         return false;
     affectedSlots[statSlot] = true;
-    const PetBehaviorStatConfig &stat = config.stats[statSlot];
-    state.values[statSlot] = operation == PetBehaviorEffectOperation::Set
-                                 ? clampedChange(0, value, stat.minValue, stat.maxValue)
-                                 : clampedChange(state.values[statSlot], value, stat.minValue, stat.maxValue);
+    state.values[statSlot] = applyPetBehaviorStatEffect(config.stats[statSlot], state.values[statSlot], operation, value);
     return true;
 }
 
@@ -135,6 +132,13 @@ bool applyOutcomeEffects(const PetBehaviorConfig &config,
     return true;
 }
 } // namespace
+
+uint32_t applyPetBehaviorStatEffect(const PetBehaviorStatConfig &stat, uint32_t current,
+                                   PetBehaviorEffectOperation operation, int64_t value)
+{
+    return clampedChange(operation == PetBehaviorEffectOperation::Set ? 0 : current,
+                         value, stat.minValue, stat.maxValue);
+}
 
 void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStatValues &state)
 {

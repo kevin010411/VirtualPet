@@ -24,12 +24,16 @@ enum class CommandResultKind : uint8_t
     Shop,
     Inventory,
     AdvanceDay,
+    Menu,
 };
 
 struct CommandResult
 {
     CommandResultKind kind = CommandResultKind::None;
     bool resourceError = false;
+#if ENABLE_PROJECT_MENUS
+    uint8_t menuSlot = 0;
+#endif
 };
 
 class CommandExecutor
@@ -40,6 +44,10 @@ public:
                     PetBehaviorRuntime &petBehaviorRuntime);
 
     CommandResult execute(const CommandController &commands);
+#if ENABLE_PROJECT_MENUS
+    CommandResult executeSystemCommand(RuntimeSystemCommandId command);
+    CommandResult executeUserAction(uint8_t actionSlot);
+#endif
     void configureRuntimeContract(const PetBehaviorConfig &config);
 
 private:
@@ -47,6 +55,7 @@ private:
     AnimationController &animations;
     PetBehaviorRuntime &petBehaviorRuntime;
     const PetBehaviorConfig *petBehaviorConfig = nullptr;
+    CommandResult execute(AppCommandId id, uint8_t targetSlot);
 #if ENABLE_SEQUENTIAL_STATUS_SET_SELECTION
     uint8_t nextStatusSetIndex = 0;
 #endif
