@@ -288,23 +288,51 @@ void Renderer::showInstructionFeedback(bool correct)
 void Renderer::drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint32_t value)
 {
     if (!width) return;
-    char digits[10];
+    // Rows 2–9 of Fusion Pixel 12 px zh-TW, from fusion-pixel-12-zh-tw.bin.
+    // These glyphs all have a six-pixel advance and a five-pixel bitmap.
+    static constexpr uint8_t glyphs[][8] = {
+        {0x70, 0x88, 0x98, 0xa8, 0xa8, 0xc8, 0x88, 0x70},
+        {0x20, 0xe0, 0x20, 0x20, 0x20, 0x20, 0x20, 0xf8},
+        {0x70, 0x88, 0x08, 0x10, 0x20, 0x40, 0x80, 0xf8},
+        {0x70, 0x88, 0x08, 0x30, 0x08, 0x08, 0x88, 0x70},
+        {0x30, 0x50, 0x50, 0x90, 0x90, 0xf8, 0x10, 0x10},
+        {0xf8, 0x80, 0x80, 0xf0, 0x08, 0x08, 0x88, 0x70},
+        {0x70, 0x88, 0x80, 0xf0, 0x88, 0x88, 0x88, 0x70},
+        {0xf8, 0x08, 0x08, 0x10, 0x10, 0x20, 0x20, 0x20},
+        {0x70, 0x88, 0x88, 0x70, 0x88, 0x88, 0x88, 0x70},
+        {0x70, 0x88, 0x88, 0x88, 0x78, 0x08, 0x88, 0x70},
+        {0x00, 0x00, 0x20, 0x20, 0xf8, 0x20, 0x20, 0x00},
+    };
+    uint8_t digits[10];
     uint8_t count = 0;
     do {
-        digits[count++] = static_cast<char>('0' + value % 10);
+        digits[count++] = value % 10;
         value /= 10;
     } while (value);
-    tft->fillRect(x, y, width, height, 0x1126);
-    tft->setTextColor(0xffff);
-    tft->setTextSize(1);
+    int16_t pen = x + width - count * 6;
     if (count * 6 > width)
     {
-        tft->setCursor(x, y + (height - 8) / 2);
-        tft->write('+');
-        return;
+        digits[0] = 10;
+        count = 1;
+        pen = x;
     }
-    tft->setCursor(x + width - count * 6, y + (height - 8) / 2);
-    while (count) tft->write(digits[--count]);
+    const int16_t top = y + height / 2 - 4;
+    tft->startWrite();
+    tft->writeFillRect(x, y, width, height, 0x1126);
+    while (count)
+    {
+        const auto &glyph = glyphs[digits[--count]];
+        for (uint8_t row = 0; row < 8; ++row)
+        {
+            if (top + row < y || top + row >= y + height) continue;
+            for (uint8_t col = 0; col < 5 && pen + col < x + width; ++col)
+            {
+                if (glyph[row] & (0x80 >> col)) tft->writePixel(pen + col, top + row, 0xffff);
+            }
+        }
+        pen += 6;
+    }
+    tft->endWrite();
 }
 
 void Renderer::highlightShopRow(uint8_t x, uint8_t y, uint8_t width, uint8_t height)

@@ -36,6 +36,16 @@ public:
         writePixels(pixels, static_cast<uint32_t>(w) * h);
     }
     void fillRect(int, int, int, int, uint16_t) {}
+    void writeFillRect(int x, int y, int w, int h, uint16_t color)
+    {
+        for (int row = y; row < y + h; ++row)
+            for (int col = x; col < x + w; ++col) writePixel(col, row, color);
+    }
+    void writePixel(int x, int y, uint16_t color)
+    {
+        assert(x >= 0 && y >= 0 && x < width() && y < height());
+        screen[y * width() + x] = color;
+    }
     void setTextColor(uint16_t, uint16_t = 0) {}
     void setTextSize(uint8_t) {}
     void write(uint8_t) {}
