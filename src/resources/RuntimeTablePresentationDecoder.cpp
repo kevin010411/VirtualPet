@@ -60,9 +60,10 @@ bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
         const uint16_t count = readU16(record + 8);
         if (count > kMaxScreenRulesPerBlock || static_cast<uint32_t>(first) + count > rules->count)
             return false;
-        config.screenBlocks[index] = {static_cast<ScreenBlockKind>(record[0]), record[1],
+        const auto kind = static_cast<ScreenBlockKind>(record[0]);
+        config.screenBlocks[index] = {kind, record[1],
             record[2], record[3], record[4], record[5], first,
-            static_cast<uint8_t>(count), readU16(record + 10)};
+            static_cast<uint8_t>(count), readU16(record + 10), readU32(record + 12)};
     }
     // Geometry, non-overlapping ranges and product frame assignment are exporter-owned.
     for (uint16_t index = 0; index < rules->count; ++index)

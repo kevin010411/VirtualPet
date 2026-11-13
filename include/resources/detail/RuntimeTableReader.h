@@ -24,7 +24,11 @@ constexpr uint32_t kCollectionFeature = 1UL << 13;
 constexpr uint32_t kSequenceAudioFeature = 1UL << 14;
 constexpr uint32_t kInstructionResponseFeature = 1UL << 15;
 constexpr uint32_t kShopFeature = 1UL << 16;
-constexpr uint32_t kKnownFeatures = ((1UL << 17) - 1UL) & ~(1UL << 8);
+constexpr uint32_t kScreenStatSumFeature = 1UL << 17;
+constexpr uint32_t kScreenStatDimensionsFeature = 1UL << 18;
+constexpr uint32_t kScreenStatSumSegmentsFeature = 1UL << 19;
+constexpr uint32_t kKnownFeatures = (((1UL << 17) - 1UL) & ~(1UL << 8)) |
+    kScreenStatSumFeature | kScreenStatDimensionsFeature | kScreenStatSumSegmentsFeature;
 
 enum SectionType : uint16_t
 {

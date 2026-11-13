@@ -74,6 +74,17 @@ bool matchesRuntimeRange(const RuntimeRangePredicate &predicate,
 
 bool isRuntimeRangeWellFormed(const RuntimeRangePredicate &predicate);
 
+inline uint8_t quantizeRuntimeValue(int64_t value, int64_t minimum, int64_t maximum, uint8_t levels)
+{
+    if (levels <= 1 || value <= minimum)
+        return 0;
+    if (value >= maximum)
+        return static_cast<uint8_t>(levels - 1);
+    const int64_t valueCount = maximum - minimum + 1;
+    const int64_t level = (value - minimum) * levels / valueCount;
+    return static_cast<uint8_t>(level < levels ? level : levels - 1);
+}
+
 // Action, Status and Pet State predicates intentionally expose only
 // stage_days and projected Pet Stats. Export and host tooling own domain
 // clipping; firmware retains only executable-shape and capacity guards.

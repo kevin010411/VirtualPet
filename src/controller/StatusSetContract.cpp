@@ -2,22 +2,6 @@
 
 #include "pet/PetStateClassifier.h"
 
-namespace
-{
-uint8_t levelForValue(int64_t value, int64_t minValue, int64_t maxValue, uint8_t levels)
-{
-    if (levels <= 1 || value <= minValue)
-        return 0;
-    if (value >= maxValue)
-        return static_cast<uint8_t>(levels - 1);
-    const int64_t valueCount = static_cast<int64_t>(maxValue) - minValue + 1;
-    const int64_t offset = static_cast<int64_t>(value) - minValue;
-    const int64_t level = offset * static_cast<int64_t>(levels) / valueCount;
-    return static_cast<uint8_t>(
-        level < static_cast<int64_t>(levels) ? level : levels - 1);
-}
-} // namespace
-
 bool resolvePetStateStatusLevel(
     const StatusSetCondition &condition,
     const ActivePetState &activePetState,
@@ -76,7 +60,7 @@ bool resolveStatusSet(
             return false;
         version = static_cast<uint16_t>(
             version * condition.levels +
-            levelForValue(value, condition.minValue, condition.maxValue, condition.levels));
+            quantizeRuntimeValue(value, condition.minValue, condition.maxValue, condition.levels));
     }
 
     if (version >= AssetData::kMaxVersions)

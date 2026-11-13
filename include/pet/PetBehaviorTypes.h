@@ -96,6 +96,9 @@ enum class ScreenBlockKind : uint8_t
     Animation = 1,
     Button = 2,
     Stat = 3,
+    StatSum = 4,
+    StatDimensions = 5,
+    StatSumSegments = 6,
 };
 
 struct ScreenBlockConfig
@@ -109,6 +112,13 @@ struct ScreenBlockConfig
     uint16_t firstRule;
     uint8_t ruleCount;
     uint16_t fallbackFrame;
+    uint32_t numericSettings = 0;
+
+    bool isNumeric() const
+    {
+        return kind == ScreenBlockKind::Stat || kind == ScreenBlockKind::StatSum ||
+               kind == ScreenBlockKind::StatDimensions || kind == ScreenBlockKind::StatSumSegments;
+    }
 };
 
 struct ScreenRuleConfig

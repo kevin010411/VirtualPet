@@ -6,6 +6,52 @@
 #include "pet/PetBehaviorTypes.h"
 #include "display/Renderer.h"
 
+namespace
+{
+uint16_t selectStatSumFrame(const ScreenBlockConfig &block, const ScreenRuleConfig *rules,
+                            const RuntimeValueContext &values)
+{
+    const bool evenSegments = block.kind == ScreenBlockKind::StatSumSegments;
+    int64_t selector = 0;
+    if (block.source != kUnboundScreenSource && !resolveRuntimeValue(block.source, values, selector))
+        return block.fallbackFrame;
+    for (uint8_t child = 0; child < block.ruleCount; ++child)
+    {
+        const ScreenRuleConfig &bank = rules[block.firstRule + child];
+        if (!evenSegments && selector != bank.minimum)
+            continue;
+        uint64_t sum = 0;
+        for (uint8_t slot = 0; slot < kRuntimeValuePetStatCapacity; ++slot)
+            if ((block.numericSettings & (1U << slot)) != 0)
+                sum += values.petStats[slot];
+        const uint32_t capped = sum > bank.maximum ? bank.maximum : static_cast<uint32_t>(sum);
+        // Even segments store the segment count in the first rule field.
+        const uint32_t index = evenSegments
+            ? static_cast<uint32_t>(static_cast<uint64_t>(capped) * bank.minimum / (static_cast<uint64_t>(bank.maximum) + 1))
+            : capped / (block.numericSettings >> 16);
+        return static_cast<uint16_t>(bank.frame + index);
+    }
+    return block.fallbackFrame;
+}
+
+uint16_t selectStatDimensionsFrame(const ScreenBlockConfig &block,
+                                   const PetBehaviorConfig &config,
+                                   const RuntimeValueContext &values)
+{
+    uint16_t index = 0;
+    // The low chunk is the first authored axis and changes slowest.
+    for (uint32_t axes = block.numericSettings; (axes & 0xFU) != 0; axes >>= 9)
+    {
+        const uint8_t slot = static_cast<uint8_t>((axes & 0xFU) - 1);
+        const uint8_t levels = static_cast<uint8_t>(((axes >> 4) & 0x1FU) + 1);
+        const auto &stat = config.stats[slot];
+        const uint8_t level = quantizeRuntimeValue(values.petStats[slot], stat.minValue, stat.maxValue, levels);
+        index = static_cast<uint16_t>(index * levels + level);
+    }
+    return static_cast<uint16_t>(config.screenRules[block.firstRule].frame + index);
+}
+} // namespace
+
 LayoutRenderer::LayoutRenderer(Renderer &rendererRef, AssetResources &resourcesRef, CommandController &commandsRef)
     : renderer(rendererRef), resources(resourcesRef), commands(commandsRef)
 {
@@ -63,7 +109,7 @@ void LayoutRenderer::drawAll()
             return;
     }
     for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
-        if (runtimeContract->screenBlocks[index].kind == ScreenBlockKind::Stat && !drawNumeric(index))
+        if (runtimeContract->screenBlocks[index].isNumeric() && !drawNumeric(index))
             return;
 }
 
@@ -135,11 +181,19 @@ void LayoutRenderer::updateValues(const PetStatSnapshot &snapshot)
     for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
     {
         const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
-        if (block.kind != ScreenBlockKind::Stat)
+        if (!block.isNumeric())
             continue;
         uint16_t frame = block.fallbackFrame;
         int64_t value = 0;
-        if (block.source != kUnboundScreenSource && resolveRuntimeValue(block.source, values, value))
+        if (block.kind == ScreenBlockKind::StatSum || block.kind == ScreenBlockKind::StatSumSegments)
+        {
+            frame = selectStatSumFrame(block, runtimeContract->screenRules, values);
+        }
+        else if (block.kind == ScreenBlockKind::StatDimensions)
+        {
+            frame = selectStatDimensionsFrame(block, *runtimeContract, values);
+        }
+        else if (block.source != kUnboundScreenSource && resolveRuntimeValue(block.source, values, value))
         {
             for (uint8_t child = 0; child < block.ruleCount; ++child)
             {

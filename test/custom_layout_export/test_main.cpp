@@ -62,7 +62,7 @@ void paint(std::vector<uint16_t> &screen, const Frame &frame)
 }
 
 
-void verify(const std::string &root)
+void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKind::Stat)
 {
     CustomLayoutHost::root = root;
     CustomLayoutHost::opens = CustomLayoutHost::reads = CustomLayoutHost::bytesRead = 0;
@@ -116,12 +116,19 @@ void verify(const std::string &root)
     uint8_t layoutId;
     assert(renderer.currentLayoutId(layoutId));
     assert(layout.syncPlayback(snapshot));
+    uint16_t expectedNumericFrame = 0;
     const auto expectedScreen = [&]() {
         std::vector<uint16_t> expected(128 * 160);
         paint(expected, findFrame(frames, config.layoutUnselected, layoutId, 0));
         for (uint8_t index = 0; index < config.screenBlockCount; ++index)
         {
             const auto &block = config.screenBlocks[index];
+            if (fixtureKind != ScreenBlockKind::Stat && block.kind == fixtureKind)
+            {
+                assert(expectedNumericFrame > 0);
+                paint(expected, findFrame(frames, config.layoutUnselected, layoutId, expectedNumericFrame - 1));
+                continue;
+            }
             if (block.kind == ScreenBlockKind::Stat)
             {
                 uint16_t frame = block.fallbackFrame;
@@ -152,6 +159,43 @@ void verify(const std::string &root)
         return expected;
     };
     assert(renderer.ShowAnimationFrame(active, 0, 1));
+    if (fixtureKind != ScreenBlockKind::Stat)
+    {
+        unsigned matchingBlocks = 0;
+        for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+        {
+            const auto &block = config.screenBlocks[index];
+            if (block.kind == fixtureKind)
+            {
+                assert(block.x == 0 && block.y == 64 && block.width == 128 && block.height == 16);
+                ++matchingBlocks;
+            }
+        }
+        assert(matchingBlocks == 1);
+        std::ifstream cases(root + "/score.tsv");
+        assert(cases);
+        unsigned checked = 0;
+        while (cases >> snapshot.customStats[0])
+        {
+            for (size_t slot = 1; slot < PetStatSnapshot::kCustomStatCount; ++slot)
+                assert(cases >> snapshot.customStats[slot]);
+            assert(cases >> expectedNumericFrame);
+            layout.updateValues(snapshot);
+            assert(display.screen == expectedScreen());
+            display.windows.clear();
+            layout.updateValues(snapshot);
+            assert(display.windows.empty());
+            ++checked;
+        }
+        assert(cases.eof() && checked > 0);
+        layout.begin();
+        assert(layout.syncPlayback(snapshot));
+        assert(renderer.ShowAnimationFrame(active, 0, 1));
+        assert(display.screen == expectedScreen());
+        assert(resources.firstAssetDataError() == AssetData::BundleError::None);
+        printf("[PASS] Numeric selection and RGB565 pixels in %u cases\n", checked);
+        return;
+    }
     assert(display.screen == expectedScreen());
     if (config.screenRuleCount)
     {
@@ -261,8 +305,16 @@ int main(int argc, char **argv)
     assert(argc == 2 || argc == 3);
     if (argc == 3)
     {
-        assert(std::string(argv[2]) == "--numeric");
-        verify(argv[1]);
+        const std::string mode = argv[2];
+        assert(mode == "--numeric" || mode == "--score" || mode == "--dimensions" || mode == "--even-score");
+        if (mode == "--dimensions")
+            verify(argv[1], ScreenBlockKind::StatDimensions);
+        else if (mode == "--score")
+            verify(argv[1], ScreenBlockKind::StatSum);
+        else if (mode == "--even-score")
+            verify(argv[1], ScreenBlockKind::StatSumSegments);
+        else
+            verify(argv[1]);
         return 0;
     }
     for (const char *name : {"horizontal-thirds", "moved", "enlarged", "shrunk-duplicates", "animation-only", "buttons-only", "empty"})
