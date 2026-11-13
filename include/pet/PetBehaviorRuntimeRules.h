@@ -19,6 +19,8 @@ using PetBehaviorEffectReader = bool (*)(void *, uint16_t, PetBehaviorActionEffe
 
 using PetBehaviorRandomBoundedSource = uint16_t (*)(uint16_t upperExclusive);
 
+constexpr uint8_t kStageDaysEffectSlot = UINT8_MAX;
+uint32_t applyStageDaysEffect(uint32_t current, PetBehaviorEffectOperation operation, int64_t value);
 uint32_t applyPetBehaviorStatEffect(const PetBehaviorStatConfig &stat, uint32_t current,
                                    PetBehaviorEffectOperation operation, int64_t value);
 void initializePetBehaviorStats(const PetBehaviorConfig &config, PetBehaviorStatValues &state);

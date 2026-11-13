@@ -290,8 +290,12 @@ int main()
     {
         auto config = effectsOnlyConfig();
         config.manualDays = true;
-        config.dayResetCount = 1;
+        config.dayResetCount = 2;
         config.dayResets[0] = {0, PetBehaviorEffectOperation::Set, 10};
+        config.dayResets[1] = {UINT8_MAX, PetBehaviorEffectOperation::Set, 3};
+        config.actionEffects[1] = {UINT8_MAX, PetBehaviorEffectOperation::Change, 2};
+        config.actionEffectCount = 2;
+        config.actionOutcomes[0].effectCount = 2;
         Pet pet;
         AssetResources resources(nullptr);
         Renderer renderer(nullptr, resources);
@@ -305,15 +309,15 @@ int main()
         assert(pet.stageDays() == 0 && pet.customStat(0) == 0);
         saveSucceeds = true;
         assert(runtime.advancePetDay());
-        assert(pet.stageDays() == 1 && pet.customStat(0) == 10);
+        assert(pet.stageDays() == 3 && pet.customStat(0) == 10);
         saveSucceeds = false;
         assert(runtime.executeAction(0) == PetBehaviorActionResult::ResourceReadFailed);
-        assert(pet.stageDays() == 1 && pet.customStat(0) == 10 && pet.actionCount(0) == 0);
+        assert(pet.stageDays() == 3 && pet.customStat(0) == 10 && pet.actionCount(0) == 0);
         saveSucceeds = true;
         assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
-        assert(pet.customStat(0) == 15 && pet.actionCount(0) == ENABLE_COLLECTION_CATALOG);
+        assert(pet.stageDays() == 5 && pet.customStat(0) == 15 && pet.actionCount(0) == ENABLE_COLLECTION_CATALOG);
         assert(runtime.advancePetDay());
-        assert(pet.stageDays() == 2 && pet.customStat(0) == 10);
+        assert(pet.stageDays() == 3 && pet.customStat(0) == 10);
     }
     testStandardEffectsOnly();
     testUnchangedEffectRefreshesThroughRuntimeCommit();

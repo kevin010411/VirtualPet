@@ -24,6 +24,7 @@ constexpr uint8_t productSize = 70;
 constexpr uint8_t navigation = 128;
 constexpr uint8_t exitEntry = 129;
 constexpr uint8_t firstEntryFrame = 16;
+constexpr uint8_t stageDaysEffectSlot = 255;
 
 class ShopFile : public SdBaseFile
 {
@@ -246,6 +247,13 @@ bool ShopSession::transact(AssetData::AnimationRef &animation)
         for (uint8_t index = 0; index < row[8]; ++index, effect += 10)
         {
             const uint8_t stat = effect[0];
+            if (stat == stageDaysEffectSlot)
+            {
+                int64_t days = readI64(effect + 2);
+                if (!effect[1]) days += values.stage_days;
+                values.stage_days = days < 0 ? 0 : days > Pet::kStageDaysMax ? Pet::kStageDaysMax : days;
+                continue;
+            }
             const auto &bounds = config.stats[stat];
             int64_t value = readI64(effect + 2);
             if (!effect[1]) value += values.customStats[stat];
@@ -277,6 +285,7 @@ bool ShopSession::transact(AssetData::AnimationRef &animation)
 
     const PersistedPetState previous = pet.st;
     pet.st.shopQuantities[slot] = nextQuantity;
+    pet.setStageDays(values.stage_days);
     if (config.statCount) pet.commitPetStats(values.customStats, config.statCount);
     if ((!pet.isDead() && !appearance.refreshUnlockState(false, false)) ||
         saves.saveCollectionProgress(true, true) != PetSaveResult::Persisted)

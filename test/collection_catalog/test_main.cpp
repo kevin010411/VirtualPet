@@ -281,6 +281,8 @@ static int verifyShop(const std::filesystem::path &root)
     assert(game.setup_game());
 
     assert(pet.customStat(0) == 50);
+    const auto initialSpecies = pet.speciesSlot();
+    assert(pet.stageDays() == 0);
     game.OnConfirmKey(); // Shop command
     const auto browsing = display.screen;
     assert(!game.preventsIdleSleep());
@@ -302,6 +304,7 @@ static int verifyShop(const std::filesystem::path &root)
     game.OnLeftKey();
     game.OnConfirmKey();
     assert(pet.customStat(0) == 46 && pet.persistentState().shopQuantities[0] == 1);
+    assert(pet.stageDays() == 1 && pet.speciesSlot() == initialSpecies);
     const auto windowsBeforePlayback = display.windows.size();
     tick(game, 1);
     assert(display.windows.size() > windowsBeforePlayback);
@@ -318,6 +321,7 @@ static int verifyShop(const std::filesystem::path &root)
     Game reboot(restored, restoredStorage, restoredRenderer, restoredResources, restoredLoader);
     assert(reboot.setup_game());
     assert(restored.customStat(0) == 46 && restored.persistentState().shopQuantities[0] == 1);
+    assert(restored.stageDays() == 1 && restored.speciesSlot() == initialSpecies);
     reboot.OnRightKey();
     reboot.OnConfirmKey(); // Direct inventory command
     reboot.OnConfirmKey();
@@ -325,12 +329,27 @@ static int verifyShop(const std::filesystem::path &root)
     sd.limitWrite(12, 0, 0);
     reboot.OnConfirmKey();
     assert(restored.customStat(0) == 46 && restored.persistentState().shopQuantities[0] == 1);
+    assert(restored.stageDays() == 1 && restored.speciesSlot() == initialSpecies);
 
     Pet recovered;
     PetStorage recoveredStorage(&sd);
     assert(recoveredStorage.load(recovered, restored.persistentState().schemaFingerprint));
     assert(recovered.customStat(0) == 46 && recovered.persistentState().shopQuantities[0] == 1);
-    puts("[PASS] Exported shop: three keys, cancel, purchase, inventory, item effect/playback, reboot and interrupted commit");
+    assert(recovered.stageDays() == 1 && recovered.speciesSlot() == initialSpecies);
+
+    sd.limitWrite(static_cast<size_t>(-1), 0, 0);
+    reboot.OnConfirmKey(); // Dismiss failure receipt and retry.
+    reboot.OnConfirmKey();
+    reboot.OnLeftKey();
+    reboot.OnConfirmKey();
+    assert(restored.stageDays() == 2 && restored.speciesSlot() == initialSpecies);
+    assert(restored.persistentState().shopQuantities[0] == 0);
+    for (unsigned time = 1001; time <= 2001; time += 250) tick(reboot, time);
+    assert(restored.stageDays() == 0 && restored.speciesSlot() != initialSpecies);
+    assert(restored.customStat(0) == 49);
+    assert(recoveredStorage.load(recovered, restored.persistentState().schemaFingerprint));
+    assert(recovered.stageDays() == 0 && recovered.speciesSlot() == restored.speciesSlot());
+    puts("[PASS] Exported shop: three keys, cancel, purchase, eating, stage-days evolution, reboot and interrupted commit");
     return 0;
 }
 #endif

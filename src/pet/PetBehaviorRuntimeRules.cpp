@@ -22,6 +22,13 @@ bool applyEffect(const PetBehaviorConfig &config,
                  PetBehaviorStatValues &state,
                  bool *affectedSlots)
 {
+    if (statSlot == kStageDaysEffectSlot)
+    {
+        if (affectedSlots[kPetBehaviorSlotCount]) return false;
+        affectedSlots[kPetBehaviorSlotCount] = true;
+        state.stageDays = applyStageDaysEffect(state.stageDays, operation, value);
+        return true;
+    }
     if (statSlot >= kPetBehaviorSlotCount || !config.stats[statSlot].active || affectedSlots[statSlot])
         return false;
     affectedSlots[statSlot] = true;
@@ -132,6 +139,12 @@ bool applyOutcomeEffects(const PetBehaviorConfig &config,
     return true;
 }
 } // namespace
+
+uint32_t applyStageDaysEffect(uint32_t current, PetBehaviorEffectOperation operation, int64_t value)
+{
+    return clampedChange(operation == PetBehaviorEffectOperation::Set ? 0 : current,
+                         value, 0, Pet::kStageDaysMax);
+}
 
 uint32_t applyPetBehaviorStatEffect(const PetBehaviorStatConfig &stat, uint32_t current,
                                    PetBehaviorEffectOperation operation, int64_t value)
@@ -260,7 +273,7 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
     // Resolve conditions against the original values, then apply the selected
     // Outcome to a temporary state. Publish values and pauses only on success.
     PetBehaviorStatValues next = state;
-    bool affectedSlots[kPetBehaviorSlotCount] = {};
+    bool affectedSlots[kPetBehaviorSlotCount + 1] = {};
     if (!applyOutcomeEffects(config, *outcome, next, affectedSlots, effectReader, effectContext))
         return false;
 
@@ -282,7 +295,7 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
                                   PetBehaviorStatValues &state)
 {
     PetBehaviorStatValues next = state;
-    bool affectedSlots[kPetBehaviorSlotCount] = {};
+    bool affectedSlots[kPetBehaviorSlotCount + 1] = {};
     for (uint8_t index = 0; index < config.guessEffectCount; ++index)
     {
         const PetBehaviorGuessEffectConfig &effect = config.guessEffects[index];
@@ -305,14 +318,13 @@ bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
     for (uint8_t round = 0; round < count; ++round)
     {
         const uint8_t group = (correctMask & (1UL << round)) ? 0 : 1;
+        bool affectedSlots[kPetBehaviorSlotCount + 1] = {};
         for (uint8_t index = 0; index < config.instructionEffectCount; ++index)
         {
             const auto &effect = config.instructionEffects[index];
             if (effect.group != group) continue;
-            const auto &stat = config.stats[effect.statSlot];
-            next.values[effect.statSlot] = clampedChange(
-                effect.operation == PetBehaviorEffectOperation::Set ? 0 : next.values[effect.statSlot],
-                effect.value, stat.minValue, stat.maxValue);
+            if (!applyEffect(config, effect.statSlot, effect.operation, effect.value, next, affectedSlots))
+                return false;
         }
     }
     state = next;

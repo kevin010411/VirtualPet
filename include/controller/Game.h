@@ -142,8 +142,10 @@ private:
 #if ENABLE_SHOP
     ShopSession shop;
     bool shopPlayback = false;
+    bool shopEvolutionPending = false;
     bool prepareShopProgress(bool &changed) override { return shop.arrive(changed); }
     void redrawShop();
+    void finishShopPlayback();
 #endif
     PetClock petClock;
     uint32_t latestRtcSeconds = 0;

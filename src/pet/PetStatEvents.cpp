@@ -88,7 +88,13 @@ bool applyNode(EventFile &file, const PetBehaviorConfig &config, const uint8_t (
         uint8_t effect[12];
         if (!file.read(config.statEventEffectsOffset, firstEffect + offset, effect)) return false;
         const uint8_t slot = effect[0];
-        if (slot >= kPetBehaviorSlotCount) return false;
+        if (slot == kStageDaysEffectSlot)
+        {
+            result.values.stage_days = applyStageDaysEffect(result.values.stage_days,
+                static_cast<PetBehaviorEffectOperation>(effect[1]), readI64(effect + 4));
+            continue;
+        }
+        if (slot >= config.statCount) return false;
         uint32_t &value = result.values.customStats[slot];
         value = applyPetBehaviorStatEffect(config.stats[slot], value,
                                           static_cast<PetBehaviorEffectOperation>(effect[1]),
@@ -153,7 +159,7 @@ bool settleStatEvents(SdFat *sd, const PetBehaviorConfig &config,
         uint8_t trigger[8];
         if (!file.read(config.statEventTriggersOffset, index, trigger)) return false;
         const uint8_t slot = trigger[2];
-        if (slot >= kPetBehaviorSlotCount) return false;
+        if (slot >= config.statCount) return false;
         if (matchesTrigger(trigger[3], readU32(trigger + 4), before.customStats[slot], after.customStats[slot]) &&
             !runEvent(file, config, readU16(trigger), before, after, result)) return false;
     }

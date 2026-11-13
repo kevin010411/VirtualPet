@@ -99,9 +99,11 @@ void Game::loop_game()
             {
                 shopPlayback = false;
                 animations->cancelAll();
-                redrawShop();
+                finishShopPlayback();
             }
         }
+        else if (shopEvolutionPending)
+            finishShopPlayback();
         return;
     }
 #endif
@@ -112,8 +114,7 @@ void Game::loop_game()
     if (flow.is(AppStage::Menu)) return;
 #endif
 
-    if (cheatEvolutionPending && !animations->isBusy() &&
-        (flow.is(AppStage::Command) || flow.is(AppStage::Minigame)))
+    if (cheatEvolutionPending && !animations->isBusy() && flow.is(AppStage::Command))
     {
         cheatEvolutionPending = false;
         handleEvolution();
@@ -128,17 +129,21 @@ void Game::loop_game()
 #if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     if (flow.is(AppStage::Minigame))
     {
+        const uint32_t previousDays = pet.stageDays();
         minigame->update();
+        cheatEvolutionPending |= pet.stageDays() != previousDays;
 #if ENABLE_INSTRUCTION_RESPONSE
         uint32_t instructionMask = 0;
         uint8_t instructionCount = 0;
         if (minigame->consumeInstructionCompletion(instructionMask, instructionCount))
         {
+            const uint32_t previousDays = pet.stageDays();
             // Consume before commit/save: a failed disk write must never replay arithmetic.
             if (!petBehaviorRuntime->applyInstructionResults(instructionMask, instructionCount))
                 renderer.showResourceError("pet state");
             else
             {
+                cheatEvolutionPending |= pet.stageDays() != previousDays;
                 settleMutation(Settlement::InstructionCompletion);
                 if (pet.isDead()) return;
 #if ENABLE_STAT_EVENTS
@@ -198,6 +203,24 @@ void Game::loop_game()
 void Game::redrawShop()
 {
     if (!shop.redraw()) enterRuntimeFatal();
+}
+
+void Game::finishShopPlayback()
+{
+    if (shopEvolutionPending)
+    {
+        shopEvolutionPending = false;
+        enterCommand();
+        const EvolutionResult result = handleEvolution();
+        if (result != EvolutionResult::NoChange && result != EvolutionResult::Failed)
+        {
+            shop.close();
+            if (result == EvolutionResult::Completed) requestFullRedraw();
+            return;
+        }
+        flow.enter(AppStage::Shop);
+    }
+    redrawShop();
 }
 #endif
 
@@ -515,7 +538,7 @@ void Game::routeDirectionKey(KeyDirection direction)
 #if ENABLE_SHOP
     if (flow.is(AppStage::Shop))
     {
-        if (!shopPlayback && !shop.move(direction == KeyDirection::Right)) enterRuntimeFatal();
+        if (!shopPlayback && !shopEvolutionPending && !shop.move(direction == KeyDirection::Right)) enterRuntimeFatal();
         return;
     }
 #endif
@@ -582,10 +605,12 @@ void Game::OnConfirmKey()
 #if ENABLE_SHOP
     if (flow.is(AppStage::Shop))
     {
-        if (shopPlayback) return;
+        if (shopPlayback || shopEvolutionPending) return;
+        const uint32_t previousDays = pet.stageDays();
         AssetData::AnimationRef animation = {};
         if (!shop.confirm(animation)) { enterRuntimeFatal(); return; }
         if (enterDeathIfNeeded()) return;
+        shopEvolutionPending = pet.stageDays() != previousDays;
         if (!shop.active())
         {
             enterCommand();
@@ -604,6 +629,8 @@ void Game::OnConfirmKey()
                 shopPlayback = true;
             }
         }
+        else if (shopEvolutionPending)
+            finishShopPlayback();
         return;
     }
 #endif
@@ -675,7 +702,9 @@ void Game::OnConfirmKey()
 #if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
     if (flow.is(AppStage::Minigame))
     {
+        const uint32_t previousDays = pet.stageDays();
         minigame->onConfirm();
+        cheatEvolutionPending |= pet.stageDays() != previousDays;
         return;
     }
 #endif
@@ -683,7 +712,11 @@ void Game::OnConfirmKey()
     if (!flow.is(AppStage::Command))
         return;
 
-    handleCommandResult(commandExecutor->execute(*commands));
+    const uint32_t previousDays = pet.stageDays();
+    const CommandResult result = commandExecutor->execute(*commands);
+    if (result.kind == CommandResultKind::UserAction)
+        cheatEvolutionPending |= pet.stageDays() != previousDays;
+    handleCommandResult(result);
     synchronizePlaybackClock();
 }
 
@@ -702,12 +735,15 @@ void Game::confirmProjectMenu()
         return;
     }
     CommandResult result;
+    const uint32_t previousDays = pet.stageDays();
     if (entry.kind == ProjectMenuSession::Kind::UserAction)
         result = commandExecutor->executeUserAction(static_cast<uint8_t>(entry.target));
     else if (entry.kind == ProjectMenuSession::Kind::SystemCommand)
         result = commandExecutor->executeSystemCommand(static_cast<RuntimeSystemCommandId>(entry.target));
     else
         return;
+    if (result.kind == CommandResultKind::UserAction)
+        cheatEvolutionPending |= pet.stageDays() != previousDays;
 
     if (result.kind == CommandResultKind::Collection || result.kind == CommandResultKind::None)
     {
@@ -1253,6 +1289,7 @@ void Game::cancelForeground()
 #if ENABLE_SHOP
     shop.close();
     shopPlayback = false;
+    shopEvolutionPending = false;
 #endif
     animations->cancelAll();
     evolution->cancel();

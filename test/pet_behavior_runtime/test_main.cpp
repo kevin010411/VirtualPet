@@ -123,10 +123,10 @@ void testAnimationOnlyAndOwnedEffects()
     assert(pauses.remainingDays[0] == 0 && pauses.remainingDays[3] == 0);
 
     // Invalid effects outside the selected Outcome must never be visited.
-    config.actionEffects[0] = {255, Operation::Change, 1};
+    config.actionEffects[0] = {254, Operation::Change, 1};
     config.actionEffects[1] = {0, Operation::Change, INT16_MAX};
     config.actionEffects[2] = {3, Operation::Set, 0};
-    config.actionEffects[3] = {255, Operation::Change, 1};
+    config.actionEffects[3] = {254, Operation::Change, 1};
     config.actionEffectCount = 4;
     config.actionOutcomes[0].firstEffect = 1;
     config.actionOutcomes[0].effectCount = 2;
@@ -169,7 +169,7 @@ void testRejectedEffectsAreAtomic()
     assertRejected(config, 7);
     assertRejected(config, 255);
     config.actionEffects[0] = {0, Operation::Change, 5};
-    config.actionEffects[1] = {255, Operation::Change, 1};
+    config.actionEffects[1] = {254, Operation::Change, 1};
     config.actionEffectCount = 2;
     config.actionOutcomes[0].effectCount = 2;
     config.actions[2].suspendDailyChangeDays = 255;

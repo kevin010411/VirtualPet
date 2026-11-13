@@ -13,7 +13,7 @@ namespace
 {
 bool decodeStats(const Source &source, const Section &section, PetBehaviorConfig &config)
 {
-    if (section.count == 0 || section.count > kPetBehaviorSlotCount)
+    if (section.count > kPetBehaviorSlotCount)
         return false;
     for (uint16_t index = 0; index < section.count; ++index)
     {
@@ -108,7 +108,7 @@ bool decodeGuessEffects(const Source &source,
     for (uint16_t index = 0; index < effects->count; ++index)
     {
         uint8_t record[14] = {};
-        if (!readRecord(source, *effects, index, record) || record[1] >= config.statCount)
+        if (!readRecord(source, *effects, index, record) || (record[1] >= config.statCount && record[1] != UINT8_MAX))
             return false;
 
         PetBehaviorGuessEffectConfig &effect = config.guessEffects[index];

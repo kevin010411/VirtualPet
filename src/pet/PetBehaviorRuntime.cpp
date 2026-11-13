@@ -24,7 +24,9 @@ PetBehaviorStatValues readStats(const Pet &pet)
 bool writeStats(const PetBehaviorStatValues &state,
                 Pet &pet)
 {
-    return pet.commitPetStats(state.values, kPetBehaviorSlotCount);
+    if (!pet.commitPetStats(state.values, kPetBehaviorSlotCount)) return false;
+    pet.setStageDays(state.stageDays);
+    return true;
 }
 
 uint16_t firmwareRandomBelow(uint16_t upperExclusive)
@@ -115,8 +117,7 @@ bool PetBehaviorRuntime::commitStatMutation(const PetBehaviorStatValues &state, 
     PetStatSnapshot after = pet.statSnapshot();
     for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
         after.customStats[slot] = state.values[slot];
-    const uint32_t remaining = Pet::kStageDaysMax - after.stage_days;
-    after.stage_days += days > remaining ? remaining : days;
+    after.stage_days = state.stageDays;
     return settleStatMutation(saveContext, after, actionSlot, days != 0);
 }
 #endif
@@ -127,11 +128,16 @@ bool PetBehaviorRuntime::advancePetDay(uint32_t days)
     PetBehaviorStatValues state = readStats(pet);
     PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
     applyPetBehaviorDailyChanges(config, state, nextPauses, days);
+    state.stageDays = applyStageDaysEffect(state.stageDays, PetBehaviorEffectOperation::Change, days);
     for (uint8_t i = 0; i < config.dayResetCount; ++i)
     {
         const auto &effect = config.dayResets[i];
-        state.values[effect.statSlot] = static_cast<uint32_t>(
-            effect.value > config.stats[effect.statSlot].maxValue ? config.stats[effect.statSlot].maxValue : effect.value);
+        if (effect.statSlot == kStageDaysEffectSlot)
+            state.stageDays = applyStageDaysEffect(state.stageDays, effect.operation, effect.value);
+        else if (effect.statSlot < config.statCount)
+            state.values[effect.statSlot] = static_cast<uint32_t>(
+                effect.value > config.stats[effect.statSlot].maxValue ? config.stats[effect.statSlot].maxValue : effect.value);
+        else return false;
     }
 #if ENABLE_STAT_EVENTS
     if (usesStatEvents())
@@ -141,7 +147,7 @@ bool PetBehaviorRuntime::advancePetDay(uint32_t days)
     else
 #endif
     {
-        if (!pet.commitPetDay(state.values, kPetBehaviorSlotCount, days)) return false;
+        if (!writeStats(state, pet)) return false;
         if (config.manualDays && saveMutation != nullptr && !saveMutation(saveContext))
         {
             pet.restoreState(before);

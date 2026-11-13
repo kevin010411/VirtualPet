@@ -13,6 +13,7 @@ void append(std::vector<uint8_t> &bytes, std::initializer_list<uint8_t> record)
 PetBehaviorConfig fixture(std::vector<uint8_t> &bytes)
 {
     PetBehaviorConfig config = {};
+    config.statCount = kPetBehaviorSlotCount;
     for (auto &stat : config.stats)
     {
         stat.active = true;
@@ -86,6 +87,12 @@ int main()
     assert(result.pages[0] == 0 && result.pages[1] == 1);
     assert(result.values.customStats[8] == 120 && result.values.customStats[9] == 4);
     assert(result.values.customStats[10] == 120 && result.values.customStats[11] == 3);
+    auto daysEffect = bytes;
+    daysEffect[config.statEventEffectsOffset + 12] = UINT8_MAX;
+    SdFat daysSd;
+    daysSd.seedReadOnly("/runtime.bin", daysEffect);
+    assert(settleStatEvents(&daysSd, config, before, after, result));
+    assert(result.values.stage_days == 4 && result.values.customStats[9] == 0);
 
     uint16_t animationId = 0;
     uint16_t durationMs = 0;
