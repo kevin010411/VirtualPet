@@ -111,8 +111,11 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
         const uint8_t role = record[0];
         if (role == 0 || role >= kFirmwarePlaybackRoleCount)
             return false;
+        const bool optionalGuessFeedback =
+            role == static_cast<uint8_t>(FirmwarePlaybackRole::GuessRight) ||
+            role == static_cast<uint8_t>(FirmwarePlaybackRole::GuessWrong);
         if (!resolveAnimation(source, *assets, *animations, readU16(record + 2), scope,
-                              animation))
+                              animation, optionalGuessFeedback))
         {
             // Evolution uses references on each evolution record. Start
             // belongs to the initial appearance, not later species.

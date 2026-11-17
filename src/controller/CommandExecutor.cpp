@@ -198,12 +198,7 @@ bool CommandExecutor::canPlayGuessItemGame() const
     if (!animations.hasAnimations(requiredResults, sizeof(requiredResults) / sizeof(requiredResults[0])))
         return false;
 
-    const FirmwarePlaybackRole itemPrompts[] = {
-        FirmwarePlaybackRole::GuessItem1,
-        FirmwarePlaybackRole::GuessItem2,
-        FirmwarePlaybackRole::GuessItem3,
-        FirmwarePlaybackRole::GuessItem4};
     return animations.hasAnimation(FirmwarePlaybackRole::GuessStart) ||
-           animations.hasAnimations(itemPrompts, sizeof(itemPrompts) / sizeof(itemPrompts[0]));
+           animations.hasAnimation(FirmwarePlaybackRole::GuessItem1);
 }
 #endif

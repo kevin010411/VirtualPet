@@ -61,7 +61,8 @@ public:
     bool isActive() const;
 
 private:
-    bool hasItemPromptAnimations() const;
+    FirmwarePlaybackRole randomItemAnimation() const;
+    FirmwarePlaybackRole nextItemAnimation() const;
     PlaybackResult replacePromptAnimation();
     void handleGuess(GuessItemSide player);
 
@@ -71,6 +72,7 @@ private:
     int wrongCount;
     GuessItemSide itemSide;
     FirmwarePlaybackRole promptPlaybackRole;
+    uint8_t itemPromptCount = 0;
     unsigned long lastMoveTime = 0;
 };
 

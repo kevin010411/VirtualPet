@@ -17,29 +17,12 @@ namespace
     constexpr int kMaxGuessCount = 3;
 #endif
 
-    FirmwarePlaybackRole randomItemAnimation()
-    {
-        switch (1 + FirmwareRandom::below(4))
-        {
-        case 1:
-            return FirmwarePlaybackRole::GuessItem1;
-        case 2:
-            return FirmwarePlaybackRole::GuessItem2;
-        case 3:
-            return FirmwarePlaybackRole::GuessItem3;
-        default:
-            return FirmwarePlaybackRole::GuessItem4;
-        }
-    }
-
-    FirmwarePlaybackRole randomItemAnimationExcept(FirmwarePlaybackRole current)
-    {
-        FirmwarePlaybackRole next = randomItemAnimation();
-        while (next == current)
-            next = randomItemAnimation();
-
-        return next;
-    }
+    constexpr FirmwarePlaybackRole kItemPrompts[] = {
+        FirmwarePlaybackRole::GuessItem1,
+        FirmwarePlaybackRole::GuessItem2,
+        FirmwarePlaybackRole::GuessItem3,
+        FirmwarePlaybackRole::GuessItem4,
+    };
 
     FirmwarePlaybackRole itemResultAnimation(GuessItemSide itemSide, GuessItemSide playerSide)
     {
@@ -63,12 +46,21 @@ GuessItemGame::GuessItemGame(GuessItemGameHost &hostRef)
     reset();
 }
 
-bool GuessItemGame::hasItemPromptAnimations() const
+FirmwarePlaybackRole GuessItemGame::randomItemAnimation() const
 {
-    return host.hasAnimation(FirmwarePlaybackRole::GuessItem1) &&
-           host.hasAnimation(FirmwarePlaybackRole::GuessItem2) &&
-           host.hasAnimation(FirmwarePlaybackRole::GuessItem3) &&
-           host.hasAnimation(FirmwarePlaybackRole::GuessItem4);
+    return itemPromptCount ? kItemPrompts[FirmwareRandom::below(itemPromptCount)] : FirmwarePlaybackRole::GuessStart;
+}
+
+FirmwarePlaybackRole GuessItemGame::nextItemAnimation() const
+{
+    uint8_t index = static_cast<uint8_t>(FirmwareRandom::below(itemPromptCount - 1));
+    for (uint8_t skipped = 0; skipped <= index; ++skipped)
+        if (kItemPrompts[skipped] == promptPlaybackRole)
+        {
+            ++index;
+            break;
+        }
+    return kItemPrompts[index];
 }
 
 PlaybackResult GuessItemGame::replacePromptAnimation()
@@ -81,11 +73,17 @@ void GuessItemGame::start()
 {
     reset();
 
-    const bool hasItemPrompts = hasItemPromptAnimations();
-
-    if (host.hasAnimation(FirmwarePlaybackRole::GuessStart) && hasItemPrompts)
+    // The exporter assigns the selected animations to a dense prefix of roles.
+    for (const auto role : kItemPrompts)
     {
-        promptPlaybackRole = randomItemAnimation();
+        if (!host.hasAnimation(role))
+            break;
+        ++itemPromptCount;
+    }
+
+    promptPlaybackRole = randomItemAnimation();
+    if (host.hasAnimation(FirmwarePlaybackRole::GuessStart) && itemPromptCount)
+    {
         const Animation sequence[] = {
             Animation::complete(FirmwarePlaybackRole::GuessStart),
             Animation(promptPlaybackRole, kItemPromptLoopDurationMs, false),
@@ -105,7 +103,6 @@ void GuessItemGame::start()
     }
     else
     {
-        promptPlaybackRole = hasItemPrompts ? randomItemAnimation() : FirmwarePlaybackRole::GuessStart;
         replacePromptAnimation();
         state = GuessItemState::WaitingItem;
     }
@@ -144,9 +141,9 @@ void GuessItemGame::update()
         break;
 
     case GuessItemState::WaitingInput:
-        if (hasItemPromptAnimations() && now - lastMoveTime > kItemPromptSwitchIntervalMs)
+        if (itemPromptCount > 1 && now - lastMoveTime > kItemPromptSwitchIntervalMs)
         {
-            promptPlaybackRole = randomItemAnimationExcept(promptPlaybackRole);
+            promptPlaybackRole = nextItemAnimation();
             replacePromptAnimation();
             lastMoveTime = now;
         }
@@ -243,7 +240,8 @@ void GuessItemGame::reset()
     correctCount = 0;
     wrongCount = 0;
     itemSide = GuessItemSide::Left;
-    promptPlaybackRole = FirmwarePlaybackRole::GuessItem1;
+    promptPlaybackRole = FirmwarePlaybackRole::GuessStart;
+    itemPromptCount = 0;
     state = GuessItemState::Inactive;
     lastMoveTime = 0;
 }

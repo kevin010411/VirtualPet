@@ -10,6 +10,7 @@ namespace
 constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
 constexpr uint16_t kBaseVersion = 28;
 constexpr uint16_t kMenuVersion = 29;
+constexpr uint16_t kGuessItemVersion = 30;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -96,10 +97,12 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
     if (source.size < kHeaderSize || source.size > kMaxFileSize ||
         !source.readAt(source.context, 0, header, sizeof(header)) ||
         memcmp(header, kMagic, sizeof(kMagic)) != 0 ||
-        (readU16(header + 4) != kBaseVersion && readU16(header + 4) != kMenuVersion) ||
         readU16(header + 6) != kHeaderSize ||
         readU32(header + 8) != 0x01020304UL || readU32(header + 16) != source.size ||
         readU16(header + 26) != kSectionEntrySize)
+        return false;
+    const uint16_t version = readU16(header + 4);
+    if (version != kBaseVersion && version != kMenuVersion && version != kGuessItemVersion)
         return false;
 
     featureFlags = readU32(header + 12);
@@ -214,7 +217,8 @@ bool resolveAnimation(const Source &source,
                       const Section &animations,
                       uint16_t animationRef,
                       const ActiveAssetScope &scope,
-                      AssetData::AnimationRef &resolved)
+                      AssetData::AnimationRef &resolved,
+                      bool allowMissingForScope)
 {
     resolved = {};
     if (animationRef == kNone16 || animationRef >= animations.count)
@@ -242,7 +246,7 @@ bool resolveAnimation(const Source &source,
             return resolved.valid();
         }
     }
-    return false;
+    return allowMissingForScope;
 }
 
 bool resolveAssetReference(const Source &source, const Section &assets,

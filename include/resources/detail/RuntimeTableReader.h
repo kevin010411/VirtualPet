@@ -163,7 +163,8 @@ bool readRecord(const Source &source, const Section &section,
                 uint16_t index, uint8_t *record);
 bool resolveAnimation(const Source &source, const Section &assets,
                       const Section &animations, uint16_t animationRef,
-                      const ActiveAssetScope &scope, AssetData::AnimationRef &resolved);
+                      const ActiveAssetScope &scope, AssetData::AnimationRef &resolved,
+                      bool allowMissingForScope = false);
 bool resolveAssetReference(const Source &source, const Section &assets,
                            uint16_t reference, AssetData::AnimationRef &resolved);
 } // namespace RuntimeTableInternal
