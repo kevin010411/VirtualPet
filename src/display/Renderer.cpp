@@ -18,6 +18,7 @@ struct Renderer::AnimationState
     uint16_t nextFrame = 0;
     uint16_t maxFrame = 0;
     uint8_t layoutId = 0;
+    bool fullScreen = false;
     bool playOnce = false;
     bool animationFrameFailed = false;
     uint8_t animationX = 0;
@@ -66,6 +67,7 @@ void Renderer::initAnimations()
     state->nextFrame = 0;
     state->maxFrame = 0;
     state->layoutId = 0;
+    state->fullScreen = false;
     state->playOnce = false;
     state->animationFrameFailed = false;
 }
@@ -125,10 +127,22 @@ bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation,
     }
     if (xmin < 0 && ymin < 0)
     {
-        if (state->animationWidth == 0)
-            return true;
-        expectedWidth = state->animationWidth;
-        expectedHeight = state->animationHeight;
+        const auto &current = state->animation;
+        if (state->fullScreen && versionIndex == state->versionIndex &&
+            animation.animationId == current.animationId &&
+            animation.speciesSlot == current.speciesSlot && animation.outfitSlot == current.outfitSlot)
+        {
+            xmin = ymin = 0;
+            expectedWidth = 128;
+            expectedHeight = 160;
+        }
+        else
+        {
+            if (state->animationWidth == 0)
+                return true;
+            expectedWidth = state->animationWidth;
+            expectedHeight = state->animationHeight;
+        }
     }
     return ShowDataFrame(frameAddress(animation, versionIndex,
                                       static_cast<uint16_t>(frameIndex - 1)),
@@ -142,6 +156,7 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation,
     state->animationFrameFailed = false;
     state->animation = {};
     state->maxFrame = 0;
+    state->fullScreen = false;
     AssetData::AnimationRecord record = {};
     if (!resources.resolveAnimation(animation, versionIndex, record))
         return false;
@@ -150,15 +165,18 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation,
     state->nextFrame = 0;
     state->maxFrame = record.frameCount;
     state->layoutId = record.layoutId;
+    state->fullScreen = record.fullScreen;
     state->playOnce = playOnce;
     return record.frameCount > 0;
 }
 
-bool Renderer::currentLayoutId(uint8_t &layoutId) const
+bool Renderer::currentLayoutId(uint8_t &layoutId, bool *fullScreen) const
 {
     if (!state->animation.valid() || state->maxFrame == 0)
         return false;
     layoutId = state->layoutId;
+    if (fullScreen)
+        *fullScreen = state->fullScreen;
     return true;
 }
 
@@ -180,10 +198,8 @@ bool Renderer::advanceAnimationFrame()
             return true;
         state->nextFrame = 0;
     }
-    const bool ok = state->animationWidth == 0 || ShowAnimationFrame(
-        state->animation, state->versionIndex, static_cast<uint16_t>(state->nextFrame + 1),
-        state->animationX, state->animationY, FrameDecoder::kWorkingBatchLines,
-        state->animationWidth, state->animationHeight);
+    const bool ok = ShowAnimationFrame(
+        state->animation, state->versionIndex, static_cast<uint16_t>(state->nextFrame + 1));
     if (ok)
         ++state->nextFrame;
     state->animationFrameFailed = !ok;

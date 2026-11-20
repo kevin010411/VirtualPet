@@ -33,7 +33,7 @@ public:
     bool setAnimation(const AssetData::AnimationRef &animation,
                       uint8_t versionIndex,
                       bool playOnce);
-    bool currentLayoutId(uint8_t &layoutId) const;
+    bool currentLayoutId(uint8_t &layoutId, bool *fullScreen = nullptr) const;
     bool willRestartAnimationLoop() const;
     bool advanceAnimationFrame();
     bool animationFrameFailed() const;

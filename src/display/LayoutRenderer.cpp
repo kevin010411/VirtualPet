@@ -127,12 +127,17 @@ void LayoutRenderer::drawSelection()
 bool LayoutRenderer::syncPlayback(const PetStatSnapshot &snapshot)
 {
     uint8_t layoutId = 0;
-    if (!renderer.currentLayoutId(layoutId))
+    bool fullScreen = false;
+    if (!renderer.currentLayoutId(layoutId, &fullScreen))
     {
         resources.recordAssetDataErrorResource("asset data");
         return false;
     }
+    if (fullScreen)
+        hasActiveLayout = false;
     updateValues(snapshot);
+    if (fullScreen)
+        return true;
     return updatePlayback(layoutId);
 }
 

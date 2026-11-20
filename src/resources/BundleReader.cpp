@@ -45,6 +45,7 @@ int compareAnimationKey(const AssetData::AnimationRecord &left,
 
 struct BundleReader::PackHeader
 {
+    uint16_t version;
     uint8_t packKind = 0;
     uint8_t speciesSlot = 0;
     uint8_t bundleId[16] = {};
@@ -255,8 +256,9 @@ bool BundleReader::readHeader(SdBaseFile &file, PackHeader &header)
     }
 
     const uint8_t *data = scratch_;
+    header.version = readU16(data + 8);
     if (memcmp(data, kMagic, sizeof(kMagic)) != 0 ||
-        readU16(data + 8) != AssetData::kVersion ||
+        (header.version != AssetData::kVersion && header.version != AssetData::kFullScreenVersion) ||
         readU16(data + 10) != AssetData::kHeaderSize ||
         readU16(data + 56) != AssetData::kAnimationRecordSize ||
         readU16(data + 58) != AssetData::kFrameRecordSize)
@@ -365,6 +367,7 @@ bool BundleReader::readAnimation(SdBaseFile &file,
     animation.frameCount = readU16(data + 8);
     animation.frameMs = readU16(data + 10);
     animation.layoutId = data[12];
+    animation.fullScreen = header.version == AssetData::kFullScreenVersion && (data[13] & 1U);
     const bool validOutfit =
         (header.packKind == AssetData::kPackKindShared && animation.outfitSlot == 0) ||
         (header.packKind == AssetData::kPackKindSpecies && animation.outfitSlot > 0);

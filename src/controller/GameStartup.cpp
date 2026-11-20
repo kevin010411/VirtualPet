@@ -90,10 +90,7 @@ bool Game::finish_setup_game()
     }
 
     layout->setCommandsVisible(!pet.isDead());
-    layout->updateValues(pet.statSnapshot());
-    uint8_t initialLayoutId = 0;
-    if (!renderer.currentLayoutId(initialLayoutId) ||
-        !layout->updatePlayback(initialLayoutId))
+    if (!layout->syncPlayback(pet.statSnapshot()))
     {
         enterRuntimeFatal();
         return false;

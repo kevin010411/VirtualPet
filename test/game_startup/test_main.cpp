@@ -2444,7 +2444,13 @@ bool Renderer::setAnimation(const AssetData::AnimationRef &animation, uint8_t, b
     }
     return true;
 }
-bool Renderer::currentLayoutId(uint8_t &layout) const { layout = 0; return scenario->layoutSucceeds; }
+bool Renderer::currentLayoutId(uint8_t &layout, bool *fullScreen) const
+{
+    layout = 0;
+    if (fullScreen)
+        *fullScreen = false;
+    return scenario->layoutSucceeds;
+}
 bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation, uint8_t,
                                   uint16_t frame, int x, int, int, uint16_t, uint16_t)
 {

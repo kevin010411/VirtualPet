@@ -11,6 +11,7 @@ constexpr uint8_t kPackKindShared = 2;
 constexpr uint8_t kCodecPal8RunLiteral = 1;
 constexpr uint8_t kCodecRgb565RunLiteral = 2;
 constexpr uint16_t kVersion = 2;
+constexpr uint16_t kFullScreenVersion = 3;
 constexpr uint16_t kHeaderSize = 80;
 constexpr uint16_t kAnimationRecordSize = 16;
 constexpr uint16_t kFrameRecordSize = 24;
@@ -69,6 +70,7 @@ struct AnimationRecord
     uint16_t frameCount = 0;
     uint16_t frameMs = 0;
     uint8_t layoutId = 0;
+    bool fullScreen = false;
 };
 
 struct FrameDescriptor

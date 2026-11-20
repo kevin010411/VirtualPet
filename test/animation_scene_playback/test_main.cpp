@@ -50,6 +50,7 @@ void recordEvent(RenderEventChannel channel, RenderEventKind kind,
 uint16_t selectedAnimationId = 0;
 uint8_t selectedVersion = 0;
 uint8_t selectedLayoutId = 0;
+bool selectedFullScreen = false;
 uint8_t fixtureLayoutIds[2] = {};
 
 AssetData::AnimationRef animation(uint16_t id) { return {1, 1, id}; }
@@ -159,9 +160,11 @@ bool Renderer::setAnimation(
     selectedLayoutId = fixtureLayoutIds[versionIndex < 2 ? versionIndex : 0];
     return true;
 }
-bool Renderer::currentLayoutId(uint8_t &layoutId) const
+bool Renderer::currentLayoutId(uint8_t &layoutId, bool *fullScreen) const
 {
     layoutId = selectedLayoutId;
+    if (fullScreen)
+        *fullScreen = selectedFullScreen;
     return true;
 }
 AssetData::BundleError AssetResources::firstAssetDataError() const
@@ -256,7 +259,22 @@ void testAppearanceRedraw()
     assert(layout.syncPlayback(snapshot));
     assert(events.size() == 6);
 
+    events.clear();
+    selectedFullScreen = true;
+    assert(layout.syncPlayback(snapshot));
+    snapshot.customStats[0] = 0;
+    assert(layout.syncPlayback(snapshot));
+    layout.drawSelection();
+    layout.drawAll();
+    assert(events.empty());
+    selectedFullScreen = false;
+    assert(layout.syncPlayback(snapshot));
+    assert(events.size() == 6);
+    assert(events[1].frame == 1 && events[3].frame == 3 && events[5].frame == 5);
+
     // Compact ranges preserve the full unsigned Pet Stat domain.
+    snapshot.customStats[0] = 1;
+    layout.updateValues(snapshot);
     config.screenRules[0] = {0, UINT32_MAX - 1, 5};
     config.screenRules[1] = {UINT32_MAX, UINT32_MAX, 6};
     snapshot.customStats[0] = UINT32_MAX - 1;
