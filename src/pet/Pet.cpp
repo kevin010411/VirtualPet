@@ -56,10 +56,16 @@ void Pet::setActiveStatEvent(uint16_t node)
     const uint32_t encoded = node == kNoActiveStatEvent ? 0U : static_cast<uint32_t>(node) + 1U;
     st.flowFlags = (st.flowFlags & ~kStatEventMask) | ((encoded << kStatEventShift) & kStatEventMask);
 }
+#endif
+#if ENABLE_STAT_EVENTS || ENABLE_COLLECTION_GAME_EVENTS
 void Pet::retainCollectionFrom(const PersistedPetState &previous)
 {
     st.collectionFingerprint = previous.collectionFingerprint;
     st.collectionMask = previous.collectionMask;
+#if ENABLE_COLLECTION_GAME_EVENTS
+    st.collectionProgressFingerprint = previous.collectionProgressFingerprint;
+    memcpy(st.collectionProgress, previous.collectionProgress, sizeof(st.collectionProgress));
+#endif
 }
 #endif
 #if ENABLE_DEATH
@@ -110,6 +116,26 @@ void Pet::acquireCollection(uint8_t slot)
 {
     if (slot < 64) st.collectionMask |= uint64_t(1) << slot;
 }
+
+#if ENABLE_COLLECTION_GAME_EVENTS
+bool Pet::configureCollectionProgress(uint32_t fingerprint)
+{
+    if (st.collectionProgressFingerprint == fingerprint) return false;
+    st.collectionProgressFingerprint = fingerprint;
+    memset(st.collectionProgress, 0, sizeof(st.collectionProgress));
+    return true;
+}
+
+uint32_t Pet::collectionProgress(uint8_t slot) const
+{
+    return slot < kCollectionProgressCount ? st.collectionProgress[slot] : 0;
+}
+
+void Pet::setCollectionProgress(uint8_t slot, uint32_t value)
+{
+    if (slot < kCollectionProgressCount) st.collectionProgress[slot] = value;
+}
+#endif
 
 bool Pet::commitPetDay(const uint32_t *customStats, size_t customStatCount, uint32_t days)
 {

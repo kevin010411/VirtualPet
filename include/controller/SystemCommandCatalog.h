@@ -23,6 +23,7 @@ enum class RuntimeSystemCommandId : uint16_t
     Shop = 7,
     Inventory = 8,
     AdvanceDay = 9,
+    CaptureGame = 10,
 };
 
 struct CompiledSystemCommand

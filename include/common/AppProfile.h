@@ -12,6 +12,10 @@
 #define APP_COMMAND_INSTRUCTION_RESPONSE 13
 #define APP_COMMAND_SHOP 14
 #define APP_COMMAND_INVENTORY 15
+#define APP_COMMAND_CAPTURE_GAME 18
+#ifndef ENABLE_CAPTURE_GAME
+#define ENABLE_CAPTURE_GAME 0
+#endif
 #ifndef ENABLE_SHOP
 #define ENABLE_SHOP 0
 #endif
@@ -33,6 +37,9 @@
 // Optional feature defaults stay off. The Profile Resolver emits opt-ins.
 #ifndef ENABLE_COLLECTION_CATALOG
 #define ENABLE_COLLECTION_CATALOG 0
+#endif
+#ifndef ENABLE_COLLECTION_GAME_EVENTS
+#define ENABLE_COLLECTION_GAME_EVENTS 0
 #endif
 
 #ifndef ENABLE_GUESS_GAME

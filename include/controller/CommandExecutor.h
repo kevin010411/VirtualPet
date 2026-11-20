@@ -25,6 +25,7 @@ enum class CommandResultKind : uint8_t
     Inventory,
     AdvanceDay,
     Menu,
+    CaptureGame,
 };
 
 struct CommandResult

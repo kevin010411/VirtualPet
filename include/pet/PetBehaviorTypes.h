@@ -170,6 +170,11 @@ struct PetBehaviorConfig
     AssetData::AnimationRef layoutSelected;
     uint32_t schemaFingerprint;
     uint32_t collectionFingerprint;
+#if ENABLE_COLLECTION_GAME_EVENTS
+    uint64_t captureOnlyMask;
+    uint32_t collectionProgressFingerprint;
+    bool retainCollectionOnRestart;
+#endif
     uint32_t trackedActionFingerprint;
     uint8_t trackedActionCount;
     uint8_t trackedActions[8];

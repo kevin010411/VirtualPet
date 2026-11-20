@@ -1,5 +1,6 @@
 #include "resources/AssetResources.h"
 #include "collection/CollectionCatalog.h"
+#include "collection/CollectionGameEvent.h"
 #include "resources/detail/RuntimeTableFile.h"
 #include "pet/Pet.h"
 #include "display/Renderer.h"
@@ -75,6 +76,11 @@ bool loadCollectionCatalog(const RuntimeTable &table, PetBehaviorConfig &config)
     config.collectionFingerprint = 0;
     config.trackedActionFingerprint = 0;
     config.trackedActionCount = 0;
+#if ENABLE_COLLECTION_GAME_EVENTS
+    config.retainCollectionOnRestart = false;
+    config.captureOnlyMask = 0;
+    config.collectionProgressFingerprint = 0;
+#endif
     if ((table.featureFlags & kCollectionFeature) == 0) return true;
 
     // The backend validates relationships and assets before export. Read only
@@ -94,6 +100,17 @@ bool loadCollectionCatalog(const RuntimeTable &table, PetBehaviorConfig &config)
     config.collectionFingerprint = readU32(cfg);
     config.trackedActionFingerprint = readU32(cfg + 20);
     config.trackedActionCount = tracked->count;
+#if ENABLE_COLLECTION_GAME_EVENTS
+    if (table.featureFlags & kCollectionGameEventsFeature)
+    {
+        const Section *gameConfig = table.find(CollectionGameConfig);
+        uint8_t row[16];
+        if (gameConfig == nullptr || !readRecord(table.source, *gameConfig, 0, row)) return false;
+        config.captureOnlyMask = static_cast<uint64_t>(readI64(row));
+        config.collectionProgressFingerprint = readU32(row + 8);
+        config.retainCollectionOnRestart = row[12] != 0;
+    }
+#endif
     return true;
 }
 
@@ -107,6 +124,9 @@ __attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const PetBehav
     {
         *changed = pet.configureCollection(config.collectionFingerprint);
         *changed |= pet.configureTrackedActions(config.trackedActionFingerprint);
+#if ENABLE_COLLECTION_GAME_EVENTS
+        *changed |= pet.configureCollectionProgress(config.collectionProgressFingerprint);
+#endif
     }
     if (config.collectionFingerprint == 0) return true;
     RuntimeTableFile file;
@@ -116,30 +136,60 @@ __attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const PetBehav
     const Section *items = table.find(CollectionItems);
     const Section *conditions = table.find(CollectionConditions);
     if (items == nullptr || conditions == nullptr) return false;
-    // Acquisition changes only ownership. Source members remain stable
-    // until all clauses finish; appearance grants run after this loop.
+    // Appearance grants run after acquisition so all non-ownership values
+    // stay stable while dependent collections are evaluated.
     const PersistedPetState &state = pet.persistentState();
-    int32_t identities[2];
-    identities[0] = pet.speciesSlot();
-    identities[1] = identities[0] * 256 + pet.outfitSlot();
-    for (uint16_t index = 0; index < items->count; ++index)
+    const int32_t identities[] = {pet.speciesSlot(), pet.speciesSlot() * 256 + pet.outfitSlot()};
+#if ENABLE_COLLECTION_GAME_EVENTS
+    bool acquired;
+    do
     {
-        if (pet.isCollectionOwned(index)) continue;
-        uint8_t item[36];
-        if (!readItem(table, index, item)) return false;
-        bool matches = true;
-        for (uint16_t clause = 0; clause < readU16(item + 4); ++clause)
+        acquired = false;
+#endif
+        for (uint16_t index = 0; index < items->count; ++index)
         {
-            uint8_t condition[18];
-            if (!readRecord(table.source, *conditions, readU16(item + 2) + clause, condition)) return false;
-            if (condition[0] >= kPetCustomStatCount + 2 + kTrackedActionCount) return false;
-            const uint8_t source = condition[0];
-            const int64_t value = source < kPetCustomStatCount ? state.customStats[source] :
-                source >= kPetCustomStatCount + 2 ? state.actionCounts[source - kPetCustomStatCount - 2] : identities[source - kPetCustomStatCount];
-            matches &= value >= readI64(condition + 2) && value <= readI64(condition + 10);
+            if (pet.isCollectionOwned(index)) continue;
+#if ENABLE_COLLECTION_GAME_EVENTS
+            if (config.captureOnlyMask & (uint64_t(1) << index)) continue;
+#endif
+            uint8_t item[36];
+            if (!readItem(table, index, item)) return false;
+            bool matches = true;
+            for (uint16_t clause = 0; clause < readU16(item + 4); ++clause)
+            {
+                uint8_t condition[18];
+                if (!readRecord(table.source, *conditions, readU16(item + 2) + clause, condition)) return false;
+                const uint8_t source = condition[0];
+#if ENABLE_COLLECTION_GAME_EVENTS
+                if (source == 22)
+                {
+                    const uint64_t required = static_cast<uint64_t>(readI64(condition + 2));
+                    matches &= (state.collectionMask & required) == required;
+                    continue;
+                }
+                if (source == 23)
+                {
+                    matches &= pet.collectionProgress(condition[1]) >= readU32(condition + 2);
+                    continue;
+                }
+#endif
+                if (source >= kPetCustomStatCount + 2 + kTrackedActionCount) return false;
+                const int64_t value = source < kPetCustomStatCount ? state.customStats[source] :
+                    source >= kPetCustomStatCount + 2 ? state.actionCounts[source - kPetCustomStatCount - 2] : identities[source - kPetCustomStatCount];
+                matches &= value >= readI64(condition + 2) && value <= readI64(condition + 10);
+            }
+            if (matches)
+            {
+                pet.acquireCollection(index);
+                *changed = true;
+#if ENABLE_COLLECTION_GAME_EVENTS
+                acquired = true;
+#endif
+            }
         }
-        if (matches) { pet.acquireCollection(index); *changed = true; }
-    }
+#if ENABLE_COLLECTION_GAME_EVENTS
+    } while (acquired && (table.featureFlags & kCollectionGameEventsFeature) != 0);
+#endif
     const uint8_t previousMask = pet.outfitUnlockMask();
     if (!applyGrants(table, pet)) return false;
     *changed |= pet.outfitUnlockMask() != previousMask;
@@ -156,6 +206,117 @@ bool applyCollectionOutfitGrants(SdFat *sd, const PetBehaviorConfig &config, Pet
 {
     return updateCollectionCatalog(sd, config, pet, nullptr);
 }
+
+#if ENABLE_COLLECTION_GAME_EVENTS
+namespace
+{
+constexpr uint8_t noShopItem = 255;
+constexpr uint8_t stageDaysSlot = 255;
+enum class RuleKind : uint8_t { UpTo = 1, DownTo, Decrease, Round, Earned };
+enum class RoundMetric : uint8_t { Catches, GroupCatches, OutsideGroup, DistinctInGroup, EndingStat, StatIncreases };
+
+uint32_t statValue(const PersistedPetState &state, uint8_t slot)
+{
+    return slot == stageDaysSlot ? state.stage_days : state.customStats[slot];
+}
+
+uint32_t metricValue(const CollectionRoundStats &round, const PersistedPetState &state,
+                     RoundMetric metric, uint8_t slot)
+{
+    switch (metric)
+    {
+    case RoundMetric::Catches: return round.catches;
+    case RoundMetric::GroupCatches: return round.groupCatches[slot];
+    case RoundMetric::OutsideGroup: return round.catches - round.groupCatches[slot];
+    case RoundMetric::DistinctInGroup: return round.distinctInGroup[slot];
+    case RoundMetric::EndingStat: return statValue(state, slot);
+    case RoundMetric::StatIncreases:
+        return round.statIncreases[slot == stageDaysSlot ? kPetCustomStatCount : slot];
+    }
+    return 0;
+}
+
+bool roundMatches(const RuntimeTable &table, const uint8_t *rule, const PersistedPetState &state,
+                  const CollectionRoundStats &round, bool &matches)
+{
+    const Section *requirements = table.find(CollectionRoundRequirements);
+    if (requirements == nullptr) return false;
+    matches = true;
+    for (uint8_t index = 0; index < rule[3]; ++index)
+    {
+        uint8_t req[8];
+        if (!readRecord(table.source, *requirements, readU16(rule + 4) + index, req)) return false;
+        const uint32_t amount = metricValue(round, state, static_cast<RoundMetric>(req[0]), req[2]);
+        const uint32_t threshold = readU32(req + 4);
+        if (req[1] == 0 ? amount != threshold : amount < threshold)
+        {
+            matches = false;
+            break;
+        }
+    }
+    return true;
+}
+
+uint32_t statIncrement(const uint8_t *rule, const PersistedPetState &before,
+                       const PersistedPetState &after, CollectionGameEvent event, uint8_t shopItem)
+{
+    const RuleKind kind = static_cast<RuleKind>(rule[0]);
+    const uint8_t filter = rule[2];
+    if (filter != noShopItem && shopItem != filter) return 0;
+    if (kind == RuleKind::Earned && event == CollectionGameEvent::StatTransition) return 0;
+    const uint32_t oldValue = statValue(before, rule[1]);
+    const uint32_t newValue = statValue(after, rule[1]);
+    const uint32_t threshold = readU32(rule + 12);
+    switch (kind)
+    {
+    case RuleKind::UpTo: return oldValue < threshold && newValue >= threshold;
+    case RuleKind::DownTo: return oldValue > threshold && newValue <= threshold;
+    case RuleKind::Decrease: return oldValue >= newValue && oldValue - newValue >= threshold;
+    case RuleKind::Earned: return newValue > oldValue ? newValue - oldValue : 0;
+    case RuleKind::Round: break;
+    }
+    return 0;
+}
+}
+
+bool recordCollectionGameEvent(SdFat *sd, const PetBehaviorConfig &config, Pet &pet,
+                               const PersistedPetState &before, CollectionGameEvent event,
+                               uint8_t shopItem, const CollectionRoundStats *round)
+{
+    if (config.collectionProgressFingerprint == 0 || pet.isDead()) return true;
+    RuntimeTableFile file;
+    if (!file.open(sd, config.assetManifest)) return false;
+    const RuntimeTable &table = file.table();
+    const Section *rules = table.find(CollectionEventRules);
+    if (rules == nullptr) return false;
+
+    pet.configureCollectionProgress(config.collectionProgressFingerprint);
+    const PersistedPetState &after = pet.persistentState();
+    for (uint16_t slot = 0; slot < rules->count; ++slot)
+    {
+        uint8_t rule[16];
+        if (!readRecord(table.source, *rules, slot, rule)) return false;
+        const uint32_t goal = readU32(rule + 8);
+        const uint32_t progress = pet.collectionProgress(slot);
+        if (progress >= goal) continue;
+
+        uint32_t increment;
+        if (static_cast<RuleKind>(rule[0]) == RuleKind::Round)
+        {
+            if (event != CollectionGameEvent::CaptureRound || round == nullptr) continue;
+            bool matches;
+            if (!roundMatches(table, rule, after, *round, matches)) return false;
+            increment = matches;
+        }
+        else
+            increment = statIncrement(rule, before, after, event, shopItem);
+
+        if (increment)
+            pet.setCollectionProgress(slot, increment >= goal - progress ? goal : progress + increment);
+    }
+    return true;
+}
+#endif
 
 CollectionCatalog::CollectionCatalog(Pet &petRef, Renderer &rendererRef, AssetResources &resourcesRef, const PetBehaviorConfig &configRef)
     : pet(petRef), renderer(rendererRef), resources(resourcesRef), config(configRef) {}

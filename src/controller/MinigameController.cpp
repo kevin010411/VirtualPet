@@ -1,7 +1,7 @@
 #include "controller/MinigameController.h"
 #include "pet/PetBehaviorRuntime.h"
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
 
 MinigameController::MinigameController(AnimationController &animationsRef
 #if ENABLE_GUESS_GAME
@@ -40,8 +40,22 @@ bool MinigameController::startPredict()
 }
 #endif
 
+#if ENABLE_CAPTURE_GAME
+bool MinigameController::startCapture(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes)
+{
+    reset();
+    animations.cancelAll();
+    if (!capture.start(renderer, resources, outcomes)) return false;
+    activeGame = Kind::Capture;
+    return true;
+}
+#endif
+
 void MinigameController::reset()
 {
+#if ENABLE_CAPTURE_GAME
+    capture.cancel();
+#endif
 #if ENABLE_INSTRUCTION_RESPONSE
     instruction.cancel();
 #endif
@@ -56,6 +70,9 @@ void MinigameController::reset()
 
 void MinigameController::update()
 {
+#if ENABLE_CAPTURE_GAME
+    if (activeGame == Kind::Capture) capture.update();
+#endif
 #if ENABLE_INSTRUCTION_RESPONSE
     if (activeGame == Kind::Instruction) instruction.update();
 #endif
@@ -69,6 +86,9 @@ void MinigameController::update()
 
 void MinigameController::onLeft()
 {
+#if ENABLE_CAPTURE_GAME
+    if (activeGame == Kind::Capture) capture.move(-1);
+#endif
 #if ENABLE_GUESS_GAME
     if (activeGame == Kind::GuessItem) guessItem.onLeft();
 #endif
@@ -76,6 +96,9 @@ void MinigameController::onLeft()
 
 void MinigameController::onRight()
 {
+#if ENABLE_CAPTURE_GAME
+    if (activeGame == Kind::Capture) capture.move(1);
+#endif
 #if ENABLE_GUESS_GAME
     if (activeGame == Kind::GuessItem) guessItem.onRight();
 #endif
@@ -83,6 +106,9 @@ void MinigameController::onRight()
 
 void MinigameController::onConfirm()
 {
+#if ENABLE_CAPTURE_GAME
+    if (activeGame == Kind::Capture) capture.confirm();
+#endif
 #if ENABLE_GUESS_GAME
     if (activeGame == Kind::GuessItem) guessItem.onMid();
 #endif
@@ -100,6 +126,9 @@ void MinigameController::onPlaybackFailed()
 
 bool MinigameController::isActive() const
 {
+#if ENABLE_CAPTURE_GAME
+    if (activeGame == Kind::Capture) return capture.active();
+#endif
 #if ENABLE_INSTRUCTION_RESPONSE
     if (activeGame == Kind::Instruction) return instruction.active();
 #endif
@@ -114,7 +143,7 @@ bool MinigameController::isActive() const
 
 bool MinigameController::pausesPetTime() const
 {
-    // Predict was a command sequence: its playback time never accrued pet days.
+    // Predict and Instruction retain their existing playback-clock policy.
     return activeGame == Kind::Predict || activeGame == Kind::Instruction;
 }
 
@@ -171,7 +200,7 @@ void MinigameController::settleOutcome(GuessItemOutcome outcome)
 }
 
 #endif // ENABLE_GUESS_GAME
-#endif // ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#endif // ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
 
 #if ENABLE_INSTRUCTION_RESPONSE
 void MinigameController::startInstruction(Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config)

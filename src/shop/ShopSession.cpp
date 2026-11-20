@@ -4,6 +4,7 @@
 #include <string.h>
 #include "appearance/AppearanceChangeController.h"
 #include "common/SdBinaryRead.h"
+#include "collection/CollectionGameEvent.h"
 #include "display/Renderer.h"
 #include "pet/Pet.h"
 #include "pet/PetBehaviorTypes.h"
@@ -287,7 +288,12 @@ bool ShopSession::transact(AssetData::AnimationRef &animation)
     pet.st.shopQuantities[slot] = nextQuantity;
     pet.setStageDays(values.stage_days);
     if (config.statCount) pet.commitPetStats(values.customStats, config.statCount);
-    if ((!pet.isDead() && !appearance.refreshUnlockState(false, false)) ||
+    if (
+#if ENABLE_COLLECTION_GAME_EVENTS
+        !recordCollectionGameEvent(resources.sdCard(), config, pet, previous,
+                                  CollectionGameEvent::StatTransition, inventory ? slot : 255) ||
+#endif
+        (!pet.isDead() && !appearance.refreshUnlockState(false, false)) ||
         saves.saveCollectionProgress(true, true) != PetSaveResult::Persisted)
     {
         pet.restoreState(previous);

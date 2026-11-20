@@ -3,6 +3,7 @@
 #if ENABLE_STAT_EVENTS
 #include "animation/AnimationController.h"
 #include "display/Renderer.h"
+#include "collection/CollectionGameEvent.h"
 #include "pet/Pet.h"
 #include "resources/AssetResources.h"
 
@@ -88,6 +89,10 @@ bool Game::settleStatMutation(const PetStatSnapshot &after, uint8_t actionSlot, 
         else target = {};
     }
     if (ready && !pet.isDead()) ready = refreshOutfitUnlockMask(activatedTarget, false);
+#if ENABLE_COLLECTION_GAME_EVENTS
+    if (ready) ready = recordCollectionGameEvent(resources.sdCard(), petBehaviorConfig, pet, previous,
+                                                 CollectionGameEvent::StatTransition);
+#endif
     if (ready) ready = petSaves.saveCollectionProgress(true, true) == PetSaveResult::Persisted;
     if (!ready)
     {

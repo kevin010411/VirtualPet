@@ -3,14 +3,19 @@
 
 #include "common/AppProfile.h"
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
 
 #include "animation/AnimationController.h"
+#if ENABLE_CAPTURE_GAME
+#include "game/CaptureGame.h"
+#endif
 #if ENABLE_INSTRUCTION_RESPONSE
 #include "game/InstructionPresentation.h"
+struct PetBehaviorConfig;
+#endif
+#if ENABLE_CAPTURE_GAME || ENABLE_INSTRUCTION_RESPONSE
 class Renderer;
 class AssetResources;
-struct PetBehaviorConfig;
 #endif
 #if ENABLE_COMMAND_PREDICT
 #include "game/PredictGame.h"
@@ -56,6 +61,11 @@ public:
     bool consumeInstructionCompletion(uint32_t &mask, uint8_t &count)
     { return activeGame == Kind::Instruction && instruction.consumeCompletion(mask, count); }
 #endif
+#if ENABLE_CAPTURE_GAME
+    bool startCapture(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes);
+    bool capturesScreen() const { return activeGame == Kind::Capture && capture.active(); }
+    void redrawCapture() { capture.redraw(); }
+#endif
     void reset();
     void update();
     void onLeft();
@@ -67,7 +77,10 @@ public:
     bool showsResourceErrorOnPlaybackFailure() const;
 
 private:
-    enum class Kind : uint8_t { None, GuessItem, Predict, Instruction };
+    enum class Kind : uint8_t { None, GuessItem, Predict, Instruction, Capture };
+#if ENABLE_CAPTURE_GAME
+    CaptureGame capture;
+#endif
 #if ENABLE_INSTRUCTION_RESPONSE
     InstructionPresentation instruction;
 #endif

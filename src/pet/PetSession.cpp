@@ -103,7 +103,9 @@ AppearanceChangeResult PetSession::reset()
         return AppearanceChangeResult::PetStateRejected;
     const PersistedPetState previous = pet.persistentState();
 #if ENABLE_STAT_EVENTS
-    const bool retainCollection = pet.isRoundComplete();
+    const bool completedRound = pet.isRoundComplete();
+#elif ENABLE_COLLECTION_GAME_EVENTS
+    constexpr bool completedRound = false;
 #endif
     AppearanceChangeResult result = AppearanceChangeResult::ConfigurationFailed;
     if (host.configureActiveAppearance(initialSpeciesSlot, initialOutfitSlot))
@@ -111,8 +113,11 @@ AppearanceChangeResult PetSession::reset()
         result = AppearanceChangeResult::PetStateRejected;
         if (loadPetState(false) != InitialState::Failed)
         {
-#if ENABLE_STAT_EVENTS
-            if (retainCollection) pet.retainCollectionFrom(previous);
+#if ENABLE_COLLECTION_GAME_EVENTS
+            if (completedRound || config.retainCollectionOnRestart)
+                pet.retainCollectionFrom(previous);
+#elif ENABLE_STAT_EVENTS
+            if (completedRound) pet.retainCollectionFrom(previous);
 #endif
             result = AppearanceChangeResult::UnlockFailed;
             if (changes.initializeUnlocksForReset())

@@ -8,6 +8,7 @@
 #include "common/FirmwareRandom.h"
 #include "appearance/AppearanceLoader.h"
 #include "common/SdBinaryRead.h"
+#include "collection/CollectionGameEvent.h"
 
 namespace
 {
@@ -148,7 +149,11 @@ bool PetBehaviorRuntime::advancePetDay(uint32_t days)
 #endif
     {
         if (!writeStats(state, pet)) return false;
-        if (config.manualDays && saveMutation != nullptr && !saveMutation(saveContext))
+        if (
+#if ENABLE_COLLECTION_GAME_EVENTS
+            !recordCollectionGameEvent(resources.sdCard(), config, pet, before, CollectionGameEvent::StatTransition) ||
+#endif
+            (config.manualDays && saveMutation != nullptr && !saveMutation(saveContext)))
         {
             pet.restoreState(before);
             return false;
@@ -209,7 +214,11 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
         for (uint8_t index = 0; index < config.trackedActionCount; ++index)
             if (config.trackedActions[index] == actionSlot) { pet.incrementActionCount(index); break; }
 #endif
-        if (saveMutation != nullptr && !saveMutation(saveContext))
+        if (
+#if ENABLE_COLLECTION_GAME_EVENTS
+            !recordCollectionGameEvent(resources.sdCard(), config, pet, before, CollectionGameEvent::StatTransition) ||
+#endif
+            (saveMutation != nullptr && !saveMutation(saveContext)))
         {
             pet.restoreState(before);
             return PetBehaviorActionResult::ResourceReadFailed;

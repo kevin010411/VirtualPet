@@ -31,9 +31,12 @@ constexpr uint32_t kStatEventsFeature = 1UL << 20;
 constexpr uint32_t kStageDaysEffectsFeature = 1UL << 22;
 constexpr uint32_t kShopStageDaysFeature = 1UL << 21;
 constexpr uint32_t kPersistentStatEventsFeature = 1UL << 23;
+constexpr uint32_t kCollectionGameEventsFeature = 1UL << 24;
+constexpr uint32_t kCaptureGameV2Feature = 1UL << 25;
 constexpr uint32_t kKnownFeatures = (((1UL << 17) - 1UL) & ~(1UL << 8)) |
     kScreenStatSumFeature | kScreenStatDimensionsFeature | kScreenStatSumSegmentsFeature |
-    kStatEventsFeature | kShopStageDaysFeature | kStageDaysEffectsFeature | kPersistentStatEventsFeature;
+    kStatEventsFeature | kShopStageDaysFeature | kStageDaysEffectsFeature | kPersistentStatEventsFeature |
+    kCollectionGameEventsFeature | kCaptureGameV2Feature;
 
 enum SectionType : uint16_t
 {
@@ -50,6 +53,9 @@ enum SectionType : uint16_t
     EventConditions = 80,
     EventEffects = 81,
     EventPages = 82,
+    CollectionGameConfig = 83,
+    CollectionEventRules = 84,
+    CollectionRoundRequirements = 85,
     Profile = 1,
     Persistence = 2,
     AssetRefs = 3,

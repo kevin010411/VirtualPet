@@ -40,6 +40,9 @@ uint16_t recordSizeFor(uint16_t type)
     case EventConditions: return 8;
     case EventEffects: return 12;
     case EventPages: return 4;
+    case CollectionGameConfig: return 16;
+    case CollectionEventRules: return 16;
+    case CollectionRoundRequirements: return 8;
     case Profile: return 38;
     case Persistence: return 16;
     case AssetRefs: return 12;
@@ -111,6 +114,12 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         return false;
 #if !ENABLE_STAT_EVENTS
     if ((featureFlags & (kStatEventsFeature | kPersistentStatEventsFeature)) != 0) return false;
+#endif
+#if !ENABLE_COLLECTION_GAME_EVENTS
+    if ((featureFlags & kCollectionGameEventsFeature) != 0) return false;
+#endif
+#if !ENABLE_CAPTURE_GAME
+    if ((featureFlags & kCaptureGameV2Feature) != 0) return false;
 #endif
 
     bool nonzeroBundle = false;

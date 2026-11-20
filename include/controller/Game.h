@@ -11,7 +11,7 @@
 #include "pet/PetSaveController.h"
 #include "resources/RuntimeContractLoader.h"
 #include "pet/PetSession.h"
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
 #include "controller/MinigameController.h"
 #endif
 #include "pet/PetClock.h"
@@ -40,6 +40,9 @@ class AssetResources;
 class CollectionCatalog;
 
 class Game : private EvolutionHost, private PetSessionHost
+#if ENABLE_CAPTURE_GAME
+           , private CaptureOutcomeHost
+#endif
 #if ENABLE_GUESS_GAME
            , private MinigameOutcomeHost
 #endif
@@ -92,6 +95,12 @@ public:
     bool setStageDaysForCheat(uint32_t value);
 
 private:
+#if ENABLE_CAPTURE_GAME
+    bool onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *target,
+                          const CollectionRoundStats &round, int32_t score,
+                          uint16_t &increasedStats) override;
+#endif
+
     enum class KeyDirection : uint8_t
     {
         Left,
@@ -135,7 +144,7 @@ private:
 #if ENABLE_APPEARANCE_SELECTION
     std::unique_ptr<AppearanceSelectionController> appearanceSelection;
 #endif
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
     std::unique_ptr<MinigameController> minigame;
 #endif
 

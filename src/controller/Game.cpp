@@ -54,7 +54,7 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AssetR
       ,
       appearanceSelection(std::make_unique<AppearanceSelectionController>(renderer, resources, appearanceLoader, *layout))
 #endif
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
       ,
       minigame(std::make_unique<MinigameController>(*animations
 #if ENABLE_GUESS_GAME
@@ -126,11 +126,14 @@ void Game::loop_game()
     if (flow.is(AppStage::Startup) && !animations->isBusy())
         enterCommand();
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
     if (flow.is(AppStage::Minigame))
     {
         const uint32_t previousDays = pet.stageDays();
         minigame->update();
+#if ENABLE_CAPTURE_GAME
+        if (minigame->capturesScreen()) return;
+#endif
         cheatEvolutionPending |= pet.stageDays() != previousDays;
 #if ENABLE_INSTRUCTION_RESPONSE
         uint32_t instructionMask = 0;
@@ -235,6 +238,13 @@ void Game::requestFullRedraw()
 {
     if (!initialized)
         return;
+#if ENABLE_CAPTURE_GAME
+    if (flow.is(AppStage::Minigame) && minigame->capturesScreen())
+    {
+        minigame->redrawCapture();
+        return;
+    }
+#endif
 #if ENABLE_STAT_EVENTS
     if (redrawStatEvents()) return;
 #endif
@@ -263,6 +273,13 @@ void Game::redrawAllNow()
 {
     if (!initialized)
         return;
+#if ENABLE_CAPTURE_GAME
+    if (flow.is(AppStage::Minigame) && minigame->capturesScreen())
+    {
+        minigame->redrawCapture();
+        return;
+    }
+#endif
 #if ENABLE_STAT_EVENTS
     if (redrawStatEvents()) return;
 #endif
@@ -562,7 +579,7 @@ void Game::routeDirectionKey(KeyDirection direction)
     }
 #endif
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
     if (flow.is(AppStage::Minigame))
     {
         if (direction == KeyDirection::Left)
@@ -699,7 +716,7 @@ void Game::OnConfirmKey()
     }
 #endif
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
     if (flow.is(AppStage::Minigame))
     {
         const uint32_t previousDays = pet.stageDays();
@@ -845,6 +862,13 @@ bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
 
 void Game::synchronizePlaybackClock()
 {
+#if ENABLE_CAPTURE_GAME
+    if (flow.is(AppStage::Minigame) && minigame->capturesScreen())
+    {
+        petClock.pause(latestRtcSeconds);
+        return;
+    }
+#endif
 #if ENABLE_STAT_EVENTS
     if (isRoundComplete() || statEventPageCount || committedEvolution.speciesSlot)
     {
@@ -853,7 +877,7 @@ void Game::synchronizePlaybackClock()
     }
 #endif
     if (!(flow.is(AppStage::Command) || flow.is(AppStage::Appearance) || flow.is(AppStage::Evolution))
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
         && !(flow.is(AppStage::Minigame) && minigame->pausesPetTime())
 #endif
     ) return;
@@ -973,7 +997,23 @@ void Game::handleSystemCommandRequest(const CommandResult &result)
     }
 #endif
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
+#if ENABLE_CAPTURE_GAME
+    if (result.kind == CommandResultKind::CaptureGame)
+    {
+        if (minigame->startCapture(renderer, resources, *this))
+        {
+            petClock.pause(latestRtcSeconds);
+            flow.enter(AppStage::Minigame);
+        }
+        else
+        {
+            resources.recordAssetDataErrorResource("/capture.data");
+            enterRuntimeFatal();
+        }
+        return;
+    }
+#endif
     if (result.kind == CommandResultKind::Instruction ||
         result.kind == CommandResultKind::Predict || result.kind == CommandResultKind::Guess)
     {
@@ -1024,6 +1064,13 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
 #endif
 #if ENABLE_SHOP
     if (flow.is(AppStage::Shop))
+    {
+        petClock.pause(rtcSeconds);
+        return;
+    }
+#endif
+#if ENABLE_CAPTURE_GAME
+    if (flow.is(AppStage::Minigame) && minigame->capturesScreen())
     {
         petClock.pause(rtcSeconds);
         return;
@@ -1262,7 +1309,7 @@ void Game::handlePlaybackResult(PlaybackResult playbackResult)
     if (evolutionResult != EvolutionResult::NoChange)
         return;
 
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
     if (flow.is(AppStage::Minigame))
     {
         if (minigame->showsResourceErrorOnPlaybackFailure()) renderer.showResourceError();
@@ -1299,7 +1346,7 @@ void Game::cancelForeground()
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();
 #endif
-#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
     minigame->reset();
 #endif
     enterCommand();

@@ -10,6 +10,9 @@
 #include "display/FrameDecoder.h"
 #include "display/RenderStatsReporter.h"
 #include "resources/AssetResources.h"
+#if ENABLE_CAPTURE_GAME
+#include "platform/TftDmaTransfer.h"
+#endif
 
 struct Renderer::AnimationState
 {
@@ -54,6 +57,90 @@ Renderer::Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resourcesRef, SPICl
 #endif
 {
 }
+
+#if ENABLE_CAPTURE_GAME
+bool Renderer::drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame &frame, uint32_t bands)
+{
+    constexpr int width = CaptureAssets::screenWidth;
+    constexpr int rows = CaptureGame::bandRows;
+    constexpr int spriteWidth = CaptureAssets::spriteMaxWidth;
+    static_assert(width * rows + spriteWidth * rows <= FrameDecoder::kLineBufferPixels,
+                  "Capture bands and sprite rows must fit the renderer workspace.");
+    uint16_t *pixels = state->lineBuffer;
+    uint16_t *spritePixels = pixels + width * rows;
+
+    for (int band = 0; band < CaptureGame::bandCount; ++band)
+    {
+        if ((bands & (1UL << band)) == 0) continue;
+        const int top = band * rows;
+        if (!assets.readBackground(top, rows, pixels)) return false;
+        const int lineStart = frame.lineStart > top ? frame.lineStart : top;
+        const int lineEnd = frame.lineEnd < top + rows ? frame.lineEnd : top + rows;
+        for (int y = lineStart; y < lineEnd; ++y)
+            pixels[(y - top) * width + frame.hookX] = 0xC6DA;
+
+        for (uint8_t index = 0; index < frame.layerCount; ++index)
+        {
+            const auto &layer = frame.layers[index];
+            const auto &sprite = *layer.sprite;
+            const int y0 = layer.y > top ? layer.y : top;
+            const int y1 = layer.y + sprite.height < top + rows ? layer.y + sprite.height : top + rows;
+            const int x0 = layer.x > 0 ? layer.x : 0;
+            const int x1 = layer.x + sprite.width < width ? layer.x + sprite.width : width;
+            if (y1 <= y0 || x1 <= x0) continue;
+            if (sprite.width > spriteWidth || !assets.readSprite(sprite, y0 - layer.y, y1 - y0, spritePixels))
+                return false;
+
+            for (int y = y0; y < y1; ++y)
+            {
+                const uint16_t *source = spritePixels + (y - y0) * sprite.width;
+                uint16_t *destination = pixels + (y - top) * width;
+                for (int x = x0; x < x1; ++x)
+                {
+                    const int local = x - layer.x;
+                    const uint16_t pixel = source[layer.flip ? sprite.width - 1 - local : local];
+                    if (pixel != sprite.transparent) destination[x] = pixel;
+                }
+            }
+        }
+
+        tft->startWrite();
+        tft->setAddrWindow(0, top, width, rows);
+        bool sent = true;
+#if defined(STM32F103xB)
+        {
+            TftDmaTransfer dma(pixelSpi);
+            if (dma.active())
+            {
+                sent = dma.send(pixels, width * rows);
+                sent = dma.finish() && sent;
+            }
+            else
+                tft->writePixels(pixels, width * rows);
+        }
+#else
+        tft->writePixels(pixels, width * rows);
+#endif
+        tft->endWrite();
+        if (!sent) return false;
+    }
+    return true;
+}
+
+void Renderer::showCaptureScore(int32_t score)
+{
+    tft->fillScreen(0x11E9);
+    tft->setTextColor(0xFFFF);
+    tft->setTextSize(2);
+    tft->setCursor(34, 45);
+    tft->print("SCORE");
+    tft->setCursor(28, 73);
+    tft->print(static_cast<long>(score));
+    tft->setTextSize(1);
+    tft->setCursor(28, 121);
+    tft->print("OK TO RETURN");
+}
+#endif
 
 Renderer::~Renderer()
 {

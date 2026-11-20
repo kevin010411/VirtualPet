@@ -5,6 +5,9 @@
 #include <Adafruit_ST7735.h>
 #include "resources/AssetRuntimeContract.h"
 #include "common/AppProfile.h"
+#if ENABLE_CAPTURE_GAME
+#include "game/CaptureGame.h"
+#endif
 #if ENABLE_DEBUG
 #include "display/TftDebugDisplay.h"
 #endif
@@ -47,6 +50,10 @@ public:
 #if ENABLE_SHOP
     void drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint32_t value);
     void highlightShopRow(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
+#endif
+#if ENABLE_CAPTURE_GAME
+    bool drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame &frame, uint32_t bands);
+    void showCaptureScore(int32_t score);
 #endif
     void showResourceError();
 #if ENABLE_STAT_EVENTS

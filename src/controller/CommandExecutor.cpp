@@ -106,6 +106,11 @@ CommandResult CommandExecutor::execute(AppCommandId id, uint8_t targetSlot)
         result.kind = CommandResultKind::Inventory;
         break;
 #endif
+#if ENABLE_CAPTURE_GAME
+    case AppCommandId::CaptureGame:
+        result.kind = CommandResultKind::CaptureGame;
+        break;
+#endif
     case AppCommandId::Status:
         result.kind = CommandResultKind::Playback;
         result.resourceError = !queueStatusSetsAnimation();

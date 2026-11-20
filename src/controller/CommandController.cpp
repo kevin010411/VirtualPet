@@ -30,6 +30,7 @@ namespace
 #define COMMAND_SLOT_SHOP COMMAND_SLOT(AppCommandId::Shop)
 #define COMMAND_SLOT_INVENTORY COMMAND_SLOT(AppCommandId::Inventory)
 #define COMMAND_SLOT_ADVANCE_DAY COMMAND_SLOT(AppCommandId::AdvanceDay)
+#define COMMAND_SLOT_CAPTURE_GAME COMMAND_SLOT(AppCommandId::CaptureGame)
 } // namespace
 
 constexpr CommandController::CommandSlot CommandController::emptySlot()

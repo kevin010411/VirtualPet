@@ -11,7 +11,14 @@ namespace
 {
 constexpr const char *kStateSlotAPath = "/state_a.bin";
 constexpr const char *kStateSlotBPath = "/state_b.bin";
-static_assert(sizeof(PersistedPetState) == (ENABLE_SHOP ? 304 : 136), "Unexpected pet state layout");
+constexpr size_t kLegacyStateSize = ENABLE_SHOP ? 304 : 136;
+#if ENABLE_COLLECTION_GAME_EVENTS
+constexpr size_t kLegacyCrcOffset = offsetof(PersistedPetState, collectionProgressFingerprint);
+static_assert(kLegacyCrcOffset == (ENABLE_SHOP ? 296 : 132), "Legacy pet state prefix moved");
+static_assert(sizeof(PersistedPetState) == (ENABLE_SHOP ? 560 : 400), "Unexpected pet state layout");
+#else
+static_assert(sizeof(PersistedPetState) == kLegacyStateSize, "Unexpected pet state layout");
+#endif
 
 uint32_t calculateStateCrc(const PersistedPetState &state)
 {
@@ -34,7 +41,11 @@ bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
         return false;
 
     const size_t stateSize = f.fileSize();
-    if (stateSize != sizeof(PersistedPetState))
+    if (stateSize != sizeof(PersistedPetState)
+#if ENABLE_COLLECTION_GAME_EVENTS
+        && stateSize != kLegacyStateSize
+#endif
+    )
     {
         f.close();
         return false;
@@ -49,7 +60,20 @@ bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
 
     if (state.magic != Pet::kPetStateMagic)
         return false;
-
+#if ENABLE_COLLECTION_GAME_EVENTS
+    if (stateSize == kLegacyStateSize)
+    {
+        // The old CRC occupies the new progress fingerprint's offset.
+        const uint32_t oldCrc = Integrity::crc32(
+            reinterpret_cast<const uint8_t *>(&state), kLegacyCrcOffset);
+        if (state.version != Pet::kPetStateBaseVersion || oldCrc != state.collectionProgressFingerprint)
+            return false;
+        state.version = Pet::kPetStateVersion;
+        state.collectionProgressFingerprint = 0;
+        memset(state.collectionProgress, 0, sizeof(state.collectionProgress));
+        return true;
+    }
+#endif
     if (calculateStateCrc(state) != state.crc32)
         return false;
 

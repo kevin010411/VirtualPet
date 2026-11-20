@@ -6,6 +6,9 @@
 
 static constexpr size_t kPetCustomStatCount = 12;
 static constexpr size_t kTrackedActionCount = 8;
+#if ENABLE_COLLECTION_GAME_EVENTS
+static constexpr size_t kCollectionProgressCount = 64;
+#endif
 static constexpr uint16_t kNoActiveStatEvent = UINT16_MAX;
 
 struct PersistedPetState
@@ -29,6 +32,10 @@ struct PersistedPetState
     uint16_t shopQuantities[64];
     uint8_t shopVisited[32];
 #endif
+#if ENABLE_COLLECTION_GAME_EVENTS
+    uint32_t collectionProgressFingerprint;
+    uint32_t collectionProgress[kCollectionProgressCount];
+#endif
     uint32_t crc32;
 };
 
@@ -49,7 +56,8 @@ class Pet
 {
 public:
     static constexpr uint32_t kPetStateMagic = 0x50455431;
-    static constexpr uint16_t kPetStateVersion = ENABLE_SHOP ? 20 : 19;
+    static constexpr uint16_t kPetStateBaseVersion = ENABLE_SHOP ? 20 : 19;
+    static constexpr uint16_t kPetStateVersion = kPetStateBaseVersion + (ENABLE_COLLECTION_GAME_EVENTS ? 2 : 0);
     static constexpr uint32_t kStageDaysMax = 864000UL;
 
     Pet();
@@ -60,6 +68,8 @@ public:
     bool isRoundComplete() const;
     void completeRound();
     void setActiveStatEvent(uint16_t node);
+#endif
+#if ENABLE_STAT_EVENTS || ENABLE_COLLECTION_GAME_EVENTS
     void retainCollectionFrom(const PersistedPetState &previous);
 #endif
 #if ENABLE_DEATH
@@ -98,6 +108,11 @@ public:
     bool configureCollection(uint32_t fingerprint);
     bool isCollectionOwned(uint8_t slot) const;
     void acquireCollection(uint8_t slot);
+#if ENABLE_COLLECTION_GAME_EVENTS
+    bool configureCollectionProgress(uint32_t fingerprint);
+    uint32_t collectionProgress(uint8_t slot) const;
+    void setCollectionProgress(uint8_t slot, uint32_t value);
+#endif
     bool configureTrackedActions(uint32_t fingerprint);
     uint16_t actionCount(uint8_t slot) const;
     void incrementActionCount(uint8_t slot);
