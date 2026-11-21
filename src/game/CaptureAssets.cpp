@@ -16,6 +16,7 @@ constexpr uint8_t effectSize = 6;
 constexpr uint8_t cardSize = 5;
 constexpr uint8_t cardDirectoryFlag = 1;
 constexpr uint8_t pauseReadingFlag = 2;
+constexpr uint8_t timerPositionFlag = 4;
 constexpr uint32_t backgroundBytes = 2UL * CaptureAssets::screenWidth * CaptureAssets::screenHeight;
 
 uint16_t readU16(const uint8_t *bytes)
@@ -52,6 +53,19 @@ bool CaptureAssets::open(SdFat *sd)
     const bool extended = readU16(header + 4) == 2;
     const bool hasCards = extended && (header[15] & cardDirectoryFlag) != 0;
     scene_.pauseReading = (header[15] & pauseReadingFlag) != 0;
+    scene_.timerX = 1;
+    scene_.timerY = 0;
+    if (extended && (header[15] & timerPositionFlag) != 0)
+    {
+        uint8_t position[2];
+        if (!read(file_.fileSize() - sizeof(position), position, sizeof(position)))
+        {
+            close();
+            return false;
+        }
+        scene_.timerX = position[0];
+        scene_.timerY = position[1];
+    }
     headerSize_ = headerSize;
     targetSize_ = legacyTargetSize;
     scene_.reward = {noSlot, 0, 1, 0, 0};

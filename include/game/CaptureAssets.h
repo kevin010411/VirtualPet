@@ -54,6 +54,7 @@ public:
         uint8_t hookX;
         uint8_t startY;
         uint8_t depth;
+        uint8_t timerX, timerY;
         bool pauseReading;
     };
 

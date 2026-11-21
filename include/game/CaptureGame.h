@@ -28,6 +28,7 @@ class CaptureGame
 public:
     static constexpr int bandRows = 8;
     static constexpr int bandCount = CaptureAssets::screenHeight / bandRows;
+    static constexpr int timerHeight = 13;
 
     struct Layer
     {

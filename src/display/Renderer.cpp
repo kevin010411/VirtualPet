@@ -82,30 +82,56 @@ Renderer::Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resourcesRef, SPICl
 #if ENABLE_CAPTURE_GAME
 namespace
 {
-void drawCaptureTimer(uint16_t *pixels, uint16_t seconds)
+constexpr int captureTimerEdge(int pixel) { return (pixel * 8 + 2) / 5; }
+
+void drawCaptureTimer(uint16_t *pixels, int top, uint16_t seconds, int timerX, int timerY)
 {
-    // Three columns by five rows, top-left bit first.
-    constexpr uint16_t glyphs[] = {0x7b6f, 0x2c97, 0x73e7, 0x73cf, 0x5bc9,
-                                   0x79cf, 0x79ef, 0x7292, 0x7bef, 0x7bcf, 0x0716};
+    // Keep the 4×6 glyphs and colors in sync with the Web CaptureTimer.
+    constexpr uint32_t digitGlyphs[] = {0x699996, 0x262227, 0x69124f, 0xe1611e, 0x26af22,
+                                        0xf8e196, 0x68e996, 0xf12444, 0x696996, 0x699716};
+    constexpr uint32_t hourglass = 0xf9669f;
+    constexpr int glyphWidth = 4;
+    constexpr int glyphHeight = 6;
+    constexpr int glyphAdvance = glyphWidth + 1;
+    constexpr int nativeHeight = glyphHeight + 2;
+    static_assert(captureTimerEdge(nativeHeight) == CaptureGame::timerHeight, "Capture timer height mismatch.");
+
+    const bool urgent = seconds <= 5;
     uint8_t digits[3];
     uint8_t count = 0;
     do
     {
         digits[count++] = seconds % 10;
         seconds /= 10;
-    } while (seconds);
-    for (int y = 0; y < 7; ++y)
+    } while (seconds || count < 2);
+    const int nativeWidth = glyphAdvance * (count + 1) + 1;
+    const int firstRow = top > timerY ? top : timerY;
+    const int bandEnd = top + CaptureGame::bandRows;
+    const int timerEnd = timerY + CaptureGame::timerHeight;
+    const int endRow = bandEnd < timerEnd ? bandEnd : timerEnd;
+    for (int y = firstRow; y < endRow; ++y)
     {
-        uint16_t *row = pixels + y * CaptureAssets::screenWidth;
-        for (int x = 0; x < 4 * (count + 1) + 1; ++x) row[x] = 0x1026;
-    }
-    for (uint8_t index = 0; index <= count; ++index)
-    {
-        const uint16_t glyph = glyphs[index == count ? 10 : digits[count - 1 - index]];
-        for (int y = 0; y < 5; ++y)
-            for (int x = 0; x < 3; ++x)
-                if (glyph & (1U << (14 - 3 * y - x)))
-                    pixels[(y + 1) * CaptureAssets::screenWidth + 1 + 4 * index + x] = 0xFFFF;
+        uint16_t *row = pixels + (y - top) * CaptureAssets::screenWidth + timerX;
+        // Invert the rounded pixel edges to find the source row for this screen row.
+        const int sourceY = ((y - timerY) * 5 + 2) / 8;
+        const int corner = sourceY == 0 || sourceY == nativeHeight - 1 ? 1 : 0;
+        const uint16_t fill = sourceY == 0 ? 0x2aec : 0x1148;
+        for (int x = captureTimerEdge(corner); x < captureTimerEdge(nativeWidth - corner); ++x)
+            row[x] = fill;
+        if (corner) continue;
+        for (uint8_t index = 0; index <= count; ++index)
+        {
+            const uint32_t glyph = index == 0 ? hourglass : digitGlyphs[digits[count - index]];
+            const uint16_t color = urgent ? 0xff12 : (index == 0 ? 0x7f5a : 0xffff);
+            for (int x = 0; x < glyphWidth; ++x)
+            {
+                const int bit = glyphWidth * (glyphHeight + 1 - sourceY) - x - 1;
+                if ((glyph & (1UL << bit)) == 0) continue;
+                const int left = 1 + glyphAdvance * index + x;
+                for (int px = captureTimerEdge(left); px < captureTimerEdge(left + 1); ++px)
+                    row[px] = color;
+            }
+        }
     }
 }
 
@@ -143,6 +169,7 @@ bool Renderer::drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame 
                   "Capture bands and sprite rows must fit the renderer workspace.");
     uint16_t *pixels = state->lineBuffer;
     uint16_t *spritePixels = pixels + width * rows;
+    const auto &scene = assets.scene();
 
     for (int band = 0; band < CaptureGame::bandCount; ++band)
     {
@@ -179,7 +206,8 @@ bool Renderer::drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame 
             }
         }
 
-        if (band == 0) drawCaptureTimer(pixels, frame.secondsLeft);
+        if (top < scene.timerY + CaptureGame::timerHeight && top + rows > scene.timerY)
+            drawCaptureTimer(pixels, top, frame.secondsLeft, scene.timerX, scene.timerY);
         if (!sendCaptureBand(pixels, top)) return false;
     }
     return true;

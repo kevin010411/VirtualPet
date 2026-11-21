@@ -94,11 +94,22 @@ static void verifyCapture(const std::filesystem::path &root, bool shouldPause)
         assert(storage.lastSaveSequence() == before);
     };
 
+    CaptureAssets capture;
+    assert(capture.open(&sd));
+    const auto &scene = capture.scene();
+    capture.close();
+    const auto timerPixel = [&](int x, int y) {
+        return display.screen[(scene.timerY + y) * CaptureAssets::screenWidth + scene.timerX + x];
+    };
     start();
-    constexpr size_t timerTopMiddle = 128 + 2;
-    assert(display.screen[timerTopMiddle] == 0xffff);
+    assert(timerPixel(2, 0) == 0x2aec && timerPixel(2, 12) == 0x1148);
+    const auto initial = display.screen;
     tick(game, hostMillis + 1000);
-    assert(display.screen[timerTopMiddle] == 0x1026);
+    bool timerChanged = false;
+    for (int y = 2; y < 11; ++y)
+        for (int x = 8; x < 24; ++x)
+            timerChanged |= timerPixel(x, y) != initial[(scene.timerY + y) * CaptureAssets::screenWidth + scene.timerX + x];
+    assert(timerChanged && timerPixel(2, 12) == 0x1148);
     catchFish();
     assert(display.screen.front() == cardBackground);
     assertUnchanged();

@@ -169,7 +169,8 @@ bool CaptureGame::draw(uint32_t age, bool full)
         const auto &layer = frame.layers[index];
         bands |= verticalBands(layer.y, layer.y + layer.sprite->height);
     }
-    const uint32_t dirtyTimer = frame.secondsLeft != drawnSeconds_ ? 1 : 0;
+    const uint32_t dirtyTimer = frame.secondsLeft != drawnSeconds_
+        ? verticalBands(scene.timerY, scene.timerY + timerHeight) : 0;
     if (!renderer_->drawCaptureBands(assets_, frame, full ? fullFrame : bands | previousBands_ | dirtyTimer))
         return false;
     drawnSeconds_ = frame.secondsLeft;
