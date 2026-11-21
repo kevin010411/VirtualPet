@@ -102,7 +102,7 @@ void Game::loop_game(bool confirmPending)
             {
                 shopPlayback = false;
                 animations->cancelAll();
-                finishShopPlayback();
+                finishShopPlayback(true);
             }
         }
         else if (shopEvolutionPending)
@@ -211,7 +211,7 @@ void Game::redrawShop()
     if (!shop.redraw()) enterRuntimeFatal();
 }
 
-void Game::finishShopPlayback()
+void Game::finishShopPlayback(bool restoreDisplay)
 {
     if (shopEvolutionPending)
     {
@@ -225,8 +225,9 @@ void Game::finishShopPlayback()
             return;
         }
         flow.enter(AppStage::Shop);
+        restoreDisplay |= result == EvolutionResult::Failed;
     }
-    redrawShop();
+    if (restoreDisplay) redrawShop();
 }
 #endif
 

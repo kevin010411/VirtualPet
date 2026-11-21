@@ -219,13 +219,14 @@ void Renderer::setAnimationArea(uint8_t x, uint8_t y, uint8_t width, uint8_t hei
 bool Renderer::ShowDataFrame(const AssetData::AssetFrameAddress &address,
                              int xmin,
                              int ymin,
-                             int batch_lines, uint16_t expectedWidth, uint16_t expectedHeight)
+                             int batch_lines, uint16_t expectedWidth, uint16_t expectedHeight,
+                             const DisplayRect *crop)
 {
     const bool ok = FrameDecoder::showDataFrame(
         resources.frameReader(), address, tft, resources.readBuffer(), AssetData::kDataReadBufferBytes,
         state->lineBuffer, FrameDecoder::kLineBufferPixels,
         xmin < 0 ? state->animationX : xmin,
-        ymin < 0 ? state->animationY : ymin, batch_lines, expectedWidth, expectedHeight, pixelSpi);
+        ymin < 0 ? state->animationY : ymin, batch_lines, expectedWidth, expectedHeight, pixelSpi, crop);
     if (!ok)
     {
         FrameDecoder::showAssetDataError(tft, resources.frameReader().firstErrorResource());
@@ -461,28 +462,32 @@ void Renderer::drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t heigh
         digits[count++] = value % 10;
         value /= 10;
     } while (value);
-    int16_t pen = x + width - count * 6;
+    int16_t left = width - count * 6;
     if (count * 6 > width)
     {
         digits[0] = 10;
         count = 1;
-        pen = x;
+        left = 0;
     }
-    const int16_t top = y + height / 2 - 4;
+    const int16_t top = height / 2 - 4;
+    uint16_t *line = state->lineBuffer;
     tft->startWrite();
-    tft->writeFillRect(x, y, width, height, 0x1126);
-    while (count)
+    tft->setAddrWindow(x, y, width, height);
+    for (uint8_t row = 0; row < height; ++row)
     {
-        const auto &glyph = glyphs[digits[--count]];
-        for (uint8_t row = 0; row < 8; ++row)
+        for (uint8_t col = 0; col < width; ++col) line[col] = 0x1126;
+        const int16_t glyphRow = row - top;
+        if (glyphRow >= 0 && glyphRow < 8)
         {
-            if (top + row < y || top + row >= y + height) continue;
-            for (uint8_t col = 0; col < 5 && pen + col < x + width; ++col)
+            int16_t pen = left;
+            for (uint8_t digit = count; digit > 0; --digit, pen += 6)
             {
-                if (glyph[row] & (0x80 >> col)) tft->writePixel(pen + col, top + row, 0xffff);
+                const uint8_t bits = glyphs[digits[digit - 1]][glyphRow];
+                for (uint8_t col = 0; col < 5 && pen + col < width; ++col)
+                    if (bits & (0x80 >> col)) line[pen + col] = 0xffff;
             }
         }
-        pen += 6;
+        tft->writePixels(line, width);
     }
     tft->endWrite();
 }

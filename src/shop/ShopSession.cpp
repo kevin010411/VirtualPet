@@ -26,6 +26,21 @@ constexpr uint8_t navigation = 128;
 constexpr uint8_t exitEntry = 129;
 constexpr uint8_t firstEntryFrame = 16;
 constexpr uint8_t stageDaysEffectSlot = 255;
+constexpr uint16_t selectedRow = 0x8000;
+constexpr DisplayRect screen{0, 0, 128, 160};
+constexpr DisplayRect confirmation{0, 88, 128, 48};
+constexpr DisplayRect navigationCard{0, 112, 128, 16};
+
+DisplayRect combine(DisplayRect a, DisplayRect b)
+{
+    if (!a.w) return b;
+    if (!b.w) return a;
+    const uint8_t x = a.x < b.x ? a.x : b.x;
+    const uint8_t y = a.y < b.y ? a.y : b.y;
+    const int right = a.right() > b.right() ? a.right() : b.right();
+    const int bottom = a.bottom() > b.bottom() ? a.bottom() : b.bottom();
+    return {x, y, static_cast<uint8_t>(right - x), static_cast<uint8_t>(bottom - y)};
+}
 
 class ShopFile : public SdBaseFile
 {
@@ -80,6 +95,9 @@ bool ShopSession::configure()
     memcpy(&walletRect, row + 27, sizeof(Rect));
     memcpy(&quantityRect, row + 31, sizeof(Rect));
     memcpy(&listRect, row + 35, sizeof(Rect));
+    // The optional trailer leaves the original Shop records at their old offsets.
+    const uint32_t recordsEnd = itemOffset(itemCount) + static_cast<uint32_t>(productSize) * productCount;
+    boundsOffset = !rowHeight && file.fileSize() > recordsEnd ? recordsEnd : 0;
     return true;
 }
 
@@ -184,10 +202,14 @@ bool ShopSession::start(bool showInventory)
 
 bool ShopSession::move(bool next)
 {
-    if (view == View::Confirm) cancel = !cancel;
-    else if (view == View::Browse) cursor = (cursor + (next ? 1 : count - 1)) % count;
-    else return true;
-    return redraw();
+    if (view == View::Confirm)
+    {
+        cancel = !cancel;
+        return paintFooter();
+    }
+    if (view != View::Browse) return true;
+    cursor = (cursor + (next ? 1 : count - 1)) % count;
+    return paint();
 }
 
 bool ShopSession::confirm(AssetData::AnimationRef &animation)
@@ -195,13 +217,13 @@ bool ShopSession::confirm(AssetData::AnimationRef &animation)
     if (view == View::Receipt)
     {
         view = View::Browse;
-        return buildEntries() && redraw();
+        return buildEntries() && paint();
     }
     if (view == View::Confirm)
     {
         if (cancel) view = View::Browse;
         else if (!transact(animation)) return false;
-        return animation.valid() || redraw();
+        return animation.valid() || paint();
     }
     const uint8_t entry = entries[cursor];
     if (entry == exitEntry)
@@ -209,10 +231,15 @@ bool ShopSession::confirm(AssetData::AnimationRef &animation)
         close();
         return true;
     }
-    if (entry == navigation) return start(!inventory);
+    if (entry == navigation)
+    {
+        inventory = !inventory;
+        cursor = 0;
+        return buildEntries() && paint();
+    }
     view = View::Confirm;
     cancel = true;
-    return redraw();
+    return paint();
 }
 
 bool ShopSession::transact(AssetData::AnimationRef &animation)
@@ -303,9 +330,9 @@ bool ShopSession::transact(AssetData::AnimationRef &animation)
     return true;
 }
 
-bool ShopSession::show(uint16_t frame, Rect rect)
+bool ShopSession::show(uint16_t frame, Rect rect, const Rect *crop)
 {
-    return renderer.ShowDataFrame({0, 0, art, 0, frame}, rect.x, rect.y, 12, rect.w, rect.h);
+    return renderer.ShowDataFrame({0, 0, art, 0, frame}, rect.x, rect.y, 12, rect.w, rect.h, crop);
 }
 
 void ShopSession::number(Rect rect, uint32_t value)
@@ -313,32 +340,76 @@ void ShopSession::number(Rect rect, uint32_t value)
     renderer.drawShopNumber(rect.x, rect.y, rect.w, rect.h, value);
 }
 
+uint16_t ShopSession::frameFor(uint8_t entry) const
+{
+    const uint16_t slot = entry >= navigation
+        ? itemCount + productCount + (entry == exitEntry ? 2 : inventory ? 1 : 0)
+        : (inventory ? entry : itemCount + entry);
+    return firstEntryFrame + 2 * slot;
+}
+
 bool ShopSession::redraw()
 {
-    const auto frameFor = [this](uint8_t entry) {
-        const uint16_t slot = entry >= navigation
-            ? itemCount + productCount + (entry == exitEntry ? 2 : inventory ? 1 : 0)
-            : (inventory ? entry : itemCount + entry);
-        return static_cast<uint16_t>(firstEntryFrame + 2 * slot);
-    };
+    return paint(true);
+}
+
+bool ShopSession::paint(bool full)
+{
     const uint8_t selected = entries[cursor];
     const uint16_t current = frameFor(selected);
-    if (!show(rowHeight ? 0 : current, {0, 0, 128, 160})) return false;
+    const bool pageChanged = full || current != paintedFrame;
+    const bool restoring = paintedView == View::Confirm && view != View::Confirm;
+    const bool hasQuantity = !rowHeight && quantityRect.w && selected < navigation;
+    Rect dirty = restoring ? confirmation : Rect{};
+    if (!rowHeight && pageChanged)
+    {
+        Rect nextBounds{0, 0, 128, 144}; // Earlier exports have no trailer.
+        if (boundsOffset)
+        {
+            ShopFile file;
+            const uint32_t offset = boundsOffset + sizeof(Rect) * ((current - firstEntryFrame) / 2);
+            if (!file.open(path, FILE_READ))
+            {
+                resources.recordAssetDataErrorResource(path);
+                return false;
+            }
+            if (!read(file, offset, reinterpret_cast<uint8_t *>(&nextBounds), sizeof(nextBounds))) return false;
+        }
+        dirty = combine(dirty, combine(paintedBounds, nextBounds));
+        paintedBounds = nextBounds;
+        if (paintedHasQuantity && !hasQuantity) dirty = combine(dirty, quantityRect);
+    }
+    const uint16_t base = rowHeight ? 0 : current;
+    if (full ? !show(base, screen) : dirty.w && !show(base, screen, &dirty)) return false;
+
+    const uint32_t balance = walletRect.w ? pet.customStat(wallet) : 0;
+    bool walletDirty = full || balance != paintedWallet || dirty.overlaps(walletRect);
+    const uint16_t firstNavigationFrame = firstEntryFrame + 2 * (itemCount + productCount);
+    walletDirty |= !rowHeight && pageChanged && paintedFrame >= firstNavigationFrame &&
+                   navigationCard.overlaps(walletRect);
     if (rowHeight)
     {
         const uint8_t rows = listRect.h / rowHeight;
         const uint8_t first = cursor < rows ? 0 : cursor - rows + 1;
-        for (uint8_t index = first; index < count && index - first < rows; ++index)
+        for (uint8_t row = 0; row < rows; ++row)
         {
-            Rect rect = listRect;
-            rect.y += (index - first) * rowHeight;
-            rect.h = rowHeight;
-            if (!show(frameFor(entries[index]), rect)) return false;
-            if (index == cursor) renderer.highlightShopRow(rect.x, rect.y, rect.w, rect.h);
+            const uint8_t index = first + row;
+            const uint16_t frame = index < count ? frameFor(entries[index]) : 0;
+            const uint16_t key = frame | (index == cursor ? selectedRow : 0);
+            const Rect rect{listRect.x, static_cast<uint8_t>(listRect.y + row * rowHeight), listRect.w, rowHeight};
+            if (!full && key == paintedRows[row] && (!frame || !dirty.overlaps(rect))) continue;
+            if (frame)
+            {
+                if (!show(frame, rect)) return false;
+                if (index == cursor) renderer.highlightShopRow(rect.x, rect.y, rect.w, rect.h);
+            }
+            else if (!full && !show(0, screen, &rect)) return false;
+            paintedRows[row] = key;
+            walletDirty |= rect.overlaps(walletRect);
         }
     }
-    if (walletRect.w) number(walletRect, pet.customStat(wallet));
-    if (!rowHeight && quantityRect.w && selected < navigation)
+    if (walletDirty) number(walletRect, balance);
+    if (hasQuantity)
     {
         uint8_t slot = selected;
         if (!inventory)
@@ -352,30 +423,52 @@ bool ShopSession::redraw()
             }
             slot = row[6];
         }
-        number(quantityRect, pet.st.shopQuantities[slot]);
+        const uint16_t quantity = pet.st.shopQuantities[slot];
+        if (full || !paintedHasQuantity || quantity != paintedQuantity || dirty.overlaps(quantityRect) ||
+            (walletDirty && walletRect.overlaps(quantityRect))) number(quantityRect, quantity);
+        paintedQuantity = quantity;
     }
     if (view == View::Confirm)
     {
-        ShopFile file;
-        uint8_t row[itemSize];
-        if (!file.open(path, FILE_READ) ||
-            !(inventory ? item(file, selected, row) : product(file, selected, row)))
-        {
-            resources.recordAssetDataErrorResource(path);
-            return false;
-        }
-        if (!show(current + 1, {0, 88, 128, 16}) ||
-            !show(inventory ? 15 : 14, {0, 104, 128, 16})) return false;
-        number({0, 120, 60, 16}, inventory ? pet.st.shopQuantities[selected] : readU32(row));
-        number({68, 120, 60, 16}, readU16(row + 4));
+        if (!paintConfirmation(current, selected)) return false;
     }
-    else if (selected >= navigation && !rowHeight && !show(current + 1, {0, 112, 128, 16}))
+    else if (selected >= navigation && !rowHeight &&
+             (pageChanged || (walletDirty && walletRect.overlaps(navigationCard))) &&
+             !show(current + 1, navigationCard))
         return false;
 
+    paintedFrame = current;
+    paintedView = view;
+    paintedWallet = balance;
+    paintedHasQuantity = hasQuantity;
+    return paintFooter(full);
+}
+
+bool ShopSession::paintConfirmation(uint16_t frame, uint8_t selected)
+{
+    ShopFile file;
+    uint8_t row[itemSize];
+    if (!file.open(path, FILE_READ) ||
+        !(inventory ? item(file, selected, row) : product(file, selected, row)))
+    {
+        resources.recordAssetDataErrorResource(path);
+        return false;
+    }
+    if (!show(frame + 1, {0, 88, 128, 16}) ||
+        !show(inventory ? 15 : 14, {0, 104, 128, 16})) return false;
+    number({0, 120, 60, 16}, inventory ? pet.st.shopQuantities[selected] : readU32(row));
+    number({68, 120, 60, 16}, readU16(row + 4));
+    return true;
+}
+
+bool ShopSession::paintFooter(bool full)
+{
     Footer footer = Browse;
     if (view == View::Confirm)
         footer = inventory ? (cancel ? CancelUse : Use) : (cancel ? CancelBuy : Buy);
     if (view == View::Receipt) footer = receipt;
+    if (!full && footer == paintedFooter) return true;
+    paintedFooter = footer;
     return show(footer, {0, 144, 128, 16});
 }
 #endif

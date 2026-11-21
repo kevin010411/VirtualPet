@@ -279,43 +279,72 @@ static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display, bool tw
     const auto pixel = [&](int x, int y) { return display.screen[y * 128 + x]; };
     game.OnConfirmKey();
     assert(game.isCollectionCatalogActive());
-    assert(pixel(0,0) == 0x07ff); // Author-supplied selected return image.
+    assert(pixel(1,1) == 0x07ff); // The 30px return image is inset by one pixel.
     const size_t before = display.windows.size();
     game.OnRightKey();
     assert(display.windows.size() == before + 2);
-    assert(pixel(0,0) == 0xffe0 && pixel(32,0) == 0xffff);
+    assert(pixel(1,1) == 0xffe0 && pixel(32,0) == 0xffff);
     assert(pixel(48,16) == 0x001f); // Shared unknown image, opaque blue center.
     assert(pixel(36,4) == 0x0820); // Transparency composed against this cell's background.
     game.OnLeftKey();
     assert(pixel(32,0) == 0x0820); // Removing selection restores the original background.
+    const size_t beforeShortPage = display.windows.size();
     game.OnLeftKey(); // First return wraps to item64, fifth page, cell4.
-    assert(display.windows.back().x == 0 && display.windows.back().y == 32);
+    bool selectedTileWritten = false;
+    for (size_t i = beforeShortPage; i < display.windows.size(); ++i)
+    {
+        const auto &window = display.windows[i];
+        assert(window.y + window.height <= 128);
+        selectedTileWritten |= window.x == 0 && window.y == 32 && window.width == 32 && window.height == 32;
+    }
+    assert(selectedTileWritten);
     assert(pixel(0,32) == 0xffff && pixel(16,48) == 0x001f);
     assert(pixel(32,32) == 0x28a0); // Empty cell5 stays background, never an item.
     const auto fifthFocused = display.screen;
+    size_t beforeDetail = display.windows.size();
     game.OnConfirmKey();
+    assert(display.windows.size() == beforeDetail + 1 && display.windows.back().y == 112);
     assert(pixel(0,0) == fifthFocused[0] && pixel(0,112) == 0xf800 && pixel(127,159) == 0xf800);
     if (twoPages)
     {
+        beforeDetail = display.windows.size();
         game.OnConfirmKey();
+        assert(display.windows.size() == beforeDetail + 1 && display.windows.back().y == 112);
         assert(pixel(0,0) == fifthFocused[0] && pixel(0,112) == 0x07e0);
         game.redrawAllNow();
         assert(pixel(0,112) == 0x07e0);
         game.OnLeftKey();
         assert(pixel(0,112) == 0x07e0);
     }
+    beforeDetail = display.windows.size();
     game.OnConfirmKey();
+    assert(display.windows.size() > beforeDetail);
+    for (size_t i = beforeDetail; i < display.windows.size(); ++i)
+        assert(display.windows[i].y >= 112);
     assert(display.screen == fifthFocused); // Detail close restores exact page/focus.
     const size_t beforeWrap = display.windows.size();
     game.OnRightKey();
-    assert(display.windows.size() == beforeWrap + 17); // Full background +16 cells.
-    assert(pixel(0,0) == 0x07ff); // Last item skips all empty cells and wraps.
+    assert(display.windows.size() == beforeWrap + 16); // Replace each grid tile once.
+    assert(pixel(1,1) == 0x07ff); // Last item skips all empty cells and wraps.
+    game.OnLeftKey();
+    assert(display.screen == fifthFocused); // Vacated cells restore their own patterned background.
+    game.OnRightKey();
+    for (int step = 0; step < 13; ++step) game.OnRightKey();
+    const auto fullPage = display.screen;
+    game.OnConfirmKey();
+    if (twoPages) game.OnConfirmKey();
+    beforeDetail = display.windows.size();
+    game.OnConfirmKey();
+    for (size_t i = beforeDetail; i < display.windows.size(); ++i)
+        assert(display.windows[i].y >= 112);
+    assert(display.screen == fullPage); // Restore the lower half of all four occupied cells.
+    for (int step = 0; step < 13; ++step) game.OnLeftKey();
     // Each page has its own return cell and every return exits the production caller.
     for (int page = 0; page < 5; ++page)
     {
         if (page != 0) game.OnConfirmKey();
         for (int step = 0; step < page * 16; ++step) game.OnRightKey();
-        assert(pixel(0,0) == 0x07ff);
+        assert(pixel(1,1) == 0x07ff);
         const size_t beforeBack = display.windows.size();
         game.OnConfirmKey();
         assert(!game.isCollectionCatalogActive());
@@ -327,11 +356,11 @@ static void verify64Grid(Game &game, Pet &pet, Adafruit_ST7735 &display, bool tw
     game.OnLeftKey();
     assert(pixel(16,48) == 0xf800); // Slot63 owned product uses final tile frame254/255.
     game.OnConfirmKey();
-    assert(pixel(0,0) == 0xffe0 && pixel(0,112) == 0x07e0 && pixel(127,159) == 0x07e0); // Story descriptor63.
+    assert(pixel(1,1) == 0xffe0 && pixel(0,112) == 0x07e0 && pixel(127,159) == 0x07e0); // Story descriptor63.
     if (twoPages)
     {
         game.OnConfirmKey();
-        assert(pixel(0,0) == 0xffe0 && pixel(0,112) == 0xf800);
+        assert(pixel(1,1) == 0xffe0 && pixel(0,112) == 0xf800);
     }
     game.OnConfirmKey();
     assert(pixel(0,32) == 0xffff && pixel(16,48) == 0xf800);
@@ -420,21 +449,60 @@ static int verifyShop(const std::filesystem::path &root)
     assert(pet.stageDays() == 0);
     game.OnConfirmKey(); // Shop command
     const auto browsing = display.screen;
+    const auto matchesFullRedraw = [&] {
+        const auto incremental = display.screen;
+        game.redrawAllNow();
+        assert(display.screen == incremental);
+    };
+    std::ifstream shopData(root / "shop.data", std::ios::binary);
+    shopData.seekg(25);
+    const bool list = shopData.get() == 16;
+    size_t beforeMove = display.windows.size();
+    game.OnRightKey(); // Product to inventory entry, with both rows in view in list mode.
+    if (list)
+    {
+        assert(display.windows.size() == beforeMove + 2);
+        for (size_t i = beforeMove; i < display.windows.size(); ++i)
+            assert(display.windows[i].height == 16 && display.windows[i].width == 120);
+    }
+    else
+    {
+        assert(display.windows.size() > beforeMove);
+        for (size_t i = beforeMove; i < display.windows.size(); ++i)
+            assert(display.windows[i].height < 160);
+    }
+    matchesFullRedraw();
+    game.OnRightKey(); // Exit entry scrolls into view in the two-row fixture.
+    matchesFullRedraw();
+    game.OnLeftKey();
+    matchesFullRedraw();
+    game.OnLeftKey();
+    assert(display.screen == browsing);
     assert(!game.preventsIdleSleep());
     game.stopPlaybackForSleep();
     game.redrawAllNow();
     assert(display.screen == browsing);
+    const size_t beforeConfirm = display.windows.size();
     game.OnConfirmKey(); // Confirmation defaults to cancel
+    for (size_t i = beforeConfirm; i < display.windows.size(); ++i)
+        assert(display.windows[i].y >= 88);
     assert(display.screen != browsing);
+    matchesFullRedraw();
     game.OnConfirmKey();
+    assert(display.screen == browsing);
     assert(pet.customStat(0) == 50 && pet.persistentState().shopQuantities[0] == 0);
     game.OnConfirmKey();
+    const size_t beforeToggle = display.windows.size();
     game.OnLeftKey();
+    assert(display.windows.size() == beforeToggle + 1);
+    assert(display.windows.back().y == 144 && display.windows.back().height == 16);
     game.OnConfirmKey();
     assert(pet.customStat(0) == 43 && pet.persistentState().shopQuantities[0] == 2);
+    matchesFullRedraw();
     game.OnConfirmKey(); // Receipt to shop
     game.OnRightKey();
     game.OnConfirmKey(); // Inventory
+    matchesFullRedraw();
     game.OnConfirmKey(); // Use confirmation
     game.OnLeftKey();
     game.OnConfirmKey();

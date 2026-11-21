@@ -2,6 +2,7 @@
 
 #include "common/AppProfile.h"
 #if ENABLE_SHOP
+#include "display/DisplayRect.h"
 #include "resources/AssetRuntimeContract.h"
 
 class Pet;
@@ -32,7 +33,7 @@ private:
         Browse = 1, CancelBuy, Buy, CancelUse, Use, Bought, Used, Locked,
         Funds, Full, Owned, Quantity, SaveFailed
     };
-    struct Rect { uint8_t x, y, w, h; };
+    using Rect = DisplayRect;
 
     Pet &pet;
     PetSaveController &saves;
@@ -42,6 +43,7 @@ private:
     const PetBehaviorConfig &config;
     AssetData::BundleId bundle = {};
     uint32_t fingerprint = 0;
+    uint32_t boundsOffset = 0;
     uint16_t art = 0;
     uint8_t wallet = 255, itemCount = 0, productCount = 0, speciesCount = 0, rowHeight = 0;
     Rect walletRect = {}, quantityRect = {}, listRect = {};
@@ -51,6 +53,14 @@ private:
     bool cancel = true;
     View view = View::Closed;
     Footer receipt = Browse;
+    uint16_t paintedFrame = 0;
+    uint16_t paintedRows[8] = {};
+    Rect paintedBounds = {};
+    uint32_t paintedWallet = 0;
+    uint16_t paintedQuantity = 0;
+    bool paintedHasQuantity = false;
+    View paintedView = View::Closed;
+    Footer paintedFooter = Browse;
 
     bool read(SdBaseFile &file, uint32_t offset, uint8_t *row, size_t length);
     uint32_t itemOffset(uint8_t slot) const;
@@ -59,7 +69,11 @@ private:
     bool unlocked(const uint8_t *product) const;
     bool buildEntries();
     bool transact(AssetData::AnimationRef &animation);
-    bool show(uint16_t frame, Rect rect);
+    uint16_t frameFor(uint8_t entry) const;
+    bool paint(bool full = false);
+    bool paintFooter(bool full = false);
+    bool paintConfirmation(uint16_t frame, uint8_t selected);
+    bool show(uint16_t frame, Rect rect, const Rect *crop = nullptr);
     void number(Rect rect, uint32_t value);
 };
 #endif

@@ -1,4 +1,5 @@
 #pragma once
+#include "display/DisplayRect.h"
 #include "pet/PetBehaviorTypes.h"
 #include "resources/detail/RuntimeTableReader.h"
 
@@ -35,8 +36,15 @@ private:
     uint8_t page = 0;
     bool opened = false;
     bool detail = false;
+    bool backgroundBands = false;
     uint8_t detailPage = 0;
     uint8_t targetSpecies = 0;
     uint8_t targetOutfit = 0;
-    bool drawCell(const RuntimeTableInternal::RuntimeTable &table, uint8_t cell, bool selected);
+    uint8_t lastCell() const;
+    bool drawCell(const RuntimeTableInternal::RuntimeTable &table, uint8_t cell, bool selected,
+                  const DisplayRect *crop = nullptr);
+    bool drawDetail(const RuntimeTableInternal::RuntimeTable &table, uint8_t *item);
+    bool restoreDetail(const RuntimeTableInternal::RuntimeTable &table);
+    bool restoreBackground(const RuntimeTableInternal::RuntimeTable &table, const uint8_t *cfg,
+                           DisplayRect rect);
 };

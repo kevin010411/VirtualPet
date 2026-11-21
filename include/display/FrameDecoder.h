@@ -7,6 +7,7 @@
 #include "resources/BundleReader.h"
 
 class SPIClass;
+struct DisplayRect;
 
 namespace FrameDecoder
 {
@@ -29,7 +30,7 @@ bool showDataFrame(BundleReader &bundleReader,
                    int batchLines,
                    uint16_t expectedWidth = 0,
                    uint16_t expectedHeight = 0,
-                   SPIClass *pixelSpi = nullptr);
+                   SPIClass *pixelSpi = nullptr, const DisplayRect *crop = nullptr);
 } // namespace FrameDecoder
 
 #endif

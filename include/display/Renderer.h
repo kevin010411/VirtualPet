@@ -14,6 +14,7 @@
 
 class AssetResources;
 class SPIClass;
+struct DisplayRect;
 
 class Renderer
 {
@@ -26,7 +27,8 @@ public:
     bool ShowDataFrame(const AssetData::AssetFrameAddress &address,
                        int xmin = -1,
                        int ymin = -1,
-                       int batch_lines = 12, uint16_t expectedWidth = 0, uint16_t expectedHeight = 0);
+                       int batch_lines = 12, uint16_t expectedWidth = 0, uint16_t expectedHeight = 0,
+                       const DisplayRect *crop = nullptr);
     bool ShowAnimationFrame(const AssetData::AnimationRef &animation,
                             uint8_t versionIndex,
                             uint16_t frameIndex,

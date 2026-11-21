@@ -160,7 +160,7 @@ private:
     bool shopEvolutionPending = false;
     bool prepareShopProgress(bool &changed) override { return shop.arrive(changed); }
     void redrawShop();
-    void finishShopPlayback();
+    void finishShopPlayback(bool restoreDisplay = false);
 #endif
     PetClock petClock;
     uint32_t latestRtcSeconds = 0;

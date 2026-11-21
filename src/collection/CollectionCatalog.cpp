@@ -21,13 +21,13 @@ __attribute__((noinline)) bool product(const RuntimeTable &table, const uint8_t 
 }
 
 __attribute__((noinline)) bool show(Renderer &renderer, const RuntimeTable &table, const uint8_t *pair,
-          uint8_t x, uint8_t y, uint16_t width, uint16_t height)
+          uint8_t x, uint8_t y, uint16_t width, uint16_t height, const DisplayRect *crop = nullptr)
 {
     AssetData::AnimationRef ref = {};
     uint16_t frame = 0;
     return product(table, pair, ref, frame) &&
         renderer.ShowDataFrame({ref.speciesSlot, ref.outfitSlot, ref.animationId, 0, frame},
-                               x, y, 12, width, height);
+                               x, y, 12, width, height, crop);
 }
 
 __attribute__((noinline)) void activationTarget(const uint8_t *item,
@@ -327,6 +327,12 @@ bool CollectionCatalog::start()
     RuntimeTableFile file;
     uint8_t cfg[24];
     if (!file.open(resources.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
+    AssetData::AnimationRef ref = {};
+    AssetData::AnimationRecord chrome = {};
+    uint16_t frame = 0;
+    if (!product(file.table(), cfg + 4, ref, frame) || !resources.resolveAnimation(ref, 0, chrome))
+        return false;
+    backgroundBands = chrome.frameCount > 3;
     count = static_cast<uint8_t>(readU16(cfg + 16));
     opened = true;
     targetSpecies = targetOutfit = 0;
@@ -337,7 +343,14 @@ bool CollectionCatalog::start()
     return redraw();
 }
 
-__attribute__((noinline)) bool CollectionCatalog::drawCell(const RuntimeTable &table, uint8_t cell, bool selected)
+uint8_t CollectionCatalog::lastCell() const
+{
+    const uint8_t remaining = count - page * 15;
+    return remaining < 15 ? remaining : 15;
+}
+
+__attribute__((noinline)) bool CollectionCatalog::drawCell(const RuntimeTable &table, uint8_t cell,
+                                                           bool selected, const DisplayRect *crop)
 {
     const uint8_t x = (cell % 4) * 32;
     const uint8_t y = (cell / 4) * 32;
@@ -351,7 +364,46 @@ __attribute__((noinline)) bool CollectionCatalog::drawCell(const RuntimeTable &t
     uint8_t item[36];
     return readItem(table, slot, item) &&
         show(renderer, table, item + 6 + (pet.isCollectionOwned(slot) ? 8 : 0) +
-             (selected ? 4 : 0), x, y, 32, 32);
+             (selected ? 4 : 0), x, y, 32, 32, crop);
+}
+
+bool CollectionCatalog::drawDetail(const RuntimeTable &table, uint8_t *item)
+{
+    const uint8_t slot = page * 15 + focus - 1;
+    uint8_t *pair = item + (pet.isCollectionOwned(slot) ? 26 : 22);
+    const uint16_t frame = readU16(pair + 2) + detailPage;
+    pair[2] = frame & 255;
+    pair[3] = frame >> 8;
+    return show(renderer, table, pair, 0, 112, 128, 48);
+}
+
+bool CollectionCatalog::restoreBackground(const RuntimeTable &table, const uint8_t *cfg, DisplayRect rect)
+{
+    if (!backgroundBands) return show(renderer, table, cfg + 4, 0, 0, 128, 160, &rect);
+
+    const bool detailBand = rect.y >= 112;
+    const uint8_t top = detailBand ? 112 : (rect.y / 32) * 32;
+    const uint8_t height = detailBand ? 48 : 32;
+    const uint8_t pair[] = {cfg[4], cfg[5], static_cast<uint8_t>(detailBand ? 7 : 3 + top / 32), 0};
+    rect.y -= top;
+    const bool wholeBand = rect.w == 128 && rect.h == height;
+    return show(renderer, table, pair, 0, top, 128, height, wholeBand ? nullptr : &rect);
+}
+
+bool CollectionCatalog::restoreDetail(const RuntimeTable &table)
+{
+    uint8_t cfg[24];
+    if (!header(table, cfg)) return false;
+    const uint8_t last = lastCell();
+    if (last < 12) return restoreBackground(table, cfg, {0, 112, 128, 48});
+
+    const DisplayRect lowerHalf{0, 16, 32, 16};
+    for (uint8_t cell = 12; cell <= last; ++cell)
+        if (!drawCell(table, cell, cell == focus, &lowerHalf)) return false;
+    const uint8_t usedWidth = (last - 11) * 32;
+    if (usedWidth < 128 && !restoreBackground(table, cfg,
+        {usedWidth, 112, static_cast<uint8_t>(128 - usedWidth), 16})) return false;
+    return restoreBackground(table, cfg, {0, 128, 128, 32});
 }
 
 bool CollectionCatalog::redraw()
@@ -361,17 +413,13 @@ bool CollectionCatalog::redraw()
     uint8_t cfg[24];
     if (!file.open(resources.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
     if (!show(renderer, file.table(), cfg + 4, 0, 0, 128, 160)) return false;
-    for (uint8_t cell = 0; cell < 16; ++cell)
+    for (uint8_t cell = 0; cell <= lastCell(); ++cell)
         if (!drawCell(file.table(), cell, cell == focus)) return false;
     if (detail)
     {
         uint8_t item[36];
         const uint8_t slot = page * 15 + focus - 1;
-        if (!readItem(file.table(), slot, item)) return false;
-        uint8_t *pair = item + (pet.isCollectionOwned(slot) ? 26 : 22);
-        const uint16_t frame = readU16(pair + 2) + detailPage;
-        pair[2] = frame & 255; pair[3] = frame >> 8;
-        return show(renderer, file.table(), pair, 0, 112, 128, 48);
+        return readItem(file.table(), slot, item) && drawDetail(file.table(), item);
     }
     return true;
 }
@@ -380,21 +428,44 @@ bool CollectionCatalog::move(bool right)
 {
     if (detail) return true;
     const uint8_t previous = focus;
-    const uint8_t last = (count - page * 15) < 15 ? count - page * 15 : 15;
+    const uint8_t previousPage = page;
+    const uint8_t last = lastCell();
     if (right && focus == last)
     {
-        page = (page + 1) % ((count + 14) / 15); focus = 0; return redraw();
+        page = (page + 1) % ((count + 14) / 15);
+        focus = 0;
     }
-    if (!right && focus == 0)
+    else if (!right && focus == 0)
     {
         page = page == 0 ? (count - 1) / 15 : page - 1;
-        focus = (count - page * 15) < 15 ? count - page * 15 : 15;
-        return redraw();
+        focus = lastCell();
     }
-    focus = right ? focus + 1 : focus - 1;
+    else focus = right ? focus + 1 : focus - 1;
     RuntimeTableFile file;
-    return file.open(resources.sdCard(), config.assetManifest) &&
-        drawCell(file.table(), previous, false) && drawCell(file.table(), focus, true);
+    if (!file.open(resources.sdCard(), config.assetManifest)) return false;
+    const auto &table = file.table();
+    if (page == previousPage)
+        return drawCell(table, previous, false) && drawCell(table, focus, true);
+
+    if ((previous == 0) != (focus == 0) && !drawCell(table, 0, focus == 0)) return false;
+    const uint8_t currentLast = lastCell();
+    for (uint8_t cell = 1; cell <= currentLast; ++cell)
+        if (!drawCell(table, cell, cell == focus)) return false;
+    if (currentLast >= last) return true;
+
+    uint8_t cfg[24];
+    if (!header(table, cfg)) return false;
+    // Clear only cells vacated on the shorter page, one strip per grid row.
+    for (uint8_t cell = currentLast + 1; cell <= last;)
+    {
+        const uint8_t x = (cell % 4) * 32;
+        uint8_t cells = 4 - cell % 4;
+        if (cells > last - cell + 1) cells = last - cell + 1;
+        if (!restoreBackground(table, cfg, {x, static_cast<uint8_t>(cell / 4 * 32),
+                                            static_cast<uint8_t>(cells * 32), 32})) return false;
+        cell += cells;
+    }
+    return true;
 }
 
 bool CollectionCatalog::confirm()
@@ -406,9 +477,9 @@ bool CollectionCatalog::confirm()
         if (!file.open(resources.sdCard(), config.assetManifest) ||
             !readItem(file.table(), page * 15 + focus - 1, item)) return false;
         const uint16_t pages = readU16(item + (pet.isCollectionOwned(page * 15 + focus - 1) ? 34 : 32));
-        if (++detailPage < pages) return redraw();
+        if (++detailPage < pages) return drawDetail(file.table(), item);
         detail = false; detailPage = 0;
-        return redraw();
+        return restoreDetail(file.table());
     }
     if (focus == 0) { exit(); return true; }
     const uint8_t slot = page * 15 + focus - 1;
@@ -428,7 +499,7 @@ bool CollectionCatalog::confirm()
     if (readU16(item + (pet.isCollectionOwned(slot) ? 34 : 32)) == 0) return true;
     detailPage = 0;
     detail = true;
-    return redraw();
+    return drawDetail(file.table(), item);
 }
 
 bool CollectionCatalog::takeActivation(uint8_t &species, uint8_t &outfit)

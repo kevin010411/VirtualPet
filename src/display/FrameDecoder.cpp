@@ -1,6 +1,8 @@
 #include "display/FrameDecoder.h"
+#include <string.h>
 
 #include "common/SdBinaryRead.h"
+#include "display/DisplayRect.h"
 #include "display/FrameTiming.h"
 #include "platform/TftDmaTransfer.h"
 
@@ -135,7 +137,8 @@ bool showDataFrame(BundleReader &bundleReader,
                    size_t lineBufferPixels,
                    int xmin,
                    int ymin,
-                   int batchLines, uint16_t expectedWidth, uint16_t expectedHeight, SPIClass *pixelSpi)
+                   int batchLines, uint16_t expectedWidth, uint16_t expectedHeight, SPIClass *pixelSpi,
+                   const DisplayRect *crop)
 {
 #if TFT_FRAME_TIMING_ENABLED
     const uint32_t frameStarted = micros();
@@ -192,11 +195,16 @@ bool showDataFrame(BundleReader &bundleReader,
         return true;
     };
 
+    const uint16_t outputWidth = crop ? crop->w : descriptor.width;
+    const uint16_t outputHeight = crop ? crop->h : descriptor.height;
+    if (crop)
+    {
+        xmin += crop->x;
+        ymin += crop->y;
+    }
     const bool frameFullyVisible = xmin >= 0 && ymin >= 0 &&
-                                   static_cast<uint32_t>(xmin) + descriptor.width <= static_cast<uint32_t>(tft->width()) &&
-                                   static_cast<uint32_t>(ymin) + descriptor.height <= static_cast<uint32_t>(tft->height());
-    TftFrameWriteSession writeSession(tft, frameFullyVisible, xmin, ymin,
-                                      descriptor.width, descriptor.height);
+                                   xmin + outputWidth <= tft->width() && ymin + outputHeight <= tft->height();
+    TftFrameWriteSession writeSession(tft, frameFullyVisible, xmin, ymin, outputWidth, outputHeight);
     int rowsPerBatch = safeBatchLines;
     uint16_t *batchBuffer = lineBuffer;
 #if defined(STM32F103xB)
@@ -219,11 +227,12 @@ bool showDataFrame(BundleReader &bundleReader,
     bool packetIsRun = false;
     uint16_t runPixel = 0;
     uint32_t producedPixels = 0;
-    for (uint16_t batchStartRow = 0; batchStartRow < descriptor.height;
+    const int endRow = crop ? crop->bottom() : descriptor.height;
+    for (uint16_t batchStartRow = 0; batchStartRow < endRow;
          batchStartRow = static_cast<uint16_t>(batchStartRow + rowsPerBatch))
     {
-        const int actualLines = batchStartRow + rowsPerBatch > descriptor.height
-                                    ? descriptor.height - batchStartRow
+        int actualLines = batchStartRow + rowsPerBatch > endRow
+                                    ? endRow - batchStartRow
                                     : rowsPerBatch;
         for (int rowOffset = 0; rowOffset < actualLines; ++rowOffset)
         {
@@ -271,12 +280,24 @@ bool showDataFrame(BundleReader &bundleReader,
             }
         }
 
+        int outputRow = batchStartRow;
+        if (crop)
+        {
+            const int skip = crop->y > batchStartRow ? crop->y - batchStartRow : 0;
+            if (skip >= actualLines) continue;
+            actualLines -= skip;
+            outputRow += skip - crop->y;
+            for (int row = 0; row < actualLines; ++row)
+                memmove(batchBuffer + row * outputWidth,
+                        batchBuffer + (row + skip) * descriptor.width + crop->x,
+                        outputWidth * sizeof(uint16_t));
+        }
         if (!frameFullyVisible)
         {
-            tft->drawRGBBitmap(xmin, ymin + batchStartRow, batchBuffer, descriptor.width, actualLines);
+            tft->drawRGBBitmap(xmin, ymin + outputRow, batchBuffer, outputWidth, actualLines);
             continue;
         }
-        const size_t pixels = static_cast<size_t>(descriptor.width) * actualLines;
+        const size_t pixels = static_cast<size_t>(outputWidth) * actualLines;
 #if defined(STM32F103xB)
         // send() waits for the preceding batch before giving its buffer back.
         if (!dma.send(batchBuffer, pixels))
@@ -290,7 +311,8 @@ bool showDataFrame(BundleReader &bundleReader,
 #endif
     }
 
-    const bool complete = producedPixels == pixelCount && packetRemaining == 0 && reader.exhausted();
+    const bool complete = endRow < descriptor.height ||
+                          (producedPixels == pixelCount && packetRemaining == 0 && reader.exhausted());
     frame.file.close();
 #if defined(STM32F103xB)
     if (!dma.finish())
