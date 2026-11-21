@@ -50,6 +50,27 @@ AssetData::AssetFrameAddress frameAddress(const AssetData::AnimationRef &animati
 }
 } // namespace
 
+#if ENABLE_CAPTURE_GAME || ENABLE_SHOP
+namespace
+{
+// Rows 2–9 of Fusion Pixel 12 px zh-TW. Each digit has 5 ink columns and a 6 px advance.
+constexpr uint8_t numberGlyphs[][8] = {
+    {0x70, 0x88, 0x98, 0xa8, 0xa8, 0xc8, 0x88, 0x70},
+    {0x20, 0xe0, 0x20, 0x20, 0x20, 0x20, 0x20, 0xf8},
+    {0x70, 0x88, 0x08, 0x10, 0x20, 0x40, 0x80, 0xf8},
+    {0x70, 0x88, 0x08, 0x30, 0x08, 0x08, 0x88, 0x70},
+    {0x30, 0x50, 0x50, 0x90, 0x90, 0xf8, 0x10, 0x10},
+    {0xf8, 0x80, 0x80, 0xf0, 0x08, 0x08, 0x88, 0x70},
+    {0x70, 0x88, 0x80, 0xf0, 0x88, 0x88, 0x88, 0x70},
+    {0xf8, 0x08, 0x08, 0x10, 0x10, 0x20, 0x20, 0x20},
+    {0x70, 0x88, 0x88, 0x70, 0x88, 0x88, 0x88, 0x70},
+    {0x70, 0x88, 0x88, 0x88, 0x78, 0x08, 0x88, 0x70},
+    {0x00, 0x00, 0x20, 0x20, 0xf8, 0x20, 0x20, 0x00}, // Shop overflow marker (+)
+    {0x00, 0x00, 0x00, 0x00, 0xf8, 0x00, 0x00, 0x00}, // Score minus sign
+};
+}
+#endif
+
 Renderer::Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resourcesRef, SPIClass *pixelSpi)
     : tft(ref_tft), resources(resourcesRef), pixelSpi(pixelSpi), state(new AnimationState)
 #if ENABLE_DEBUG
@@ -86,6 +107,30 @@ void drawCaptureTimer(uint16_t *pixels, uint16_t seconds)
                 if (glyph & (1U << (14 - 3 * y - x)))
                     pixels[(y + 1) * CaptureAssets::screenWidth + 1 + 4 * index + x] = 0xFFFF;
     }
+}
+
+// Fusion Pixel 12 px zh-TW rows for 本局得分 and 中鍵返回, matching the Web preview.
+constexpr uint16_t captureScoreTitle[4][11] = {
+    {0x0400, 0x0400, 0xffe0, 0x1500, 0x1500, 0x1500, 0x2480, 0x2480, 0x5f40, 0x8420, 0x0400},
+    {0x7fc0, 0x4040, 0x7fc0, 0x4000, 0x7fe0, 0x4020, 0x5f20, 0x5120, 0x5120, 0x5f20, 0x80c0},
+    {0x2fc0, 0x4840, 0x8fc0, 0x2840, 0x4fc0, 0xc000, 0x5fe0, 0x4080, 0x5fe0, 0x4880, 0x4580},
+    {0x1f00, 0x0100, 0x2080, 0x2080, 0x4040, 0xbfa0, 0x0880, 0x0880, 0x1080, 0x2080, 0xc300},
+};
+constexpr uint16_t captureScoreReturn[4][11] = {
+    {0x0400, 0x0400, 0xffe0, 0x8420, 0x8420, 0x8420, 0xffe0, 0x0400, 0x0400, 0x0400, 0x0400},
+    {0x4080, 0xbbe0, 0x08a0, 0xefe0, 0x50a0, 0xfbe0, 0x4880, 0xebe0, 0xd880, 0x6c80, 0x93e0},
+    {0x8fe0, 0x4800, 0x0800, 0xcfe0, 0x4820, 0x4c20, 0x8a40, 0x4980, 0x5660, 0xa000, 0x9fe0},
+    {0xffe0, 0x8020, 0x8020, 0x9f20, 0x9120, 0x9120, 0x9120, 0x9f20, 0x8020, 0x8020, 0xffe0},
+};
+
+void drawCaptureScoreLabel(Adafruit_ST7735 &screen, const uint16_t (&label)[4][11], int top)
+{
+    constexpr int left = (CaptureAssets::screenWidth - (4 * 12 - 1)) / 2;
+    for (int glyph = 0; glyph < 4; ++glyph)
+        for (int row = 0; row < 11; ++row)
+            for (int col = 0; col < 11; ++col)
+                if (label[glyph][row] & (0x8000U >> col))
+                    screen.writePixel(left + glyph * 12 + col, top + row, 0xffff);
 }
 }
 
@@ -178,16 +223,36 @@ bool Renderer::showCaptureCard(CaptureAssets &assets, const CaptureAssets::Card 
 
 void Renderer::showCaptureScore(int32_t score)
 {
+    constexpr uint8_t minusGlyph = 11;
+    uint32_t value = static_cast<uint32_t>(score);
+    if (score < 0) value = 0U - value;
+    uint8_t digits[11];
+    int count = 0;
+    do
+    {
+        digits[count++] = value % 10;
+        value /= 10;
+    } while (value);
+    if (score < 0) digits[count++] = minusGlyph;
+
+    const int width = count * 6 - 1;
+    const int fittingScale = (CaptureAssets::screenWidth - 16) / width;
+    const int scale = fittingScale < 4 ? fittingScale : 4;
+    const int top = (CaptureAssets::screenHeight - 8 * scale) / 2;
+    int left = (CaptureAssets::screenWidth - width * scale) / 2;
     tft->fillScreen(0x11E9);
-    tft->setTextColor(0xFFFF);
-    tft->setTextSize(2);
-    tft->setCursor(34, 45);
-    tft->print("SCORE");
-    tft->setCursor(28, 73);
-    tft->print(static_cast<long>(score));
-    tft->setTextSize(1);
-    tft->setCursor(28, 121);
-    tft->print("OK TO RETURN");
+    tft->startWrite();
+    drawCaptureScoreLabel(*tft, captureScoreTitle, 26);
+    for (int digit = count - 1; digit >= 0; --digit, left += 6 * scale)
+    {
+        const auto &glyph = numberGlyphs[digits[digit]];
+        for (int row = 0; row < 8; ++row)
+            for (int col = 0; col < 5; ++col)
+                if (glyph[row] & (0x80U >> col))
+                    tft->writeFillRect(left + col * scale, top + row * scale, scale, scale, 0xffff);
+    }
+    drawCaptureScoreLabel(*tft, captureScoreReturn, 139);
+    tft->endWrite();
 }
 #endif
 
@@ -441,21 +506,6 @@ void Renderer::showInstructionFeedback(bool correct)
 void Renderer::drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint32_t value)
 {
     if (!width) return;
-    // Rows 2–9 of Fusion Pixel 12 px zh-TW, from fusion-pixel-12-zh-tw.bin.
-    // These glyphs all have a six-pixel advance and a five-pixel bitmap.
-    static constexpr uint8_t glyphs[][8] = {
-        {0x70, 0x88, 0x98, 0xa8, 0xa8, 0xc8, 0x88, 0x70},
-        {0x20, 0xe0, 0x20, 0x20, 0x20, 0x20, 0x20, 0xf8},
-        {0x70, 0x88, 0x08, 0x10, 0x20, 0x40, 0x80, 0xf8},
-        {0x70, 0x88, 0x08, 0x30, 0x08, 0x08, 0x88, 0x70},
-        {0x30, 0x50, 0x50, 0x90, 0x90, 0xf8, 0x10, 0x10},
-        {0xf8, 0x80, 0x80, 0xf0, 0x08, 0x08, 0x88, 0x70},
-        {0x70, 0x88, 0x80, 0xf0, 0x88, 0x88, 0x88, 0x70},
-        {0xf8, 0x08, 0x08, 0x10, 0x10, 0x20, 0x20, 0x20},
-        {0x70, 0x88, 0x88, 0x70, 0x88, 0x88, 0x88, 0x70},
-        {0x70, 0x88, 0x88, 0x88, 0x78, 0x08, 0x88, 0x70},
-        {0x00, 0x00, 0x20, 0x20, 0xf8, 0x20, 0x20, 0x00},
-    };
     uint8_t digits[10];
     uint8_t count = 0;
     do {
@@ -482,7 +532,7 @@ void Renderer::drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t heigh
             int16_t pen = left;
             for (uint8_t digit = count; digit > 0; --digit, pen += 6)
             {
-                const uint8_t bits = glyphs[digits[digit - 1]][glyphRow];
+                const uint8_t bits = numberGlyphs[digits[digit - 1]][glyphRow];
                 for (uint8_t col = 0; col < 5 && pen + col < width; ++col)
                     if (bits & (0x80 >> col)) line[pen + col] = 0xffff;
             }

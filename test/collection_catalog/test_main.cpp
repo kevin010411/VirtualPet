@@ -133,6 +133,10 @@ static void verifyCapture(const std::filesystem::path &root, bool shouldPause)
     assertUnchanged();
     tick(game, hostMillis + 5001);
     assert(display.screen.front() == scoreBackground);
+    const auto pixel = [&](int x, int y) { return display.screen[y * 128 + x]; };
+    assert(pixel(50, 64) == 0xffff && pixel(70, 64) == 0xffff); // Top edges of the centered 4x score "10".
+    assert(pixel(49, 64) == scoreBackground && pixel(53, 67) == 0xffff);
+    assert(pixel(45, 139) == 0xffff && pixel(45, 138) == scoreBackground); // First stroke of 中鍵返回.
     assert(pet.stageDays() == 12 && pet.persistentState().captureSeenMask == 1 && pet.isCollectionOwned(0));
     assert(storage.lastSaveSequence() == before + 1);
 
