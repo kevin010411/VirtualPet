@@ -15,9 +15,16 @@ constexpr size_t kLegacyStateSize = ENABLE_SHOP ? 304 : 136;
 #if ENABLE_COLLECTION_GAME_EVENTS
 constexpr size_t kLegacyCrcOffset = offsetof(PersistedPetState, collectionProgressFingerprint);
 static_assert(kLegacyCrcOffset == (ENABLE_SHOP ? 296 : 132), "Legacy pet state prefix moved");
-static_assert(sizeof(PersistedPetState) == (ENABLE_SHOP ? 560 : 400), "Unexpected pet state layout");
+constexpr size_t kPreCaptureStateSize = ENABLE_SHOP ? 560 : 400;
 #else
-static_assert(sizeof(PersistedPetState) == kLegacyStateSize, "Unexpected pet state layout");
+constexpr size_t kPreCaptureStateSize = kLegacyStateSize;
+#endif
+#if ENABLE_CAPTURE_GAME
+constexpr size_t kPreCaptureCrcOffset = offsetof(PersistedPetState, captureTargetFingerprint);
+static_assert(kPreCaptureCrcOffset == (ENABLE_COLLECTION_GAME_EVENTS
+    ? (ENABLE_SHOP ? 556 : 392) : (ENABLE_SHOP ? 296 : 132)), "Pre-capture pet state prefix moved");
+#else
+static_assert(sizeof(PersistedPetState) == kPreCaptureStateSize, "Unexpected pet state layout");
 #endif
 
 uint32_t calculateStateCrc(const PersistedPetState &state)
@@ -42,6 +49,9 @@ bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
 
     const size_t stateSize = f.fileSize();
     if (stateSize != sizeof(PersistedPetState)
+#if ENABLE_CAPTURE_GAME
+        && stateSize != kPreCaptureStateSize
+#endif
 #if ENABLE_COLLECTION_GAME_EVENTS
         && stateSize != kLegacyStateSize
 #endif
@@ -71,6 +81,18 @@ bool readStateSlot(SdFat *sd, const char *path, PersistedPetState &state)
         state.version = Pet::kPetStateVersion;
         state.collectionProgressFingerprint = 0;
         memset(state.collectionProgress, 0, sizeof(state.collectionProgress));
+        return true;
+    }
+#endif
+#if ENABLE_CAPTURE_GAME
+    if (stateSize == kPreCaptureStateSize)
+    {
+        const uint32_t oldCrc = Integrity::crc32(
+            reinterpret_cast<const uint8_t *>(&state), kPreCaptureCrcOffset);
+        if (state.version != Pet::kPetStatePreCaptureVersion || oldCrc != state.captureTargetFingerprint)
+            return false;
+        state.version = Pet::kPetStateVersion;
+        state.captureTargetFingerprint = 0;
         return true;
     }
 #endif

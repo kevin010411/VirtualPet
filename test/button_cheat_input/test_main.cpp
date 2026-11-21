@@ -16,7 +16,7 @@ void previous() { ++shorts[0]; }
 void next() { ++shorts[1]; }
 void confirm() { ++shorts[2]; }
 void beep() { ++beeps; }
-#if ENABLE_PROJECT_MENUS
+#if ENABLE_PROJECT_MENUS || ENABLE_CAPTURE_GAME
 static int backs = 0;
 void back() { ++backs; }
 #endif
@@ -113,7 +113,7 @@ int main()
     assert(tick(input) == CheatButtonEvent::Exited);
     assert(shorts[0] == previousBefore + 1);
 
-#if ENABLE_PROJECT_MENUS
+#if ENABLE_PROJECT_MENUS || ENABLE_CAPTURE_GAME
     const auto menuTick = [&](unsigned long ms)
     {
         clockMs += ms;
@@ -143,5 +143,21 @@ int main()
     pins[2] = HIGH;
     menuTick(1);
     assert(shorts[2] == beforeMenu + 2 && backs == 1);
+#if ENABLE_CAPTURE_GAME
+    pins[1] = LOW;
+    menuTick(251);
+    pins[1] = HIGH;
+    menuTick(1);
+    pins[2] = LOW;
+    menuTick(1); // Hold during the prior short press's cooldown.
+    assert(input.confirmHoldPending());
+    menuTick(1999);
+    assert(input.confirmHoldPending() && backs == 1);
+    menuTick(1);
+    assert(!input.confirmHoldPending() && backs == 2);
+    pins[2] = HIGH;
+    menuTick(1);
+    assert(shorts[2] == beforeMenu + 2);
+#endif
 #endif
 }

@@ -54,6 +54,13 @@ public:
         uint8_t hookX;
         uint8_t startY;
         uint8_t depth;
+        bool pauseReading;
+    };
+
+    struct Card
+    {
+        uint32_t offset;
+        uint8_t pages;
     };
 
     struct Target
@@ -71,11 +78,14 @@ public:
     void close();
     const Scene &scene() const { return scene_; }
     uint16_t totalWeight() const { return totalWeight_; }
+    uint32_t targetFingerprint() const { return targetFingerprint_; }
     bool pickTarget(uint16_t roll, Target &target);
     bool readGroup(uint8_t slot, Group &group);
     bool readEffect(uint16_t index, Effect &effect);
     bool readBackground(uint16_t y, uint16_t rows, uint16_t *pixels);
     bool readSprite(const Sprite &sprite, uint16_t row, uint16_t rows, uint16_t *pixels);
+    bool readCard(uint8_t slot, Card &card);
+    bool readCardRows(const Card &card, uint8_t page, uint16_t y, uint16_t rows, uint16_t *pixels);
 
 private:
     static constexpr uint8_t maxTargets = 64;
@@ -85,6 +95,8 @@ private:
     uint32_t backgroundOffset_ = 0;
     uint32_t groupsOffset_ = 0;
     uint32_t effectsOffset_ = 0;
+    uint32_t cardDirectory_ = 0;
+    uint32_t targetFingerprint_ = 0;
     uint8_t headerSize_ = 0;
     uint8_t targetSize_ = 0;
     uint8_t weights_[maxTargets] = {};

@@ -26,6 +26,9 @@ public:
     bool takeDeathPress();
     bool isHeld() const { return readMask() != 0; }
     bool isDebouncedHeld() const { return stableMask != 0; }
+#if ENABLE_CAPTURE_GAME
+    bool confirmHoldPending() const { return confirmPending; }
+#endif
     uint32_t wakeGeneration() const { return wakeCount; }
     CheatButtonEvent update(ButtonCallback onPrevious, ButtonCallback onNext,
                             ButtonCallback onConfirm, ButtonCallback onAnyPress,
@@ -55,8 +58,9 @@ private:
     uint8_t gestureMask = 0;
     bool waitForRelease = false;
     bool cheatMode = false;
-#if ENABLE_PROJECT_MENUS
-    bool menuConfirmPending = false;
+#if ENABLE_PROJECT_MENUS || ENABLE_CAPTURE_GAME
+    bool confirmPending = false;
+    bool confirmShortAllowed = false;
 #endif
 };
 

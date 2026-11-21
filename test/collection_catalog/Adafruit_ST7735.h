@@ -36,6 +36,7 @@ public:
         writePixels(pixels, static_cast<uint32_t>(w) * h);
     }
     void fillRect(int, int, int, int, uint16_t) {}
+    void fillScreen(uint16_t color) { std::fill(screen.begin(), screen.end(), color); }
     void writeFillRect(int x, int y, int w, int h, uint16_t color)
     {
         for (int row = y; row < y + h; ++row)
@@ -64,6 +65,7 @@ public:
     }
     void setCursor(int, int) {}
     void print(const char *) {}
+    void print(long) {}
 private:
     Window current = {};
     uint32_t offset = 0;

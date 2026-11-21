@@ -68,10 +68,12 @@ void MinigameController::reset()
 #endif
 }
 
-void MinigameController::update()
+void MinigameController::update(bool confirmPending)
 {
 #if ENABLE_CAPTURE_GAME
-    if (activeGame == Kind::Capture) capture.update();
+    if (activeGame == Kind::Capture) capture.update(confirmPending);
+#else
+    (void)confirmPending;
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
     if (activeGame == Kind::Instruction) instruction.update();

@@ -13,6 +13,9 @@ constexpr uint8_t legacyTargetSize = 18;
 constexpr uint8_t targetSize = 20;
 constexpr uint8_t groupSize = 4;
 constexpr uint8_t effectSize = 6;
+constexpr uint8_t cardSize = 5;
+constexpr uint8_t cardDirectoryFlag = 1;
+constexpr uint8_t pauseReadingFlag = 2;
 constexpr uint32_t backgroundBytes = 2UL * CaptureAssets::screenWidth * CaptureAssets::screenHeight;
 
 uint16_t readU16(const uint8_t *bytes)
@@ -47,6 +50,8 @@ bool CaptureAssets::open(SdFat *sd)
     scene_.startY = header[11];
     scene_.depth = header[12];
     const bool extended = readU16(header + 4) == 2;
+    const bool hasCards = extended && (header[15] & cardDirectoryFlag) != 0;
+    scene_.pauseReading = (header[15] & pauseReadingFlag) != 0;
     headerSize_ = headerSize;
     targetSize_ = legacyTargetSize;
     scene_.reward = {noSlot, 0, 1, 0, 0};
@@ -76,7 +81,9 @@ bool CaptureAssets::open(SdFat *sd)
     scene_.missPoints = static_cast<int16_t>(readU16(header + 20));
 
     totalWeight_ = 0;
-    uint8_t record[targetSize];
+    cardDirectory_ = 0;
+    targetFingerprint_ = 0;
+    uint8_t record[targetSize] = {};
     for (uint8_t slot = 0; slot < targetCount_; ++slot)
     {
         if (!read(headerSize_ + slot * targetSize_, record, targetSize_))
@@ -86,6 +93,19 @@ bool CaptureAssets::open(SdFat *sd)
         }
         weights_[slot] = record[7] & 0x7f;
         totalWeight_ += weights_[slot];
+    }
+    if (hasCards)
+    {
+        // The card directory follows the last target's sprite pixels.
+        const uint32_t trailer = readU32(record + 14) + 2UL * record[8] * record[9];
+        uint8_t fingerprint[4];
+        if (!read(trailer, fingerprint, sizeof(fingerprint)))
+        {
+            close();
+            return false;
+        }
+        targetFingerprint_ = readU32(fingerprint);
+        cardDirectory_ = trailer + sizeof(fingerprint);
     }
     return true;
 }
@@ -145,6 +165,25 @@ bool CaptureAssets::readBackground(uint16_t y, uint16_t rows, uint16_t *pixels)
 bool CaptureAssets::readSprite(const Sprite &sprite, uint16_t row, uint16_t rows, uint16_t *pixels)
 {
     return read(sprite.offset + 2UL * sprite.width * row, pixels, 2U * sprite.width * rows);
+}
+
+bool CaptureAssets::readCard(uint8_t slot, Card &card)
+{
+    if (cardDirectory_ == 0)
+    {
+        card = {};
+        return true;
+    }
+    uint8_t row[cardSize];
+    if (!read(cardDirectory_ + slot * cardSize, row, sizeof(row))) return false;
+    card = {readU32(row), row[4]};
+    return true;
+}
+
+bool CaptureAssets::readCardRows(const Card &card, uint8_t page, uint16_t y, uint16_t rows, uint16_t *pixels)
+{
+    return read(card.offset + page * backgroundBytes + 2UL * screenWidth * y,
+                pixels, 2U * screenWidth * rows);
 }
 
 #endif

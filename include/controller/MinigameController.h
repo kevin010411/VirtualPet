@@ -64,10 +64,11 @@ public:
 #if ENABLE_CAPTURE_GAME
     bool startCapture(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes);
     bool capturesScreen() const { return activeGame == Kind::Capture && capture.active(); }
+    bool captureClockRunning() const { return activeGame == Kind::Capture && capture.clockRunning(); }
     void redrawCapture() { capture.redraw(); }
 #endif
     void reset();
-    void update();
+    void update(bool confirmPending = false);
     void onLeft();
     void onRight();
     void onConfirm();

@@ -53,6 +53,7 @@ public:
 #endif
 #if ENABLE_CAPTURE_GAME
     bool drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame &frame, uint32_t bands);
+    bool showCaptureCard(CaptureAssets &assets, const CaptureAssets::Card &card, uint8_t page);
     void showCaptureScore(int32_t score);
 #endif
     void showResourceError();
@@ -72,6 +73,9 @@ public:
 
 private:
     struct AnimationState;
+#if ENABLE_CAPTURE_GAME
+    bool sendCaptureBand(uint16_t *pixels, uint8_t top);
+#endif
 #if ENABLE_DEBUG
     void showAssetDataDebug(const char *fallbackResource = nullptr,
                             const char *debugStage = nullptr);

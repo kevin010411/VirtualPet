@@ -57,7 +57,7 @@ public:
     bool setup_game();
     bool prepare_game();
     bool finish_setup_game();
-    void loop_game();
+    void loop_game(bool confirmPending = false);
     void synchronizeTime(uint32_t rtcSeconds);
     bool hasPendingTime() const { return petClock.pending() && initialized; }
     bool isReady() const { return initialized; }
@@ -87,6 +87,10 @@ public:
     void OnLeftKey();
     void OnRightKey();
     void OnConfirmKey();
+#if ENABLE_CAPTURE_GAME
+    bool isCaptureActive() const;
+    void OnCaptureCancel();
+#endif
 #if ENABLE_PROJECT_MENUS
     bool isProjectMenuActive() const { return flow.is(AppStage::Menu); }
     void OnProjectMenuBack();
@@ -98,7 +102,9 @@ private:
 #if ENABLE_CAPTURE_GAME
     bool onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *target,
                           const CollectionRoundStats &round, int32_t score,
-                          uint16_t &increasedStats) override;
+                          CatchResult &result) override;
+    Pet capturePet;
+    bool captureChanged = false;
 #endif
 
     enum class KeyDirection : uint8_t

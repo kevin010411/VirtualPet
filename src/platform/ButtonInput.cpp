@@ -28,8 +28,8 @@ void ButtonInput::begin()
 
 void ButtonInput::clearFlags()
 {
-#if ENABLE_PROJECT_MENUS
-    menuConfirmPending = false;
+#if ENABLE_PROJECT_MENUS || ENABLE_CAPTURE_GAME
+    confirmPending = false;
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
     instructionObserved = 255;
@@ -82,24 +82,28 @@ CheatButtonEvent ButtonInput::update(ButtonCallback onPrevious,
             gestureMask |= stableMask;
         }
     }
-#if ENABLE_PROJECT_MENUS
-    // In project menus, a short confirm fires on release so a hold can
-    // go back without first opening or executing the selected entry.
-    if (menuConfirmPending)
+#if ENABLE_PROJECT_MENUS || ENABLE_CAPTURE_GAME
+    // In screens with a hold action, short confirm waits for release.
+    if (confirmPending)
     {
         if (onConfirmHold == nullptr || (stableMask != 0 && stableMask != kConfirm))
-            menuConfirmPending = false;
+            confirmPending = false;
         else
         {
             const bool held = now - gestureStartedAt >= kLongPressMs;
             if (stableMask == 0 || held)
             {
-                menuConfirmPending = false;
+                confirmPending = false;
                 waitForRelease = stableMask != 0;
                 gestureMask = 0;
-                lastShortPressAt = now;
-                const ButtonCallback callback = held ? onConfirmHold : onConfirm;
-                if (callback != nullptr) callback();
+                const ButtonCallback callback = held ? onConfirmHold :
+                                                confirmShortAllowed ? onConfirm : nullptr;
+                if (callback != nullptr)
+                {
+                    lastShortPressAt = now;
+                    if (!confirmShortAllowed && onAnyPress != nullptr) onAnyPress();
+                    callback();
+                }
             }
             return CheatButtonEvent::None;
         }
@@ -107,23 +111,26 @@ CheatButtonEvent ButtonInput::update(ButtonCallback onPrevious,
 #endif
     // Normal single buttons dispatch on the first observed down edge, without
     // debounce or release delay. Wake presses and cheat holds stay consumed.
-    if (previousMask == 0 && stableMask != 0 && !waitForRelease && !cheatMode &&
-        (lastShortPressAt == 0 || now - lastShortPressAt >= cooldownMs))
+    if (previousMask == 0 && stableMask != 0 && !waitForRelease && !cheatMode)
     {
-        ButtonCallback callback = stableMask == kPrevious ? onPrevious :
-                                  stableMask == kNext ? onNext :
-                                  stableMask == kConfirm ? onConfirm : nullptr;
+        const bool shortAllowed = lastShortPressAt == 0 || now - lastShortPressAt >= cooldownMs;
+#if ENABLE_PROJECT_MENUS || ENABLE_CAPTURE_GAME
+        if (stableMask == kConfirm && onConfirmHold != nullptr)
+        {
+            confirmPending = true;
+            confirmShortAllowed = shortAllowed;
+            if (shortAllowed && onAnyPress != nullptr) onAnyPress();
+            return CheatButtonEvent::None;
+        }
+#endif
+        const ButtonCallback callback = shortAllowed
+            ? stableMask == kPrevious ? onPrevious : stableMask == kNext ? onNext :
+              stableMask == kConfirm ? onConfirm : nullptr
+            : nullptr;
         if (callback != nullptr)
         {
             lastShortPressAt = now;
             if (onAnyPress != nullptr) onAnyPress();
-#if ENABLE_PROJECT_MENUS
-            if (stableMask == kConfirm && onConfirmHold != nullptr)
-            {
-                menuConfirmPending = true;
-                return CheatButtonEvent::None;
-            }
-#endif
             callback();
         }
     }

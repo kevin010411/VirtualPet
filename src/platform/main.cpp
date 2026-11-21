@@ -353,10 +353,15 @@ void onConfirmButton()
   noteInteraction();
 }
 
-#if ENABLE_PROJECT_MENUS
-void onProjectMenuBack()
+#if ENABLE_PROJECT_MENUS || ENABLE_CAPTURE_GAME
+void onConfirmHold()
 {
-  game.OnProjectMenuBack();
+#if ENABLE_CAPTURE_GAME
+  if (game.isCaptureActive()) game.OnCaptureCancel();
+#endif
+#if ENABLE_PROJECT_MENUS
+  if (game.isProjectMenuActive()) game.OnProjectMenuBack();
+#endif
   noteInteraction();
 }
 #endif
@@ -674,11 +679,14 @@ void loop()
       {
         if (captured) { buttons.clearFlags(); captured = false; }
 #endif
-        buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton, playButtonBeep
-#if ENABLE_PROJECT_MENUS
-                                     , game.isProjectMenuActive() ? onProjectMenuBack : nullptr
+        ButtonCallback holdAction = nullptr;
+#if ENABLE_CAPTURE_GAME
+        if (game.isCaptureActive()) holdAction = onConfirmHold;
 #endif
-                                     );
+#if ENABLE_PROJECT_MENUS
+        if (game.isProjectMenuActive()) holdAction = onConfirmHold;
+#endif
+        buttonEvent = buttons.update(onPreviousButton, onNextButton, onConfirmButton, playButtonBeep, holdAction);
 #if ENABLE_INSTRUCTION_RESPONSE
       }
 #endif
@@ -724,7 +732,14 @@ void loop()
   }
 
   const bool deadBeforeLoop = game.isDead();
-  if (g_gameReady && game.isReady()) game.loop_game();
+  if (g_gameReady && game.isReady())
+  {
+#if ENABLE_CAPTURE_GAME
+    game.loop_game(buttons.confirmHoldPending());
+#else
+    game.loop_game();
+#endif
+  }
   if (!deadBeforeLoop && game.isDead()) buttons.clearFlags();
   updateButtonBeep(millis());
 

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock, [switch]$ActionCounts, [switch]$Grid64, [switch]$Pages64, [switch]$Activation, [switch]$Recovery, [switch]$ActivationEvolution, [Alias('InvalidContracts')][switch]$CapacityLimits, [switch]$GuessGame, [switch]$GuessClassic, [switch]$Shop, [switch]$TransactionsOnly, [switch]$ManualDay, [switch]$ProjectMenus, [switch]$StatEvents)
+param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock, [switch]$ActionCounts, [switch]$Grid64, [switch]$Pages64, [switch]$Activation, [switch]$Recovery, [switch]$ActivationEvolution, [Alias('InvalidContracts')][switch]$CapacityLimits, [switch]$GuessGame, [switch]$GuessClassic, [switch]$Shop, [switch]$TransactionsOnly, [switch]$ManualDay, [switch]$ProjectMenus, [switch]$StatEvents, [switch]$CaptureGame)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($GuessClassic -and -not $UseRtcClock) { throw 'GuessClassic requires the production RTC clock.' }
@@ -27,20 +27,27 @@ $sources = @(
 if ($Shop) { $sources += 'src/shop/ShopSession.cpp' }
 if ($ProjectMenus) { $sources += 'src/controller/ProjectMenuSession.cpp' }
 if ($StatEvents) { $sources += 'src/controller/GameStatEvents.cpp', 'src/pet/PetStatEvents.cpp' }
+if ($CaptureGame) {
+ $sources += 'src/controller/CaptureOutcome.cpp', 'src/game/CaptureAssets.cpp', 'src/game/CaptureGame.cpp'
+}
+if ($GuessGame -or $GuessClassic -or $CaptureGame) { $sources += 'src/controller/MinigameController.cpp' }
+if ($GuessGame -or $GuessClassic) { $sources += 'src/game/GuessItemGame.cpp' }
 $eventProfile = if ($StatEvents) { '-DAPP_MAX_SCREEN_RULES=95' }
-$outputPath = if ($StatEvents) { '.pio/stat_event_firmware_host.exe' } elseif ($Shop) { '.pio/shop_firmware_host.exe' } elseif ($ProjectMenus) { '.pio/project_menu_firmware_host.exe' } else { '.pio/collection_catalog_host.exe' }
+$outputPath = if ($CaptureGame) { '.pio/capture_firmware_host.exe' } elseif ($StatEvents) { '.pio/stat_event_firmware_host.exe' } elseif ($Shop) { '.pio/shop_firmware_host.exe' } elseif ($ProjectMenus) { '.pio/project_menu_firmware_host.exe' } else { '.pio/collection_catalog_host.exe' }
 Push-Location $repoRoot
 try {
  New-Item -ItemType Directory -Force .pio | Out-Null
  & g++ -std=c++17 -O1 -ffunction-sections -fdata-sections '-Wl,--gc-sections' `
   "-DCOLLECTION_USE_RTC=$([int]$UseRtcClock.IsPresent)" `
   "-DENABLE_STAT_EVENTS=$([int]$StatEvents.IsPresent)" `
+  "-DENABLE_CAPTURE_GAME=$([int]$CaptureGame.IsPresent)" `
+  "-DENABLE_COLLECTION_GAME_EVENTS=$([int]$CaptureGame.IsPresent)" `
   $eventProfile `
   "-DENABLE_PROJECT_MENUS=$([int]$ProjectMenus.IsPresent)" `
   "-DENABLE_SHOP=$([int]$Shop.IsPresent)" -DENABLE_DEBUG=0 -DENABLE_COLLECTION_CATALOG=1 "-DENABLE_GUESS_GAME=$([int]($GuessGame.IsPresent -or $GuessClassic.IsPresent))" -DENABLE_GUESS_GAME_SINGLE_ROUND=1 "-DENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT=$([int](-not $GuessClassic.IsPresent))" `
   "-DENABLE_APPEARANCE_SELECTION=$([int]($Activation.IsPresent -or $ActivationEvolution.IsPresent))" "-DENABLE_COMMAND_OUTFIT=$([int]($Activation.IsPresent -or $ActivationEvolution.IsPresent))" -DENABLE_COMMAND_PREDICT=0 `
-  -Itest/collection_catalog -Itest/host_stubs -Iinclude @sources $(if ($Activation -or $ActivationEvolution) { 'src/appearance/AppearanceSelectionController.cpp' }) $(if ($GuessGame -or $GuessClassic) { 'src/controller/MinigameController.cpp'; 'src/game/GuessItemGame.cpp' }) -o $outputPath
+  -Itest/collection_catalog -Itest/host_stubs -Iinclude @sources $(if ($Activation -or $ActivationEvolution) { 'src/appearance/AppearanceSelectionController.cpp' }) -o $outputPath
  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
- & $outputPath ([IO.Path]::GetFullPath($FixtureRoot)) $(if ($StatEvents) { 'stat-events' } elseif ($TransactionsOnly) { 'transactions' } elseif ($ManualDay) { 'manual-day' } elseif ($Shop) { 'shop' } elseif ($ProjectMenus) { 'project-menus' } elseif ($GuessClassic) { 'guess-classic' } elseif ($GuessGame) { 'guess' } elseif ($CapacityLimits) { 'capacity' } elseif ($Recovery) { 'recovery' } elseif ($ActivationEvolution) { 'activation-evolution' } elseif ($Activation) { 'activation' } elseif ($ActionCounts) { 'counts' } elseif ($Pages64) { 'pages64' } elseif ($Grid64) { 'grid64' } else { 'single' })
+ & $outputPath ([IO.Path]::GetFullPath($FixtureRoot)) $(if ($CaptureGame) { 'capture' } elseif ($StatEvents) { 'stat-events' } elseif ($TransactionsOnly) { 'transactions' } elseif ($ManualDay) { 'manual-day' } elseif ($Shop) { 'shop' } elseif ($ProjectMenus) { 'project-menus' } elseif ($GuessClassic) { 'guess-classic' } elseif ($GuessGame) { 'guess' } elseif ($CapacityLimits) { 'capacity' } elseif ($Recovery) { 'recovery' } elseif ($ActivationEvolution) { 'activation-evolution' } elseif ($Activation) { 'activation' } elseif ($ActionCounts) { 'counts' } elseif ($Pages64) { 'pages64' } elseif ($Grid64) { 'grid64' } else { 'single' })
  exit $LASTEXITCODE
 } finally { Pop-Location }

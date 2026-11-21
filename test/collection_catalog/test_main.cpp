@@ -20,6 +20,9 @@
 #include "common/FirmwareRandom.h"
 #include "collection/CollectionCatalog.h"
 #include "appearance/RuntimeTableAppearance.h"
+#if ENABLE_CAPTURE_GAME
+#include "common/Crc32.h"
+#endif
 
 unsigned long hostMillis = 0;
 
@@ -43,6 +46,138 @@ static void mountBundle(SdFat &sd, const std::filesystem::path &root)
         sd.seedReadOnly(path.c_str(), bytes);
     }
 }
+
+#if ENABLE_CAPTURE_GAME
+static void verifyCapture(const std::filesystem::path &root, bool shouldPause)
+{
+    constexpr uint16_t cardBackground = 0x1168;
+    constexpr uint16_t scoreBackground = 0x11e9;
+    SdFat sd;
+    mountBundle(sd, root);
+    Adafruit_ST7735 display;
+    Pet pet;
+    PetStorage storage(&sd);
+    AssetResources resources(&sd);
+    Renderer renderer(&display, resources);
+    SdAppearanceLoader loader(&sd);
+    Game game(pet, storage, renderer, resources, loader);
+    assert(game.setup_game());
+    tick(game, 1000);
+    pet.setStageDays(10);
+    assert(game.saveNow());
+    const uint32_t before = storage.lastSaveSequence();
+
+    const auto start = [&]
+    {
+        FirmwareRandom::seed(1);
+        game.OnConfirmKey();
+        assert(game.isCaptureActive());
+    };
+    const auto catchFish = [&]
+    {
+        game.OnConfirmKey();
+        tick(game, hostMillis + 850);
+    };
+    const auto readCard = [&]
+    {
+        unsigned pages = 0;
+        while (display.screen.front() == cardBackground && pages < 16)
+        {
+            game.OnConfirmKey();
+            ++pages;
+        }
+        assert(pages > 1 && pages < 16);
+    };
+    const auto assertUnchanged = [&]
+    {
+        assert(pet.stageDays() == 10 && pet.persistentState().captureSeenMask == 0 && !pet.isCollectionOwned(0));
+        assert(storage.lastSaveSequence() == before);
+    };
+
+    start();
+    constexpr size_t timerTopMiddle = 128 + 2;
+    assert(display.screen[timerTopMiddle] == 0xffff);
+    tick(game, hostMillis + 1000);
+    assert(display.screen[timerTopMiddle] == 0x1026);
+    catchFish();
+    assert(display.screen.front() == cardBackground);
+    assertUnchanged();
+    game.OnCaptureCancel();
+    tick(game, hostMillis + 1);
+    assert(!game.isCaptureActive());
+    assertUnchanged();
+
+    start();
+    catchFish();
+    assert(display.screen.front() == cardBackground);
+    tick(game, hostMillis + 6000);
+    assert(display.screen.front() == cardBackground);
+    readCard();
+    if (shouldPause)
+    {
+        tick(game, hostMillis + 1000);
+        assert(display.screen.front() != scoreBackground);
+    }
+    hostMillis += shouldPause ? 4000 : 1;
+    game.loop_game(true); // A center hold already in progress crosses the deadline.
+    assert(display.screen.front() != scoreBackground);
+    assertUnchanged();
+    game.OnCaptureCancel();
+    tick(game, hostMillis + 1);
+    assertUnchanged();
+
+    start();
+    catchFish();
+    assert(display.screen.front() == cardBackground);
+    readCard();
+    assertUnchanged();
+    tick(game, hostMillis + 5001);
+    assert(display.screen.front() == scoreBackground);
+    assert(pet.stageDays() == 12 && pet.persistentState().captureSeenMask == 1 && pet.isCollectionOwned(0));
+    assert(storage.lastSaveSequence() == before + 1);
+
+    Pet restored;
+    PetStorage rebootStorage(&sd);
+    Game reboot(restored, rebootStorage, renderer, resources, loader);
+    assert(reboot.setup_game() && restored.stageDays() == 12 && restored.isCollectionOwned(0));
+    tick(reboot, hostMillis + 1000);
+    FirmwareRandom::seed(1);
+    reboot.OnConfirmKey();
+    reboot.OnConfirmKey();
+    tick(reboot, hostMillis + 850);
+    assert(display.screen.front() != cardBackground);
+    sd.limitWrite(12, 0, 0);
+    tick(reboot, hostMillis + 5001);
+    assert(restored.stageDays() == 12 && restored.persistentState().captureSeenMask == 1);
+    Pet recovered;
+    PetStorage recovery(&sd);
+    assert(recovery.load(recovered, pet.persistentState().schemaFingerprint) && recovered.stageDays() == 12);
+    puts("[PASS] Capture bundle: countdown, card paging and clock policy, cancellation before settlement, committed first catch after reboot, and failed-write rollback");
+}
+
+static void verifyPreCaptureSave()
+{
+    SdFat sd;
+    Pet old;
+    old.setSchemaFingerprint(123);
+    old.setStageDays(42);
+    old.configureCollection(456);
+    old.acquireCollection(63);
+    PersistedPetState state = old.persistentState();
+    state.version = Pet::kPetStatePreCaptureVersion;
+    const auto *bytes = reinterpret_cast<const uint8_t *>(&state);
+    constexpr size_t oldCrcAt = offsetof(PersistedPetState, captureTargetFingerprint);
+    state.captureTargetFingerprint = Integrity::crc32(bytes, oldCrcAt);
+    constexpr size_t oldSize = ENABLE_SHOP ? 560 : 400;
+    sd.seedReadOnly("/state_a.bin", std::vector<uint8_t>(bytes, bytes + oldSize));
+    Pet restored;
+    PetStorage storage(&sd);
+    assert(storage.load(restored, 123));
+    assert(restored.stageDays() == 42 && restored.isCollectionOwned(63));
+    assert(restored.persistentState().captureSeenMask == 0);
+    puts("[PASS] Pre-capture saves retain pet values and collections");
+}
+#endif
 
 #if COLLECTION_USE_RTC
 static void verifyClassicGuess(const std::filesystem::path &root)
@@ -489,6 +624,14 @@ static void verifyBingbingEvents(const std::filesystem::path &root)
 
 int main(int argc, char **argv)
 {
+#if ENABLE_CAPTURE_GAME
+    if (argc == 3 && (strcmp(argv[2], "capture") == 0 || strcmp(argv[2], "capture-live-clock") == 0))
+    {
+        verifyPreCaptureSave();
+        verifyCapture(argv[1], strcmp(argv[2], "capture") == 0);
+        return 0;
+    }
+#endif
     assert(argc == 2 || argc == 3);
 #if ENABLE_STAT_EVENTS
     if (argc == 3 && std::string(argv[2]) == "stat-events") { verifyBingbingEvents(argv[1]); return 0; }

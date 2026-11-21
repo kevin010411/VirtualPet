@@ -66,6 +66,26 @@ void Pet::retainCollectionFrom(const PersistedPetState &previous)
     st.collectionProgressFingerprint = previous.collectionProgressFingerprint;
     memcpy(st.collectionProgress, previous.collectionProgress, sizeof(st.collectionProgress));
 #endif
+#if ENABLE_CAPTURE_GAME
+    st.captureTargetFingerprint = previous.captureTargetFingerprint;
+    st.captureSeenMask = previous.captureSeenMask;
+#endif
+}
+#endif
+
+#if ENABLE_CAPTURE_GAME
+bool Pet::recordFirstCapture(uint32_t fingerprint, uint8_t slot)
+{
+    if (fingerprint == 0) return false;
+    if (st.captureTargetFingerprint != fingerprint)
+    {
+        st.captureTargetFingerprint = fingerprint;
+        st.captureSeenMask = 0;
+    }
+    const uint64_t bit = 1ULL << slot;
+    if ((st.captureSeenMask & bit) != 0) return false;
+    st.captureSeenMask |= bit;
+    return true;
 }
 #endif
 #if ENABLE_DEATH

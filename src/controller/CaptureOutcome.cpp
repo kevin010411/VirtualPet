@@ -5,6 +5,9 @@
 #include "collection/CollectionGameEvent.h"
 #include "pet/Pet.h"
 #include "resources/AssetResources.h"
+#if ENABLE_COLLECTION_CATALOG
+#include "collection/CollectionCatalog.h"
+#endif
 #if ENABLE_COLLECTION_GAME_EVENTS
 #include <string.h>
 #endif
@@ -29,10 +32,10 @@ void applyDelta(const PetBehaviorConfig &config, PetStatSnapshot &values, uint8_
 
 bool Game::onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *target,
                             const CollectionRoundStats &round, int32_t score,
-                            uint16_t &increasedStats)
+                            CatchResult &result)
 {
-    const PersistedPetState before = pet.persistentState();
-    PetStatSnapshot values = pet.statSnapshot();
+    const PersistedPetState before = capturePet.persistentState();
+    PetStatSnapshot values = capturePet.statSnapshot();
     if (target != nullptr && target->group != CaptureAssets::noSlot)
     {
         CaptureAssets::Group group;
@@ -71,38 +74,53 @@ bool Game::onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *
     if (changed)
     {
         if (petBehaviorConfig.statCount &&
-            !pet.commitPetStats(values.customStats, petBehaviorConfig.statCount)) return false;
-        pet.setStageDays(values.stage_days);
+            !capturePet.commitPetStats(values.customStats, petBehaviorConfig.statCount)) return false;
+        capturePet.setStageDays(values.stage_days);
+    }
+    if (target != nullptr)
+    {
+        result.firstCatch = capturePet.recordFirstCapture(assets.targetFingerprint(), target->slot);
+        changed |= result.firstCatch;
     }
 #if ENABLE_COLLECTION_CATALOG
     if (petBehaviorConfig.collectionFingerprint != 0)
     {
         if (target != nullptr && target->collection != CaptureAssets::noSlot &&
-            !pet.isCollectionOwned(target->collection))
+            !capturePet.isCollectionOwned(target->collection))
         {
-            pet.acquireCollection(target->collection);
+            capturePet.acquireCollection(target->collection);
             changed = true;
         }
 #if ENABLE_COLLECTION_GAME_EVENTS
         const auto event = target == nullptr ? CollectionGameEvent::CaptureRound : CollectionGameEvent::CaptureCatch;
-        if (!recordCollectionGameEvent(resources.sdCard(), petBehaviorConfig, pet, before, event,
+        if (!recordCollectionGameEvent(resources.sdCard(), petBehaviorConfig, capturePet, before, event,
                                        CaptureAssets::noSlot, &round))
-        {
-            pet.restoreState(before);
             return false;
-        }
-        const auto &after = pet.persistentState();
+        const auto &after = capturePet.persistentState();
         changed |= before.collectionProgressFingerprint != after.collectionProgressFingerprint ||
             memcmp(before.collectionProgress, after.collectionProgress, sizeof(before.collectionProgress)) != 0;
 #endif
+        if (target != nullptr && changed)
+        {
+            // Preserve unlocks from intermediate values in rounds that finish.
+            bool collectionChanged = false;
+            if (!evaluateCollectionCatalog(resources.sdCard(), petBehaviorConfig, capturePet, collectionChanged))
+                return false;
+        }
     }
 #endif
-    if (changed && petSaves.saveCollectionProgress(true, true) != PetSaveResult::Persisted)
+    captureChanged |= changed;
+    result.increasedStats = gained;
+    if (target == nullptr && captureChanged)
     {
-        pet.restoreState(before);
-        return false;
+        const PersistedPetState beforeRound = pet.persistentState();
+        if (!pet.restoreState(capturePet.persistentState())) return false;
+        if (petSaves.saveCollectionProgress(true, true) != PetSaveResult::Persisted)
+        {
+            pet.restoreState(beforeRound);
+            return false;
+        }
     }
-    increasedStats = gained;
     return true;
 }
 #endif

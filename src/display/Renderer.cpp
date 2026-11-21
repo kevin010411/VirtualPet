@@ -59,6 +59,36 @@ Renderer::Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resourcesRef, SPICl
 }
 
 #if ENABLE_CAPTURE_GAME
+namespace
+{
+void drawCaptureTimer(uint16_t *pixels, uint16_t seconds)
+{
+    // Three columns by five rows, top-left bit first.
+    constexpr uint16_t glyphs[] = {0x7b6f, 0x2c97, 0x73e7, 0x73cf, 0x5bc9,
+                                   0x79cf, 0x79ef, 0x7292, 0x7bef, 0x7bcf, 0x0716};
+    uint8_t digits[3];
+    uint8_t count = 0;
+    do
+    {
+        digits[count++] = seconds % 10;
+        seconds /= 10;
+    } while (seconds);
+    for (int y = 0; y < 7; ++y)
+    {
+        uint16_t *row = pixels + y * CaptureAssets::screenWidth;
+        for (int x = 0; x < 4 * (count + 1) + 1; ++x) row[x] = 0x1026;
+    }
+    for (uint8_t index = 0; index <= count; ++index)
+    {
+        const uint16_t glyph = glyphs[index == count ? 10 : digits[count - 1 - index]];
+        for (int y = 0; y < 5; ++y)
+            for (int x = 0; x < 3; ++x)
+                if (glyph & (1U << (14 - 3 * y - x)))
+                    pixels[(y + 1) * CaptureAssets::screenWidth + 1 + 4 * index + x] = 0xFFFF;
+    }
+}
+}
+
 bool Renderer::drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame &frame, uint32_t bands)
 {
     constexpr int width = CaptureAssets::screenWidth;
@@ -104,25 +134,44 @@ bool Renderer::drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame 
             }
         }
 
-        tft->startWrite();
-        tft->setAddrWindow(0, top, width, rows);
-        bool sent = true;
+        if (band == 0) drawCaptureTimer(pixels, frame.secondsLeft);
+        if (!sendCaptureBand(pixels, top)) return false;
+    }
+    return true;
+}
+
+bool Renderer::sendCaptureBand(uint16_t *pixels, uint8_t top)
+{
+    constexpr int width = CaptureAssets::screenWidth;
+    constexpr int rows = CaptureGame::bandRows;
+    tft->startWrite();
+    tft->setAddrWindow(0, top, width, rows);
+    bool sent = true;
 #if defined(STM32F103xB)
+    {
+        TftDmaTransfer dma(pixelSpi);
+        if (dma.active())
         {
-            TftDmaTransfer dma(pixelSpi);
-            if (dma.active())
-            {
-                sent = dma.send(pixels, width * rows);
-                sent = dma.finish() && sent;
-            }
-            else
-                tft->writePixels(pixels, width * rows);
+            sent = dma.send(pixels, width * rows);
+            sent = dma.finish() && sent;
         }
+        else
+            tft->writePixels(pixels, width * rows);
+    }
 #else
-        tft->writePixels(pixels, width * rows);
+    tft->writePixels(pixels, width * rows);
 #endif
-        tft->endWrite();
-        if (!sent) return false;
+    tft->endWrite();
+    return sent;
+}
+
+bool Renderer::showCaptureCard(CaptureAssets &assets, const CaptureAssets::Card &card, uint8_t page)
+{
+    uint16_t *pixels = state->lineBuffer;
+    for (uint8_t y = 0; y < CaptureAssets::screenHeight; y += CaptureGame::bandRows)
+    {
+        if (!assets.readCardRows(card, page, y, CaptureGame::bandRows, pixels) ||
+            !sendCaptureBand(pixels, y)) return false;
     }
     return true;
 }

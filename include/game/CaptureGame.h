@@ -10,9 +10,15 @@ class Renderer;
 class CaptureOutcomeHost
 {
 public:
+    struct CatchResult
+    {
+        uint16_t increasedStats = 0;
+        bool firstCatch = false;
+    };
+
     virtual bool onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *target,
                                   const CollectionRoundStats &round, int32_t score,
-                                  uint16_t &increasedStats) = 0;
+                                  CatchResult &result) = 0;
 protected:
     ~CaptureOutcomeHost() = default;
 };
@@ -33,20 +39,26 @@ public:
     struct Frame
     {
         Layer layers[CaptureAssets::maxFish + 1];
+        uint16_t secondsLeft;
         uint8_t layerCount;
         uint8_t hookX, lineStart, lineEnd;
     };
 
     bool start(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes);
     void cancel();
-    void update();
+    void update(bool confirmPending);
     void redraw();
     void move(int direction);
     void confirm();
     bool active() const { return state_ != State::Closed; }
+    bool clockRunning() const
+    {
+        return state_ == State::Swimming || state_ == State::Drop ||
+               (state_ == State::Card && !assets_.scene().pauseReading);
+    }
 
 private:
-    enum class State : uint8_t { Closed, Swimming, Drop, Result, ReadFailed };
+    enum class State : uint8_t { Closed, Swimming, Drop, Card, Result, ReadFailed };
 
     struct Fish
     {
@@ -74,6 +86,7 @@ private:
     Renderer *renderer_ = nullptr;
     CaptureOutcomeHost *outcomes_ = nullptr;
     CollectionRoundStats round_ = {};
+    CaptureAssets::Card card_ = {};
     uint64_t caughtTargets_ = 0;
     State state_ = State::Closed;
     Fish fish_[CaptureAssets::maxFish] = {};
@@ -81,10 +94,13 @@ private:
     uint32_t dropStart_ = 0;
     uint32_t frameAt_ = 0;
     uint32_t previousBands_ = 0;
+    uint32_t cardStarted_ = 0;
     uint16_t turnAt_ = 0, hookTurnY_ = 0, hitAt_ = 0;
+    uint16_t drawnSeconds_ = 0;
     int32_t score_ = 0;
     int8_t caught_ = -1;
     uint8_t hookX_ = 0;
+    uint8_t cardPage_ = 0;
 };
 
 #endif

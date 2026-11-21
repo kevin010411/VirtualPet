@@ -68,8 +68,11 @@ Game::Game(Pet &petRef, PetStorage &petStorageRef, Renderer &rendererRef, AssetR
 Game::~Game()
     = default;
 
-void Game::loop_game()
+void Game::loop_game(bool confirmPending)
 {
+#if !ENABLE_CAPTURE_GAME && !ENABLE_INSTRUCTION_RESPONSE && !ENABLE_COMMAND_PREDICT && !ENABLE_GUESS_GAME
+    (void)confirmPending;
+#endif
     if (!initialized)
         return;
 
@@ -130,11 +133,11 @@ void Game::loop_game()
     if (flow.is(AppStage::Minigame))
     {
         const uint32_t previousDays = pet.stageDays();
-        minigame->update();
+        minigame->update(confirmPending);
+        cheatEvolutionPending |= pet.stageDays() != previousDays;
 #if ENABLE_CAPTURE_GAME
         if (minigame->capturesScreen()) return;
 #endif
-        cheatEvolutionPending |= pet.stageDays() != previousDays;
 #if ENABLE_INSTRUCTION_RESPONSE
         uint32_t instructionMask = 0;
         uint8_t instructionCount = 0;
@@ -417,6 +420,9 @@ bool Game::hasTransientAnimation() const
 
 bool Game::preventsIdleSleep() const
 {
+#if ENABLE_CAPTURE_GAME
+    if (flow.is(AppStage::Minigame) && minigame->captureClockRunning()) return true;
+#endif
 #if ENABLE_STAT_EVENTS
     if (statEventPageCount || committedEvolution.speciesSlot) return true;
 #endif
@@ -425,6 +431,18 @@ bool Game::preventsIdleSleep() const
 #endif
     return animations->hasFinitePlayback();
 }
+
+#if ENABLE_CAPTURE_GAME
+bool Game::isCaptureActive() const
+{
+    return flow.is(AppStage::Minigame) && minigame->capturesScreen();
+}
+
+void Game::OnCaptureCancel()
+{
+    if (isCaptureActive()) minigame->reset();
+}
+#endif
 
 void Game::stopPlaybackForSleep()
 {
@@ -807,6 +825,9 @@ bool Game::setStageDaysForCheat(uint32_t value)
         evolution->isActive())
         return false;
 
+#if ENABLE_CAPTURE_GAME
+    OnCaptureCancel();
+#endif
     const uint32_t previous = pet.stageDays();
     pet.setStageDays(value);
     if (petSaves.requestSave() == PetSaveResult::Failed)
@@ -1003,6 +1024,8 @@ void Game::handleSystemCommandRequest(const CommandResult &result)
     {
         if (minigame->startCapture(renderer, resources, *this))
         {
+            capturePet.restoreState(pet.persistentState());
+            captureChanged = false;
             petClock.pause(latestRtcSeconds);
             flow.enter(AppStage::Minigame);
         }

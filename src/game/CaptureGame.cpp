@@ -145,6 +145,8 @@ bool CaptureGame::draw(uint32_t age, bool full)
     frame.hookX = hookX_;
     frame.lineStart = scene.startY;
     frame.lineEnd = hookTop;
+    const uint32_t elapsedSeconds = age / 1000UL;
+    frame.secondsLeft = elapsedSeconds < scene.durationSeconds ? scene.durationSeconds - elapsedSeconds : 0;
     for (uint8_t index = 0; index < scene.density; ++index)
     {
         const Fish &fish = fish_[index];
@@ -167,8 +169,10 @@ bool CaptureGame::draw(uint32_t age, bool full)
         const auto &layer = frame.layers[index];
         bands |= verticalBands(layer.y, layer.y + layer.sprite->height);
     }
-    if (!renderer_->drawCaptureBands(assets_, frame, full ? fullFrame : bands | previousBands_))
+    const uint32_t dirtyTimer = frame.secondsLeft != drawnSeconds_ ? 1 : 0;
+    if (!renderer_->drawCaptureBands(assets_, frame, full ? fullFrame : bands | previousBands_ | dirtyTimer))
         return false;
+    drawnSeconds_ = frame.secondsLeft;
     previousBands_ = bands;
     return true;
 }
@@ -187,10 +191,21 @@ bool CaptureGame::collect(const CaptureAssets::Target &caught)
         }
     }
     score_ += caught.points;
-    uint16_t increased = 0;
-    if (!outcomes_->onCaptureOutcome(assets_, &caught, round_, score_, increased)) return false;
+    CaptureOutcomeHost::CatchResult result;
+    if (!outcomes_->onCaptureOutcome(assets_, &caught, round_, score_, result)) return false;
     for (uint8_t stat = 0; stat <= CaptureAssets::stageDaysSlot; ++stat)
-        if ((increased & (1U << stat)) != 0) ++round_.statIncreases[stat];
+        if ((result.increasedStats & (1U << stat)) != 0) ++round_.statIncreases[stat];
+    if (result.firstCatch)
+    {
+        if (!assets_.readCard(caught.slot, card_)) return false;
+        if (card_.pages)
+        {
+            cardStarted_ = millis();
+            cardPage_ = 0;
+            state_ = State::Card;
+            return renderer_->showCaptureCard(assets_, card_, cardPage_);
+        }
+    }
     return true;
 }
 
@@ -205,10 +220,14 @@ void CaptureGame::redraw()
 {
     if (state_ == State::Result) renderer_->showCaptureScore(score_);
     else if (state_ == State::ReadFailed) renderer_->showResourceError("/capture.data");
+    else if (state_ == State::Card)
+    {
+        if (!renderer_->showCaptureCard(assets_, card_, cardPage_)) readFailed();
+    }
     else if (state_ != State::Closed && !draw(millis() - started_, true)) readFailed();
 }
 
-void CaptureGame::update()
+void CaptureGame::update(bool confirmPending)
 {
     if (state_ != State::Swimming && state_ != State::Drop) return;
     const uint32_t age = millis() - started_;
@@ -216,6 +235,7 @@ void CaptureGame::update()
     bool readable = true;
     if (state_ == State::Drop && age - dropStart_ >= 2U * turnAt_)
     {
+        state_ = State::Swimming;
         if (caught_ >= 0)
         {
             Fish &fish = fish_[caught_];
@@ -224,18 +244,18 @@ void CaptureGame::update()
         }
         else
             score_ += scene.missPoints;
-        state_ = State::Swimming;
     }
     if (!readable)
     {
         readFailed();
         return;
     }
-    if (state_ == State::Swimming && age >= 1000UL * scene.durationSeconds)
+    if (state_ == State::Card) return;
+    if (state_ == State::Swimming && !confirmPending && age >= 1000UL * scene.durationSeconds)
     {
         assets_.close();
-        uint16_t increased = 0;
-        if (!outcomes_->onCaptureOutcome(assets_, nullptr, round_, score_, increased))
+        CaptureOutcomeHost::CatchResult result;
+        if (!outcomes_->onCaptureOutcome(assets_, nullptr, round_, score_, result))
         {
             readFailed();
             return;
@@ -266,6 +286,18 @@ void CaptureGame::confirm()
     if (state_ == State::Result || state_ == State::ReadFailed)
     {
         cancel();
+        return;
+    }
+    if (state_ == State::Card)
+    {
+        if (++cardPage_ < card_.pages)
+        {
+            redraw();
+            return;
+        }
+        if (assets_.scene().pauseReading) started_ += millis() - cardStarted_;
+        state_ = State::Swimming;
+        redraw();
         return;
     }
     if (state_ != State::Swimming) return;
