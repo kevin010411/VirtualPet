@@ -4,6 +4,7 @@
 #if ENABLE_SHOP
 #include "display/DisplayRect.h"
 #include "resources/AssetRuntimeContract.h"
+#include "shop/ShopConfirmation.h"
 
 class Pet;
 class PetSaveController;
@@ -44,6 +45,7 @@ private:
     AssetData::BundleId bundle = {};
     uint32_t fingerprint = 0;
     uint32_t boundsOffset = 0;
+    uint32_t confirmationOffset = 0;
     uint16_t art = 0;
     uint8_t wallet = 255, itemCount = 0, productCount = 0, speciesCount = 0, rowHeight = 0;
     Rect walletRect = {}, quantityRect = {}, listRect = {};
@@ -66,13 +68,16 @@ private:
     uint32_t itemOffset(uint8_t slot) const;
     bool item(SdBaseFile &file, uint8_t slot, uint8_t *row);
     bool product(SdBaseFile &file, uint8_t slot, uint8_t *row);
-    bool unlocked(const uint8_t *product) const;
+    ShopConfirmationNotice unlockNotice(const uint8_t *product) const;
+    ShopConfirmationNotice purchaseNotice(const uint8_t *offer, const uint8_t *item,
+                                          uint16_t owned, uint32_t balance) const;
     bool buildEntries();
     bool transact(AssetData::AnimationRef &animation);
     uint16_t frameFor(uint8_t entry) const;
     bool paint(bool full = false);
     bool paintFooter(bool full = false);
     bool paintConfirmation(uint16_t frame, uint8_t selected);
+    bool paintConfiguredConfirmation(uint8_t selected);
     bool show(uint16_t frame, Rect rect, const Rect *crop = nullptr);
     void number(Rect rect, uint32_t value);
 };

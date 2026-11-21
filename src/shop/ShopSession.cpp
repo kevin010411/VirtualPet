@@ -98,6 +98,14 @@ bool ShopSession::configure()
     // The optional trailer leaves the original Shop records at their old offsets.
     const uint32_t recordsEnd = itemOffset(itemCount) + static_cast<uint32_t>(productSize) * productCount;
     boundsOffset = !rowHeight && file.fileSize() > recordsEnd ? recordsEnd : 0;
+    const uint32_t boundsEnd = recordsEnd + (rowHeight ? 0 : sizeof(Rect) * (itemCount + productCount + 3));
+    confirmationOffset = 0;
+    uint8_t signature[4];
+    if (file.fileSize() >= boundsEnd + sizeof(signature))
+    {
+        if (!read(file, boundsEnd, signature, sizeof(signature))) return false;
+        if (memcmp(signature, "SCF1", sizeof(signature)) == 0) confirmationOffset = boundsEnd;
+    }
     return true;
 }
 
@@ -150,16 +158,29 @@ bool ShopSession::arrive(bool &changed)
     return true;
 }
 
-bool ShopSession::unlocked(const uint8_t *row) const
+ShopConfirmationNotice ShopSession::unlockNotice(const uint8_t *row) const
 {
     const uint8_t species = row[7];
     if (species && !(pet.st.shopVisited[species / 8] & (1U << (species & 7U))))
-        return false;
+        return ShopConfirmationNotice::Species;
     const uint8_t *condition = row + 10;
     for (uint8_t index = 0; index < row[9]; ++index, condition += 5)
         if (pet.customStat(condition[0]) < readU32(condition + 1))
-            return false;
-    return true;
+            return ShopConfirmationNotice::Condition;
+    return ShopConfirmationNotice::None;
+}
+
+ShopConfirmationNotice ShopSession::purchaseNotice(const uint8_t *offer, const uint8_t *row,
+                                                    uint16_t owned, uint32_t balance) const
+{
+    const ShopConfirmationNotice locked = unlockNotice(offer);
+    if (locked != ShopConfirmationNotice::None) return locked;
+    if (row[6] && owned) return ShopConfirmationNotice::Owned;
+    if (static_cast<uint32_t>(owned) + readU16(offer + 4) > readU16(row + 2))
+        return ShopConfirmationNotice::Capacity;
+    const uint32_t minimum = config.stats[wallet].minValue;
+    if (balance < minimum || balance - minimum < readU32(offer)) return ShopConfirmationNotice::Funds;
+    return ShopConfirmationNotice::None;
 }
 
 bool ShopSession::buildEntries()
@@ -182,7 +203,7 @@ bool ShopSession::buildEntries()
         {
             uint8_t row[productSize];
             if (!product(file, index, row)) return false;
-            if (!row[8] || unlocked(row)) entries[count++] = index;
+            if (!row[8] || unlockNotice(row) == ShopConfirmationNotice::None) entries[count++] = index;
         }
     }
     entries[count++] = navigation;
@@ -205,7 +226,7 @@ bool ShopSession::move(bool next)
     if (view == View::Confirm)
     {
         cancel = !cancel;
-        return paintFooter();
+        return confirmationOffset ? paint() : paintFooter();
     }
     if (view != View::Browse) return true;
     cursor = (cursor + (next ? 1 : count - 1)) % count;
@@ -260,7 +281,6 @@ bool ShopSession::transact(AssetData::AnimationRef &animation)
     }
     if (!item(file, slot, row)) return false;
     const uint16_t owned = pet.st.shopQuantities[slot];
-    const uint16_t capacity = readU16(row + 2);
     const bool permanent = row[6] != 0;
     view = View::Receipt;
     PetStatSnapshot values = pet.statSnapshot();
@@ -299,12 +319,13 @@ bool ShopSession::transact(AssetData::AnimationRef &animation)
     {
         const uint32_t price = readU32(offer);
         const uint16_t added = readU16(offer + 4);
-        if (!unlocked(offer)) { receipt = Locked; return true; }
-        if (permanent && owned) { receipt = Owned; return true; }
-        if (static_cast<uint32_t>(owned) + added > capacity) { receipt = Full; return true; }
-        const uint32_t balance = values.customStats[wallet];
-        if (balance < config.stats[wallet].minValue ||
-            balance - config.stats[wallet].minValue < price) { receipt = Funds; return true; }
+        const ShopConfirmationNotice notice = purchaseNotice(offer, row, owned, values.customStats[wallet]);
+        if (notice != ShopConfirmationNotice::None)
+        {
+            constexpr Footer notices[]{Browse, Locked, Locked, Owned, Full, Funds};
+            receipt = notices[static_cast<uint8_t>(notice)];
+            return true;
+        }
         values.customStats[wallet] -= price;
         nextQuantity = owned + added;
         receipt = Bought;
@@ -356,6 +377,14 @@ bool ShopSession::redraw()
 bool ShopSession::paint(bool full)
 {
     const uint8_t selected = entries[cursor];
+    if (confirmationOffset && view == View::Confirm)
+    {
+        if (!paintConfiguredConfirmation(selected)) return false;
+        paintedView = View::Confirm;
+        return true;
+    }
+    // Authored confirmation blocks can cover any part of the browse scene.
+    full |= confirmationOffset && paintedView == View::Confirm;
     const uint16_t current = frameFor(selected);
     const bool pageChanged = full || current != paintedFrame;
     const bool restoring = paintedView == View::Confirm && view != View::Confirm;
@@ -459,6 +488,36 @@ bool ShopSession::paintConfirmation(uint16_t frame, uint8_t selected)
     number({0, 120, 60, 16}, inventory ? pet.st.shopQuantities[selected] : readU32(row));
     number({68, 120, 60, 16}, readU16(row + 4));
     return true;
+}
+
+bool ShopSession::paintConfiguredConfirmation(uint8_t selected)
+{
+    const uint16_t background = firstEntryFrame + 2 * (itemCount + productCount + 3);
+    if (!show(background, screen)) return false;
+
+    ShopFile file;
+    if (!file.open(path, FILE_READ))
+    {
+        resources.recordAssetDataErrorResource(path);
+        return false;
+    }
+
+    ShopConfirmationValues values{};
+    ShopConfirmationNotice notice = ShopConfirmationNotice::None;
+    if (inventory)
+        values.owned = pet.st.shopQuantities[selected];
+    else
+    {
+        uint8_t offer[productSize], row[itemSize];
+        if (!product(file, selected, offer) || !item(file, offer[6], row)) return false;
+        values = {readU32(offer), readU16(offer + 4), pet.st.shopQuantities[offer[6]]};
+        notice = purchaseNotice(offer, row, values.owned, pet.customStat(wallet));
+    }
+
+    const uint16_t entry = inventory ? selected : itemCount + selected;
+    if (drawShopConfirmation(file, confirmationOffset, entry, cancel, values, notice, renderer)) return true;
+    resources.recordAssetDataErrorResource(path);
+    return false;
 }
 
 bool ShopSession::paintFooter(bool full)

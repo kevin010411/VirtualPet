@@ -459,8 +459,14 @@ static int verifyShop(const std::filesystem::path &root)
         assert(display.screen == incremental);
     };
     std::ifstream shopData(root / "shop.data", std::ios::binary);
-    shopData.seekg(25);
+    shopData.seekg(23);
+    const int items = shopData.get(), products = shopData.get();
     const bool list = shopData.get() == 16;
+    const int species = shopData.get();
+    shopData.seekg(39 + (129 + 2 * species) * items + 70 * products + (list ? 0 : 4 * (items + products + 3)));
+    char confirmationTag[4]{};
+    shopData.read(confirmationTag, sizeof(confirmationTag));
+    const bool configured = std::string(confirmationTag, sizeof(confirmationTag)) == "SCF1";
     size_t beforeMove = display.windows.size();
     game.OnRightKey(); // Product to inventory entry, with both rows in view in list mode.
     if (list)
@@ -488,8 +494,9 @@ static int verifyShop(const std::filesystem::path &root)
     assert(display.screen == browsing);
     const size_t beforeConfirm = display.windows.size();
     game.OnConfirmKey(); // Confirmation defaults to cancel
-    for (size_t i = beforeConfirm; i < display.windows.size(); ++i)
-        assert(display.windows[i].y >= 88);
+    if (!configured)
+        for (size_t i = beforeConfirm; i < display.windows.size(); ++i)
+            assert(display.windows[i].y >= 88);
     assert(display.screen != browsing);
     matchesFullRedraw();
     game.OnConfirmKey();
@@ -497,9 +504,18 @@ static int verifyShop(const std::filesystem::path &root)
     assert(pet.customStat(0) == 50 && pet.persistentState().shopQuantities[0] == 0);
     game.OnConfirmKey();
     const size_t beforeToggle = display.windows.size();
+    const auto returning = display.screen;
     game.OnLeftKey();
-    assert(display.windows.size() == beforeToggle + 1);
-    assert(display.windows.back().y == 144 && display.windows.back().height == 16);
+    if (configured)
+    {
+        assert(display.screen != returning);
+        matchesFullRedraw();
+    }
+    else
+    {
+        assert(display.windows.size() == beforeToggle + 1);
+        assert(display.windows.back().y == 144 && display.windows.back().height == 16);
+    }
     game.OnConfirmKey();
     assert(pet.customStat(0) == 43 && pet.persistentState().shopQuantities[0] == 2);
     matchesFullRedraw();

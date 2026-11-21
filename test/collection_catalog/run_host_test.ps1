@@ -24,7 +24,7 @@ $sources = @(
  'src/pet/RuntimeValueResolver.cpp', 'src/common/CopyResourceName.cpp',
  'src/common/FirmwareRandom.cpp', 'src/common/Crc32.cpp'
 )
-if ($Shop) { $sources += 'src/shop/ShopSession.cpp' }
+if ($Shop) { $sources += 'src/shop/ShopSession.cpp', 'src/shop/ShopConfirmation.cpp' }
 if ($ProjectMenus) { $sources += 'src/controller/ProjectMenuSession.cpp' }
 if ($StatEvents) { $sources += 'src/controller/GameStatEvents.cpp', 'src/pet/PetStatEvents.cpp' }
 if ($CaptureGame) {
