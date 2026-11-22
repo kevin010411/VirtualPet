@@ -1,14 +1,21 @@
 # 韌體文件
 
-本目錄只記錄現行韌體實作、操作與未完成工作。跨層產品規格由 Web 維護：
+## 跨端規格
 
-- [Pet Stats／Behavior／Action／Status／Evolution／存檔](E:/C++/virtualPet/web/.scratch/sd-driven-pet-stats/spec.md)
-- [Runtime Table](E:/C++/virtualPet/web/.scratch/binary-runtime-tables/spec.md)
-- [播放序列音訊](E:/C++/virtualPet/web/.scratch/sequence-audio/spec.md)
+從配對的 [VirtualPetWeb checkout](https://github.com/kevin010411/VirtualPetWeb)
+開啟 `contracts/README.md`。若 Web 在韌體的 `../../web`，可直接開啟
+[本機 Web–韌體契約](../../../web/contracts/README.md)。該入口涵蓋行為、持久化身分、
+動畫音訊、Runtime Table、SD 匯出和 Profile Resolver。
+
+Web 的 `.scratch/` 和韌體的 `.agent/` 保存歷史設計、交接與試驗紀錄。
+現行跨端規格及匯出器隨 Web 原始碼提供。
+
+## 韌體文件
 
 | 需要做什麼 | 文件 |
 | --- | --- |
 | 匯出、建置與驗證 | [開發流程](development-workflow.md) |
+| 依功能選擇 host 案例 | [Host 測試清單](../test/README.md) |
 | 查功能開關與產生來源 | [Profile flags](profile_feature_flags.md) |
 | 找模組與執行路徑 | [架構](architecture.md) |
 | 查播放／資源／保存 | [動畫](animation_scheduler.md)、[資源](renderer_asset_formats.md)、[存檔](pet_storage.md) |

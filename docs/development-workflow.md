@@ -1,36 +1,46 @@
 # 開發、匯出與驗證
 
-1. 先確認本批需求、責任與驗收，再改程式；跨層契約更新在 Web repository。
-2. 在 Web 保存並套用專案，匯出同一快照的 SD bundle 與 Profile Resolver ini。
-3. 使用產生的 ini 建置；不要依舊客戶名稱、文件範例或手改 header 啟用功能。
-4. 執行受影響 host 檢查，使用同一份 Web 匯出 fixture 驗證跨層行為。
-5. 記錄實際建置與實機驗收範圍，保留工作樹中其他任務的變更。
+## 建置 repo 基準
 
-## 建置
-
-完整 resolver 產物可替換 `platformio.ini`，或另存為完整設定並以 `-c` 指定。
-舊式只含一個 env 的 `profile.ini` 片段需併入其指定的基底；不能當成完整 ini。
+從韌體 repo 根目錄操作。安裝 PlatformIO Core 6.2.0，確認 `pio` 在 PATH 上。
+首次建置需要下載平台、工具鏈及函式庫。
+[`platformio.ini`](../platformio.ini) 固定基準的平台、編譯工具鏈和函式庫版本，
+並沿用已簽入的 `project_59` 功能及容量組合。
 
 ```powershell
-# 使用目前 platformio.ini 的 default_envs，避免寫死 Project ID。
-C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run
-# 指定另一份完整 resolver 設定。
-C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -c path\to\platformio.ini
+pio --version
+pio run
 ```
 
-將 Web 匯出的 SD ZIP 解壓到 SD 卡根目錄，保留 `assets/` 的路徑。
-更新二進位契約後，重新匯出整份 SD ZIP。 [SD 檔案與格式版本](renderer_asset_formats.md)
+成功後可在 `.pio/build/project_59/` 找到 `firmware.elf` 與 `firmware.bin`。
+此組態供 checkout 建置和比較使用。交付裝置時使用下方的 Web 專案產物。
+
+## 匯出與建置 Web 專案
+
+1. 在 Web 儲存專案變更並套用版面。
+2. 從管理後台為同一專案快照下載「專案設定包」與「SD 卡素材包」。匯出設定包時，依實際裝置選擇 MCU 與靜音設定。
+3. 將設定包中的 `platformio.ini` 解壓到獨立目錄。確認 `default_envs` 指向本次要建置的 `project_<id>`。
+4. 把 SD 卡素材包解壓至 SD 卡根目錄，保留 `assets/` 路徑和各功能資料檔。
+   更新執行契約時，重新匯出完整套件。[SD 檔案配置](renderer_asset_formats.md)
+5. 在韌體根目錄使用 `-c` 建置完整的 Resolver ini，將路徑換成步驟 3 的檔案。
+
+```powershell
+pio run -c 'path/to/exported/platformio.ini'
+```
+
+Resolver 根據專案功能、MCU 與容量產生完整設定，並有自己的相依宣告。
+要重跑同一交付版本，保留兩份 ZIP、韌體 Git revision 和實際解析的套件版本。
+舊式單一 env 的 `profile.ini` 片段需搭配該片段原本的基底。
+[契約與 Resolver 來源](README.md#跨端規格) · [韌體功能旗標](profile_feature_flags.md)
 
 ## 驗證與尺寸
 
-Host 入口在 `test/<功能>/run_host_test.ps1`；選項以各 script 的 `param` 為準。
-受旗標控制的行為需測開／關組態。此 repository 沒有 `scripts/verify.ps1`；
-Web 修改則依 Web 的 `AGENTS.md` 執行 canonical preflight／verify。
+依功能選擇 host 案例和相符的 Web 匯出 fixture。
+受旗標控制的行為應驗證適用的開啟和關閉組態。[Host 測試清單](../test/README.md)
 
 ```powershell
-pwsh -NoProfile -File test/pet_behavior_runtime/run_host_test.ps1
-pwsh -NoProfile -File test/runtime_table_behavior/run_host_test.ps1
-pwsh -NoProfile -File test/game_startup/run_host_test.ps1 -EvolutionOnly
+pwsh -NoProfile -NonInteractive -File test/run_host_tests.ps1 -List
+pwsh -NoProfile -NonInteractive -File test/run_host_tests.ps1 -Case pet-behavior
 ```
 
 完成建置後，以 `arm-none-eabi-size`／`nm` 檢查該 env 的新 ELF。

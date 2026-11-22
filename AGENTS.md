@@ -1,13 +1,12 @@
 # Cross-repository specification
 
-Before designing or changing Pet Stats, Pet Behavior, User Actions, Status,
-Evolution conditions, System Commands, pet persistence, SD initialization, or
-firmware profiles, read the authoritative cross-layer specification at:
+Before changing Pet Stats, Pet Behavior, User Actions, Status, Evolution, System Commands,
+pet persistence, animation audio, SD loading, or firmware profiles, follow the
+[Web–firmware contract entry](docs/README.md#跨端規格). Keep shared contracts in
+the Web repository and firmware implementation notes in this repository.
 
-`E:\C++\virtualPet\web\.scratch\sd-driven-pet-stats\spec.md`
-
-Do not duplicate that specification in this firmware repository. Keep firmware
-documentation limited to firmware-specific implementation and verification.
+For local builds and verification, use the [development workflow](docs/development-workflow.md)
+and [host test index](test/README.md).
 
 # Validation ownership
 

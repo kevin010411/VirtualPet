@@ -10,7 +10,7 @@ FirstStart 完成位元為 `0x2`，Dead 為 `0x4`；Daily Change 暫停計數與
 
 載入檢查存檔大小、magic、version、CRC，選有效且 sequence 最新的一筆。
 Schema／Project 不符時依 Session 政策開始新局，不做遷移；
-該 fingerprint 的定義由 [Web 規格](E:/C++/virtualPet/web/.scratch/sd-driven-pet-stats/spec.md) 擁有。
+Fingerprint 的輸入見[跨端規格](README.md#跨端規格)中的持久化身分。
 圖鑑與追蹤 counters 的相容性另由各自 fingerprint 決定。
 
 抓取遊戲啟用時，存檔含目標 fingerprint 與首次捕獲位元。回合正常結算時，這些位元與數值、圖鑑進度一起提交。上一版相容存檔會保留既有進度，首次捕獲欄位以空白紀錄開始。
