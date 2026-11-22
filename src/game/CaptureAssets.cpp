@@ -2,6 +2,7 @@
 #include "common/AppProfile.h"
 
 #if ENABLE_CAPTURE_GAME
+#include "common/FirmwareRandom.h"
 #include "common/SdBinaryRead.h"
 
 namespace
@@ -134,11 +135,19 @@ bool CaptureAssets::read(uint32_t offset, void *destination, size_t size)
     return file_.seekSet(offset) && readSdBinary(file_, destination, size) == static_cast<int>(size);
 }
 
-bool CaptureAssets::pickTarget(uint16_t roll, Target &target)
+bool CaptureAssets::pickTarget(Target &target, uint8_t excludedSlot)
 {
+    uint16_t weight = totalWeight_;
+    if (excludedSlot != noSlot && weight > weights_[excludedSlot])
+        weight -= weights_[excludedSlot];
+    else
+        excludedSlot = noSlot;
+
+    uint16_t roll = FirmwareRandom::below(weight);
     uint8_t slot = 0;
     for (; slot < targetCount_; ++slot)
     {
+        if (slot == excludedSlot) continue;
         if (roll < weights_[slot]) break;
         roll -= weights_[slot];
     }

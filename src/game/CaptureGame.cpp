@@ -12,6 +12,7 @@
 namespace
 {
 constexpr uint32_t frameIntervalMs = 50;
+constexpr uint32_t fishLifetimeMs = 5000;
 constexpr uint32_t fullFrame = (1UL << CaptureGame::bandCount) - 1UL;
 
 int roundedPixel(int halfPixels)
@@ -54,7 +55,6 @@ bool CaptureGame::start(Renderer &renderer, AssetResources &resources, CaptureOu
         return false;
     }
     started_ = millis();
-    frameAt_ = 0;
     return true;
 }
 
@@ -66,9 +66,9 @@ void CaptureGame::cancel()
     state_ = State::Closed;
 }
 
-bool CaptureGame::spawn(Fish &fish, uint32_t age)
+bool CaptureGame::spawn(Fish &fish, uint32_t age, uint8_t excludedSlot)
 {
-    if (!assets_.pickTarget(FirmwareRandom::below(assets_.totalWeight()), fish.target)) return false;
+    if (!assets_.pickTarget(fish.target, excludedSlot)) return false;
     fish.born = age;
     fish.offsetX = FirmwareRandom::below(fish.target.width * 2);
     fish.offsetY = FirmwareRandom::below(fish.target.height * 2);
@@ -100,21 +100,25 @@ uint16_t CaptureGame::hookY(uint32_t dropAge) const
     return start + (hookTurnY_ - start) * progress / turnAt_;
 }
 
-void CaptureGame::traceDrop(uint32_t age)
+void CaptureGame::traceDrop(uint32_t elapsed)
 {
+    if (caught_ >= 0) return;
     const auto &scene = assets_.scene();
     const uint16_t samples = (scene.depth - scene.startY) * 2;
-    // Search at half-pixel positions along the same path used to draw the hook.
-    for (uint16_t step = 0; step <= samples * 2U; ++step)
+    // Visit each elapsed half-pixel step so later samples can see replacement fish.
+    for (; dropStep_ <= samples * 2U; ++dropStep_)
     {
-        const uint16_t at = static_cast<uint32_t>(turnAt_) * step / samples;
+        const uint32_t at = static_cast<uint32_t>(turnAt_) * dropStep_ / samples;
+        if (at > elapsed) return;
+        const uint32_t sampleAge = dropStart_ + at;
         const int y = hookY(at);
         int nearest = 32767;
 
         for (uint8_t index = 0; index < scene.density; ++index)
         {
             const Fish &fish = fish_[index];
-            const auto point = position(fish, age + at);
+            if (sampleAge - fish.born >= fishLifetimeMs) continue;
+            const auto point = position(fish, sampleAge);
             const int dx = abs(point.x - 2 * hookX_);
             const int dy = abs(point.y - y);
             if (dx > fish.target.hitWidth || dy > fish.target.hitHeight) continue;
@@ -125,7 +129,6 @@ void CaptureGame::traceDrop(uint32_t age)
         }
 
         if (caught_ < 0) continue;
-        hitAt_ = at;
         if (at < turnAt_)
         {
             hookTurnY_ = y;
@@ -138,6 +141,17 @@ void CaptureGame::traceDrop(uint32_t age)
 bool CaptureGame::draw(uint32_t age, bool full)
 {
     const auto &scene = assets_.scene();
+    bool replacedFish = false;
+    for (uint8_t index = 0; index < scene.density; ++index)
+    {
+        Fish &fish = fish_[index];
+        if ((state_ == State::Drop && index == caught_) || age - fish.born < fishLifetimeMs) continue;
+        if (!spawn(fish, age, fish.target.slot)) return false;
+        replacedFish = true;
+    }
+    if (!full && !replacedFish && age - frameAt_ < frameIntervalMs) return true;
+    frameAt_ = age;
+
     const uint32_t dropAge = state_ == State::Drop ? age - dropStart_ : 0;
     const int hookTop = roundedPixel(hookY(dropAge));
     const int hookLeft = roundedPixel(2 * hookX_ - scene.hook.width);
@@ -150,9 +164,9 @@ bool CaptureGame::draw(uint32_t age, bool full)
     for (uint8_t index = 0; index < scene.density; ++index)
     {
         const Fish &fish = fish_[index];
+        const bool attached = state_ == State::Drop && index == caught_;
         const auto point = position(fish, age);
         const auto &sprite = fish.target.sprite;
-        const bool attached = state_ == State::Drop && index == caught_ && dropAge >= hitAt_;
         const int x = attached ? 2 * hookX_ : point.x;
         const int y = attached ? 2 * (hookTop + scene.hook.height / 2) : point.y;
         frame.layers[frame.layerCount++] = {
@@ -225,7 +239,12 @@ void CaptureGame::redraw()
     {
         if (!renderer_->showCaptureCard(assets_, card_, cardPage_)) readFailed();
     }
-    else if (state_ != State::Closed && !draw(millis() - started_, true)) readFailed();
+    else if (state_ != State::Closed)
+    {
+        const uint32_t age = millis() - started_;
+        if (state_ == State::Drop) traceDrop(age - dropStart_);
+        if (!draw(age, true)) readFailed();
+    }
 }
 
 void CaptureGame::update(bool confirmPending)
@@ -234,6 +253,7 @@ void CaptureGame::update(bool confirmPending)
     const uint32_t age = millis() - started_;
     const auto &scene = assets_.scene();
     bool readable = true;
+    if (state_ == State::Drop) traceDrop(age - dropStart_);
     if (state_ == State::Drop && age - dropStart_ >= 2U * turnAt_)
     {
         state_ = State::Swimming;
@@ -265,8 +285,6 @@ void CaptureGame::update(bool confirmPending)
         state_ = State::Result;
         return;
     }
-    if (age - frameAt_ < frameIntervalMs) return;
-    frameAt_ = age;
     if (!draw(age))
     {
         readFailed();
@@ -309,8 +327,8 @@ void CaptureGame::confirm()
     turnAt_ = scene.turnMs;
     hookTurnY_ = 2 * scene.depth;
     caught_ = -1;
+    dropStep_ = 0;
     state_ = State::Drop;
-    traceDrop(age);
 }
 
 #endif

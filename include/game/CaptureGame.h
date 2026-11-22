@@ -75,10 +75,10 @@ private:
         bool movingLeft;
     };
 
-    bool spawn(Fish &fish, uint32_t age);
+    bool spawn(Fish &fish, uint32_t age, uint8_t excludedSlot = CaptureAssets::noSlot);
     bool collect(const CaptureAssets::Target &caught);
     Position position(const Fish &fish, uint32_t age) const;
-    void traceDrop(uint32_t age);
+    void traceDrop(uint32_t elapsed);
     bool draw(uint32_t age, bool full = false);
     void readFailed();
     uint16_t hookY(uint32_t dropAge) const;
@@ -96,7 +96,8 @@ private:
     uint32_t frameAt_ = 0;
     uint32_t previousBands_ = 0;
     uint32_t cardStarted_ = 0;
-    uint16_t turnAt_ = 0, hookTurnY_ = 0, hitAt_ = 0;
+    uint16_t turnAt_ = 0, hookTurnY_ = 0;
+    uint16_t dropStep_ = 0;
     uint16_t drawnSeconds_ = 0;
     int32_t score_ = 0;
     int8_t caught_ = -1;

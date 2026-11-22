@@ -1,4 +1,5 @@
 #include "resources/AssetResources.h"
+#include <algorithm>
 #include <assert.h>
 #include <filesystem>
 #include <fstream>
@@ -22,6 +23,7 @@
 #include "appearance/RuntimeTableAppearance.h"
 #if ENABLE_CAPTURE_GAME
 #include "common/Crc32.h"
+#include "game/CaptureGame.h"
 #endif
 
 unsigned long hostMillis = 0;
@@ -48,6 +50,99 @@ static void mountBundle(SdFat &sd, const std::filesystem::path &root)
 }
 
 #if ENABLE_CAPTURE_GAME
+static std::vector<uint8_t> captureLifetimeBundle(uint8_t targetCount)
+{
+    constexpr size_t headerSize = 40, targetSize = 18;
+    const size_t sprites = headerSize + targetCount * targetSize + 2 * 128 * 160 + 2;
+    std::vector<uint8_t> bundle(sprites + 2 * targetCount);
+    const auto write16 = [&](size_t offset, uint16_t value) {
+        bundle[offset] = value & 0xff;
+        bundle[offset + 1] = value >> 8;
+    };
+    memcpy(bundle.data(), "VPCG", 4);
+    bundle[4] = 1;
+    bundle[6] = 1; // Density
+    bundle[7] = targetCount;
+    bundle[8] = 2; // Swim right
+    bundle[10] = 64;
+    bundle[11] = 20;
+    bundle[12] = 120;
+    bundle[13] = bundle[14] = 1;
+    write16(16, 20);
+    write16(18, 810);
+    for (size_t slot = 0; slot < targetCount; ++slot)
+    {
+        const size_t record = headerSize + slot * targetSize;
+        bundle[record] = slot == 0 ? 10 : 64;
+        bundle[record + 1] = slot == 0 ? 40 : 80;
+        bundle[record + 2] = bundle[record + 3] = 4;
+        bundle[record + 4] = 5;
+        bundle[record + 5] = bundle[record + 6] = 10;
+        bundle[record + 7] = bundle[record + 8] = bundle[record + 9] = 1;
+        write16(record + 12, slot + 1);
+        write16(record + 14, sprites + 2 * slot);
+        write16(sprites + 2 * slot, slot == 0 ? 0xf800 : 0x07e0);
+    }
+    return bundle;
+}
+
+static void verifyCaptureFishLifetime()
+{
+    constexpr uint16_t red = 0xf800, green = 0x07e0;
+    struct Outcomes : CaptureOutcomeHost
+    {
+        int32_t score = 0;
+        bool onCaptureOutcome(CaptureAssets &, const CaptureAssets::Target *,
+                              const CollectionRoundStats &, int32_t points, CatchResult &) override
+        {
+            score = points;
+            return true;
+        }
+    } outcomes;
+    SdFat sd;
+    Adafruit_ST7735 display;
+    AssetResources resources(&sd);
+    Renderer renderer(&display, resources);
+    CaptureGame game;
+    const auto start = [&](uint32_t seed, uint8_t targetCount = 2) {
+        sd.seedReadOnly("/capture.data", captureLifetimeBundle(targetCount));
+        hostMillis = 0;
+        outcomes.score = 0;
+        FirmwareRandom::seed(seed);
+        assert(game.start(renderer, resources, outcomes));
+    };
+    const auto advance = [&](unsigned long now) {
+        hostMillis = now;
+        game.update(false);
+    };
+    const auto visible = [&](uint16_t color) {
+        return std::find(display.screen.begin(), display.screen.end(), color) != display.screen.end();
+    };
+
+    start(2);
+    advance(4799);
+    game.confirm();
+    advance(4999);
+    assert(visible(red) && !visible(green));
+    advance(5000);
+    assert(visible(green) && !visible(red) && outcomes.score == 0);
+    advance(6100);
+    assert(outcomes.score == 2); // The new fish can be caught by an already moving hook.
+
+    start(1);
+    advance(4400);
+    game.confirm();
+    advance(5000);
+    assert(visible(green) && !visible(red) && outcomes.score == 0);
+    advance(5600);
+    assert(outcomes.score == 2); // A fish hooked before expiry stays on the line.
+
+    start(2, 1);
+    advance(5000);
+    assert(game.clockRunning() && visible(red) && !visible(green) && outcomes.score == 0);
+    puts("[PASS] Capture fish lifetime, replacement and catches at the expiry boundary");
+}
+
 static void verifyCapture(const std::filesystem::path &root, bool shouldPause)
 {
     constexpr uint16_t cardBackground = 0x1168;
@@ -726,6 +821,7 @@ int main(int argc, char **argv)
 #if ENABLE_CAPTURE_GAME
     if (argc == 3 && (strcmp(argv[2], "capture") == 0 || strcmp(argv[2], "capture-live-clock") == 0))
     {
+        verifyCaptureFishLifetime();
         verifyPreCaptureSave();
         verifyCapture(argv[1], strcmp(argv[2], "capture") == 0);
         return 0;

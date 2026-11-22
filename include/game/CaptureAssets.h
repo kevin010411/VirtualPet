@@ -78,9 +78,8 @@ public:
     bool open(SdFat *sd);
     void close();
     const Scene &scene() const { return scene_; }
-    uint16_t totalWeight() const { return totalWeight_; }
     uint32_t targetFingerprint() const { return targetFingerprint_; }
-    bool pickTarget(uint16_t roll, Target &target);
+    bool pickTarget(Target &target, uint8_t excludedSlot);
     bool readGroup(uint8_t slot, Group &group);
     bool readEffect(uint16_t index, Effect &effect);
     bool readBackground(uint16_t y, uint16_t rows, uint16_t *pixels);
