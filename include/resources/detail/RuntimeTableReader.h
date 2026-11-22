@@ -68,6 +68,7 @@ enum SectionType : uint16_t
     TrainingCourses = 87,
     CollectionCards = 88,
     CollectionUnlockOrder = 89,
+    OrderedMemoryLayouts = 90,
     Profile = 1,
     Persistence = 2,
     AssetRefs = 3,

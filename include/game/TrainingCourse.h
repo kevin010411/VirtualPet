@@ -5,6 +5,11 @@
 
 #if ENABLE_TRAINING_COURSES
 enum class TrainingMode : uint8_t { None, Timing, OrderedMemory, Matching };
+constexpr uint8_t kOrderedMemoryScreenFrames = 5;
+constexpr uint8_t kOrderedMemoryRecallCells = 5;
+constexpr uint8_t kOrderedMemoryAnswerChoices = 3;
+constexpr uint8_t kOrderedMemoryArtworkFrames =
+    kOrderedMemoryScreenFrames + kOrderedMemoryRecallCells * kOrderedMemoryAnswerChoices;
 
 struct TrainingCourseSettings
 {
@@ -20,6 +25,13 @@ struct TrainingCourseSettings
     uint8_t frameCount = 0;
     uint16_t frameMs = 0;
     uint16_t cueMs = 0;
+    bool customRecall = false;
+    uint8_t recallPositions[kOrderedMemoryRecallCells][2] = {};
+
+    bool hasAnswerArtwork() const
+    {
+        return mode == TrainingMode::OrderedMemory && frameCount == kOrderedMemoryArtworkFrames;
+    }
 };
 
 class TrainingCourse

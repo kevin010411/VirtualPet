@@ -525,6 +525,18 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
             training.cueMs = readU16(row + 16);
             training.passScore = row[18];
             training.frameCount = row[19];
+            if (const Section *layouts = table.find(OrderedMemoryLayouts))
+            {
+                for (uint16_t layoutIndex = 0; layoutIndex < layouts->count; ++layoutIndex)
+                {
+                    uint8_t layout[1 + 2 * kOrderedMemoryRecallCells];
+                    if (!readRecord(source, *layouts, layoutIndex, layout)) return false;
+                    if (layout[0] != speciesSlot) continue;
+                    memcpy(training.recallPositions, layout + 1, sizeof(training.recallPositions));
+                    training.customRecall = true;
+                    break;
+                }
+            }
             if (!resolveAnimation(source, *assets, *animations, readU16(row + 8), scope, contract.instruction.trainingFrames))
                 return false;
             break;

@@ -70,18 +70,35 @@ bool InstructionPresentation::renderCourse()
 {
     Renderer &renderer = *instructionRenderer;
     using Phase = TrainingCourse::Phase;
+    const auto &settings = instructionConfig->trainingSettings;
+    const bool answerArtwork = settings.hasAnswerArtwork();
     if (course.phase == Phase::Result)
-        renderer.showTrainingResult(course.score, course.completed,
-                                    course.score >= instructionConfig->trainingSettings.passScore);
-    else if (course.phase == Phase::Feedback)
+        renderer.showTrainingResult(course.score, course.completed, course.score >= settings.passScore);
+    else if (course.phase == Phase::Feedback && !answerArtwork)
         renderer.showInstructionFeedback(course.lastCorrect);
     else
     {
         if (!renderer.ShowAnimationFrame(instructionConfig->trainingFrames, 0, course.frame + 1,
                                          0, 0, 12, 128, 160))
             return false;
-        if (course.phase == Phase::Answer &&
-            instructionConfig->trainingSettings.mode == TrainingMode::OrderedMemory)
+        if (answerArtwork && (course.phase == Phase::Answer || course.phase == Phase::Feedback))
+        {
+            const uint8_t patchSize = settings.customRecall ? 12 : 16;
+            uint8_t cell = course.completed > kOrderedMemoryRecallCells ? kOrderedMemoryRecallCells : course.completed;
+            uint16_t choices = course.recentChoices;
+            while (cell)
+            {
+                --cell;
+                const uint8_t patch = cell * kOrderedMemoryAnswerChoices + (choices & 3) + 1;
+                const uint8_t x = settings.customRecall ? settings.recallPositions[cell][0] : 18 + 19 * cell;
+                const uint8_t y = settings.customRecall ? settings.recallPositions[cell][1] : 80;
+                if (!renderer.ShowAnimationFrame(instructionConfig->trainingFrames, 1, patch,
+                                                 x, y, 4, patchSize, patchSize))
+                    return false;
+                choices >>= 2;
+            }
+        }
+        else if (course.phase == Phase::Answer && settings.mode == TrainingMode::OrderedMemory)
             renderer.showTrainingRecall(course.recentChoices, course.completed);
     }
     course.ready(millis());
