@@ -135,12 +135,10 @@ bool PetBehaviorRuntime::commitStatMutation(const PetBehaviorStatValues &state, 
 }
 #endif
 
-bool PetBehaviorRuntime::advancePetDay(uint32_t days)
+bool PetBehaviorRuntime::applyDayChanges(PetBehaviorStatValues &state, PetBehaviorDailyChangePauses &pauses,
+                                         uint32_t days) const
 {
-    const PersistedPetState before = pet.persistentState();
-    PetBehaviorStatValues state = readStats(pet);
-    PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
-    applyPetBehaviorDailyChanges(config, state, nextPauses, days);
+    applyPetBehaviorDailyChanges(config, state, pauses, days);
     state.stageDays = applyStageDaysEffect(state.stageDays, PetBehaviorEffectOperation::Change, days);
     for (uint8_t i = 0; i < config.dayResetCount; ++i)
     {
@@ -152,6 +150,15 @@ bool PetBehaviorRuntime::advancePetDay(uint32_t days)
                 effect.value > config.stats[effect.statSlot].maxValue ? config.stats[effect.statSlot].maxValue : effect.value);
         else return false;
     }
+    return true;
+}
+
+bool PetBehaviorRuntime::advancePetDay(uint32_t days)
+{
+    const PersistedPetState before = pet.persistentState();
+    PetBehaviorStatValues state = readStats(pet);
+    PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
+    if (!applyDayChanges(state, nextPauses, days)) return false;
 #if ENABLE_STAT_EVENTS
     if (usesStatEvents())
     {
@@ -240,18 +247,20 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
 }
 
 PetBehaviorActionResult PetBehaviorRuntime::commitActionValues(
-    const PetBehaviorStatValues &state, uint8_t actionSlot, const PersistedPetState &before)
+    const PetBehaviorStatValues &state, uint8_t actionSlot, const PersistedPetState &before, bool advanceDay)
 {
 #if ENABLE_STAT_EVENTS
     if (usesStatEvents())
     {
-        if (!commitStatMutation(state, actionSlot))
+        if (!commitStatMutation(state, actionSlot, advanceDay ? 1U : 0U))
         {
             pet.restoreState(before);
             return PetBehaviorActionResult::ResourceReadFailed;
         }
     }
     else
+#else
+    (void)advanceDay;
 #endif
     {
         if (!writeStats(state, pet))
@@ -341,12 +350,15 @@ PendingActionProgress PetBehaviorRuntime::continuePendingAction(uint8_t &species
                 pendingPlaybackStarted = true;
                 return PendingActionProgress::Playing;
             }
+            const bool advanceDay = action.advanceDayAfterPlayback;
+            if (advanceDay && !applyDayChanges(state, nextPauses, 1))
+                return PendingActionProgress::Failed;
             pendingPlaybackStarted = false;
             pet.setPendingActionOutcome(UINT8_MAX);
-            if (commitActionValues(state, slot, before) != PetBehaviorActionResult::Applied)
+            if (commitActionValues(state, slot, before, advanceDay) != PetBehaviorActionResult::Applied)
                 return PendingActionProgress::Failed;
             dailyChangePauses = nextPauses;
-            return PendingActionProgress::Settled;
+            return advanceDay ? PendingActionProgress::DayAdvanced : PendingActionProgress::Settled;
         }
         if (!pendingPlaybackStarted)
         {

@@ -165,6 +165,7 @@ bool decodeActions(const Source &source,
         action.suspendDailyChangeDays = actionRecord[2];
         action.hasFallbackAnimation = hasFallback;
         action.effectsAfterPlayback = (actionRecord[3] & 2U) != 0;
+        action.advanceDayAfterPlayback = (actionRecord[3] & 4U) != 0;
         action.firstOutcome = static_cast<uint8_t>(nextOutcome);
         action.outcomeCount = outcomeCount;
         action.firstCondition = static_cast<uint8_t>(nextCondition);

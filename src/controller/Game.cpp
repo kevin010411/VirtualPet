@@ -204,9 +204,13 @@ bool Game::continuePendingAction()
         enterRuntimeFatal();
         return true;
     }
-    if (progress == PendingActionProgress::Settled)
+    if (progress == PendingActionProgress::Settled || progress == PendingActionProgress::DayAdvanced)
     {
         if (enterDeathIfNeeded(true)) return true;
+#if ENABLE_DAILY_POST_PROCESSING
+        if (progress == PendingActionProgress::DayAdvanced &&
+            settleMutation(Settlement::DailyProgress) != EvolutionResult::NoChange) return true;
+#endif
 #if ENABLE_STAT_EVENTS
         if (!statEventsActive())
 #endif

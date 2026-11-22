@@ -24,7 +24,7 @@ enum class PetBehaviorActionResult : uint8_t
     AwaitingCompletion,
 };
 
-enum class PendingActionProgress : uint8_t { Playing, Evolve, Settled, Failed };
+enum class PendingActionProgress : uint8_t { Playing, Evolve, Settled, DayAdvanced, Failed };
 
 class PetBehaviorRuntime
 {
@@ -76,7 +76,9 @@ private:
     PetBehaviorDailyChangePauses dailyChangePauses;
     bool pendingPlaybackStarted = false;
     PlaybackResult playAction(const PetBehaviorActionConfig &action, const PetBehaviorActionPlayback &playback);
-    PetBehaviorActionResult commitActionValues(const PetBehaviorStatValues &state, uint8_t slot, const PersistedPetState &before);
+    bool applyDayChanges(PetBehaviorStatValues &state, PetBehaviorDailyChangePauses &pauses, uint32_t days) const;
+    PetBehaviorActionResult commitActionValues(const PetBehaviorStatValues &state, uint8_t slot,
+                                               const PersistedPetState &before, bool advanceDay = false);
     bool (*saveMutation)(void *, bool settleActionEffects) = nullptr;
     void *saveContext = nullptr;
 #if ENABLE_STAT_EVENTS

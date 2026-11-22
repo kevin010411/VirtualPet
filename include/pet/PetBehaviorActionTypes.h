@@ -67,6 +67,7 @@ struct PetBehaviorActionConfig
     uint8_t followingAnimationCount;
     PetBehaviorAnimationPlaybackConfig prelude;
     bool effectsAfterPlayback = false;
+    bool advanceDayAfterPlayback = false;
 };
 
 struct PetBehaviorActionOutcomeConfig
