@@ -1,14 +1,40 @@
 # SD 資源與渲染
 
-正式 SD bundle 由 Web exporter 產生：`runtime.bin` v19、`runtime.manifest`、
-`shared.data`、`species_<slot>.data`，使用音訊時另有 `audio.data`。
-舊 `/index/` TXT、獨立 RLE／BMP 檔不受支援，請重新匯出整包，不手寫資源表。
+## SD 卡檔案
 
-`BundleReader` 查找動畫／影格 descriptor 並定位 payload；`FrameDecoder`
-以固定讀取／行緩衝解碼、分批寫 TFT，不配置整張 framebuffer。
-現行 `.data` v2 codecs 為 `PAL8_RUN_LITERAL` 與 `RGB565_RUN_LITERAL`。
-詳細記錄格式、尺寸及產品驗證由 Web exporter／host inspector 管理。
+以下是 Web 匯出的 SD ZIP 解壓到卡片根目錄後的路徑。
 
-版面圖片由 Web 預合成，韌體依 SCREEN_BLOCKS／SCREEN_RULES 選取並顯示。
-資源留在 SD 不表示相關 renderer／decoder 沒有 Flash 或 RAM 成本。
-實際開檔、讀取、解碼或繪圖失敗記錄第一個資源名稱；不增加 decode-only 掃描或全檔 CRC。
+| 路徑 | 用途 |
+| --- | --- |
+| `/runtime.bin` | 執行契約。韌體從標頭讀取版本及 bundle ID。 |
+| `/asset_manifest.txt` | Web 匯出與檢查工具使用的素材包清單。 |
+| `/assets/shared.data` | 跨物種共用的畫面與動畫。 |
+| `/assets/species_<slot>.data` | 個別物種的造型、畫面與動畫。 |
+| `/audio.data` | 匯出的序列音訊。 |
+| `/shop.data` | 啟用商店時匯出的商店資料。 |
+| `/capture.data` | 啟用抓取遊戲時匯出的資料。 |
+
+從舊 `/index/` TXT、獨立 RLE 或 BMP 格式升級時，透過 Web 重新匯出完整 SD ZIP。
+
+新版 `shop.data` 的 `SBD2` 尾標記啟用自訂列表欄數、反白影格及全螢幕結算影格。韌體也保留 `SBD1` 分帶素材及更早的商店繪製路徑。商店更新應使用同一份匯出的 `shop.data`、`assets/shared.data` 和執行契約。
+
+## 格式版本
+
+Web 匯出器按專案使用的功能決定 `/runtime.bin` 版本。韌體必須支援該版本並啟用所需功能。
+
+| 版本 | 匯出條件 |
+| --- | --- |
+| v28 | 基礎 Runtime Table。 |
+| v29 | 有專案選單，且無需下列版本。 |
+| v30 | 猜物遊戲使用 1 至 3 個物品提示，或部分造型未配置指定的答對或答錯動畫。 |
+| v31 | 含 `COLLECTION_CARDS` 區段。需搭配支援 v31 的韌體。 |
+
+影像素材包使用 `.data` v2。含全螢幕動畫的匯出使用 `.data` v3。
+兩版都支援 `PAL8_RUN_LITERAL` 與 `RGB565_RUN_LITERAL`。
+
+## 影格讀取
+
+Web 預先合成版面圖片。韌體依 `SCREEN_BLOCKS` 和 `SCREEN_RULES` 選取要顯示的影格。
+`BundleReader` 定位影格資料，`FrameDecoder` 以固定大小的讀取緩衝和行緩衝解碼，再分批寫入 TFT。
+緩衝和解碼器分別計入韌體的 RAM 與 Flash 用量。
+Web 匯出端檢查素材尺寸、格式、資料參照與完整性。韌體處理實際 SD 讀取、解碼和繪圖失敗，並記錄第一個資源錯誤。

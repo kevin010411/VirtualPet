@@ -18,8 +18,8 @@ C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run
 C:\Users\kevin\.platformio\penv\Scripts\platformio.exe run -c path\to\platformio.ini
 ```
 
-將匹配版本的 `runtime.bin`、`runtime.manifest` 與 `.data` packs 一起放入 SD；
-音訊專案另含 `audio.data`。韌體不接受舊 TXT runtime fallback，更新二進位版本後需重新匯出。
+將 Web 匯出的 SD ZIP 解壓到 SD 卡根目錄，保留 `assets/` 的路徑。
+更新二進位契約後，重新匯出整份 SD ZIP。 [SD 檔案與格式版本](renderer_asset_formats.md)
 
 ## 驗證與尺寸
 

@@ -22,8 +22,8 @@
 
 ## 主要路徑
 
-- 啟動：`GameStartup → PetSession → RuntimeContractLoader`，載入 manifest、初始外觀及契約；
-  匹配存檔時恢復，否則建立新局。Game 啟用顯示、命令與播放。
+- `GameStartup → PetSession → RuntimeContractLoader` 負責啟動，載入 `/runtime.bin` 標頭、初始外觀及執行契約。
+  存檔相容時恢復遊戲，否則建立新局。Game 啟用顯示、命令與播放。
 - 命令：`CommandController → CommandExecutor → PetBehaviorRuntime` 或 System Command。
   Action 先原子提交數值與暫停，再提交完整播放序列。
 - 換日：RTC／SessionClock／PetClock 提供日邊界，Game 執行一次日交易；
@@ -33,7 +33,7 @@
 - 畫面：`LayoutRenderer` 同步版面，`AnimationController` 選影格，
   `BundleReader` 定位 payload，`FrameDecoder` 串流送 TFT。
 
-現行韌體接受 `/runtime.bin` v19；格式由 Web 規格管理。
+Web 規格管理匯出格式。韌體的 SD 路徑與格式版本見[SD 資源與渲染](renderer_asset_formats.md)。
 資料／素材完整驗證在 exporter。韌體保留必要讀取、容量與硬體失敗處理，
 記錄第一個資源錯誤。Fatal 關閉互動、取消暫態工作，重開機才恢復。
 不要把歷史重構計畫或當時的 Flash 數字當成尚待執行工作。
