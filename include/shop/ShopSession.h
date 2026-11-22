@@ -46,8 +46,11 @@ private:
     uint32_t fingerprint = 0;
     uint32_t boundsOffset = 0;
     uint32_t confirmationOffset = 0;
+    uint32_t bandsOffset = 0;
     uint16_t art = 0;
     uint8_t wallet = 255, itemCount = 0, productCount = 0, speciesCount = 0, rowHeight = 0;
+    uint8_t listColumns = 1;
+    bool styledBrowse = false;
     Rect walletRect = {}, quantityRect = {}, listRect = {};
     uint8_t entries[66] = {};
     uint8_t count = 0, cursor = 0;
@@ -56,7 +59,7 @@ private:
     View view = View::Closed;
     Footer receipt = Browse;
     uint16_t paintedFrame = 0;
-    uint16_t paintedRows[8] = {};
+    uint16_t paintedRows[8 * 4] = {};
     Rect paintedBounds = {};
     uint32_t paintedWallet = 0;
     uint16_t paintedQuantity = 0;
@@ -74,11 +77,13 @@ private:
     bool buildEntries();
     bool transact(AssetData::AnimationRef &animation);
     uint16_t frameFor(uint8_t entry) const;
+    uint16_t confirmationFrame() const;
     bool paint(bool full = false);
     bool paintFooter(bool full = false);
     bool paintConfirmation(uint16_t frame, uint8_t selected);
     bool paintConfiguredConfirmation(uint8_t selected, bool buttonsOnly = false);
     bool show(uint16_t frame, Rect rect, const Rect *crop = nullptr);
+    bool restoreBrowse(uint16_t frame, Rect dirty);
     void number(Rect rect, uint32_t value);
 };
 #endif

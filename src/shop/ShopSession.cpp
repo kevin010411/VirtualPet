@@ -26,6 +26,9 @@ constexpr uint8_t navigation = 128;
 constexpr uint8_t exitEntry = 129;
 constexpr uint8_t firstEntryFrame = 16;
 constexpr uint8_t stageDaysEffectSlot = 255;
+constexpr uint8_t bandHeight = 16;
+constexpr uint8_t bandCount = 9;
+constexpr uint8_t receiptCount = 8;
 constexpr uint16_t selectedRow = 0x8000;
 constexpr DisplayRect screen{0, 0, 128, 160};
 constexpr DisplayRect confirmation{0, 88, 128, 48};
@@ -72,6 +75,7 @@ bool ShopSession::configure()
     }
     if (art && AssetData::sameBundleId(bundle, config.assetManifest.bundleId))
         return true;
+    art = 0;
     ShopFile file;
     uint8_t row[headerSize];
     if (!file.open(path, FILE_READ) || !read(file, 0, row, sizeof(row)))
@@ -86,7 +90,7 @@ bool ShopSession::configure()
         return false;
     }
     fingerprint = readU32(row + 16);
-    art = readU16(row + 20);
+    const uint16_t newArt = readU16(row + 20);
     wallet = row[22];
     itemCount = row[23];
     productCount = row[24];
@@ -100,12 +104,26 @@ bool ShopSession::configure()
     boundsOffset = !rowHeight && file.fileSize() > recordsEnd ? recordsEnd : 0;
     const uint32_t boundsEnd = recordsEnd + (rowHeight ? 0 : sizeof(Rect) * (itemCount + productCount + 3));
     confirmationOffset = 0;
+    bandsOffset = 0;
+    styledBrowse = false;
+    listColumns = 1;
     uint8_t signature[4];
     if (file.fileSize() >= boundsEnd + sizeof(signature))
     {
         if (!read(file, boundsEnd, signature, sizeof(signature))) return false;
         if (memcmp(signature, "SCF1", sizeof(signature)) == 0) confirmationOffset = boundsEnd;
     }
+    const uint16_t bandBytes = 2 * bandCount * (rowHeight ? 1 : itemCount + productCount + 4);
+    if (confirmationOffset && file.fileSize() >= boundsEnd + bandBytes + sizeof(signature))
+    {
+        const uint32_t tagOffset = file.fileSize() - sizeof(signature);
+        if (!read(file, tagOffset, signature, sizeof(signature))) return false;
+        styledBrowse = memcmp(signature, "SBD2", sizeof(signature)) == 0;
+        if (styledBrowse || memcmp(signature, "SBD1", sizeof(signature)) == 0)
+            bandsOffset = tagOffset - bandBytes;
+        if (styledBrowse && !read(file, bandsOffset - 1, &listColumns, sizeof(listColumns))) return false;
+    }
+    art = newArt;
     return true;
 }
 
@@ -357,6 +375,32 @@ bool ShopSession::show(uint16_t frame, Rect rect, const Rect *crop)
     return renderer.ShowDataFrame({0, 0, art, 0, frame}, rect.x, rect.y, 12, rect.w, rect.h, crop);
 }
 
+bool ShopSession::restoreBrowse(uint16_t frame, Rect dirty)
+{
+    if (!bandsOffset) return show(frame, screen, &dirty);
+    const uint16_t page = frame ? 1 + (frame - firstEntryFrame) / 2 : 0;
+    const uint8_t first = dirty.y / bandHeight;
+    const uint8_t end = (dirty.bottom() + bandHeight - 1) / bandHeight;
+    uint8_t addresses[2 * bandCount];
+    ShopFile file;
+    if (!file.open(path, FILE_READ))
+    {
+        resources.recordAssetDataErrorResource(path);
+        return false;
+    }
+    if (!read(file, bandsOffset + 2 * (page * bandCount + first), addresses, 2 * (end - first))) return false;
+    file.close();
+    for (uint8_t band = first; band < end; ++band)
+    {
+        const uint8_t y = band * bandHeight;
+        const int top = dirty.y > y ? dirty.y : y;
+        const int bottom = dirty.bottom() < y + bandHeight ? dirty.bottom() : y + bandHeight;
+        const Rect crop{dirty.x, static_cast<uint8_t>(top - y), dirty.w, static_cast<uint8_t>(bottom - top)};
+        if (!show(readU16(addresses + 2 * (band - first)), {0, y, 128, bandHeight}, &crop)) return false;
+    }
+    return true;
+}
+
 void ShopSession::number(Rect rect, uint32_t value)
 {
     renderer.drawShopNumber(rect.x, rect.y, rect.w, rect.h, value);
@@ -368,6 +412,11 @@ uint16_t ShopSession::frameFor(uint8_t entry) const
         ? itemCount + productCount + (entry == exitEntry ? 2 : inventory ? 1 : 0)
         : (inventory ? entry : itemCount + entry);
     return firstEntryFrame + 2 * slot;
+}
+
+uint16_t ShopSession::confirmationFrame() const
+{
+    return firstEntryFrame + 2 * (itemCount + productCount + 3);
 }
 
 bool ShopSession::redraw()
@@ -384,8 +433,14 @@ bool ShopSession::paint(bool full)
         paintedView = View::Confirm;
         return true;
     }
+    if (styledBrowse && view == View::Receipt)
+    {
+        if (!show(confirmationFrame() + 1 + receipt - Bought, screen)) return false;
+        paintedView = View::Receipt;
+        return true;
+    }
     // Authored confirmation blocks can cover any part of the browse scene.
-    full |= confirmationOffset && paintedView == View::Confirm;
+    full |= (confirmationOffset && paintedView == View::Confirm) || (styledBrowse && paintedView == View::Receipt);
     const uint16_t current = frameFor(selected);
     const bool pageChanged = full || current != paintedFrame;
     const bool restoring = paintedView == View::Confirm && view != View::Confirm;
@@ -410,31 +465,42 @@ bool ShopSession::paint(bool full)
         if (paintedHasQuantity && !hasQuantity) dirty = combine(dirty, quantityRect);
     }
     const uint16_t base = rowHeight ? 0 : current;
-    if (full ? !show(base, screen) : dirty.w && !show(base, screen, &dirty)) return false;
+    if (full ? !show(base, screen) : dirty.w && !restoreBrowse(base, dirty)) return false;
 
     const uint32_t balance = walletRect.w ? pet.customStat(wallet) : 0;
     bool walletDirty = full || balance != paintedWallet || dirty.overlaps(walletRect);
     const uint16_t firstNavigationFrame = firstEntryFrame + 2 * (itemCount + productCount);
-    walletDirty |= !rowHeight && pageChanged && paintedFrame >= firstNavigationFrame &&
+    walletDirty |= !styledBrowse && !rowHeight && pageChanged && paintedFrame >= firstNavigationFrame &&
                    navigationCard.overlaps(walletRect);
     if (rowHeight)
     {
         const uint8_t rows = listRect.h / rowHeight;
-        const uint8_t first = cursor < rows ? 0 : cursor - rows + 1;
-        for (uint8_t row = 0; row < rows; ++row)
+        const uint8_t cursorRow = cursor / listColumns;
+        const uint8_t first = cursorRow < rows ? 0 : (cursorRow - rows + 1) * listColumns;
+        const uint8_t width = listRect.w / listColumns;
+        for (uint8_t cell = 0; cell < rows * listColumns; ++cell)
         {
-            const uint8_t index = first + row;
+            const uint8_t index = first + cell;
             const uint16_t frame = index < count ? frameFor(entries[index]) : 0;
             const uint16_t key = frame | (index == cursor ? selectedRow : 0);
-            const Rect rect{listRect.x, static_cast<uint8_t>(listRect.y + row * rowHeight), listRect.w, rowHeight};
-            if (!full && key == paintedRows[row] && (!frame || !dirty.overlaps(rect))) continue;
+            const Rect rect{static_cast<uint8_t>(listRect.x + (cell % listColumns) * width),
+                            static_cast<uint8_t>(listRect.y + (cell / listColumns) * rowHeight), width, rowHeight};
+            if (!full && key == paintedRows[cell] && (!frame || !dirty.overlaps(rect))) continue;
             if (frame)
             {
-                if (!show(frame, rect)) return false;
-                if (index == cursor) renderer.highlightShopRow(rect.x, rect.y, rect.w, rect.h);
+                if (styledBrowse)
+                {
+                    const uint16_t styledFrame = confirmationFrame() + 1 + receiptCount + frame - firstEntryFrame;
+                    if (!show(styledFrame + (index == cursor), rect)) return false;
+                }
+                else
+                {
+                    if (!show(frame, rect)) return false;
+                    if (index == cursor) renderer.highlightShopRow(rect.x, rect.y, rect.w, rect.h);
+                }
             }
-            else if (!full && !show(0, screen, &rect)) return false;
-            paintedRows[row] = key;
+            else if (!full && !restoreBrowse(0, rect)) return false;
+            paintedRows[cell] = key;
             walletDirty |= rect.overlaps(walletRect);
         }
     }
@@ -462,7 +528,7 @@ bool ShopSession::paint(bool full)
     {
         if (!paintConfirmation(current, selected)) return false;
     }
-    else if (selected >= navigation && !rowHeight &&
+    else if (!styledBrowse && selected >= navigation && !rowHeight &&
              (pageChanged || (walletDirty && walletRect.overlaps(navigationCard))) &&
              !show(current + 1, navigationCard))
         return false;
@@ -493,7 +559,7 @@ bool ShopSession::paintConfirmation(uint16_t frame, uint8_t selected)
 
 bool ShopSession::paintConfiguredConfirmation(uint8_t selected, bool buttonsOnly)
 {
-    const uint16_t background = firstEntryFrame + 2 * (itemCount + productCount + 3);
+    const uint16_t background = confirmationFrame();
     ShopFile file;
     if (!file.open(path, FILE_READ))
     {

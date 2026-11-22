@@ -634,6 +634,10 @@ static int verifyShop(const std::filesystem::path &root)
         assert(display.screen == incremental);
     };
     std::ifstream shopData(root / "shop.data", std::ios::binary);
+    shopData.seekg(20);
+    uint8_t artBytes[2];
+    shopData.read(reinterpret_cast<char *>(artBytes), sizeof(artBytes));
+    const uint16_t art = RuntimeTableInternal::readU16(artBytes);
     shopData.seekg(23);
     const int items = shopData.get(), products = shopData.get();
     const bool list = shopData.get() == 16;
@@ -644,6 +648,12 @@ static int verifyShop(const std::filesystem::path &root)
     char confirmationTag[4]{};
     shopData.read(confirmationTag, sizeof(confirmationTag));
     const bool configured = std::string(confirmationTag, sizeof(confirmationTag)) == "SCF1";
+    shopData.clear();
+    shopData.seekg(-4, std::ios::end);
+    char bandTag[4]{};
+    shopData.read(bandTag, sizeof(bandTag));
+    const bool styledBrowse = std::string(bandTag, sizeof(bandTag)) == "SBD2";
+    const bool banded = styledBrowse || std::string(bandTag, sizeof(bandTag)) == "SBD1";
     const auto checkButtons = [&](bool inventory, bool next) {
         const size_t firstWindow = display.windows.size();
         const size_t firstFill = display.filledRects.size();
@@ -709,18 +719,35 @@ static int verifyShop(const std::filesystem::path &root)
         assert(display.windows.size() == windows && display.filledRects.size() == fills);
     };
     size_t beforeMove = display.windows.size();
+    constexpr char sharedPath[] = "/assets/shared.data";
+    if (banded && !list)
+    {
+        // The destination's full image remains available for a later redraw.
+        // A partial selection must not read any of its compressed payload.
+        AssetData::OpenFrame target;
+        assert(resources.frameReader().openFrame({0, 0, art, 0, static_cast<uint16_t>(16 + 2 * (items + products))}, target));
+        assert(target.descriptor.height == 160);
+        sd.failReadAt(sharedPath, target.descriptor.payloadOffset);
+        target.file.close();
+    }
     game.OnRightKey(); // Product to inventory entry, with both rows in view in list mode.
+    sd.failReadAt(sharedPath, static_cast<size_t>(-1));
     if (list)
     {
         assert(display.windows.size() == beforeMove + 2);
         for (size_t i = beforeMove; i < display.windows.size(); ++i)
-            assert(display.windows[i].height == 16 && display.windows[i].width == 120);
+            assert(display.windows[i].height == 16 && display.windows[i].width == (styledBrowse ? 60 : 120));
+        if (styledBrowse)
+        {
+            assert(display.screen[88 * 128 + 4] != 0xf000);
+            assert(display.screen[88 * 128 + 64] == 0xf000);
+        }
     }
     else
     {
         assert(display.windows.size() > beforeMove);
         for (size_t i = beforeMove; i < display.windows.size(); ++i)
-            assert(display.windows[i].height < 160);
+            assert(banded ? display.windows[i].height <= 16 : display.windows[i].height < 160);
     }
     matchesFullRedraw();
     game.OnRightKey(); // Exit entry scrolls into view in the two-row fixture.
@@ -753,6 +780,11 @@ static int verifyShop(const std::filesystem::path &root)
     checkButtons(false, false);
     game.OnConfirmKey();
     assert(pet.customStat(0) == 43 && pet.persistentState().shopQuantities[0] == 2);
+    if (styledBrowse)
+    {
+        assert(display.screen[136 * 128] == 0xF716); // The configured full-screen receipt footer starts here.
+        assert(display.screen[0] == 0x0010);
+    }
     matchesFullRedraw();
     game.OnConfirmKey(); // Receipt to shop
     game.OnRightKey();
