@@ -225,8 +225,9 @@ bool ShopSession::move(bool next)
 {
     if (view == View::Confirm)
     {
-        cancel = !cancel;
-        return confirmationOffset ? paint() : paintFooter();
+        if (cancel == next) return true;
+        cancel = next;
+        return confirmationOffset ? paintConfiguredConfirmation(entries[cursor], true) : paintFooter();
     }
     if (view != View::Browse) return true;
     cursor = (cursor + (next ? 1 : count - 1)) % count;
@@ -490,11 +491,9 @@ bool ShopSession::paintConfirmation(uint16_t frame, uint8_t selected)
     return true;
 }
 
-bool ShopSession::paintConfiguredConfirmation(uint8_t selected)
+bool ShopSession::paintConfiguredConfirmation(uint8_t selected, bool buttonsOnly)
 {
     const uint16_t background = firstEntryFrame + 2 * (itemCount + productCount + 3);
-    if (!show(background, screen)) return false;
-
     ShopFile file;
     if (!file.open(path, FILE_READ))
     {
@@ -515,7 +514,8 @@ bool ShopSession::paintConfiguredConfirmation(uint8_t selected)
     }
 
     const uint16_t entry = inventory ? selected : itemCount + selected;
-    if (drawShopConfirmation(file, confirmationOffset, entry, cancel, values, notice, renderer)) return true;
+    if (drawShopConfirmation(file, confirmationOffset, entry, cancel, values, notice, renderer,
+                             {0, 0, art, 0, background}, buttonsOnly)) return true;
     resources.recordAssetDataErrorResource(path);
     return false;
 }

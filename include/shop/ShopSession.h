@@ -77,7 +77,7 @@ private:
     bool paint(bool full = false);
     bool paintFooter(bool full = false);
     bool paintConfirmation(uint16_t frame, uint8_t selected);
-    bool paintConfiguredConfirmation(uint8_t selected);
+    bool paintConfiguredConfirmation(uint8_t selected, bool buttonsOnly = false);
     bool show(uint16_t frame, Rect rect, const Rect *crop = nullptr);
     void number(Rect rect, uint32_t value);
 };

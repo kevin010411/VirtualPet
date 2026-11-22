@@ -16,6 +16,7 @@ public:
     struct Window { int x, y, width, height; };
     std::vector<uint16_t> screen = std::vector<uint16_t>(128 * 160, 0xdead);
     std::vector<Window> windows;
+    std::vector<Window> filledRects;
     int width() const { return 128; }
     int height() const { return 160; }
     void startWrite() {}
@@ -42,6 +43,7 @@ public:
     void fillScreen(uint16_t color) { std::fill(screen.begin(), screen.end(), color); }
     void writeFillRect(int x, int y, int w, int h, uint16_t color)
     {
+        filledRects.push_back({x, y, w, h});
         for (int row = y; row < y + h; ++row)
             for (int col = x; col < x + w; ++col) writePixel(col, row, color);
     }

@@ -57,7 +57,8 @@ public:
 #if ENABLE_SHOP
     void drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint32_t value);
     void highlightShopRow(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
-    void drawShopConfirmationBlock(const ShopConfirmationBlock &block, const uint8_t *mask, bool selected);
+    void drawShopConfirmationBlock(const ShopConfirmationBlock &block, const uint8_t *mask, bool selected,
+                                   const DisplayRect &visible);
 #endif
 #if ENABLE_CAPTURE_GAME
     bool drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame &frame, uint32_t bands);

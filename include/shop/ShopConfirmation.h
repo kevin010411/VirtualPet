@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 class Renderer;
+namespace AssetData { struct AssetFrameAddress; }
 
 enum class ShopConfirmationNotice : uint8_t { None, Species, Condition, Owned, Capacity, Funds };
 
@@ -28,5 +29,6 @@ struct ShopConfirmationBlock
 };
 
 bool drawShopConfirmation(SdBaseFile &file, uint32_t offset, uint16_t entry, bool returning,
-                          ShopConfirmationValues values, ShopConfirmationNotice notice, Renderer &renderer);
+                          ShopConfirmationValues values, ShopConfirmationNotice notice, Renderer &renderer,
+                          const AssetData::AssetFrameAddress &background, bool buttonsOnly);
 #endif

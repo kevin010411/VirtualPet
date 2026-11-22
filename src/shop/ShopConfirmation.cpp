@@ -1,7 +1,9 @@
 #include "shop/ShopConfirmation.h"
 #if ENABLE_SHOP
 
+#include <algorithm>
 #include "common/SdBinaryRead.h"
+#include "display/DisplayRect.h"
 #include "display/Renderer.h"
 #include "resources/detail/RuntimeTableReader.h"
 
@@ -15,7 +17,20 @@ constexpr uint8_t blockHeader = 20;
 constexpr uint8_t referenceSize = 5;
 constexpr uint8_t templateGlyphs = 11;
 constexpr uint8_t commonBlocks = 6;
+constexpr uint8_t maxPageBlocks = 5;
+constexpr DisplayRect screen{0, 0, 128, 160};
 constexpr uint32_t endOfLine = UINT32_MAX;
+
+DisplayRect clipRect(int x, int y, int width, int height, const DisplayRect &region)
+{
+    const int left = std::max(x, static_cast<int>(region.x));
+    const int top = std::max(y, static_cast<int>(region.y));
+    const int right = std::min(x + width, region.right());
+    const int bottom = std::min(y + height, region.bottom());
+    if (left >= right || top >= bottom) return {};
+    return {static_cast<uint8_t>(left), static_cast<uint8_t>(top),
+            static_cast<uint8_t>(right - left), static_cast<uint8_t>(bottom - top)};
+}
 
 struct GlyphRef
 {
@@ -126,7 +141,8 @@ bool stampGlyph(ConfirmationFile &file, const ShopConfirmationBlock &block,
     return true;
 }
 
-bool drawBlock(ConfirmationFile &file, uint32_t offset, const Digits *values, bool returning, Renderer &renderer)
+bool drawBlock(ConfirmationFile &file, uint32_t offset, const Digits *values, bool returning,
+               Renderer &renderer, const DisplayRect &region)
 {
     uint8_t row[blockHeader + referenceSize * templateGlyphs];
     if (!file.read(offset, row, sizeof(row))) return false;
@@ -134,7 +150,8 @@ bool drawBlock(ConfirmationFile &file, uint32_t offset, const Digits *values, bo
         readI16(row), readI16(row + 2), row[4], row[5], row[6], row[7] != 0,
         readU16(row + 8), readU16(row + 10), readU16(row + 12), readU16(row + 14), readU16(row + 16),
     };
-    if (block.x >= 128 || block.y >= 160 || block.x + block.width <= 0 || block.y + block.height <= 0) return true;
+    const DisplayRect visible = clipRect(block.x, block.y, block.width, block.height, region);
+    if (!visible.w) return true;
 
     const uint8_t *table = row + blockHeader;
     const GlyphRef ellipsis = glyphRef(table + 10 * referenceSize);
@@ -175,7 +192,8 @@ bool drawBlock(ConfirmationFile &file, uint32_t offset, const Digits *values, bo
         pen += glyph.advance;
     }
     if (addEllipsis && !stampGlyph(file, block, mask, pen, ellipsis)) return false;
-    renderer.drawShopConfirmationBlock(block, reinterpret_cast<const uint8_t *>(&mask), block.action == (returning ? 2 : 1));
+    renderer.drawShopConfirmationBlock(block, reinterpret_cast<const uint8_t *>(&mask),
+                                       block.action == (returning ? 2 : 1), visible);
     return true;
 }
 
@@ -195,56 +213,76 @@ bool outlineAt(const ShopConfirmationBlock &block, const uint8_t *mask, int x, i
 }
 
 bool drawShopConfirmation(SdBaseFile &file, uint32_t offset, uint16_t entry, bool returning,
-                          ShopConfirmationValues values, ShopConfirmationNotice notice, Renderer &renderer)
+                          ShopConfirmationValues values, ShopConfirmationNotice notice, Renderer &renderer,
+                          const AssetData::AssetFrameAddress &background, bool buttonsOnly)
 {
     ConfirmationFile source(file, offset);
     const Digits digits[]{Digits(values.price), Digits(values.quantity), Digits(values.owned)};
-    uint32_t block;
-    if (!source.index(0, block) || !drawBlock(source, block, digits, returning, renderer)) return false;
+    uint32_t blocks[2 + maxPageBlocks];
+    uint8_t blockCount = 1;
+    if (!source.index(0, blocks[0])) return false;
     if (notice != ShopConfirmationNotice::None &&
-        (!source.index(static_cast<uint8_t>(notice), block) || !drawBlock(source, block, digits, returning, renderer)))
+        !source.index(static_cast<uint8_t>(notice), blocks[blockCount++]))
         return false;
 
     uint32_t page;
-    uint8_t count, offsets[5 * 4];
+    uint8_t count, offsets[maxPageBlocks * 4];
     if (!source.index(commonBlocks + entry, page) || !source.read(page, &count, 1) ||
         !source.read(page + 1, offsets, count * 4U)) return false;
     for (uint8_t index = 0; index < count; ++index)
-        if (!drawBlock(source, readU32(offsets + 4 * index), digits, returning, renderer)) return false;
+        blocks[blockCount++] = readU32(offsets + 4 * index);
+
+    const auto paint = [&](const DisplayRect &region) {
+        if (!renderer.ShowDataFrame(background, 0, 0, 12, screen.w, screen.h, buttonsOnly ? &region : nullptr))
+            return false;
+        for (uint8_t index = 0; index < blockCount; ++index)
+            if (!drawBlock(source, blocks[index], digits, returning, renderer, region)) return false;
+        return true;
+    };
+    if (!buttonsOnly) return paint(screen);
+
+    // Restore each button's region in layer order so moved buttons can overlap other text.
+    for (uint8_t index = blockCount - 2; index < blockCount; ++index)
+    {
+        uint8_t bounds[6];
+        if (!source.read(blocks[index], bounds, sizeof(bounds))) return false;
+        const auto region = clipRect(readI16(bounds), readI16(bounds + 2), bounds[4], bounds[5], screen);
+        if (region.w && !paint(region)) return false;
+    }
     return true;
 }
 
-void Renderer::drawShopConfirmationBlock(const ShopConfirmationBlock &block, const uint8_t *mask, bool selected)
+void Renderer::drawShopConfirmationBlock(const ShopConfirmationBlock &block, const uint8_t *mask, bool selected,
+                                         const DisplayRect &visible)
 {
-    auto fill = [this](int x, int y, int width, int height, uint16_t color) {
-        const int left = x < 0 ? 0 : x, top = y < 0 ? 0 : y;
-        const int right = x + width > 128 ? 128 : x + width;
-        const int bottom = y + height > 160 ? 160 : y + height;
-        if (left < right && top < bottom)
-            tft->writeFillRect(left, top, right - left, bottom - top, color);
+    auto border = [this, &visible, &block](int x, int y, int width, int height) {
+        const auto rect = clipRect(x, y, width, height, visible);
+        if (rect.w) tft->writeFillRect(rect.x, rect.y, rect.w, rect.h, block.border);
     };
     tft->startWrite();
     if (selected)
-        fill(block.x, block.y, block.width, block.height, block.fill);
+        tft->writeFillRect(visible.x, visible.y, visible.w, visible.h, block.fill);
     else if (block.action)
     {
-        fill(block.x, block.y, block.width, 1, block.border);
-        fill(block.x, block.y + block.height - 1, block.width, 1, block.border);
-        fill(block.x, block.y + 1, 1, block.height - 2, block.border);
-        fill(block.x + block.width - 1, block.y + 1, 1, block.height - 2, block.border);
+        border(block.x, block.y, block.width, 1);
+        border(block.x, block.y + block.height - 1, block.width, 1);
+        border(block.x, block.y + 1, 1, block.height - 2);
+        border(block.x + block.width - 1, block.y + 1, 1, block.height - 2);
     }
 
     const uint16_t ink = selected ? block.selectedInk : block.ink;
     const int inset = block.action ? 1 : 0;
-    const int right = block.width - inset;
-    for (int y = inset; y < block.height - inset; ++y)
+    const int left = std::max(inset, visible.x - block.x);
+    const int right = std::min(block.width - inset, visible.right() - block.x);
+    const int top = std::max(inset, visible.y - block.y);
+    const int bottom = std::min(block.height - inset, visible.bottom() - block.y);
+    for (int y = top; y < bottom; ++y)
     {
-        if (block.y + y < 0 || block.y + y >= 160) continue;
-        int run = 0, previous = -1;
-        for (int x = inset; x <= right; ++x)
+        int run = left, previous = -1;
+        for (int x = left; x <= right; ++x)
         {
             int color = -1;
-            if (x < right && block.x + x >= 0 && block.x + x < 128)
+            if (x < right)
             {
                 if (inkAt(block, mask, x, y)) color = ink;
                 else if (block.outlined && outlineAt(block, mask, x, y)) color = block.outline;

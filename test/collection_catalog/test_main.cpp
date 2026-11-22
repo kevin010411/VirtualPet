@@ -569,10 +569,76 @@ static int verifyShop(const std::filesystem::path &root)
     const int items = shopData.get(), products = shopData.get();
     const bool list = shopData.get() == 16;
     const int species = shopData.get();
-    shopData.seekg(39 + (129 + 2 * species) * items + 70 * products + (list ? 0 : 4 * (items + products + 3)));
+    const auto confirmationOffset = 39 + (129 + 2 * species) * items + 70 * products +
+                                    (list ? 0 : 4 * (items + products + 3));
+    shopData.seekg(confirmationOffset);
     char confirmationTag[4]{};
     shopData.read(confirmationTag, sizeof(confirmationTag));
     const bool configured = std::string(confirmationTag, sizeof(confirmationTag)) == "SCF1";
+    const auto checkButtons = [&](bool inventory, bool next) {
+        const size_t firstWindow = display.windows.size();
+        const size_t firstFill = display.filledRects.size();
+        const auto prior = display.screen;
+        if (next) game.OnRightKey();
+        else game.OnLeftKey();
+        assert(display.screen != prior);
+        if (configured)
+        {
+            const auto readWord = [&](int offset, unsigned bytes) {
+                shopData.seekg(confirmationOffset + offset);
+                unsigned value = 0;
+                for (unsigned i = 0; i < bytes; ++i)
+                    value |= static_cast<unsigned>(shopData.get()) << (8 * i);
+                return value;
+            };
+            const int page = readWord(4 + 4 * (6 + (inventory ? 0 : items)), 4);
+            const int count = readWord(page, 1);
+            Adafruit_ST7735::Window buttons[2];
+            uint16_t topColors[2];
+            for (int i = 0; i < 2; ++i)
+            {
+                const int block = readWord(page + 1 + 4 * (count - 2 + i), 4);
+                buttons[i] = {static_cast<int16_t>(readWord(block, 2)),
+                              static_cast<int16_t>(readWord(block + 2, 2)),
+                              static_cast<int>(readWord(block + 4, 1)),
+                              static_cast<int>(readWord(block + 5, 1))};
+                topColors[i] = readWord(block + (i == next ? 8 : 16), 2);
+            }
+            const auto inButton = [&](const Adafruit_ST7735::Window &write) {
+                for (const auto &button : buttons)
+                    if (write.x >= button.x && write.y >= button.y &&
+                        write.x + write.width <= button.x + button.width &&
+                        write.y + write.height <= button.y + button.height) return true;
+                return false;
+            };
+            for (size_t i = firstWindow; i < display.windows.size(); ++i)
+                assert(inButton(display.windows[i]) && "TFT frame write outside confirmation buttons");
+            for (size_t i = firstFill; i < display.filledRects.size(); ++i)
+                assert(inButton(display.filledRects[i]) && "TFT fill outside confirmation buttons");
+            for (int i = 0; i < 2; ++i)
+            {
+                const auto &button = buttons[i];
+                const auto &other = buttons[1 - i];
+                const int x = button.x + button.width / 2, y = button.y;
+                const bool overlaps = x >= other.x && x < other.x + other.width &&
+                                      y >= other.y && y < other.y + other.height;
+                if (x >= 0 && x < 128 && y >= 0 && y < 160 && !overlaps)
+                    assert(display.screen[y * 128 + x] == topColors[i]);
+            }
+        }
+        else
+        {
+            assert(display.windows.size() == firstWindow + 1);
+            assert(display.windows.back().y == 144 && display.windows.back().height == 16);
+        }
+        matchesFullRedraw();
+    };
+    const auto checkNoRedraw = [&](bool next) {
+        const size_t windows = display.windows.size(), fills = display.filledRects.size();
+        if (next) game.OnRightKey();
+        else game.OnLeftKey();
+        assert(display.windows.size() == windows && display.filledRects.size() == fills);
+    };
     size_t beforeMove = display.windows.size();
     game.OnRightKey(); // Product to inventory entry, with both rows in view in list mode.
     if (list)
@@ -609,19 +675,13 @@ static int verifyShop(const std::filesystem::path &root)
     assert(display.screen == browsing);
     assert(pet.customStat(0) == 50 && pet.persistentState().shopQuantities[0] == 0);
     game.OnConfirmKey();
-    const size_t beforeToggle = display.windows.size();
     const auto returning = display.screen;
-    game.OnLeftKey();
-    if (configured)
-    {
-        assert(display.screen != returning);
-        matchesFullRedraw();
-    }
-    else
-    {
-        assert(display.windows.size() == beforeToggle + 1);
-        assert(display.windows.back().y == 144 && display.windows.back().height == 16);
-    }
+    checkButtons(false, false);
+    checkNoRedraw(false);
+    checkButtons(false, true);
+    assert(display.screen == returning);
+    checkNoRedraw(true);
+    checkButtons(false, false);
     game.OnConfirmKey();
     assert(pet.customStat(0) == 43 && pet.persistentState().shopQuantities[0] == 2);
     matchesFullRedraw();
@@ -630,7 +690,8 @@ static int verifyShop(const std::filesystem::path &root)
     game.OnConfirmKey(); // Inventory
     matchesFullRedraw();
     game.OnConfirmKey(); // Use confirmation
-    game.OnLeftKey();
+    checkNoRedraw(true);
+    checkButtons(true, false);
     game.OnConfirmKey();
     assert(pet.customStat(0) == 46 && pet.persistentState().shopQuantities[0] == 1);
     assert(pet.stageDays() == 1 && pet.speciesSlot() == initialSpecies);
