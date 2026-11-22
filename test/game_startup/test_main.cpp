@@ -163,7 +163,7 @@ public:
                     {runtimeValueIdForPetStat(0), threshold, threshold}, days);
         return scenario->catchUpReadSucceeds;
     }
-    void configureRuntimeContract(const PetBehaviorConfig &) override {}
+    void configureRuntimeContract(const AssetData::RuntimeManifest &, const PetBehaviorConfig &) override {}
     const char *firstAssetDataErrorResource() const override { return "appearance"; }
     EvolutionLookupResult findEvolutionTarget(const PetStatSnapshot &stats,
                                              AppearanceSelection &selection) override
@@ -251,14 +251,14 @@ public:
 class SessionHost : public PetSessionHost
 {
 public:
-    SessionHost(PetBehaviorConfig &configRef, AssetResources &resourcesRef,
+    SessionHost(RuntimeContract &configRef, AssetResources &resourcesRef,
                 AnimationController &animationsRef, AppearanceLoader &loaderRef)
         : config(configRef), resources(resourcesRef), animations(animationsRef), loader(loaderRef) {}
     bool activateLoadedAppearance(uint8_t species, uint8_t outfit) override
     {
-        if (!resources.configureBundle(config.assetManifest.bundleId)) return false;
-        loader.configureRuntimeContract(config);
-        animations.configureRuntimeContract(config);
+        if (!resources.configureBundle(config.table.assetManifest.bundleId)) return false;
+        loader.configureRuntimeContract(config.table.assetManifest, config.behavior);
+        animations.configureRuntimeContract(config.playback);
         return true;
     }
     bool configureActiveAppearance(uint8_t species, uint8_t outfit) override
@@ -267,7 +267,7 @@ public:
                activateLoadedAppearance(species, outfit);
     }
 private:
-    PetBehaviorConfig &config;
+    RuntimeContract &config;
     AssetResources &resources;
     AnimationController &animations;
     AppearanceLoader &loader;
@@ -298,8 +298,8 @@ void testPetSession()
         Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
         AnimationController animations(renderer, resources);
-        PetBehaviorConfig config = {};
-        PetBehaviorRuntime runtime(config, pet, animations, resources);
+        RuntimeContract config = {};
+        PetBehaviorRuntime runtime(config.behavior, pet, animations, resources);
         PetSaveController saves(pet, storage, resources);
         SessionHost host(config, resources, animations, loader);
         AppearanceChangeController changes(pet, saves, storage, resources, loader, host);
@@ -355,8 +355,8 @@ void testPetSession()
         Renderer renderer(nullptr, resources);
         FakeAppearanceLoader loader;
         AnimationController animations(renderer, resources);
-        PetBehaviorConfig config = {};
-        PetBehaviorRuntime runtime(config, pet, animations, resources);
+        RuntimeContract config = {};
+        PetBehaviorRuntime runtime(config.behavior, pet, animations, resources);
         PetSaveController saves(pet, storage, resources);
         SessionHost host(config, resources, animations, loader);
         AppearanceChangeController changes(pet, saves, storage, resources, loader, host);
@@ -1489,34 +1489,34 @@ void testUnifiedCommandExecution()
     AssetResources resources(&sd);
     Renderer renderer(nullptr, resources);
     AnimationController animations(renderer, resources);
-    PetBehaviorConfig config = {};
-    config.stats[0] = {true, 2, 0, 10, -1};
-    config.actions[0].active = true;
-    config.actions[0].mode = PetBehaviorActionMode::Standard;
-    config.actions[0].outcomeCount = 1;
-    config.actions[0].suspendDailyChangeDays = 1;
-    config.actionOutcomeCount = 1;
-    config.actionOutcomes[0].animationPlayback = {{0, 0, 1}, 1};
-    config.actionOutcomes[0].effectCount = 1;
-    config.actionEffectCount = 1;
-    config.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
+    RuntimeContract config = {};
+    config.behavior.stats[0] = {true, 2, 0, 10, -1};
+    config.behavior.actions[0].active = true;
+    config.behavior.actions[0].mode = PetBehaviorActionMode::Standard;
+    config.behavior.actions[0].outcomeCount = 1;
+    config.behavior.actions[0].suspendDailyChangeDays = 1;
+    config.behavior.actionOutcomeCount = 1;
+    config.behavior.actionOutcomes[0].animationPlayback = {{0, 0, 1}, 1};
+    config.behavior.actionOutcomes[0].effectCount = 1;
+    config.behavior.actionEffectCount = 1;
+    config.behavior.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
     // Button position and referenced Action slot are deliberately different.
-    config.buttons[3] = {true, PetBehaviorButtonKind::UserAction, 0, RuntimeSystemCommandId::Status};
-    config.buttons[4] = {true, PetBehaviorButtonKind::UserAction, 1, RuntimeSystemCommandId::Status};
-    config.buttons[5] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Status};
-    config.screenBlockCount = 3;
+    config.buttons.buttons[3] = {true, PetBehaviorButtonKind::UserAction, 0, RuntimeSystemCommandId::Status};
+    config.buttons.buttons[4] = {true, PetBehaviorButtonKind::UserAction, 1, RuntimeSystemCommandId::Status};
+    config.buttons.buttons[5] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Status};
+    config.layout.screenBlockCount = 3;
     for (uint8_t index = 0; index < 3; ++index)
     {
-        config.screenBlocks[index].kind = ScreenBlockKind::Button;
-        config.screenBlocks[index].source = index + 4;
+        config.layout.screenBlocks[index].kind = ScreenBlockKind::Button;
+        config.layout.screenBlocks[index].source = index + 4;
     }
-    animations.configureRuntimeContract(config);
-    PetBehaviorRuntime runtime(config, pet, animations, resources);
+    animations.configureRuntimeContract(config.playback);
+    PetBehaviorRuntime runtime(config.behavior, pet, animations, resources);
     runtime.initializeStats();
     CommandExecutor executor(pet, animations, runtime);
-    executor.configureRuntimeContract(config);
+    executor.configureRuntimeContract(config.statusSets, config.behavior);
     CommandController commands;
-    commands.configure(config);
+    commands.configure(config.buttons, config.layout);
     // Selection starts on an invisible slot; it cannot apply effects.
     assert(executor.execute(commands).kind == CommandResultKind::None);
     assert(pet.customStat(0) == 2);
@@ -1542,8 +1542,8 @@ void testUnifiedCommandExecution()
     commands.next();
     const CommandResult status = executor.execute(commands);
     assert(status.kind == CommandResultKind::Playback && status.resourceError);
-    config.buttons[5].active = false;
-    commands.configure(config);
+    config.buttons.buttons[5].active = false;
+    commands.configure(config.buttons, config.layout);
     assert(executor.execute(commands).kind == CommandResultKind::None);
     assert(data.saves == 0);
 }
@@ -1558,16 +1558,16 @@ void testStatusReadsActionCommittedPet()
     AssetResources resources(&sd);
     Renderer renderer(nullptr, resources);
     AnimationController animations(renderer, resources);
-    PetBehaviorConfig config = {};
-    config.stats[0] = {true, 2, 0, 10, 0};
-    config.actions[0].active = true;
-    config.actions[0].mode = PetBehaviorActionMode::Standard;
-    config.actions[0].outcomeCount = 1;
-    config.actionOutcomeCount = 1;
-    config.actionOutcomes[0].animationPlayback = {{0, 0, 1}, 1};
-    config.actionOutcomes[0].effectCount = 1;
-    config.actionEffectCount = 1;
-    config.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
+    RuntimeContract config = {};
+    config.behavior.stats[0] = {true, 2, 0, 10, 0};
+    config.behavior.actions[0].active = true;
+    config.behavior.actions[0].mode = PetBehaviorActionMode::Standard;
+    config.behavior.actions[0].outcomeCount = 1;
+    config.behavior.actionOutcomeCount = 1;
+    config.behavior.actionOutcomes[0].animationPlayback = {{0, 0, 1}, 1};
+    config.behavior.actionOutcomes[0].effectCount = 1;
+    config.behavior.actionEffectCount = 1;
+    config.behavior.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
     config.statusSets.count = 1;
     StatusSetConfig &set = config.statusSets.sets[0];
     set.animation = {0, 0, 2};
@@ -1575,17 +1575,17 @@ void testStatusReadsActionCommittedPet()
     set.conditionCount = 1;
     set.conditions[0] = {StatusConditionKind::RuntimeValue,
                          runtimeValueIdForPetStat(0), 0, 2, 0, 10};
-    animations.configureRuntimeContract(config);
-    PetBehaviorRuntime runtime(config, pet, animations, resources);
+    animations.configureRuntimeContract(config.playback);
+    PetBehaviorRuntime runtime(config.behavior, pet, animations, resources);
     runtime.initializeStats();
     CommandExecutor executor(pet, animations, runtime);
-    executor.configureRuntimeContract(config);
-    config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Status};
-    config.screenBlockCount = 1;
-    config.screenBlocks[0].kind = ScreenBlockKind::Button;
-    config.screenBlocks[0].source = 1;
+    executor.configureRuntimeContract(config.statusSets, config.behavior);
+    config.buttons.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Status};
+    config.layout.screenBlockCount = 1;
+    config.layout.screenBlocks[0].kind = ScreenBlockKind::Button;
+    config.layout.screenBlocks[0].source = 1;
     CommandController commands;
-    commands.configure(config);
+    commands.configure(config.buttons, config.layout);
     assert(!executor.execute(commands).resourceError);
     assert(data.statusVersionQueries == 0);
     animations.preparePlayback(0);
@@ -2316,13 +2316,13 @@ void testBatchedCatchUpMatchesDailyEvents()
 #if ENABLE_COLLECTION_CATALOG
 // No collection conditions in these fixtures. Exercise the production Game
 // and save controller with catalog support without requiring SD artwork.
-bool evaluateCollectionCatalog(SdFat *, const PetBehaviorConfig &, Pet &, bool &changed)
+bool evaluateCollectionCatalog(SdFat *, const RuntimeTableConfig &, Pet &, bool &changed)
 {
     changed = false;
     return true;
 }
-bool applyCollectionOutfitGrants(SdFat *, const PetBehaviorConfig &, Pet &) { return true; }
-CollectionCatalog::CollectionCatalog(Pet &p, Renderer &r, AssetResources &a, const PetBehaviorConfig &c)
+bool applyCollectionOutfitGrants(SdFat *, const RuntimeTableConfig &, Pet &) { return true; }
+CollectionCatalog::CollectionCatalog(Pet &p, Renderer &r, AssetResources &a, const RuntimeTableConfig &c)
     : pet(p), renderer(r), resources(a), config(c) {}
 bool CollectionCatalog::start() { return false; }
 bool CollectionCatalog::move(bool) { return false; }
@@ -2333,7 +2333,7 @@ bool CollectionCatalog::takeActivation(uint8_t &, uint8_t &) { return false; }
 #endif
 
 bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
-                                PetBehaviorConfig &config, bool &resolved,
+                                RuntimeContract &config, bool &resolved,
                                 char *errorResource, size_t capacity)
 {
     ++scenario->initialLoads;
@@ -2349,126 +2349,126 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
     config.schemaFingerprint = 123;
     config.activeSpeciesSlot = selection.speciesSlot;
     config.activeOutfitSlot = selection.outfitSlot;
-    config.idleAnimation = {selection.speciesSlot, selection.outfitSlot, 5};
+    config.behavior.idleAnimation = {selection.speciesSlot, selection.outfitSlot, 5};
     if (scenario->manualDays)
     {
-        config.manualDays = true;
-        config.stats[0] = {true, 10, 0, 10, -1};
-        config.dayResetCount = 1;
-        config.dayResets[0] = {0, PetBehaviorEffectOperation::Set, 10};
-        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::AdvanceDay};
-        config.screenBlockCount = 1;
-        config.screenBlocks[0].kind = ScreenBlockKind::Button;
-        config.screenBlocks[0].source = 1;
+        config.behavior.manualDays = true;
+        config.behavior.stats[0] = {true, 10, 0, 10, -1};
+        config.behavior.dayResetCount = 1;
+        config.behavior.dayResets[0] = {0, PetBehaviorEffectOperation::Set, 10};
+        config.buttons.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::AdvanceDay};
+        config.layout.screenBlockCount = 1;
+        config.layout.screenBlocks[0].kind = ScreenBlockKind::Button;
+        config.layout.screenBlocks[0].source = 1;
     }
 #if ENABLE_SEQUENCE_AUDIO
-    if (scenario->idleMusic) config.animationAudio[config.idleAnimation.animationId - 1] = {0, 16000};
+    if (scenario->idleMusic) config.playback.animationAudio[config.behavior.idleAnimation.animationId - 1] = {0, 16000};
 #endif
-    config.deathEnabled = scenario->deathEnabled;
-    config.deathStatMask = 1;
-    config.deathAnimation = {selection.speciesSlot, selection.outfitSlot, 9};
-    config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::FirstStart)] =
+    config.behavior.deathEnabled = scenario->deathEnabled;
+    config.behavior.deathStatMask = 1;
+    config.behavior.deathAnimation = {selection.speciesSlot, selection.outfitSlot, 9};
+    config.playback.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::FirstStart)] =
         {selection.speciesSlot, selection.outfitSlot, 6};
     if (scenario->commandAction)
     {
-        config.stats[0] = {true, 2, 0, 10, 0};
-        if (scenario->pausedDailyAction) config.stats[0].dailyChange = -1;
-        if (scenario->catchUpEvents) config.stats[0] = {true, 100, 0, 100, -1};
-        config.actions[0].active = true;
-        if (scenario->pausedDailyAction) config.actions[0].suspendDailyChangeDays = 1;
-        config.actions[0].mode = PetBehaviorActionMode::Standard;
-        config.actions[0].outcomeCount = 1;
-        config.actionOutcomeCount = 1;
-        config.actionOutcomes[0].animationPlayback = {{1, 1, 1}, 1};
-        config.actionOutcomes[0].effectCount = 1;
-        config.actionEffectCount = 1;
-        config.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
-        config.buttons[0] = {true, PetBehaviorButtonKind::UserAction, 0, RuntimeSystemCommandId::Status};
-        config.screenBlockCount = 1;
-        config.screenBlocks[0].kind = ScreenBlockKind::Button;
-        config.screenBlocks[0].source = 1;
+        config.behavior.stats[0] = {true, 2, 0, 10, 0};
+        if (scenario->pausedDailyAction) config.behavior.stats[0].dailyChange = -1;
+        if (scenario->catchUpEvents) config.behavior.stats[0] = {true, 100, 0, 100, -1};
+        config.behavior.actions[0].active = true;
+        if (scenario->pausedDailyAction) config.behavior.actions[0].suspendDailyChangeDays = 1;
+        config.behavior.actions[0].mode = PetBehaviorActionMode::Standard;
+        config.behavior.actions[0].outcomeCount = 1;
+        config.behavior.actionOutcomeCount = 1;
+        config.behavior.actionOutcomes[0].animationPlayback = {{1, 1, 1}, 1};
+        config.behavior.actionOutcomes[0].effectCount = 1;
+        config.behavior.actionEffectCount = 1;
+        config.behavior.actionEffects[0] = {0, PetBehaviorEffectOperation::Set, 8};
+        config.buttons.buttons[0] = {true, PetBehaviorButtonKind::UserAction, 0, RuntimeSystemCommandId::Status};
+        config.layout.screenBlockCount = 1;
+        config.layout.screenBlocks[0].kind = ScreenBlockKind::Button;
+        config.layout.screenBlocks[0].source = 1;
     }
     if (scenario->commandOutfit)
     {
-        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::ChangeOutfit};
-        config.screenBlockCount = 1;
-        config.screenBlocks[0].kind = ScreenBlockKind::Button;
-        config.screenBlocks[0].source = 1;
+        config.buttons.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::ChangeOutfit};
+        config.layout.screenBlockCount = 1;
+        config.layout.screenBlocks[0].kind = ScreenBlockKind::Button;
+        config.layout.screenBlocks[0].source = 1;
     }
     if (scenario->navigationButtons)
     {
-        config.buttons[1] = config.buttons[0];
-        config.screenBlockCount = 2;
-        config.screenBlocks[1] = config.screenBlocks[0];
-        config.screenBlocks[1].source = 2;
-        config.layoutUnselected = {1, 1, 7};
-        config.layoutSelected = {1, 1, 8};
+        config.buttons.buttons[1] = config.buttons.buttons[0];
+        config.layout.screenBlockCount = 2;
+        config.layout.screenBlocks[1] = config.layout.screenBlocks[0];
+        config.layout.screenBlocks[1].source = 2;
+        config.layout.layoutUnselected = {1, 1, 7};
+        config.layout.layoutSelected = {1, 1, 8};
     }
     if (scenario->commandSequence)
     {
-        config.actions[0].followingAnimationCount = 2;
-        config.followingAnimations[0] = {{1, 1, 2}, 1};
-        config.followingAnimations[1] = {{1, 1, 3}, 1};
-        config.actions[1].active = true;
-        config.actions[1].firstOutcome = 1;
-        config.actions[1].outcomeCount = 1;
-        config.actionOutcomeCount = 2;
-        config.actionOutcomes[1].animationPlayback = {{1, 1, 4}, 1};
-        config.actionOutcomes[1].firstEffect = 1;
-        config.actionOutcomes[1].effectCount = 1;
-        config.actionEffectCount = 2;
-        config.actionEffects[1] = {0, PetBehaviorEffectOperation::Set, 4};
-        config.buttons[1].actionSlot = 1;
+        config.behavior.actions[0].followingAnimationCount = 2;
+        config.behavior.followingAnimations[0] = {{1, 1, 2}, 1};
+        config.behavior.followingAnimations[1] = {{1, 1, 3}, 1};
+        config.behavior.actions[1].active = true;
+        config.behavior.actions[1].firstOutcome = 1;
+        config.behavior.actions[1].outcomeCount = 1;
+        config.behavior.actionOutcomeCount = 2;
+        config.behavior.actionOutcomes[1].animationPlayback = {{1, 1, 4}, 1};
+        config.behavior.actionOutcomes[1].firstEffect = 1;
+        config.behavior.actionOutcomes[1].effectCount = 1;
+        config.behavior.actionEffectCount = 2;
+        config.behavior.actionEffects[1] = {0, PetBehaviorEffectOperation::Set, 4};
+        config.buttons.buttons[1].actionSlot = 1;
     }
 #if ENABLE_INSTRUCTION_RESPONSE
     if (scenario->commandInstruction)
     {
-        config.instructionSettings = scenario->instructionSettings;
-        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::InstructionResponse};
+        config.instruction.instructionSettings = scenario->instructionSettings;
+        config.buttons.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::InstructionResponse};
         if (scenario->instructionEffects)
         {
-            config.stats[0] = {true, 9, 0, 10, 0};
-            config.instructionEffectCount = 2;
-            config.instructionEffects[0] = {0, 0, PetBehaviorEffectOperation::Change, 5};
-            config.instructionEffects[1] = {1, 0, scenario->deathEnabled ? PetBehaviorEffectOperation::Set : PetBehaviorEffectOperation::Change,
+            config.behavior.stats[0] = {true, 9, 0, 10, 0};
+            config.instruction.instructionEffectCount = 2;
+            config.instruction.instructionEffects[0] = {0, 0, PetBehaviorEffectOperation::Change, 5};
+            config.instruction.instructionEffects[1] = {1, 0, scenario->deathEnabled ? PetBehaviorEffectOperation::Set : PetBehaviorEffectOperation::Change,
                                             scenario->deathEnabled ? 0 : -5};
         }
         if (scenario->instructionCustomArea)
         {
-            auto &area = config.screenBlocks[config.screenBlockCount++];
+            auto &area = config.layout.screenBlocks[config.layout.screenBlockCount++];
             area.kind = ScreenBlockKind::Animation;
             area.x = 16; area.y = 32; area.width = 96; area.height = 96;
         }
         if (scenario->instructionAnimatedFeedback)
         {
-            config.systemAnimations[38] = {1, 1, 95};
-            config.systemAnimations[39] = {1, 1, 95};
+            config.playback.systemAnimations[38] = {1, 1, 95};
+            config.playback.systemAnimations[39] = {1, 1, 95};
         }
         for (uint8_t item = 0; item < 3; ++item)
         {
-            config.instructionOptions[item] = {0, 0, static_cast<uint16_t>(80 + item)};
-            config.systemAnimations[35 + item] = {1, 1, static_cast<uint16_t>(90 + item)};
-            if (config.instructionSettings.noGoEnabled)
-                config.systemAnimations[40 + item] = {1, 1, static_cast<uint16_t>(85 + item)};
+            config.instruction.instructionOptions[item] = {0, 0, static_cast<uint16_t>(80 + item)};
+            config.playback.systemAnimations[35 + item] = {1, 1, static_cast<uint16_t>(90 + item)};
+            if (config.instruction.instructionSettings.noGoEnabled)
+                config.playback.systemAnimations[40 + item] = {1, 1, static_cast<uint16_t>(85 + item)};
         }
     }
 #endif
     if (scenario->commandPredict)
     {
-        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Predict};
-        config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::PredAnim)] = {1, 1, 10};
-        config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Battery)] = {1, 1, 22};
+        config.buttons.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Predict};
+        config.playback.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::PredAnim)] = {1, 1, 10};
+        config.playback.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Battery)] = {1, 1, 22};
         for (size_t index = 0; index < 11; ++index)
-            config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Predict1) + index] =
+            config.playback.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Predict1) + index] =
                 {1, 1, static_cast<uint16_t>(11 + index)};
         if (scenario->missingPredict)
-            config.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Predict11)] = {};
+            config.playback.systemAnimations[static_cast<size_t>(FirmwarePlaybackRole::Predict11)] = {};
     }
 #if ENABLE_GUESS_GAME
     if (scenario->commandGuess)
     {
-        config.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::GuessGame};
-        config.buttons[1] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Predict};
+        config.buttons.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::GuessGame};
+        config.buttons.buttons[1] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::Predict};
         for (auto role : {FirmwarePlaybackRole::GuessStart, FirmwarePlaybackRole::GuessItem1,
                          FirmwarePlaybackRole::GuessItem2, FirmwarePlaybackRole::GuessItem3,
                          FirmwarePlaybackRole::GuessItem4, FirmwarePlaybackRole::GuessLL,
@@ -2476,16 +2476,16 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
                          FirmwarePlaybackRole::GuessRR, FirmwarePlaybackRole::GuessRight,
                          FirmwarePlaybackRole::GuessWrong, FirmwarePlaybackRole::GuessWin,
                          FirmwarePlaybackRole::GuessLoss})
-            config.systemAnimations[static_cast<size_t>(role)] = {1, 1, static_cast<uint16_t>(40 + static_cast<uint8_t>(role))};
-        config.guessEffectCount = 1;
-        config.guessEffects[0] = {true, PetBehaviorGuessOutcome::RoundCorrect, 0, PetBehaviorEffectOperation::Change, 1};
+            config.playback.systemAnimations[static_cast<size_t>(role)] = {1, 1, static_cast<uint16_t>(40 + static_cast<uint8_t>(role))};
+        config.behavior.guessEffectCount = 1;
+        config.behavior.guessEffects[0] = {true, PetBehaviorGuessOutcome::RoundCorrect, 0, PetBehaviorEffectOperation::Change, 1};
     }
 #endif
     return true;
 }
 
 bool loadRuntimeContract(SdFat *, uint8_t species, uint8_t outfit,
-                         PetBehaviorConfig &config, char *errorResource, size_t capacity)
+                         RuntimeContract &config, char *errorResource, size_t capacity)
 {
     ++scenario->reloads;
     if (!scenario->reloadSucceeds)
@@ -2495,7 +2495,7 @@ bool loadRuntimeContract(SdFat *, uint8_t species, uint8_t outfit,
     }
     config.activeSpeciesSlot = species;
     config.activeOutfitSlot = outfit;
-    config.idleAnimation = {species, outfit, 5};
+    config.behavior.idleAnimation = {species, outfit, 5};
     return true;
 }
 
@@ -2769,14 +2769,14 @@ void testPredictMinigame()
     SdFat sd;
     AssetResources resources(&sd);
     Renderer renderer(nullptr, resources);
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     AppearanceSelection selection;
     bool resolved = false;
     char resource[20] = {};
     assert(loadInitialRuntimeContract(&sd, selection, config, resolved, resource, sizeof(resource)));
     AnimationController animations(renderer, resources);
-    animations.configureRuntimeContract(config);
-    animations.setup(config.idleAnimation);
+    animations.configureRuntimeContract(config.playback);
+    animations.setup(config.behavior.idleAnimation);
     PredictGame predict(animations);
     uint16_t seen = 0;
     for (uint32_t seed : {1U, 33U, 48U, 49U, 66U, 96U, 98U, 99U, 113U, 114U, 180U})
@@ -2796,10 +2796,10 @@ void testPredictMinigame()
 #if ENABLE_SEQUENCE_AUDIO
     // Timed system animations use their own v21 BGM and keep the original
     // 40-second introduction / 4.8-second result across animation loop boundaries.
-    for (uint8_t id = 10; id <= 21; ++id) config.animationAudio[id - 1] = {0, 800};
+    for (uint8_t id = 10; id <= 21; ++id) config.playback.animationAudio[id - 1] = {0, 800};
     AnimationController musical(renderer, resources);
-    musical.configureRuntimeContract(config);
-    musical.setup(config.idleAnimation);
+    musical.configureRuntimeContract(config.playback);
+    musical.setup(config.behavior.idleAnimation);
     PredictGame musicalPredict(musical);
     assert(musicalPredict.start());
     auto tick = [&](unsigned long now) {

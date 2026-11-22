@@ -1,6 +1,6 @@
 #pragma once
 #include "display/DisplayRect.h"
-#include "pet/PetBehaviorTypes.h"
+#include "resources/RuntimeTableConfig.h"
 #include "resources/detail/RuntimeTableReader.h"
 
 class Pet;
@@ -10,15 +10,15 @@ class AssetResources;
 // Runtime records stay on SD. Only the active page/focus and a bounded record
 // buffer live in RAM; no framebuffer or array of 64 resolved image references.
 bool loadCollectionCatalog(const RuntimeTableInternal::RuntimeTable &table,
-                           PetBehaviorConfig &config);
-bool evaluateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &pet,
+                           CollectionSettings &config, uint8_t (&trackedActions)[8], uint8_t &trackedActionCount);
+bool evaluateCollectionCatalog(SdFat *sd, const RuntimeTableConfig &config, Pet &pet,
                                bool &changed);
-bool applyCollectionOutfitGrants(SdFat *sd, const PetBehaviorConfig &config, Pet &pet);
+bool applyCollectionOutfitGrants(SdFat *sd, const RuntimeTableConfig &config, Pet &pet);
 
 class CollectionCatalog
 {
 public:
-    CollectionCatalog(Pet &pet, Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config);
+    CollectionCatalog(Pet &pet, Renderer &renderer, AssetResources &resources, const RuntimeTableConfig &config);
     bool start();
     bool active() const { return opened; }
     bool move(bool right);
@@ -31,7 +31,7 @@ private:
     Pet &pet;
     Renderer &renderer;
     AssetResources &resources;
-    const PetBehaviorConfig &config;
+    const RuntimeTableConfig &config;
     uint8_t count = 0;
     uint8_t focus = 0;
     uint8_t page = 0;

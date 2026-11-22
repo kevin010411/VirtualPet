@@ -21,9 +21,11 @@ enum class AppStage : uint8_t
 class AppFlowController
 {
 public:
+    AppStage stage() const { return currentStage; }
     bool is(AppStage stage) const { return currentStage == stage; }
     void enter(AppStage stage) { currentStage = stage; }
     bool allowsPetTime() const;
+    bool holdsPetClock() const;
     bool allowsMenuNavigation() const;
     void beginEvolution();
     void endEvolution();

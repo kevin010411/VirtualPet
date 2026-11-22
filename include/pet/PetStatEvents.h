@@ -5,6 +5,8 @@
 #include "pet/PetBehaviorTypes.h"
 
 #if ENABLE_STAT_EVENTS
+#include "pet/StatEventSettings.h"
+
 constexpr uint8_t kMaxStatEventPages = 64;
 
 struct PetStatEventResult
@@ -15,10 +17,10 @@ struct PetStatEventResult
     uint8_t pageCount;
 };
 
-bool settleStatEvents(SdFat *sd, const PetBehaviorConfig &config,
+bool settleStatEvents(SdFat *sd, const StatEventSettings &events, const PetBehaviorConfig &config,
                       const PetStatSnapshot &before, const PetStatSnapshot &after,
                       PetStatEventResult &result);
-bool readStatEventPage(SdFat *sd, const PetBehaviorConfig &config, uint16_t index,
+bool readStatEventPage(SdFat *sd, const StatEventSettings &events, uint16_t index,
                        uint16_t &animationId, uint16_t &durationMs);
 #endif
 

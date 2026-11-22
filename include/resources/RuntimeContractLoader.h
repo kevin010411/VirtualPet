@@ -2,7 +2,7 @@
 #define RUNTIME_CONTRACT_LOADER_H
 
 #include <SdFat.h>
-#include "pet/PetBehaviorTypes.h"
+#include "resources/RuntimeContract.h"
 
 struct AppearanceSelection;
 
@@ -12,7 +12,7 @@ struct AppearanceSelection;
 bool loadRuntimeContract(SdFat *sd,
                          uint8_t speciesSlot,
                          uint8_t outfitSlot,
-                         PetBehaviorConfig &config,
+                         RuntimeContract &config,
                          char *errorResource = nullptr,
                          size_t errorResourceCapacity = 0);
 
@@ -22,7 +22,7 @@ bool loadRuntimeContract(SdFat *sd,
 // or presentation failures.
 bool loadInitialRuntimeContract(SdFat *sd,
                                 AppearanceSelection &selection,
-                                PetBehaviorConfig &config,
+                                RuntimeContract &config,
                                 bool &initialAppearanceResolved,
                                 char *errorResource = nullptr,
                                 size_t errorResourceCapacity = 0);

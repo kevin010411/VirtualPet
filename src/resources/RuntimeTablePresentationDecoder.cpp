@@ -51,7 +51,7 @@ bool compiledFeaturesAccept(uint32_t flags)
 
 // Flow and FlowRoles are export/inspector metadata. Firmware executes the
 // resolved system roles, including the two shared button-layout assets.
-bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
+bool decodeScreenBlocks(const RuntimeTable &table, ScreenLayoutConfig &config)
 {
     const Section *blocks = table.find(ScreenBlocks);
     const Section *rules = table.find(ScreenRules);
@@ -90,7 +90,7 @@ bool decodeScreenBlocks(const RuntimeTable &table, PetBehaviorConfig &config)
 bool decodeRuntimePresentation(const RuntimeTable &table,
                                uint8_t speciesSlot,
                                uint8_t outfitSlot,
-                               PetBehaviorConfig &config)
+                               RuntimeContract &config)
 {
     if (speciesSlot == 0 || outfitSlot == 0)
         return false;
@@ -99,7 +99,7 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
 #endif
     const Source &source = table.source;
     const uint32_t featureFlags = table.featureFlags;
-    if (!compiledFeaturesAccept(featureFlags) || !decodeScreenBlocks(table, config))
+    if (!compiledFeaturesAccept(featureFlags) || !decodeScreenBlocks(table, config.layout))
         return false;
 
     const Section *assets = table.find(AssetRefs);
@@ -131,13 +131,13 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
                 continue;
             return false;
         }
-        config.systemAnimations[role] = animation;
+        config.playback.systemAnimations[role] = animation;
         if (role == static_cast<uint8_t>(FirmwarePlaybackRole::Layout))
-            config.layoutUnselected = animation;
+            config.layout.layoutUnselected = animation;
         else if (role == static_cast<uint8_t>(FirmwarePlaybackRole::LayoutSel))
-            config.layoutSelected = animation;
+            config.layout.layoutSelected = animation;
     }
-    return config.layoutUnselected.valid() && config.layoutUnselected.shared() &&
-           config.layoutSelected.valid() && config.layoutSelected.shared();
+    return config.layout.layoutUnselected.valid() && config.layout.layoutUnselected.shared() &&
+           config.layout.layoutSelected.valid() && config.layout.layoutSelected.shared();
 }
 } // namespace RuntimeTableInternal

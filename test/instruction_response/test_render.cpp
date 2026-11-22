@@ -17,14 +17,14 @@ int main(int argc,char **argv)
     uint8_t scratch[AssetData::kIoScratchBytes]={};
     BundleReader reader(&sd,scratch,sizeof(scratch));
     assert(reader.configureBundle(manifest.bundleId));
-    PetBehaviorConfig config={};
+    RuntimeContract config ={};
     assert(loadCompleteRuntimeTable(&sd,manifest,reader,1,1,config));
     Adafruit_ST7735 display;
     uint8_t readBuffer[FrameDecoder::kDataReadBufferBytes]={};
     uint16_t lines[FrameDecoder::kLineBufferPixels]={};
     for (uint8_t item=0;item<3;++item)
     {
-        const auto &ref=config.instructionOptions[item];
+        const auto &ref=config.instruction.instructionOptions[item];
         AssetData::AssetFrameAddress address={ref.speciesSlot,ref.outfitSlot,ref.animationId,0,0};
         assert(FrameDecoder::showDataFrame(reader,address,&display,readBuffer,sizeof(readBuffer),lines,
                 FrameDecoder::kLineBufferPixels,item*43,128,12,42,32));
@@ -38,7 +38,7 @@ int main(int argc,char **argv)
     if(maximum) {
         const uint16_t intervals[]={50,10000,167,500};
         for(uint8_t role=35;role<43;++role) for(uint8_t version=0;version<4;++version) {
-            const auto &ref=config.systemAnimations[role];
+            const auto &ref=config.playback.systemAnimations[role];
             AssetData::AssetFrameAddress address={ref.speciesSlot,ref.outfitSlot,ref.animationId,version,0};
             AssetData::AnimationRecord animation;
             assert(reader.resolveAnimation(address,animation));
@@ -57,7 +57,7 @@ int main(int argc,char **argv)
     }
     for (uint8_t role=38;role<=39;++role)
     {
-        const auto &ref=config.systemAnimations[role];
+        const auto &ref=config.playback.systemAnimations[role];
         if (!ref.valid()) continue;
         AssetData::AssetFrameAddress address={ref.speciesSlot,ref.outfitSlot,ref.animationId,0,0};
         AssetData::AnimationRecord animation;
@@ -76,7 +76,7 @@ int main(int argc,char **argv)
     }
     for(uint8_t role=40;role<43;++role)
     {
-        const auto &ref=config.systemAnimations[role];
+        const auto &ref=config.playback.systemAnimations[role];
         if(!ref.valid()) continue;
         AssetData::AssetFrameAddress address={ref.speciesSlot,ref.outfitSlot,ref.animationId,0,0};
         const auto options=display.screen;
@@ -86,6 +86,6 @@ int main(int argc,char **argv)
         for(unsigned pixel=128*128;pixel<128*160;++pixel) assert(display.screen[pixel]==options[pixel]);
     }
     puts("[PASS] actual exported 42x32 option frames decoded into TFT capture at x0/43/86, exact 1px gaps, bounded scanline writes");
-    if(config.systemAnimations[38].valid())
+    if(config.playback.systemAnimations[38].valid())
         puts("[PASS] actual single/multi-frame feedback decodes inside 128x96 without changing top or option pixels");
 }

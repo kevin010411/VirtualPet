@@ -2,7 +2,6 @@
 
 #if ENABLE_PROJECT_MENUS
 #include "display/Renderer.h"
-#include "pet/PetBehaviorTypes.h"
 #include "resources/AssetResources.h"
 #include "resources/detail/RuntimeTableFile.h"
 
@@ -21,8 +20,8 @@ bool readDefinition(const RuntimeTable &table, uint16_t menu, uint8_t (&record)[
 }
 
 ProjectMenuSession::ProjectMenuSession(Renderer &rendererRef, AssetResources &resourcesRef,
-                                       const PetBehaviorConfig &configRef)
-    : renderer(rendererRef), resources(resourcesRef), config(configRef)
+                                       const AssetData::RuntimeManifest &manifestRef)
+    : renderer(rendererRef), resources(resourcesRef), manifest(manifestRef)
 {
 }
 
@@ -57,7 +56,7 @@ bool ProjectMenuSession::move(bool forward)
 {
     if (card != kNone16) return true;
     RuntimeTableFile file;
-    if (!file.open(resources.sdCard(), config.assetManifest)) return false;
+    if (!file.open(resources.sdCard(), manifest)) return false;
     Cursor &cursor = stack[depth - 1];
     uint8_t definition[4];
     if (!readDefinition(file.table(), cursor.menu, definition)) return false;
@@ -71,7 +70,7 @@ bool ProjectMenuSession::move(bool forward)
 bool ProjectMenuSession::confirm(Entry &entry)
 {
     RuntimeTableFile file;
-    if (!file.open(resources.sdCard(), config.assetManifest)) return false;
+    if (!file.open(resources.sdCard(), manifest)) return false;
     const RuntimeTable &table = file.table();
     if (card != kNone16)
     {
@@ -112,7 +111,7 @@ bool ProjectMenuSession::confirm(Entry &entry)
 bool ProjectMenuSession::redraw()
 {
     RuntimeTableFile file;
-    return file.open(resources.sdCard(), config.assetManifest) && redraw(file.table());
+    return file.open(resources.sdCard(), manifest) && redraw(file.table());
 }
 
 bool ProjectMenuSession::redraw(const RuntimeTable &table)

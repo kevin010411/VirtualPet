@@ -8,14 +8,14 @@
 
 class Renderer;
 class AssetResources;
-struct PetBehaviorConfig;
+struct RuntimePlaybackConfig;
 
 class AnimationController
 {
 public:
     AnimationController(Renderer &renderer, AssetResources &resources);
 
-    void configureRuntimeContract(const PetBehaviorConfig &config);
+    void configureRuntimeContract(const RuntimePlaybackConfig &config);
     void setup(const AssetData::AnimationRef &baseAnimation);
     void setBaseAnimation(const AssetData::AnimationRef &baseAnimation);
     bool hasAnimation(FirmwarePlaybackRole id) const;
@@ -52,7 +52,7 @@ private:
     Animation animationQueue[kMaxQueuedAnimations] = {};
     uint8_t animationQueueCount = 0;
     Animation activeAnimation = {};
-    const PetBehaviorConfig *runtimeContract = nullptr;
+    const RuntimePlaybackConfig *runtimeContract = nullptr;
     bool hasActiveAnimation = false;
     uint8_t activeRepeatsRemaining = 0;
     BaseAnimationRotation baseRotation;

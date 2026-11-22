@@ -74,10 +74,10 @@ int main(int argc,char **argv)
         }
         Source source={&bytes,memoryRead,static_cast<uint32_t>(bytes.size())};
         AssetData::RuntimeManifest manifest={};assert(readRuntimeManifest(source,manifest));
-        PetBehaviorConfig config={};
+        RuntimeContract config ={};
         const bool accepted=parseRuntimeTableBehavior(bytes.data(),bytes.size(),manifest,1,1,config);
         assert(accepted==(card==1));
-        if(accepted) assert(config.buttons[0].systemCommandId!=RuntimeSystemCommandId::InstructionResponse);
+        if(accepted) assert(config.buttons.buttons[0].systemCommandId!=RuntimeSystemCommandId::InstructionResponse);
     }
     puts("[PASS] feature-disabled reader accepts actual unused v26 export and rejects enabled maximum package");
     puts("[PASS] v22/v23/v24/v25 and unknown v27 headers rejected; no legacy compatibility parser");

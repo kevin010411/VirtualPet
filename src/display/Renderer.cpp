@@ -10,9 +10,7 @@
 #include "display/FrameDecoder.h"
 #include "display/RenderStatsReporter.h"
 #include "resources/AssetResources.h"
-#if ENABLE_CAPTURE_GAME
 #include "platform/TftDmaTransfer.h"
-#endif
 
 struct Renderer::AnimationState
 {
@@ -50,27 +48,6 @@ AssetData::AssetFrameAddress frameAddress(const AssetData::AnimationRef &animati
 }
 } // namespace
 
-#if ENABLE_CAPTURE_GAME || ENABLE_SHOP
-namespace
-{
-// Rows 2–9 of Fusion Pixel 12 px zh-TW. Each digit has 5 ink columns and a 6 px advance.
-constexpr uint8_t numberGlyphs[][8] = {
-    {0x70, 0x88, 0x98, 0xa8, 0xa8, 0xc8, 0x88, 0x70},
-    {0x20, 0xe0, 0x20, 0x20, 0x20, 0x20, 0x20, 0xf8},
-    {0x70, 0x88, 0x08, 0x10, 0x20, 0x40, 0x80, 0xf8},
-    {0x70, 0x88, 0x08, 0x30, 0x08, 0x08, 0x88, 0x70},
-    {0x30, 0x50, 0x50, 0x90, 0x90, 0xf8, 0x10, 0x10},
-    {0xf8, 0x80, 0x80, 0xf0, 0x08, 0x08, 0x88, 0x70},
-    {0x70, 0x88, 0x80, 0xf0, 0x88, 0x88, 0x88, 0x70},
-    {0xf8, 0x08, 0x08, 0x10, 0x10, 0x20, 0x20, 0x20},
-    {0x70, 0x88, 0x88, 0x70, 0x88, 0x88, 0x88, 0x70},
-    {0x70, 0x88, 0x88, 0x88, 0x78, 0x08, 0x88, 0x70},
-    {0x00, 0x00, 0x20, 0x20, 0xf8, 0x20, 0x20, 0x00}, // Shop overflow marker (+)
-    {0x00, 0x00, 0x00, 0x00, 0xf8, 0x00, 0x00, 0x00}, // Score minus sign
-};
-}
-#endif
-
 Renderer::Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resourcesRef, SPIClass *pixelSpi)
     : tft(ref_tft), resources(resourcesRef), pixelSpi(pixelSpi), state(new AnimationState)
 #if ENABLE_DEBUG
@@ -78,211 +55,6 @@ Renderer::Renderer(Adafruit_ST7735 *ref_tft, AssetResources &resourcesRef, SPICl
 #endif
 {
 }
-
-#if ENABLE_CAPTURE_GAME
-namespace
-{
-constexpr int captureTimerEdge(int pixel) { return (pixel * 8 + 2) / 5; }
-
-void drawCaptureTimer(uint16_t *pixels, int top, uint16_t seconds, int timerX, int timerY)
-{
-    // Keep the 4×6 glyphs and colors in sync with the Web CaptureTimer.
-    constexpr uint32_t digitGlyphs[] = {0x699996, 0x262227, 0x69124f, 0xe1611e, 0x26af22,
-                                        0xf8e196, 0x68e996, 0xf12444, 0x696996, 0x699716};
-    constexpr uint32_t hourglass = 0xf9669f;
-    constexpr int glyphWidth = 4;
-    constexpr int glyphHeight = 6;
-    constexpr int glyphAdvance = glyphWidth + 1;
-    constexpr int nativeHeight = glyphHeight + 2;
-    static_assert(captureTimerEdge(nativeHeight) == CaptureGame::timerHeight, "Capture timer height mismatch.");
-
-    const bool urgent = seconds <= 5;
-    uint8_t digits[3];
-    uint8_t count = 0;
-    do
-    {
-        digits[count++] = seconds % 10;
-        seconds /= 10;
-    } while (seconds || count < 2);
-    const int nativeWidth = glyphAdvance * (count + 1) + 1;
-    const int firstRow = top > timerY ? top : timerY;
-    const int bandEnd = top + CaptureGame::bandRows;
-    const int timerEnd = timerY + CaptureGame::timerHeight;
-    const int endRow = bandEnd < timerEnd ? bandEnd : timerEnd;
-    for (int y = firstRow; y < endRow; ++y)
-    {
-        uint16_t *row = pixels + (y - top) * CaptureAssets::screenWidth + timerX;
-        // Invert the rounded pixel edges to find the source row for this screen row.
-        const int sourceY = ((y - timerY) * 5 + 2) / 8;
-        const int corner = sourceY == 0 || sourceY == nativeHeight - 1 ? 1 : 0;
-        const uint16_t fill = sourceY == 0 ? 0x2aec : 0x1148;
-        for (int x = captureTimerEdge(corner); x < captureTimerEdge(nativeWidth - corner); ++x)
-            row[x] = fill;
-        if (corner) continue;
-        for (uint8_t index = 0; index <= count; ++index)
-        {
-            const uint32_t glyph = index == 0 ? hourglass : digitGlyphs[digits[count - index]];
-            const uint16_t color = urgent ? 0xff12 : (index == 0 ? 0x7f5a : 0xffff);
-            for (int x = 0; x < glyphWidth; ++x)
-            {
-                const int bit = glyphWidth * (glyphHeight + 1 - sourceY) - x - 1;
-                if ((glyph & (1UL << bit)) == 0) continue;
-                const int left = 1 + glyphAdvance * index + x;
-                for (int px = captureTimerEdge(left); px < captureTimerEdge(left + 1); ++px)
-                    row[px] = color;
-            }
-        }
-    }
-}
-
-// Fusion Pixel 12 px zh-TW rows for 本局得分 and 中鍵返回, matching the Web preview.
-constexpr uint16_t captureScoreTitle[4][11] = {
-    {0x0400, 0x0400, 0xffe0, 0x1500, 0x1500, 0x1500, 0x2480, 0x2480, 0x5f40, 0x8420, 0x0400},
-    {0x7fc0, 0x4040, 0x7fc0, 0x4000, 0x7fe0, 0x4020, 0x5f20, 0x5120, 0x5120, 0x5f20, 0x80c0},
-    {0x2fc0, 0x4840, 0x8fc0, 0x2840, 0x4fc0, 0xc000, 0x5fe0, 0x4080, 0x5fe0, 0x4880, 0x4580},
-    {0x1f00, 0x0100, 0x2080, 0x2080, 0x4040, 0xbfa0, 0x0880, 0x0880, 0x1080, 0x2080, 0xc300},
-};
-constexpr uint16_t captureScoreReturn[4][11] = {
-    {0x0400, 0x0400, 0xffe0, 0x8420, 0x8420, 0x8420, 0xffe0, 0x0400, 0x0400, 0x0400, 0x0400},
-    {0x4080, 0xbbe0, 0x08a0, 0xefe0, 0x50a0, 0xfbe0, 0x4880, 0xebe0, 0xd880, 0x6c80, 0x93e0},
-    {0x8fe0, 0x4800, 0x0800, 0xcfe0, 0x4820, 0x4c20, 0x8a40, 0x4980, 0x5660, 0xa000, 0x9fe0},
-    {0xffe0, 0x8020, 0x8020, 0x9f20, 0x9120, 0x9120, 0x9120, 0x9f20, 0x8020, 0x8020, 0xffe0},
-};
-
-void drawCaptureScoreLabel(Adafruit_ST7735 &screen, const uint16_t (&label)[4][11], int top)
-{
-    constexpr int left = (CaptureAssets::screenWidth - (4 * 12 - 1)) / 2;
-    for (int glyph = 0; glyph < 4; ++glyph)
-        for (int row = 0; row < 11; ++row)
-            for (int col = 0; col < 11; ++col)
-                if (label[glyph][row] & (0x8000U >> col))
-                    screen.writePixel(left + glyph * 12 + col, top + row, 0xffff);
-}
-}
-
-bool Renderer::drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame &frame, uint32_t bands)
-{
-    constexpr int width = CaptureAssets::screenWidth;
-    constexpr int rows = CaptureGame::bandRows;
-    constexpr int spriteWidth = CaptureAssets::spriteMaxWidth;
-    static_assert(width * rows + spriteWidth * rows <= FrameDecoder::kLineBufferPixels,
-                  "Capture bands and sprite rows must fit the renderer workspace.");
-    uint16_t *pixels = state->lineBuffer;
-    uint16_t *spritePixels = pixels + width * rows;
-    const auto &scene = assets.scene();
-
-    for (int band = 0; band < CaptureGame::bandCount; ++band)
-    {
-        if ((bands & (1UL << band)) == 0) continue;
-        const int top = band * rows;
-        if (!assets.readBackground(top, rows, pixels)) return false;
-        const int lineStart = frame.lineStart > top ? frame.lineStart : top;
-        const int lineEnd = frame.lineEnd < top + rows ? frame.lineEnd : top + rows;
-        for (int y = lineStart; y < lineEnd; ++y)
-            pixels[(y - top) * width + frame.hookX] = 0xC6DA;
-
-        for (uint8_t index = 0; index < frame.layerCount; ++index)
-        {
-            const auto &layer = frame.layers[index];
-            const auto &sprite = *layer.sprite;
-            const int y0 = layer.y > top ? layer.y : top;
-            const int y1 = layer.y + sprite.height < top + rows ? layer.y + sprite.height : top + rows;
-            const int x0 = layer.x > 0 ? layer.x : 0;
-            const int x1 = layer.x + sprite.width < width ? layer.x + sprite.width : width;
-            if (y1 <= y0 || x1 <= x0) continue;
-            if (sprite.width > spriteWidth || !assets.readSprite(sprite, y0 - layer.y, y1 - y0, spritePixels))
-                return false;
-
-            for (int y = y0; y < y1; ++y)
-            {
-                const uint16_t *source = spritePixels + (y - y0) * sprite.width;
-                uint16_t *destination = pixels + (y - top) * width;
-                for (int x = x0; x < x1; ++x)
-                {
-                    const int local = x - layer.x;
-                    const uint16_t pixel = source[layer.flip ? sprite.width - 1 - local : local];
-                    if (pixel != sprite.transparent) destination[x] = pixel;
-                }
-            }
-        }
-
-        if (top < scene.timerY + CaptureGame::timerHeight && top + rows > scene.timerY)
-            drawCaptureTimer(pixels, top, frame.secondsLeft, scene.timerX, scene.timerY);
-        if (!sendCaptureBand(pixels, top)) return false;
-    }
-    return true;
-}
-
-bool Renderer::sendCaptureBand(uint16_t *pixels, uint8_t top)
-{
-    constexpr int width = CaptureAssets::screenWidth;
-    constexpr int rows = CaptureGame::bandRows;
-    tft->startWrite();
-    tft->setAddrWindow(0, top, width, rows);
-    bool sent = true;
-#if defined(STM32F103xB)
-    {
-        TftDmaTransfer dma(pixelSpi);
-        if (dma.active())
-        {
-            sent = dma.send(pixels, width * rows);
-            sent = dma.finish() && sent;
-        }
-        else
-            tft->writePixels(pixels, width * rows);
-    }
-#else
-    tft->writePixels(pixels, width * rows);
-#endif
-    tft->endWrite();
-    return sent;
-}
-
-bool Renderer::showCaptureCard(CaptureAssets &assets, const CaptureAssets::Card &card, uint8_t page)
-{
-    uint16_t *pixels = state->lineBuffer;
-    for (uint8_t y = 0; y < CaptureAssets::screenHeight; y += CaptureGame::bandRows)
-    {
-        if (!assets.readCardRows(card, page, y, CaptureGame::bandRows, pixels) ||
-            !sendCaptureBand(pixels, y)) return false;
-    }
-    return true;
-}
-
-void Renderer::showCaptureScore(int32_t score)
-{
-    constexpr uint8_t minusGlyph = 11;
-    uint32_t value = static_cast<uint32_t>(score);
-    if (score < 0) value = 0U - value;
-    uint8_t digits[11];
-    int count = 0;
-    do
-    {
-        digits[count++] = value % 10;
-        value /= 10;
-    } while (value);
-    if (score < 0) digits[count++] = minusGlyph;
-
-    const int width = count * 6 - 1;
-    const int fittingScale = (CaptureAssets::screenWidth - 16) / width;
-    const int scale = fittingScale < 4 ? fittingScale : 4;
-    const int top = (CaptureAssets::screenHeight - 8 * scale) / 2;
-    int left = (CaptureAssets::screenWidth - width * scale) / 2;
-    tft->fillScreen(0x11E9);
-    tft->startWrite();
-    drawCaptureScoreLabel(*tft, captureScoreTitle, 26);
-    for (int digit = count - 1; digit >= 0; --digit, left += 6 * scale)
-    {
-        const auto &glyph = numberGlyphs[digits[digit]];
-        for (int row = 0; row < 8; ++row)
-            for (int col = 0; col < 5; ++col)
-                if (glyph[row] & (0x80U >> col))
-                    tft->writeFillRect(left + col * scale, top + row * scale, scale, scale, 0xffff);
-    }
-    drawCaptureScoreLabel(*tft, captureScoreReturn, 139);
-    tft->endWrite();
-}
-#endif
 
 Renderer::~Renderer()
 {
@@ -565,48 +337,28 @@ void Renderer::showTrainingResult(uint8_t score, uint8_t total, bool passed)
 #endif
 #endif
 
-#if ENABLE_SHOP
-void Renderer::drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint32_t value)
-{
-    if (!width) return;
-    uint8_t digits[10];
-    uint8_t count = 0;
-    do {
-        digits[count++] = value % 10;
-        value /= 10;
-    } while (value);
-    int16_t left = width - count * 6;
-    if (count * 6 > width)
-    {
-        digits[0] = 10;
-        count = 1;
-        left = 0;
-    }
-    const int16_t top = height / 2 - 4;
-    uint16_t *line = state->lineBuffer;
-    tft->startWrite();
-    tft->setAddrWindow(x, y, width, height);
-    for (uint8_t row = 0; row < height; ++row)
-    {
-        for (uint8_t col = 0; col < width; ++col) line[col] = 0x1126;
-        const int16_t glyphRow = row - top;
-        if (glyphRow >= 0 && glyphRow < 8)
-        {
-            int16_t pen = left;
-            for (uint8_t digit = count; digit > 0; --digit, pen += 6)
-            {
-                const uint8_t bits = numberGlyphs[digits[digit - 1]][glyphRow];
-                for (uint8_t col = 0; col < 5 && pen + col < width; ++col)
-                    if (bits & (0x80 >> col)) line[pen + col] = 0xffff;
-            }
-        }
-        tft->writePixels(line, width);
-    }
-    tft->endWrite();
-}
+uint16_t *Renderer::pixelWorkspace() { return state->lineBuffer; }
 
-void Renderer::highlightShopRow(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
+bool Renderer::writePixelBand(uint8_t top, uint8_t width, uint8_t rows)
 {
-    tft->drawRect(x, y, width, height, 0x8758);
-}
+    uint16_t *pixels = pixelWorkspace();
+    tft->startWrite();
+    tft->setAddrWindow(0, top, width, rows);
+    bool sent = true;
+#if defined(STM32F103xB)
+    {
+        TftDmaTransfer dma(pixelSpi);
+        if (dma.active())
+        {
+            sent = dma.send(pixels, width * rows);
+            sent = dma.finish() && sent;
+        }
+        else
+            tft->writePixels(pixels, width * rows);
+    }
+#else
+    tft->writePixels(pixels, width * rows);
 #endif
+    tft->endWrite();
+    return sent;
+}

@@ -6,12 +6,14 @@
 #if ENABLE_INSTRUCTION_RESPONSE
 class Renderer;
 class AssetResources;
-struct PetBehaviorConfig;
+struct InstructionRuntimeSettings;
+struct RuntimePlaybackConfig;
 
 class InstructionPresentation
 {
 public:
-    void start(Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config);
+    void start(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
+                          const RuntimePlaybackConfig &playback);
     void update();
     void cancel();
     bool active() const;
@@ -29,12 +31,13 @@ private:
     InstructionResponse instruction;
     InstructionResponse::Phase drawnPhase = InstructionResponse::Phase::Idle;
     AssetResources *instructionResources = nullptr;
+    const RuntimePlaybackConfig *instructionPlayback = nullptr;
     uint8_t instructionHeld = 7;
     uint8_t promptVersion = 0;
     uint32_t frameAt = 0, frameMs = 167;
     bool render();
 #endif
     Renderer *instructionRenderer = nullptr;
-    const PetBehaviorConfig *instructionConfig = nullptr;
+    const InstructionRuntimeSettings *instructionConfig = nullptr;
 };
 #endif

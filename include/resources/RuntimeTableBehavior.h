@@ -4,7 +4,7 @@
 #include <SdFat.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "pet/PetBehaviorTypes.h"
+#include "resources/RuntimeContract.h"
 
 class BundleReader;
 struct AppearanceSelection;
@@ -21,7 +21,7 @@ bool loadCompleteRuntimeTable(SdFat *sd,
                               BundleReader &bundleReader,
                               uint8_t speciesSlot,
                               uint8_t outfitSlot,
-                              PetBehaviorConfig &config,
+                              RuntimeContract &config,
                               AppearanceSelection *initialAppearance = nullptr,
                               bool *initialAppearanceResolved = nullptr);
 
@@ -33,6 +33,6 @@ bool parseRuntimeTableBehavior(const uint8_t *bytes,
                                const AssetData::RuntimeManifest &manifest,
                                uint8_t speciesSlot,
                                uint8_t outfitSlot,
-                               PetBehaviorConfig &config);
+                               RuntimeContract &config);
 
 #endif // RUNTIME_TABLE_BEHAVIOR_H

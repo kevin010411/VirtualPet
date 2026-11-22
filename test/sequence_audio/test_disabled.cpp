@@ -20,7 +20,7 @@ int main(int argc, char **argv)
         manifest.fileSize = bytes.size();
         manifest.schemaFingerprint = RuntimeTableInternal::readU32(bytes.data() + 44);
         manifest.fileCrc32 = RuntimeTableInternal::readU32(bytes.data() + 48);
-        PetBehaviorConfig config = {};
+        RuntimeContract config = {};
         const bool loaded = parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, 1, config);
         assert(loaded == (argument == 1)); // Silent v21 loads; animation audio requires the player.
     }

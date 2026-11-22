@@ -49,7 +49,9 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
                                   PetBehaviorStatValues &state);
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
+struct InstructionRuntimeSettings;
 bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
+                                        const InstructionRuntimeSettings &settings,
                                         uint32_t correctMask, uint8_t count,
                                         PetBehaviorStatValues &state);
 #endif

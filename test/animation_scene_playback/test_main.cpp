@@ -204,32 +204,32 @@ unsigned long AssetResources::frameIntervalFor(
 
 void testAppearanceRedraw()
 {
-    PetBehaviorConfig config = {};
-    config.layoutUnselected = {0, 0, 10};
-    config.layoutSelected = {0, 0, 11};
-    config.screenBlockCount = 3;
-    config.screenBlocks[0] = {ScreenBlockKind::Animation, 0, 0, 20, 128, 96};
-    config.screenBlocks[1] = {ScreenBlockKind::Button, 1, 0, 0, 16, 16};
-    config.screenBlocks[2] = {ScreenBlockKind::Stat, 16, 16, 0, 16, 16, 0, 2, 5};
-    config.screenRules[0] = {0, 0, 5};
-    config.screenRules[1] = {1, 100, 6};
-    config.screenRuleCount = 2;
-    config.statCount = 1;
-    config.buttons[0].active = true;
-    config.buttons[0].kind = PetBehaviorButtonKind::UserAction;
+    RuntimeContract config = {};
+    config.layout.layoutUnselected = {0, 0, 10};
+    config.layout.layoutSelected = {0, 0, 11};
+    config.layout.screenBlockCount = 3;
+    config.layout.screenBlocks[0] = {ScreenBlockKind::Animation, 0, 0, 20, 128, 96};
+    config.layout.screenBlocks[1] = {ScreenBlockKind::Button, 1, 0, 0, 16, 16};
+    config.layout.screenBlocks[2] = {ScreenBlockKind::Stat, 16, 16, 0, 16, 16, 0, 2, 5};
+    config.layout.screenRules[0] = {0, 0, 5};
+    config.layout.screenRules[1] = {1, 100, 6};
+    config.layout.screenRuleCount = 2;
+    config.behavior.statCount = 1;
+    config.buttons.buttons[0].active = true;
+    config.buttons.buttons[0].kind = PetBehaviorButtonKind::UserAction;
     AssetResources resources(nullptr);
     Renderer renderer(nullptr, resources);
     CommandController commands;
     LayoutRenderer layout(renderer, resources, commands);
-    commands.configure(config);
-    layout.configureRuntimeContract(config);
+    commands.configure(config.buttons, config.layout);
+    layout.configureRuntimeContract(config.layout, config.behavior, config.table.assetManifest.bundleId);
     selectedLayoutId = 0;
     assert(layout.syncPlayback(PetStatSnapshot{}));
 
     // Reloading the same bundle for another species keeps buttons and values.
     events.clear();
     config.activeSpeciesSlot = 2;
-    layout.configureRuntimeContract(config);
+    layout.configureRuntimeContract(config.layout, config.behavior, config.table.assetManifest.bundleId);
     assert(layout.syncPlayback(PetStatSnapshot{}));
     assert(events.empty());
 
@@ -239,7 +239,7 @@ void testAppearanceRedraw()
     assert(layout.syncPlayback(snapshot));
     assert(events.size() == 2 && events[1].frame == 6);
     events.clear();
-    layout.configureRuntimeContract(config);
+    layout.configureRuntimeContract(config.layout, config.behavior, config.table.assetManifest.bundleId);
     assert(layout.syncPlayback(snapshot));
     assert(events.empty());
 
@@ -250,8 +250,8 @@ void testAppearanceRedraw()
     events.clear();
 
     // The same layout ID in another bundle must not reuse old pixels.
-    config.assetManifest.bundleId.bytes[0] = 1;
-    layout.configureRuntimeContract(config);
+    config.table.assetManifest.bundleId.bytes[0] = 1;
+    layout.configureRuntimeContract(config.layout, config.behavior, config.table.assetManifest.bundleId);
     assert(layout.syncPlayback(snapshot));
     assert(events.size() == 6);
     events.clear();
@@ -275,8 +275,8 @@ void testAppearanceRedraw()
     // Compact ranges preserve the full unsigned Pet Stat domain.
     snapshot.customStats[0] = 1;
     layout.updateValues(snapshot);
-    config.screenRules[0] = {0, UINT32_MAX - 1, 5};
-    config.screenRules[1] = {UINT32_MAX, UINT32_MAX, 6};
+    config.layout.screenRules[0] = {0, UINT32_MAX - 1, 5};
+    config.layout.screenRules[1] = {UINT32_MAX, UINT32_MAX, 6};
     snapshot.customStats[0] = UINT32_MAX - 1;
     events.clear();
     layout.updateValues(snapshot);
@@ -292,12 +292,12 @@ void testAppearanceRedraw()
 
 void testPreparedFrameLifecycle()
 {
-    PetBehaviorConfig config = {};
-    config.systemAnimations[static_cast<uint8_t>(FirmwarePlaybackRole::Battery)] = animation(3);
+    RuntimeContract config = {};
+    config.playback.systemAnimations[static_cast<uint8_t>(FirmwarePlaybackRole::Battery)] = animation(3);
     AssetResources resources(nullptr);
     Renderer renderer(nullptr, resources);
     AnimationController animations(renderer, resources);
-    animations.configureRuntimeContract(config);
+    animations.configureRuntimeContract(config.playback);
     animations.setup(animation(1));
 
     events.clear();
@@ -367,17 +367,17 @@ int main(int argc, char **argv)
     assert(argc == 3);
     const std::vector<uint8_t> runtimeFixture = readFixture(argv[1]);
     const std::vector<uint8_t> packFixture = readFixture(argv[2]);
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     assert(parseRuntimeTableBehavior(runtimeFixture.data(), runtimeFixture.size(),
                                      fixtureManifest(runtimeFixture), 1, 1, config));
-    assert(config.layoutUnselected.shared() && config.layoutUnselected.valid());
-    assert(config.layoutSelected.shared() && config.layoutSelected.valid());
+    assert(config.layout.layoutUnselected.shared() && config.layout.layoutUnselected.valid());
+    assert(config.layout.layoutSelected.shared() && config.layout.layoutSelected.valid());
     assert(packFixture.size() >= 112);
     assert(packFixture[12] == AssetData::kPackKindSpecies);
     fixtureLayoutIds[0] = packFixture[92];
     fixtureLayoutIds[1] = packFixture[108];
     assert(fixtureLayoutIds[0] == 0 && fixtureLayoutIds[1] == 1);
-    config.buttons[1] = config.buttons[0];
+    config.buttons.buttons[1] = config.buttons.buttons[0];
 
     AssetResources resources(nullptr);
 
@@ -385,9 +385,9 @@ int main(int argc, char **argv)
     CommandController commands;
     AnimationController animations(renderer, resources);
     LayoutRenderer layout(renderer, resources, commands);
-    commands.configure(config);
-    animations.configureRuntimeContract(config);
-    layout.configureRuntimeContract(config);
+    commands.configure(config.buttons, config.layout);
+    animations.configureRuntimeContract(config.playback);
+    layout.configureRuntimeContract(config.layout, config.behavior, config.table.assetManifest.bundleId);
     const AssetData::AnimationRef center = animation(1);
     animations.setup(center);
     layout.begin();

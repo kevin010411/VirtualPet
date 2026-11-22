@@ -8,6 +8,8 @@ class CommandController;
 class Renderer;
 class AssetResources;
 struct PetBehaviorConfig;
+struct PetBehaviorStatConfig;
+struct ScreenLayoutConfig;
 struct PetStatSnapshot;
 
 class LayoutRenderer
@@ -15,7 +17,8 @@ class LayoutRenderer
 public:
     LayoutRenderer(Renderer &renderer, AssetResources &resources, CommandController &commands);
 
-    void configureRuntimeContract(const PetBehaviorConfig &config);
+    void configureRuntimeContract(const ScreenLayoutConfig &layout, const PetBehaviorConfig &behavior,
+                                  const AssetData::BundleId &bundleId);
     void begin();
     void setCommandsVisible(bool visible) { commandsVisible = visible; }
     void drawAll();
@@ -28,7 +31,9 @@ private:
     Renderer &renderer;
     AssetResources &resources;
     CommandController &commands;
-    const PetBehaviorConfig *runtimeContract = nullptr;
+    const ScreenLayoutConfig *layout = nullptr;
+    const PetBehaviorStatConfig *stats = nullptr;
+    uint16_t activeStatMask = 0;
     AssetData::BundleId layoutBundleId = {};
     uint8_t activeLayoutId = 0;
     bool hasActiveLayout = false;

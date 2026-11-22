@@ -52,7 +52,7 @@ public:
     virtual bool catchUpDays(const PetBehaviorConfig &, const PetBehaviorStatValues &,
                              const PetBehaviorDailyChangePauses &, uint32_t, uint32_t &days)
     { days = 1; return true; }
-    virtual void configureRuntimeContract(const PetBehaviorConfig &config) = 0;
+    virtual void configureRuntimeContract(const AssetData::RuntimeManifest &manifest, const PetBehaviorConfig &config) = 0;
     virtual const char *firstAssetDataErrorResource() const = 0;
     virtual EvolutionLookupResult findEvolutionTarget(const PetStatSnapshot &stats,
                                                       AppearanceSelection &selection) = 0;

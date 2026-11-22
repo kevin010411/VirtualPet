@@ -205,11 +205,12 @@ void MinigameController::settleOutcome(GuessItemOutcome outcome)
 #endif // ENABLE_GUESS_GAME || ENABLE_COMMAND_PREDICT || ENABLE_INSTRUCTION_RESPONSE || ENABLE_CAPTURE_GAME
 
 #if ENABLE_INSTRUCTION_RESPONSE
-void MinigameController::startInstruction(Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config)
+void MinigameController::startInstruction(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
+                          const RuntimePlaybackConfig &playback)
 {
     reset();
     animations.cancelAll();
-    instruction.start(renderer, resources, config);
+    instruction.start(renderer, resources, config, playback);
     activeGame = Kind::Instruction;
 }
 

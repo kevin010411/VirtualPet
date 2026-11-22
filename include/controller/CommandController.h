@@ -5,7 +5,8 @@
 #include <stddef.h>
 #include "common/AppProfile.h"
 #include "animation/Animation.h"
-#include "pet/PetBehaviorTypes.h"
+#include "controller/ButtonBindings.h"
+#include "display/ScreenLayoutConfig.h"
 
 enum class AppCommandId : uint8_t
 {
@@ -30,7 +31,7 @@ class CommandController
 public:
     CommandController();
 
-    void configure(const PetBehaviorConfig &config);
+    void configure(const ButtonBindings &bindings, const ScreenLayoutConfig &layout);
     void resetSelection();
     void next();
     void prev();

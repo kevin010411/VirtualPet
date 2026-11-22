@@ -9,7 +9,7 @@ class PetStorage;
 class AssetResources;
 class AppearanceLoader;
 class PetBehaviorRuntime;
-struct PetBehaviorConfig;
+struct RuntimeContract;
 
 // Game activates the loaded contract in its presentation/command modules.
 class PetSessionHost : public AppearanceChangeHost
@@ -34,7 +34,7 @@ public:
     };
 
     PetSession(Pet &pet, PetStorage &storage, AssetResources &resources,
-               AppearanceLoader &loader, PetBehaviorConfig &config,
+               AppearanceLoader &loader, RuntimeContract &config,
                PetBehaviorRuntime &runtime, AppearanceChangeController &changes,
                PetSessionHost &host);
 
@@ -52,7 +52,7 @@ private:
     PetStorage &storage;
     AssetResources &resources;
     AppearanceLoader &loader;
-    PetBehaviorConfig &config;
+    RuntimeContract &config;
     PetBehaviorRuntime &runtime;
     AppearanceChangeController &changes;
     PetSessionHost &host;

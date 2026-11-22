@@ -12,7 +12,7 @@ public:
     bool catchUpDays(const PetBehaviorConfig &config, const PetBehaviorStatValues &state,
                      const PetBehaviorDailyChangePauses &pauses, uint32_t limit, uint32_t &days) override;
 
-    void configureRuntimeContract(const PetBehaviorConfig &config) override;
+    void configureRuntimeContract(const AssetData::RuntimeManifest &manifest, const PetBehaviorConfig &config) override;
     const char *firstAssetDataErrorResource() const override;
     EvolutionLookupResult findEvolutionTarget(const PetStatSnapshot &stats,
                                              AppearanceSelection &selection) override;

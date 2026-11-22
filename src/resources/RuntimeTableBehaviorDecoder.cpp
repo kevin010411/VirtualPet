@@ -281,7 +281,7 @@ bool decodeFollowingAnimations(const Source &source, const Section *playbacks,
     return true;
 }
 
-bool decodeButtons(const Source &source, const Section &buttons, uint8_t species, PetBehaviorConfig &config)
+bool decodeButtons(const Source &source, const Section &buttons, uint8_t species, uint8_t actionCount, ButtonBindings &bindings)
 {
     if (buttons.count < kPetBehaviorButtonCount)
         return false;
@@ -302,13 +302,13 @@ bool decodeButtons(const Source &source, const Section &buttons, uint8_t species
         uint8_t record[8] = {};
         if (!readRecord(source, buttons, first + index, record))
             return false;
-        PetBehaviorButtonConfig &button = config.buttons[index];
+        PetBehaviorButtonConfig &button = bindings.buttons[index];
         button.active = true;
         button.kind = static_cast<PetBehaviorButtonKind>(record[1]);
         const uint16_t target = readU16(record + 2);
         if (button.kind == PetBehaviorButtonKind::UserAction)
         {
-            if (target >= config.actionCount)
+            if (target >= actionCount)
                 return false;
             button.actionSlot = static_cast<uint8_t>(target);
         }
@@ -327,7 +327,7 @@ bool decodeButtons(const Source &source, const Section &buttons, uint8_t species
 #endif
         }
     }
-    config.buttonCount = kPetBehaviorButtonCount;
+    bindings.buttonCount = kPetBehaviorButtonCount;
     return true;
 }
 
@@ -338,7 +338,7 @@ bool decodeStatus(const Source &source,
                   const Section &assets,
                   const Section &animations,
                   const ActiveAssetScope &scope,
-                  PetBehaviorConfig &config)
+                  StatusSetsConfig &statusSets)
 {
     const bool enabled = (featureFlags & kStatusFeature) != 0;
     if (!enabled)
@@ -354,7 +354,7 @@ bool decodeStatus(const Source &source,
             setRecord[1] > kMaxStatusConditions ||
             static_cast<uint32_t>(nextCondition) + setRecord[1] > conditions->count)
             return false;
-        StatusSetConfig &set = config.statusSets.sets[setIndex];
+        StatusSetConfig &set = statusSets.sets[setIndex];
         set.conditionCount = setRecord[1];
         set.versionCount = readU16(setRecord + 6);
         if (!resolveAnimation(source, assets, animations, readU16(setRecord + 2),
@@ -380,12 +380,12 @@ bool decodeStatus(const Source &source,
             ++nextCondition;
         }
     }
-    config.statusSets.count = static_cast<uint8_t>(sets->count);
+    statusSets.count = static_cast<uint8_t>(sets->count);
     return true;
 }
 
 bool decodeAnimationAudio(const RuntimeTable &table, const Section &animations,
-                          PetBehaviorConfig &config)
+                          RuntimePlaybackConfig &config)
 {
 #if ENABLE_SEQUENCE_AUDIO
     const Section *bindings = table.find(AnimationAudio);
@@ -415,7 +415,7 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                                 const AssetData::RuntimeManifest &manifest,
                                 uint8_t speciesSlot,
                                 uint8_t outfitSlot,
-                                PetBehaviorConfig &config)
+                                RuntimeContract &contract)
 {
     if (speciesSlot == 0 || outfitSlot == 0)
         return false;
@@ -435,11 +435,12 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         outcomes == nullptr || buttons == nullptr)
         return false;
 
+    auto &config = contract.behavior;
     // The caller owns initialization and discards the configuration on failure.
-    config.assetManifest = manifest;
-    config.activeSpeciesSlot = speciesSlot;
-    config.activeOutfitSlot = outfitSlot;
-    config.schemaFingerprint = table.schemaFingerprint;
+    contract.table.assetManifest = manifest;
+    contract.activeSpeciesSlot = speciesSlot;
+    contract.activeOutfitSlot = outfitSlot;
+    contract.schemaFingerprint = table.schemaFingerprint;
     config.manualDays = false;
     config.dayResetCount = 0;
     config.actionGateCount = 0;
@@ -468,8 +469,8 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         config.actionGateCount = gates->count;
     }
 #if ENABLE_STAT_EVENTS
-    config.persistentStatEvents = (table.featureFlags & kPersistentStatEventsFeature) != 0;
-    config.statEventTriggerCount = 0;
+    contract.statEvents.persistentStatEvents = (table.featureFlags & kPersistentStatEventsFeature) != 0;
+    contract.statEvents.statEventTriggerCount = 0;
     if ((table.featureFlags & kStatEventsFeature) != 0)
     {
         const Section *triggers = table.find(EventTriggers);
@@ -481,19 +482,19 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         if (triggers == nullptr || nodes == nullptr || edges == nullptr || conditions == nullptr ||
             effects == nullptr || pages == nullptr)
             return false;
-        config.statEventTriggersOffset = triggers->offset;
-        config.statEventNodesOffset = nodes->offset;
-        config.statEventEdgesOffset = edges->offset;
-        config.statEventConditionsOffset = conditions->offset;
-        config.statEventEffectsOffset = effects->offset;
-        config.statEventPagesOffset = pages->offset;
-        config.statEventTriggerCount = triggers->count;
-        config.statEventNodeCount = nodes->count;
-        config.statEventPageCount = pages->count;
+        contract.statEvents.statEventTriggersOffset = triggers->offset;
+        contract.statEvents.statEventNodesOffset = nodes->offset;
+        contract.statEvents.statEventEdgesOffset = edges->offset;
+        contract.statEvents.statEventConditionsOffset = conditions->offset;
+        contract.statEvents.statEventEffectsOffset = effects->offset;
+        contract.statEvents.statEventPagesOffset = pages->offset;
+        contract.statEvents.statEventTriggerCount = triggers->count;
+        contract.statEvents.statEventNodeCount = nodes->count;
+        contract.statEvents.statEventPageCount = pages->count;
     }
 #endif
 #if ENABLE_COLLECTION_CATALOG
-    if (!loadCollectionCatalog(table, config))
+    if (!loadCollectionCatalog(table, contract.table.collection, config.trackedActions, config.trackedActionCount))
         return false;
 #else
     if ((table.featureFlags & kCollectionFeature) != 0) return false;
@@ -509,7 +510,7 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
             uint8_t row[20];
             if (!readRecord(source, *courses, index, row)) return false;
             if (row[0] != speciesSlot) continue;
-            auto &training = config.trainingSettings;
+            auto &training = contract.instruction.trainingSettings;
             training.mode = static_cast<TrainingMode>(row[1]);
             training.gateSlot = row[2];
             training.completionSlot = row[3];
@@ -522,7 +523,7 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
             training.cueMs = readU16(row + 16);
             training.passScore = row[18];
             training.frameCount = row[19];
-            if (!resolveAnimation(source, *assets, *animations, readU16(row + 8), scope, config.trainingFrames))
+            if (!resolveAnimation(source, *assets, *animations, readU16(row + 8), scope, contract.instruction.trainingFrames))
                 return false;
             break;
         }
@@ -534,18 +535,18 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         const Section *instruction = table.find(InstructionResponseConfig);
         uint8_t record[24] = {};
         if (instruction == nullptr || !readRecord(source, *instruction, 0, record)) return false;
-        config.instructionSettings.roundCount = record[0];
-        config.instructionSettings.hard = record[1] != 0;
-        config.instructionSettings.noGoEnabled = (readU16(record + 6) & 1) != 0;
-        config.instructionSettings.typeWeights[0] = readU16(record + 20);
-        config.instructionSettings.typeWeights[1] = readU16(record + 22);
-        config.instructionSettings.answerMs = readU16(record + 2);
-        config.instructionSettings.feedbackMs = readU16(record + 4);
+        contract.instruction.instructionSettings.roundCount = record[0];
+        contract.instruction.instructionSettings.hard = record[1] != 0;
+        contract.instruction.instructionSettings.noGoEnabled = (readU16(record + 6) & 1) != 0;
+        contract.instruction.instructionSettings.typeWeights[0] = readU16(record + 20);
+        contract.instruction.instructionSettings.typeWeights[1] = readU16(record + 22);
+        contract.instruction.instructionSettings.answerMs = readU16(record + 2);
+        contract.instruction.instructionSettings.feedbackMs = readU16(record + 4);
         for (uint8_t item = 0; item < 3; ++item)
         {
-            config.instructionSettings.targetWeights[item] = readU16(record + 14 + item * 2);
+            contract.instruction.instructionSettings.targetWeights[item] = readU16(record + 14 + item * 2);
             if (!resolveAnimation(source, *assets, *animations, readU16(record + 8 + item * 2),
-                                  scope, config.instructionOptions[item])) return false;
+                                  scope, contract.instruction.instructionOptions[item])) return false;
         }
     }
     const Section *instructionEffects = table.find(InstructionResponseEffects);
@@ -555,13 +556,13 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         {
             uint8_t record[12];
             if (!readRecord(source, *instructionEffects, index, record)) return false;
-            auto &effect = config.instructionEffects[index];
+            auto &effect = contract.instruction.instructionEffects[index];
             effect.group = record[0];
             effect.statSlot = record[1];
             effect.operation = static_cast<PetBehaviorEffectOperation>(record[2]);
             effect.value = readI64(record + 4);
         }
-        config.instructionEffectCount = static_cast<uint8_t>(instructionEffects->count);
+        contract.instruction.instructionEffectCount = static_cast<uint8_t>(instructionEffects->count);
     }
 #endif
     const Section *death = table.find(DeathConfig);
@@ -584,12 +585,12 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                        *assets, *animations, scope, config) ||
         !decodeFollowingAnimations(source, table.find(ActionPlaybacks),
                                    *assets, *animations, scope, config) ||
-        !decodeAnimationAudio(table, *animations, config) ||
+        !decodeAnimationAudio(table, *animations, contract.playback) ||
         !decodeGuessEffects(source, table.featureFlags, guessEffects, config) ||
-        !decodeButtons(source, *buttons, scope.speciesSlot, config) ||
+        !decodeButtons(source, *buttons, scope.speciesSlot, config.actionCount, contract.buttons) ||
         !decodeStatus(source, table.featureFlags,
                       table.find(StatusSets), table.find(StatusConditions),
-                      *assets, *animations, scope, config))
+                      *assets, *animations, scope, contract.statusSets))
         return false;
     return true;
 }

@@ -73,7 +73,7 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
     AssetData::RuntimeManifest manifest;
     assert(loadRuntimeManifest(&sd, manifest));
     assert(reader.configureBundle(manifest.bundleId));
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
 #if EXPECT_RULE_CAPACITY_REJECTION
     assert(!loadCompleteRuntimeTable(&sd, manifest, reader, 1, 1, config));
     return;
@@ -100,18 +100,18 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
                 assert(display.screen[(frame.y + y) * 128 + frame.x + x] == frame.pixels[y * frame.width + x]);
     }
     const ScreenBlockConfig *animationBlock = nullptr;
-    for (uint8_t index = 0; index < config.screenBlockCount; ++index)
-        if (config.screenBlocks[index].kind == ScreenBlockKind::Animation)
+    for (uint8_t index = 0; index < config.layout.screenBlockCount; ++index)
+        if (config.layout.screenBlocks[index].kind == ScreenBlockKind::Animation)
         {
-            animationBlock = &config.screenBlocks[index];
+            animationBlock = &config.layout.screenBlocks[index];
         }
     CommandController commands;
-    commands.configure(config);
+    commands.configure(config.buttons, config.layout);
     commands.resetSelection();
     LayoutRenderer layout(renderer, resources, commands);
-    layout.configureRuntimeContract(config);
+    layout.configureRuntimeContract(config.layout, config.behavior, config.table.assetManifest.bundleId);
     PetStatSnapshot snapshot = {};
-    const AssetData::AnimationRef active = config.idleAnimation;
+    const AssetData::AnimationRef active = config.behavior.idleAnimation;
     assert(renderer.setAnimation(active, 0, true));
     uint8_t layoutId;
     assert(renderer.currentLayoutId(layoutId));
@@ -119,14 +119,14 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
     uint16_t expectedNumericFrame = 0;
     const auto expectedScreen = [&]() {
         std::vector<uint16_t> expected(128 * 160);
-        paint(expected, findFrame(frames, config.layoutUnselected, layoutId, 0));
-        for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+        paint(expected, findFrame(frames, config.layout.layoutUnselected, layoutId, 0));
+        for (uint8_t index = 0; index < config.layout.screenBlockCount; ++index)
         {
-            const auto &block = config.screenBlocks[index];
+            const auto &block = config.layout.screenBlocks[index];
             if (fixtureKind != ScreenBlockKind::Stat && block.kind == fixtureKind)
             {
                 assert(expectedNumericFrame > 0);
-                paint(expected, findFrame(frames, config.layoutUnselected, layoutId, expectedNumericFrame - 1));
+                paint(expected, findFrame(frames, config.layout.layoutUnselected, layoutId, expectedNumericFrame - 1));
                 continue;
             }
             if (block.kind == ScreenBlockKind::Stat)
@@ -138,7 +138,7 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
                         ? snapshot.stage_days : snapshot.customStats[runtimePetStatSlot(block.source)];
                     for (uint8_t child = 0; child < block.ruleCount; ++child)
                     {
-                        const auto &rule = config.screenRules[block.firstRule + child];
+                        const auto &rule = config.layout.screenRules[block.firstRule + child];
                         if (value >= rule.minimum && value <= rule.maximum)
                         {
                             frame = rule.frame;
@@ -146,13 +146,13 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
                         }
                     }
                 }
-                paint(expected, findFrame(frames, config.layoutUnselected, layoutId, frame - 1));
+                paint(expected, findFrame(frames, config.layout.layoutUnselected, layoutId, frame - 1));
                 continue;
             }
             if (block.kind != ScreenBlockKind::Button) continue;
             const bool selected = commands.isSlotVisible(block.source - 1) &&
                                   commands.selectedSlot() == block.source - 1;
-            paint(expected, findFrame(frames, selected ? config.layoutSelected : config.layoutUnselected,
+            paint(expected, findFrame(frames, selected ? config.layout.layoutSelected : config.layout.layoutUnselected,
                                       layoutId, index + 1));
         }
         if (animationBlock) paint(expected, findFrame(frames, active, 0, 0));
@@ -162,9 +162,9 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
     if (fixtureKind != ScreenBlockKind::Stat)
     {
         unsigned matchingBlocks = 0;
-        for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+        for (uint8_t index = 0; index < config.layout.screenBlockCount; ++index)
         {
-            const auto &block = config.screenBlocks[index];
+            const auto &block = config.layout.screenBlocks[index];
             if (block.kind == fixtureKind)
             {
                 assert(block.x == 0 && block.y == 64 && block.width == 128 && block.height == 16);
@@ -197,14 +197,14 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
         return;
     }
     assert(display.screen == expectedScreen());
-    if (config.screenRuleCount)
+    if (config.layout.screenRuleCount)
     {
         // Exercise every exported segment endpoint across all numeric blocks.
         std::vector<int32_t> values{9, 10, 20, 21, 30, 40, 41, 50, 60, 70, 80, 81};
-        for (uint16_t index = 0; index < config.screenRuleCount; ++index)
+        for (uint16_t index = 0; index < config.layout.screenRuleCount; ++index)
         {
-            values.push_back(config.screenRules[index].minimum);
-            values.push_back(config.screenRules[index].maximum);
+            values.push_back(config.layout.screenRules[index].minimum);
+            values.push_back(config.layout.screenRules[index].maximum);
         }
         for (int32_t value : values)
         {
@@ -216,9 +216,9 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
             for (const auto &window : display.windows)
             {
                 bool numeric = false;
-                for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+                for (uint8_t index = 0; index < config.layout.screenBlockCount; ++index)
                 {
-                    const auto &block = config.screenBlocks[index];
+                    const auto &block = config.layout.screenBlocks[index];
                     numeric |= block.kind == ScreenBlockKind::Stat && block.x == window.x &&
                                block.y <= window.y && window.y < block.y + block.height;
                 }
@@ -230,14 +230,14 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
         }
         // Distinct intervals mapped to the same image must also skip TFT writes.
         const std::vector<ScreenRuleConfig> originalRules(
-            config.screenRules, config.screenRules + config.screenRuleCount);
-        for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+            config.layout.screenRules, config.layout.screenRules + config.layout.screenRuleCount);
+        for (uint8_t index = 0; index < config.layout.screenBlockCount; ++index)
         {
-            const auto &block = config.screenBlocks[index];
+            const auto &block = config.layout.screenBlocks[index];
             if (block.kind != ScreenBlockKind::Stat || !block.ruleCount) continue;
-            const uint16_t frame = config.screenRules[block.firstRule].frame;
+            const uint16_t frame = config.layout.screenRules[block.firstRule].frame;
             for (uint8_t child = 0; child < block.ruleCount; ++child)
-                config.screenRules[block.firstRule + child].frame = frame;
+                config.layout.screenRules[block.firstRule + child].frame = frame;
         }
         for (auto &stat : snapshot.customStats) stat = 10;
         snapshot.stage_days = 10;
@@ -247,14 +247,14 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
         display.windows.clear();
         layout.updateValues(snapshot);
         assert(display.windows.empty());
-        std::copy(originalRules.begin(), originalRules.end(), config.screenRules);
+        std::copy(originalRules.begin(), originalRules.end(), config.layout.screenRules);
         // Different source values catch accidental Stage Days/Pet Stat aliasing.
         snapshot.stage_days = 30;
         for (auto &stat : snapshot.customStats) stat = 10;
         layout.updateValues(snapshot);
         assert(display.screen == expectedScreen());
         // Reconfiguring an appearance must display restored/current values, not Initial.
-        layout.configureRuntimeContract(config);
+        layout.configureRuntimeContract(config.layout, config.behavior, config.table.assetManifest.bundleId);
         assert(layout.syncPlayback(snapshot));
         assert(renderer.ShowAnimationFrame(active, 0, 1));
         assert(display.screen == expectedScreen());
@@ -268,9 +268,9 @@ void verify(const std::string &root, ScreenBlockKind fixtureKind = ScreenBlockKi
         for (const auto &window : display.windows)
         {
             bool necessary = false;
-            for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+            for (uint8_t index = 0; index < config.layout.screenBlockCount; ++index)
             {
-                const auto &block = config.screenBlocks[index];
+                const auto &block = config.layout.screenBlocks[index];
                 necessary |= block.kind == ScreenBlockKind::Button && window.x == block.x && window.y == block.y &&
                     (block.source == commands.selectedSlot() + 1 || block.source == commands.previousSlot() + 1);
             }

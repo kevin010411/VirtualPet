@@ -1,3 +1,7 @@
+#include "common/AppProfile.h"
+#if ENABLE_INSTRUCTION_RESPONSE
+#include "game/InstructionRuntimeSettings.h"
+#endif
 #include "pet/PetBehaviorRuntimeRules.h"
 
 #include "pet/PetBehaviorStatSlot.h"
@@ -314,14 +318,15 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
 
 #if ENABLE_INSTRUCTION_RESPONSE
 bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
+                                        const InstructionRuntimeSettings &settings,
                                         uint32_t correctMask, uint8_t count,
                                         PetBehaviorStatValues &state)
 {
     PetBehaviorStatValues next = state;
 #if ENABLE_TRAINING_COURSES
-    if (config.trainingSettings.mode != TrainingMode::None)
+    if (settings.trainingSettings.mode != TrainingMode::None)
     {
-        const auto &training = config.trainingSettings;
+        const auto &training = settings.trainingSettings;
         if (count != training.rounds) return false;
         uint8_t score = 0;
         for (uint8_t round = 0; round < count; ++round)
@@ -339,9 +344,9 @@ bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
     {
         const uint8_t group = (correctMask & (1UL << round)) ? 0 : 1;
         bool affectedSlots[kPetBehaviorSlotCount + 1] = {};
-        for (uint8_t index = 0; index < config.instructionEffectCount; ++index)
+        for (uint8_t index = 0; index < settings.instructionEffectCount; ++index)
         {
-            const auto &effect = config.instructionEffects[index];
+            const auto &effect = settings.instructionEffects[index];
             if (effect.group != group) continue;
             if (!applyEffect(config, effect.statSlot, effect.operation, effect.value, next, affectedSlots))
                 return false;

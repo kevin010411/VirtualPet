@@ -13,13 +13,13 @@ bool SdAppearanceLoader::catchUpDays(const PetBehaviorConfig &config,
                                     const PetBehaviorDailyChangePauses &pauses,
                                     uint32_t limit, uint32_t &days)
 {
-    return recordQueryResult(runtimeTableCatchUpDays(sd, config, state, pauses, limit, days));
+    return recordQueryResult(runtimeTableCatchUpDays(sd, assetManifest, config, state, pauses, limit, days));
 }
 
-void SdAppearanceLoader::configureRuntimeContract(const PetBehaviorConfig &config)
+void SdAppearanceLoader::configureRuntimeContract(const AssetData::RuntimeManifest &manifest, const PetBehaviorConfig &config)
 {
     evolutionStatSlots.configure(config);
-    assetManifest = config.assetManifest;
+    assetManifest = manifest;
     bundleReader.configureBundle(assetManifest.bundleId);
     contractErrorResource[0] = '\0';
 }

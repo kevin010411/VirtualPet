@@ -1,13 +1,20 @@
+#include "animation/RuntimePlaybackConfig.h"
 #include "game/InstructionPresentation.h"
 #if ENABLE_INSTRUCTION_RESPONSE
 #include "resources/AssetResources.h"
 #include "display/Renderer.h"
-#include "pet/PetBehaviorTypes.h"
+#include "game/InstructionRuntimeSettings.h"
 #include "common/FirmwareRandom.h"
 
-void InstructionPresentation::start(Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config)
+void InstructionPresentation::start(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
+                          const RuntimePlaybackConfig &playback)
 {
     instructionRenderer = &renderer;
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    instructionPlayback = &playback;
+#else
+    (void)playback;
+#endif
     instructionConfig = &config;
 #if ENABLE_TRAINING_COURSES
     if (usesTraining())
@@ -159,11 +166,11 @@ bool InstructionPresentation::render()
                         instructionConfig->instructionOptions[instruction.itemAt(position)],
                         0, 1, position * 43, 128, 12, 42, 32))
                     return false;
-            prompt = instructionConfig->systemAnimations[
+            prompt = instructionPlayback->systemAnimations[
                 static_cast<uint8_t>(instruction.isNoGo() ? FirmwarePlaybackRole::InstructionNoGo1 : FirmwarePlaybackRole::InstructionPrompt1) + instruction.targetItem()];
         }
         else if (phase == InstructionResponse::Phase::Feedback)
-            prompt = instructionConfig->systemAnimations[static_cast<uint8_t>(feedbackRole)];
+            prompt = instructionPlayback->systemAnimations[static_cast<uint8_t>(feedbackRole)];
         if (prompt.valid())
         {
             promptVersion = static_cast<uint8_t>(FirmwareRandom::below(instructionResources->versionCountFor(prompt)));
@@ -188,7 +195,7 @@ bool InstructionPresentation::render()
     }
     drawnPhase = phase;
     const bool animated = phase != InstructionResponse::Phase::Feedback ||
-        instructionConfig->systemAnimations[static_cast<uint8_t>(feedbackRole)].valid();
+        instructionPlayback->systemAnimations[static_cast<uint8_t>(feedbackRole)].valid();
     if (animated && static_cast<uint32_t>(now - frameAt) >= frameMs)
     {
         const bool complete = renderer.advanceAnimationFrame();

@@ -13,6 +13,7 @@ class AssetResources;
 class AppearanceLoader;
 struct PetStatSnapshot;
 struct PersistedPetState;
+struct RuntimeTableConfig;
 
 enum class PetBehaviorActionResult : uint8_t
 {
@@ -31,7 +32,11 @@ public:
     PetBehaviorRuntime(const PetBehaviorConfig &config,
                        Pet &pet,
                        AnimationController &animations,
-                       AssetResources &resources);
+                       AssetResources &resources
+#if ENABLE_COLLECTION_GAME_EVENTS
+                       , const RuntimeTableConfig &collectionSource
+#endif
+                       );
 
     bool hasAction(uint8_t actionSlot) const;
     // Settle derived unlocks only once the selected Action effects are applied.
@@ -54,7 +59,7 @@ public:
     bool applyGuessOutcome(PetBehaviorGuessOutcome outcome);
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
-    bool applyInstructionResults(uint32_t correctMask, uint8_t count);
+    bool applyInstructionResults(const InstructionRuntimeSettings &settings, uint32_t correctMask, uint8_t count);
 #endif
     AssetData::AnimationRef baseAnimation() const;
     ActivePetState activePetState() const;
@@ -65,6 +70,9 @@ private:
     Pet &pet;
     AnimationController &animations;
     AssetResources &resources;
+#if ENABLE_COLLECTION_GAME_EVENTS
+    const RuntimeTableConfig &collectionSource;
+#endif
     PetBehaviorDailyChangePauses dailyChangePauses;
     bool pendingPlaybackStarted = false;
     PlaybackResult playAction(const PetBehaviorActionConfig &action, const PetBehaviorActionPlayback &playback);
@@ -73,7 +81,7 @@ private:
     void *saveContext = nullptr;
 #if ENABLE_STAT_EVENTS
     bool (*settleStatMutation)(void *, const PetStatSnapshot &, uint8_t, bool) = nullptr;
-    bool usesStatEvents() const { return config.statEventTriggerCount && settleStatMutation; }
+    bool usesStatEvents() const { return settleStatMutation != nullptr; }
     bool commitStatMutation(const PetBehaviorStatValues &state, uint8_t actionSlot, uint32_t days = 0);
 #endif
 };

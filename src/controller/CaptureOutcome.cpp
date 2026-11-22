@@ -47,7 +47,7 @@ bool Game::onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *
             if (!assets.readEffect(group.firstEffect + index, effect)) return false;
             if ((effect.mode == 1 && catches > effect.limit) ||
                 (effect.mode == 2 && catches <= effect.limit)) continue;
-            applyDelta(petBehaviorConfig, values, effect.stat, effect.delta);
+            applyDelta(runtime.behavior, values, effect.stat, effect.delta);
         }
     }
     if (target == nullptr)
@@ -59,22 +59,22 @@ bool Game::onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *
             const uint64_t earned = reward.participation +
                 static_cast<uint64_t>(points / reward.perPoints) * reward.coins;
             const uint16_t amount = earned > reward.cap ? reward.cap : earned;
-            applyDelta(petBehaviorConfig, values, reward.stat, amount);
+            applyDelta(runtime.behavior, values, reward.stat, amount);
         }
     }
 
     uint16_t gained = 0;
     bool changed = before.stage_days != values.stage_days;
     if (values.stage_days > before.stage_days) gained |= 1U << CaptureAssets::stageDaysSlot;
-    for (uint8_t slot = 0; slot < petBehaviorConfig.statCount; ++slot)
+    for (uint8_t slot = 0; slot < runtime.behavior.statCount; ++slot)
     {
         changed |= values.customStats[slot] != before.customStats[slot];
         if (values.customStats[slot] > before.customStats[slot]) gained |= 1U << slot;
     }
     if (changed)
     {
-        if (petBehaviorConfig.statCount &&
-            !capturePet.commitPetStats(values.customStats, petBehaviorConfig.statCount)) return false;
+        if (runtime.behavior.statCount &&
+            !capturePet.commitPetStats(values.customStats, runtime.behavior.statCount)) return false;
         capturePet.setStageDays(values.stage_days);
     }
     if (target != nullptr)
@@ -83,7 +83,7 @@ bool Game::onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *
         changed |= result.firstCatch;
     }
 #if ENABLE_COLLECTION_CATALOG
-    if (petBehaviorConfig.collectionFingerprint != 0)
+    if (runtime.table.collection.collectionFingerprint != 0)
     {
         if (target != nullptr && target->collection != CaptureAssets::noSlot &&
             !capturePet.isCollectionOwned(target->collection))
@@ -93,7 +93,7 @@ bool Game::onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *
         }
 #if ENABLE_COLLECTION_GAME_EVENTS
         const auto event = target == nullptr ? CollectionGameEvent::CaptureRound : CollectionGameEvent::CaptureCatch;
-        if (!recordCollectionGameEvent(resources.sdCard(), petBehaviorConfig, capturePet, before, event,
+        if (!recordCollectionGameEvent(resources.sdCard(), runtime.table, capturePet, before, event,
                                        CaptureAssets::noSlot, &round))
             return false;
         const auto &after = capturePet.persistentState();
@@ -104,7 +104,7 @@ bool Game::onCaptureOutcome(CaptureAssets &assets, const CaptureAssets::Target *
         {
             // Preserve unlocks from intermediate values in rounds that finish.
             bool collectionChanged = false;
-            if (!evaluateCollectionCatalog(resources.sdCard(), petBehaviorConfig, capturePet, collectionChanged))
+            if (!evaluateCollectionCatalog(resources.sdCard(), runtime.table, capturePet, collectionChanged))
                 return false;
         }
     }

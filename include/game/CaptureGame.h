@@ -26,25 +26,6 @@ protected:
 class CaptureGame
 {
 public:
-    static constexpr int bandRows = 8;
-    static constexpr int bandCount = CaptureAssets::screenHeight / bandRows;
-    static constexpr int timerHeight = 13;
-
-    struct Layer
-    {
-        const CaptureAssets::Sprite *sprite;
-        int16_t x, y;
-        bool flip;
-    };
-
-    struct Frame
-    {
-        Layer layers[CaptureAssets::maxFish + 1];
-        uint16_t secondsLeft;
-        uint8_t layerCount;
-        uint8_t hookX, lineStart, lineEnd;
-    };
-
     bool start(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes);
     void cancel();
     void update(bool confirmPending);

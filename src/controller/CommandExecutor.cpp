@@ -22,7 +22,7 @@ uint8_t firmwareStatusSetIndex(uint8_t setCount)
 struct StatusValueContext
 {
     const PetStatSnapshot &stats;
-    const PetBehaviorConfig &config;
+    uint16_t activeStatMask;
     const ActivePetState &activePetState;
 };
 
@@ -38,7 +38,7 @@ bool statusValueFromSnapshot(const StatusSetCondition &condition,
     if (condition.kind != StatusConditionKind::RuntimeValue)
         return false;
     const auto runtimeValueContext = makeRuntimeValueContext(status.stats.customStats,
-        activePetBehaviorStatMask(status.config), status.stats.stage_days);
+        status.activeStatMask, status.stats.stage_days);
     return resolveRuntimeValue(condition.valueId, runtimeValueContext, value);
 }
 } // namespace
@@ -118,7 +118,7 @@ CommandResult CommandExecutor::execute(AppCommandId id, uint8_t targetSlot)
         result.resourceError = !queueStatusSetsAnimation();
         break;
     case AppCommandId::AdvanceDay:
-        if (petBehaviorConfig != nullptr && petBehaviorConfig->manualDays)
+        if (manualDays)
             result.kind = CommandResultKind::AdvanceDay;
         break;
 #if ENABLE_COLLECTION_CATALOG
@@ -147,31 +147,33 @@ CommandResult CommandExecutor::execute(AppCommandId id, uint8_t targetSlot)
     return result;
 }
 
-void CommandExecutor::configureRuntimeContract(const PetBehaviorConfig &config)
+void CommandExecutor::configureRuntimeContract(const StatusSetsConfig &sets, const PetBehaviorConfig &behavior)
 {
-    petBehaviorConfig = &config;
+    statusSets = &sets;
+    activeStatMask = activePetBehaviorStatMask(behavior);
+    manualDays = behavior.manualDays;
 }
 
 bool CommandExecutor::queueStatusSetsAnimation()
 {
-    if (petBehaviorConfig == nullptr)
+    if (statusSets == nullptr)
         return false;
     uint8_t selectedSetIndex = 0;
 #if ENABLE_SEQUENTIAL_STATUS_SET_SELECTION
-    const uint8_t setCount = petBehaviorConfig->statusSets.count;
+    const uint8_t setCount = statusSets->count;
     if (setCount == 0)
         return false;
     selectedSetIndex = static_cast<uint8_t>(nextStatusSetIndex % setCount);
     nextStatusSetIndex = static_cast<uint8_t>((selectedSetIndex + 1) % setCount);
 #else
-    if (!selectStatusSetIndex(petBehaviorConfig->statusSets.count, firmwareStatusSetIndex, selectedSetIndex))
+    if (!selectStatusSetIndex(statusSets->count, firmwareStatusSetIndex, selectedSetIndex))
         return false;
 #endif
-    const StatusSetConfig &set = petBehaviorConfig->statusSets.sets[selectedSetIndex];
+    const StatusSetConfig &set = statusSets->sets[selectedSetIndex];
     const PetStatSnapshot stats = pet.statSnapshot();
     const ActivePetState activePetState = petBehaviorRuntime.activePetState(stats);
     const StatusValueContext valueContext = {
-        stats, *petBehaviorConfig, activePetState};
+        stats, activeStatMask, activePetState};
     StatusSetResolution resolution = {};
     if (!resolveStatusSet(set, statusValueFromSnapshot, &valueContext, resolution))
         return false;

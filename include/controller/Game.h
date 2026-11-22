@@ -107,6 +107,8 @@ private:
     bool captureChanged = false;
 #endif
 
+    enum class RedrawMode : uint8_t { Deferred, Wake };
+
     enum class KeyDirection : uint8_t
     {
         Left,
@@ -127,7 +129,7 @@ private:
     AssetResources &resources;
     AppearanceLoader &appearanceLoader;
     AppFlowController flow;
-    PetBehaviorConfig petBehaviorConfig = {};
+    RuntimeContract runtime = {};
     PetSaveController petSaves;
     AppearanceChangeController appearanceChanges;
     std::unique_ptr<AnimationController> animations;
@@ -207,6 +209,13 @@ private:
     bool continuePendingAction();
     void synchronizePlaybackClock();
     bool completePlaybackTick(const PlaybackTickResult &playbackResult);
+    void redrawForeground(RedrawMode mode);
+    bool updateExclusiveForeground();
+    bool foregroundHoldsPetClock() const;
+#if ENABLE_PROJECT_MENUS || ENABLE_SHOP || ENABLE_COLLECTION_CATALOG
+    void prepareStaticForeground();
+    void leaveStaticForeground();
+#endif
     void routeDirectionKey(KeyDirection direction);
     void handleCommandResult(const CommandResult &result);
     enum class Settlement : uint8_t { GuessOutcome, InstructionCompletion, DailyProgress };

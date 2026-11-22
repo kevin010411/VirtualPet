@@ -141,6 +141,9 @@ bool stampGlyph(ConfirmationFile &file, const ShopConfirmationBlock &block,
     return true;
 }
 
+void paintBlock(Renderer &renderer, const ShopConfirmationBlock &block, const uint8_t *mask,
+                bool selected, const DisplayRect &visible);
+
 bool drawBlock(ConfirmationFile &file, uint32_t offset, const Digits *values, bool returning,
                Renderer &renderer, const DisplayRect &region)
 {
@@ -192,8 +195,8 @@ bool drawBlock(ConfirmationFile &file, uint32_t offset, const Digits *values, bo
         pen += glyph.advance;
     }
     if (addEllipsis && !stampGlyph(file, block, mask, pen, ellipsis)) return false;
-    renderer.drawShopConfirmationBlock(block, reinterpret_cast<const uint8_t *>(&mask),
-                                       block.action == (returning ? 2 : 1), visible);
+    paintBlock(renderer, block, reinterpret_cast<const uint8_t *>(&mask),
+               block.action == (returning ? 2 : 1), visible);
     return true;
 }
 
@@ -252,16 +255,19 @@ bool drawShopConfirmation(SdBaseFile &file, uint32_t offset, uint16_t entry, boo
     return true;
 }
 
-void Renderer::drawShopConfirmationBlock(const ShopConfirmationBlock &block, const uint8_t *mask, bool selected,
-                                         const DisplayRect &visible)
+namespace
 {
-    auto border = [this, &visible, &block](int x, int y, int width, int height) {
+void paintBlock(Renderer &renderer, const ShopConfirmationBlock &block, const uint8_t *mask,
+                bool selected, const DisplayRect &visible)
+{
+    auto &display = renderer.pixelDisplay();
+    auto border = [&display, &visible, &block](int x, int y, int width, int height) {
         const auto rect = clipRect(x, y, width, height, visible);
-        if (rect.w) tft->writeFillRect(rect.x, rect.y, rect.w, rect.h, block.border);
+        if (rect.w) display.writeFillRect(rect.x, rect.y, rect.w, rect.h, block.border);
     };
-    tft->startWrite();
+    display.startWrite();
     if (selected)
-        tft->writeFillRect(visible.x, visible.y, visible.w, visible.h, block.fill);
+        display.writeFillRect(visible.x, visible.y, visible.w, visible.h, block.fill);
     else if (block.action)
     {
         border(block.x, block.y, block.width, 1);
@@ -288,11 +294,12 @@ void Renderer::drawShopConfirmationBlock(const ShopConfirmationBlock &block, con
                 else if (block.outlined && outlineAt(block, mask, x, y)) color = block.outline;
             }
             if (color == previous) continue;
-            if (previous >= 0) tft->writeFillRect(block.x + run, block.y + y, x - run, 1, previous);
+            if (previous >= 0) display.writeFillRect(block.x + run, block.y + y, x - run, 1, previous);
             run = x;
             previous = color;
         }
     }
-    tft->endWrite();
+    display.endWrite();
+}
 }
 #endif

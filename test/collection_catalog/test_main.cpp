@@ -551,7 +551,7 @@ static void verifyCatchUpCollectionWindow(const std::filesystem::path &root)
     using namespace RuntimeTableInternal;
     SdFat sd;
     mountBundle(sd, root);
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     assert(loadRuntimeContract(&sd, 1, 1, config));
     std::ifstream input(root / "runtime.bin", std::ios::binary);
     std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
@@ -583,10 +583,10 @@ static void verifyCatchUpCollectionWindow(const std::filesystem::path &root)
     put(item + 2, 0, 2);
     put(item + 4, 1, 2);
     sd.seedReadOnly("/runtime.bin", bytes);
-    config.stats[0] = {true, 100, 0, 100, -1};
-    config.stats[1] = {true, 0, 0, 100, 0};
-    config.petStateCount = 0;
-    config.deathEnabled = false;
+    config.behavior.stats[0] = {true, 100, 0, 100, -1};
+    config.behavior.stats[1] = {true, 0, 0, 100, 0};
+    config.behavior.petStateCount = 0;
+    config.behavior.deathEnabled = false;
     PetBehaviorStatValues state = {};
     state.values[0] = 100;
     PetBehaviorDailyChangePauses pauses = {};
@@ -595,12 +595,12 @@ static void verifyCatchUpCollectionWindow(const std::filesystem::path &root)
     while (remaining)
     {
         uint32_t days = 0;
-        assert(runtimeTableCatchUpDays(&sd, config, state, pauses, remaining, days));
+        assert(runtimeTableCatchUpDays(&sd, config.table.assetManifest, config.behavior, state, pauses, remaining, days));
         if (batches == 0) assert(days == 5);
-        applyPetBehaviorDailyChanges(config, state, pauses, days);
+        applyPetBehaviorDailyChanges(config.behavior, state, pauses, days);
         assert(pet.commitPetDay(state.values, kPetBehaviorSlotCount, days));
         bool changed = false;
-        assert(evaluateCollectionCatalog(&sd, config, pet, changed));
+        assert(evaluateCollectionCatalog(&sd, config.table, pet, changed));
         if (batches == 0) assert(pet.isCollectionOwned(0) && pet.customStat(0) == 95);
         remaining -= days;
         ++batches;
@@ -864,10 +864,10 @@ static void verifyBingbingEvents(const std::filesystem::path &root)
         SdAppearanceLoader loader(&sd);
         Game game(pet, storage, renderer, resources, loader);
         assert(game.setup_game());
-        PetBehaviorConfig config = {};
+        RuntimeContract config = {};
         assert(loadRuntimeContract(&sd, pet.speciesSlot(), pet.outfitSlot(), config));
         CommandController buttons;
-        buttons.configure(config);
+        buttons.configure(config.buttons, config.layout);
         buttons.resetSelection();
         const auto select = [&](int slot)
         {
@@ -947,10 +947,10 @@ static void verifyBingbingEvents(const std::filesystem::path &root)
         pet.setCustomStat(8, 150);
         pet.setCustomStat(9, 150);
         assert(game.saveNow());
-        PetBehaviorConfig config = {};
+        RuntimeContract config = {};
         assert(loadRuntimeContract(&sd, pet.speciesSlot(), pet.outfitSlot(), config));
         CommandController buttons;
-        buttons.configure(config);
+        buttons.configure(config.buttons, config.layout);
         buttons.resetSelection();
         while (buttons.selectedSlot() != 5)
         {
@@ -1079,10 +1079,10 @@ int main(int argc, char **argv)
 #if ENABLE_PROJECT_MENUS
     if (argc == 3 && std::string(argv[2]) == "project-menus")
     {
-        PetBehaviorConfig config = {};
+        RuntimeContract config = {};
         assert(loadRuntimeContract(&sd, pet.speciesSlot(), pet.outfitSlot(), config));
         CommandController expected;
-        expected.configure(config);
+        expected.configure(config.buttons, config.layout);
         expected.resetSelection();
         const auto selectSlot = [&](int slot)
         {
@@ -1297,25 +1297,29 @@ int main(int argc, char **argv)
         assert(pet.actionCount(0) == 0);
         // All eight compiled mappings use the production action dispatcher,
         // including a valid action whose optional playback is absent.
-        PetBehaviorConfig config = {}; char resource[20] = {};
+        RuntimeContract config = {}; char resource[20] = {};
         assert(loadRuntimeContract(&sd, 1, 1, config, resource, sizeof(resource)));
         AnimationController animations(renderer, resources);
-        animations.configureRuntimeContract(config);
+        animations.configureRuntimeContract(config.playback);
         Pet isolated;
-        PetBehaviorRuntime runtime(config, isolated, animations, resources);
+        PetBehaviorRuntime runtime(config.behavior, isolated, animations, resources
+#if ENABLE_COLLECTION_GAME_EVENTS
+                                   , config.table
+#endif
+                                   );
         runtime.initializeStats();
         for (uint8_t slot = 0; slot < 8; ++slot)
         {
-            assert(runtime.executeAction(config.trackedActions[slot]) != PetBehaviorActionResult::Rejected);
+            assert(runtime.executeAction(config.behavior.trackedActions[slot]) != PetBehaviorActionResult::Rejected);
             assert(isolated.actionCount(slot) == 1);
         }
         const auto beforeUnknown = isolated.persistentState();
         assert(runtime.executeAction(255) == PetBehaviorActionResult::Rejected);
         assert(memcmp(&beforeUnknown, &isolated.persistentState(), sizeof(beforeUnknown)) == 0);
-        config.actionOutcomes[config.actions[0].firstOutcome].animationPlayback = {};
+        config.behavior.actionOutcomes[config.behavior.actions[0].firstOutcome].animationPlayback = {};
         assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
         assert(isolated.actionCount(0) == 2); // absent optional playback still dispatches once
-        config.trackedActionCount = 0;
+        config.behavior.trackedActionCount = 0;
         assert(runtime.executeAction(0) != PetBehaviorActionResult::Rejected);
         assert(isolated.actionCount(0) == 2); // valid untracked dispatch
         pet.setDefaultState();

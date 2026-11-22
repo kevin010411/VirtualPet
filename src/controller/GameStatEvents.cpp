@@ -25,7 +25,7 @@ bool wouldDie(const PetBehaviorConfig &config, const PetStatSnapshot &values)
 
 bool Game::statEventsActive() const
 {
-    return petBehaviorConfig.statEventTriggerCount != 0;
+    return runtime.statEvents.statEventTriggerCount != 0;
 }
 
 bool Game::isRoundComplete() const
@@ -40,9 +40,9 @@ bool Game::settleStatMutation(const PetStatSnapshot &after, uint8_t actionSlot, 
     if (pet.isRoundComplete()) return false;
     PetStatEventResult events = {};
     // User Actions already give their immediate death condition precedence in Web.
-    if (actionSlot != UINT8_MAX && wouldDie(petBehaviorConfig, after))
+    if (actionSlot != UINT8_MAX && wouldDie(runtime.behavior, after))
         events.values = after;
-    else if (!settleStatEvents(resources.sdCard(), petBehaviorConfig, before, after, events))
+    else if (!settleStatEvents(resources.sdCard(), runtime.statEvents, runtime.behavior, before, after, events))
     {
         resources.recordAssetDataErrorResource("runtime.bin");
         return false;
@@ -52,10 +52,10 @@ bool Game::settleStatMutation(const PetStatSnapshot &after, uint8_t actionSlot, 
 
     if (!pet.commitPetStats(events.values.customStats, kPetCustomStatCount)) return false;
     pet.setStageDays(events.values.stage_days);
-    if (petBehaviorConfig.persistentStatEvents) pet.setActiveStatEvent(events.values.activeStatEvent);
+    if (runtime.statEvents.persistentStatEvents) pet.setActiveStatEvent(events.values.activeStatEvent);
 #if ENABLE_COLLECTION_CATALOG
-    for (uint8_t index = 0; index < petBehaviorConfig.trackedActionCount; ++index)
-        if (petBehaviorConfig.trackedActions[index] == actionSlot)
+    for (uint8_t index = 0; index < runtime.behavior.trackedActionCount; ++index)
+        if (runtime.behavior.trackedActions[index] == actionSlot)
         {
             pet.incrementActionCount(index);
             break;
@@ -90,7 +90,7 @@ bool Game::settleStatMutation(const PetStatSnapshot &after, uint8_t actionSlot, 
     }
     if (ready && !pet.isDead()) ready = appearanceChanges.resolveOutfitUnlocks(activatedTarget);
 #if ENABLE_COLLECTION_GAME_EVENTS
-    if (ready) ready = recordCollectionGameEvent(resources.sdCard(), petBehaviorConfig, pet, previous,
+    if (ready) ready = recordCollectionGameEvent(resources.sdCard(), runtime.table, pet, previous,
                                                  CollectionGameEvent::StatTransition);
 #endif
     if (ready) ready = petSaves.saveCollectionProgress(true, true) == PetSaveResult::Persisted;
@@ -152,7 +152,7 @@ bool Game::presentStatEvents(unsigned long now)
     }
     if (statEventPage < statEventPageCount)
     {
-        if (!readStatEventPage(resources.sdCard(), petBehaviorConfig, statEventPages[statEventPage],
+        if (!readStatEventPage(resources.sdCard(), runtime.statEvents, statEventPages[statEventPage],
                                statEventAnimationId, statEventPageDuration))
         {
             resources.recordAssetDataErrorResource("runtime.bin");

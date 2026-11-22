@@ -6,7 +6,8 @@
 #include "pet/PetBehaviorStatSlot.h"
 #include "pet/PetBehaviorRuntimeRules.h"
 
-bool runtimeTableCatchUpDays(SdFat *sd, const PetBehaviorConfig &config,
+bool runtimeTableCatchUpDays(SdFat *sd, const AssetData::RuntimeManifest &manifest,
+                            const PetBehaviorConfig &config,
                             const PetBehaviorStatValues &state,
                             const PetBehaviorDailyChangePauses &pauses,
                             uint32_t limit, uint32_t &days);

@@ -54,7 +54,7 @@ const char *BundleReader::firstErrorResource() const
 
 bool loadCompleteRuntimeTable(SdFat *, const AssetData::RuntimeManifest &manifest,
                               BundleReader &, uint8_t speciesSlot, uint8_t outfitSlot,
-                              PetBehaviorConfig &config,
+                              RuntimeContract &config,
                               AppearanceSelection *selection, bool *initialAppearanceResolved)
 {
     ++completeTableReads;
@@ -80,7 +80,7 @@ bool loadCompleteRuntimeTable(SdFat *, const AssetData::RuntimeManifest &manifes
 int main()
 {
     SdFat sd;
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     char error[20] = {};
     // An ordinary appearance change always refreshes the manifest.
     assert(loadRuntimeContract(&sd, 2, 3, config, error, sizeof(error)));

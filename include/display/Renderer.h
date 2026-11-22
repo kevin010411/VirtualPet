@@ -5,9 +5,6 @@
 #include <Adafruit_ST7735.h>
 #include "resources/AssetRuntimeContract.h"
 #include "common/AppProfile.h"
-#if ENABLE_CAPTURE_GAME
-#include "game/CaptureGame.h"
-#endif
 #if ENABLE_DEBUG
 #include "display/TftDebugDisplay.h"
 #endif
@@ -15,9 +12,6 @@
 class AssetResources;
 class SPIClass;
 struct DisplayRect;
-#if ENABLE_SHOP
-struct ShopConfirmationBlock;
-#endif
 
 class Renderer
 {
@@ -54,17 +48,11 @@ public:
     void showTrainingResult(uint8_t score, uint8_t total, bool passed);
     void showTrainingRecall(uint16_t recentChoices, uint8_t count);
 #endif
-#if ENABLE_SHOP
-    void drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint32_t value);
-    void highlightShopRow(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
-    void drawShopConfirmationBlock(const ShopConfirmationBlock &block, const uint8_t *mask, bool selected,
-                                   const DisplayRect &visible);
-#endif
-#if ENABLE_CAPTURE_GAME
-    bool drawCaptureBands(CaptureAssets &assets, const CaptureGame::Frame &frame, uint32_t bands);
-    bool showCaptureCard(CaptureAssets &assets, const CaptureAssets::Card &card, uint8_t page);
-    void showCaptureScore(int32_t score);
-#endif
+    // Immediate scene drawing borrows the decoder workspace and display.
+    Adafruit_ST7735 &pixelDisplay() { return *tft; }
+    uint16_t *pixelWorkspace();
+    bool writePixelBand(uint8_t top, uint8_t width, uint8_t rows);
+
     void showResourceError();
 #if ENABLE_STAT_EVENTS
     void showRoundComplete();
@@ -82,9 +70,6 @@ public:
 
 private:
     struct AnimationState;
-#if ENABLE_CAPTURE_GAME
-    bool sendCaptureBand(uint16_t *pixels, uint8_t top);
-#endif
 #if ENABLE_DEBUG
     void showAssetDataDebug(const char *fallbackResource = nullptr,
                             const char *debugStage = nullptr);

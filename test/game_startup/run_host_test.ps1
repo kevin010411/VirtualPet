@@ -21,7 +21,7 @@ $startupEnabled = [int]$EnableFirstStartAnimation.IsPresent
 $appearanceEnabled = [int]$EnableAppearanceSelection.IsPresent
 $sources = @(
     'test/game_startup/test_main.cpp',
-    'src/controller/Game.cpp',
+    'src/controller/Game.cpp', 'src/controller/GameForeground.cpp',
     'src/controller/GameStartup.cpp',
     'src/appearance/EvolutionController.cpp',
     'src/controller/AppFlowController.cpp',

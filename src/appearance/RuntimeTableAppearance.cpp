@@ -4,7 +4,8 @@
 
 using namespace RuntimeTableInternal;
 
-bool runtimeTableCatchUpDays(SdFat *sd, const PetBehaviorConfig &config,
+bool runtimeTableCatchUpDays(SdFat *sd, const AssetData::RuntimeManifest &manifest,
+                            const PetBehaviorConfig &config,
                             const PetBehaviorStatValues &state,
                             const PetBehaviorDailyChangePauses &pauses,
                             uint32_t limit, uint32_t &days)
@@ -12,7 +13,7 @@ bool runtimeTableCatchUpDays(SdFat *sd, const PetBehaviorConfig &config,
     days = petBehaviorCatchUpDays(config, state, pauses, limit);
     if (days <= 1) return true;
     RuntimeTableFile file;
-    if (!file.open(sd, config.assetManifest)) return false;
+    if (!file.open(sd, manifest)) return false;
     const RuntimeTable &table = file.table();
     // Read executable thresholds only. Exporter validation owns their shape
     // and references. Including inactive branches is conservative and avoids

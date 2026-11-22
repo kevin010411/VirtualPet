@@ -76,15 +76,15 @@ CommandController::CommandController()
         slots[slot] = emptySlot();
 }
 
-void CommandController::configure(const PetBehaviorConfig &config)
+void CommandController::configure(const ButtonBindings &bindings, const ScreenLayoutConfig &layout)
 {
     for (uint8_t slot = 0; slot < kPetBehaviorButtonCount; ++slot)
     {
-        slots[slot] = buttonSlot(config.buttons[slot]);
+        slots[slot] = buttonSlot(bindings.buttons[slot]);
         bool displayed = false;
-        for (uint8_t index = 0; index < config.screenBlockCount; ++index)
+        for (uint8_t index = 0; index < layout.screenBlockCount; ++index)
         {
-            const ScreenBlockConfig &block = config.screenBlocks[index];
+            const ScreenBlockConfig &block = layout.screenBlocks[index];
             displayed |= block.kind == ScreenBlockKind::Button && block.source == slot + 1;
         }
         slots[slot].visible &= displayed;

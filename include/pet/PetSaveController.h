@@ -10,7 +10,7 @@ class AssetResources;
 #if ENABLE_DEBUG
 class DebugDisplay;
 #endif
-struct PetBehaviorConfig;
+struct RuntimeTableConfig;
 
 enum class PetSaveResult : uint8_t { NotNeeded, Deferred, Persisted, Failed };
 
@@ -30,7 +30,7 @@ public:
     PetSaveResult saveCollectionProgress(bool forceSave, bool immediate = false);
     PetSaveResult saveDailyProgress(bool forceSave = false);
     bool applyCollectionGrants();
-    void configureRuntimeContract(const PetBehaviorConfig &value) { config = &value; }
+    void configureRuntimeContract(const RuntimeTableConfig &value) { config = &value; }
     PetSaveResult maybeSave();
     void beginBatch() { batching = true; }
     PetSaveResult endBatch();
@@ -44,7 +44,7 @@ private:
     DebugDisplay &debug;
 #endif
     uint8_t saveCounter = 0;
-    const PetBehaviorConfig *config = nullptr;
+    const RuntimeTableConfig *config = nullptr;
     PetSaveResult saveSnapshot(bool immediate = false);
     bool batching = false;
     bool batchDirty = false;

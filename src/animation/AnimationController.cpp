@@ -4,7 +4,7 @@
 #include <limits.h>
 #include <string.h>
 #include "display/Renderer.h"
-#include "pet/PetBehaviorTypes.h"
+#include "animation/RuntimePlaybackConfig.h"
 
 namespace
 {
@@ -16,7 +16,7 @@ constexpr unsigned long kCompletePlaybackSafetyMs = 3000;
 AnimationController::AnimationController(Renderer &rendererRef, AssetResources &resourcesRef)
     : renderer(rendererRef), resources(resourcesRef) {}
 
-void AnimationController::configureRuntimeContract(const PetBehaviorConfig &config)
+void AnimationController::configureRuntimeContract(const RuntimePlaybackConfig &config)
 {
     runtimeContract = &config;
 }

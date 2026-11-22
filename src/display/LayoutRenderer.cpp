@@ -35,7 +35,7 @@ uint16_t selectStatSumFrame(const ScreenBlockConfig &block, const ScreenRuleConf
 }
 
 uint16_t selectStatDimensionsFrame(const ScreenBlockConfig &block,
-                                   const PetBehaviorConfig &config,
+                                   const ScreenRuleConfig *rules, const PetBehaviorStatConfig *stats,
                                    const RuntimeValueContext &values)
 {
     uint16_t index = 0;
@@ -44,11 +44,11 @@ uint16_t selectStatDimensionsFrame(const ScreenBlockConfig &block,
     {
         const uint8_t slot = static_cast<uint8_t>((axes & 0xFU) - 1);
         const uint8_t levels = static_cast<uint8_t>(((axes >> 4) & 0x1FU) + 1);
-        const auto &stat = config.stats[slot];
+        const auto &stat = stats[slot];
         const uint8_t level = quantizeRuntimeValue(values.petStats[slot], stat.minValue, stat.maxValue, levels);
         index = static_cast<uint16_t>(index * levels + level);
     }
-    return static_cast<uint16_t>(config.screenRules[block.firstRule].frame + index);
+    return static_cast<uint16_t>(rules[block.firstRule].frame + index);
 }
 } // namespace
 
@@ -57,15 +57,20 @@ LayoutRenderer::LayoutRenderer(Renderer &rendererRef, AssetResources &resourcesR
 {
 }
 
-void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
+void LayoutRenderer::configureRuntimeContract(const ScreenLayoutConfig &config, const PetBehaviorConfig &behavior,
+                                             const AssetData::BundleId &bundleId)
 {
     // Screen blocks, rules and shared layout products belong to the bundle,
     // not the species. Preserve displayed values until syncPlayback compares
     // the next animation's layout ID and current Pet Stats.
-    const bool retainLayout = runtimeContract != nullptr &&
-        AssetData::sameBundleId(layoutBundleId, config.assetManifest.bundleId);
-    layoutBundleId = config.assetManifest.bundleId;
-    runtimeContract = &config;
+    const bool retainLayout = layout != nullptr &&
+        AssetData::sameBundleId(layoutBundleId, bundleId);
+    layoutBundleId = bundleId;
+    layout = &config;
+    stats = behavior.stats;
+    activeStatMask = 0;
+    for (uint8_t slot = 0; slot < behavior.statCount && slot < PetStatSnapshot::kCustomStatCount; ++slot)
+        activeStatMask |= static_cast<uint16_t>(1U << slot);
     restoreAnimationArea();
     for (uint8_t index = 0; index < config.screenBlockCount; ++index)
     {
@@ -79,10 +84,10 @@ void LayoutRenderer::configureRuntimeContract(const PetBehaviorConfig &config)
 void LayoutRenderer::restoreAnimationArea()
 {
     renderer.setAnimationArea(0, 0, 0, 0);
-    if (runtimeContract == nullptr) return;
-    for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
+    if (layout == nullptr) return;
+    for (uint8_t index = 0; index < layout->screenBlockCount; ++index)
     {
-        const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
+        const ScreenBlockConfig &block = layout->screenBlocks[index];
         if (block.kind == ScreenBlockKind::Animation)
             renderer.setAnimationArea(block.x, block.y, block.width, block.height);
     }
@@ -96,9 +101,9 @@ void LayoutRenderer::begin()
 
 void LayoutRenderer::drawAll()
 {
-    if (!hasActiveLayout || runtimeContract == nullptr)
+    if (!hasActiveLayout || layout == nullptr)
         return;
-    if (!renderer.ShowAnimationFrame(runtimeContract->layoutUnselected, activeLayoutId,
+    if (!renderer.ShowAnimationFrame(layout->layoutUnselected, activeLayoutId,
                                      1, 0, 0, 12, 128, 160))
         return;
     const int selectedSlot = commands.selectedSlot();
@@ -108,8 +113,8 @@ void LayoutRenderer::drawAll()
         if (!drawSlot(slot, slot == selectedSlot && commands.isSlotVisible(slot)))
             return;
     }
-    for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
-        if (runtimeContract->screenBlocks[index].isNumeric() && !drawNumeric(index))
+    for (uint8_t index = 0; index < layout->screenBlockCount; ++index)
+        if (layout->screenBlocks[index].isNumeric() && !drawNumeric(index))
             return;
 }
 
@@ -143,7 +148,7 @@ bool LayoutRenderer::syncPlayback(const PetStatSnapshot &snapshot)
 
 bool LayoutRenderer::updatePlayback(uint8_t layoutId)
 {
-    if (runtimeContract == nullptr)
+    if (layout == nullptr)
         return false;
     if (hasActiveLayout && activeLayoutId == layoutId)
         return true;
@@ -156,19 +161,19 @@ bool LayoutRenderer::updatePlayback(uint8_t layoutId)
 bool LayoutRenderer::drawSlot(int slot, bool selected)
 {
     if (!commandsVisible) return true;
-    if (runtimeContract == nullptr)
+    if (layout == nullptr)
         return false;
     if (!hasActiveLayout)
         return false;
-    const AssetData::AnimationRef &layout = selected
-                                                ? runtimeContract->layoutSelected
-                                                : runtimeContract->layoutUnselected;
-    for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
+    const AssetData::AnimationRef &layoutAnimation = selected
+                                                ? layout->layoutSelected
+                                                : layout->layoutUnselected;
+    for (uint8_t index = 0; index < layout->screenBlockCount; ++index)
     {
-        const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
+        const ScreenBlockConfig &block = layout->screenBlocks[index];
         if (block.kind != ScreenBlockKind::Button || block.source != slot + 1)
             continue;
-        if (!renderer.ShowAnimationFrame(layout, activeLayoutId, index + 2,
+        if (!renderer.ShowAnimationFrame(layoutAnimation, activeLayoutId, index + 2,
                                          block.x, block.y, 12, block.width, block.height))
             return false;
     }
@@ -177,32 +182,29 @@ bool LayoutRenderer::drawSlot(int slot, bool selected)
 
 void LayoutRenderer::updateValues(const PetStatSnapshot &snapshot)
 {
-    if (runtimeContract == nullptr)
+    if (layout == nullptr)
         return;
-    uint16_t activeMask = 0;
-    for (uint8_t slot = 0; slot < runtimeContract->statCount && slot < PetStatSnapshot::kCustomStatCount; ++slot)
-        activeMask |= static_cast<uint16_t>(1U << slot);
-    const auto values = makeRuntimeValueContext(snapshot.customStats, activeMask, snapshot.stage_days);
-    for (uint8_t index = 0; index < runtimeContract->screenBlockCount; ++index)
+    const auto values = makeRuntimeValueContext(snapshot.customStats, activeStatMask, snapshot.stage_days);
+    for (uint8_t index = 0; index < layout->screenBlockCount; ++index)
     {
-        const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
+        const ScreenBlockConfig &block = layout->screenBlocks[index];
         if (!block.isNumeric())
             continue;
         uint16_t frame = block.fallbackFrame;
         int64_t value = 0;
         if (block.kind == ScreenBlockKind::StatSum || block.kind == ScreenBlockKind::StatSumSegments)
         {
-            frame = selectStatSumFrame(block, runtimeContract->screenRules, values);
+            frame = selectStatSumFrame(block, layout->screenRules, values);
         }
         else if (block.kind == ScreenBlockKind::StatDimensions)
         {
-            frame = selectStatDimensionsFrame(block, *runtimeContract, values);
+            frame = selectStatDimensionsFrame(block, layout->screenRules, stats, values);
         }
         else if (block.source != kUnboundScreenSource && resolveRuntimeValue(block.source, values, value))
         {
             for (uint8_t child = 0; child < block.ruleCount; ++child)
             {
-                const ScreenRuleConfig &rule = runtimeContract->screenRules[block.firstRule + child];
+                const ScreenRuleConfig &rule = layout->screenRules[block.firstRule + child];
                 if (value >= rule.minimum && value <= rule.maximum)
                 {
                     frame = rule.frame;
@@ -220,8 +222,8 @@ void LayoutRenderer::updateValues(const PetStatSnapshot &snapshot)
 
 bool LayoutRenderer::drawNumeric(uint8_t index)
 {
-    const ScreenBlockConfig &block = runtimeContract->screenBlocks[index];
-    return renderer.ShowAnimationFrame(runtimeContract->layoutUnselected, activeLayoutId,
+    const ScreenBlockConfig &block = layout->screenBlocks[index];
+    return renderer.ShowAnimationFrame(layout->layoutUnselected, activeLayoutId,
                                        numericFrames[index], block.x, block.y, 12,
                                        block.width, block.height);
 }

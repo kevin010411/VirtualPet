@@ -16,13 +16,13 @@ struct CollectionRoundStats
 #include <SdFat.h>
 
 class Pet;
-struct PetBehaviorConfig;
+struct RuntimeTableConfig;
 struct PersistedPetState;
 
 enum class CollectionGameEvent : uint8_t { StatTransition, CaptureCatch, CaptureRound };
 
 // Use the caller's existing transaction snapshot to roll back on an SD failure.
-bool recordCollectionGameEvent(SdFat *sd, const PetBehaviorConfig &config, Pet &pet,
+bool recordCollectionGameEvent(SdFat *sd, const RuntimeTableConfig &config, Pet &pet,
                                const PersistedPetState &before, CollectionGameEvent event,
                                uint8_t shopItem = 255, const CollectionRoundStats *round = nullptr);
 #endif

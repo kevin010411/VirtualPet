@@ -1,6 +1,6 @@
 #pragma once
 
-#include "pet/PetBehaviorTypes.h"
+#include "resources/RuntimeContract.h"
 #include "resources/detail/RuntimeTableReader.h"
 
 namespace RuntimeTableInternal
@@ -12,10 +12,10 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                                 const AssetData::RuntimeManifest &manifest,
                                 uint8_t speciesSlot,
                                 uint8_t outfitSlot,
-                                PetBehaviorConfig &config);
+                                RuntimeContract &config);
 
 bool decodeRuntimePresentation(const RuntimeTable &table,
                                uint8_t speciesSlot,
                                uint8_t outfitSlot,
-                               PetBehaviorConfig &config);
+                               RuntimeContract &config);
 } // namespace RuntimeTableInternal

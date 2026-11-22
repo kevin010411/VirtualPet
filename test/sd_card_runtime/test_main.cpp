@@ -85,7 +85,7 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     AppearanceSelection initialAppearance = {};
     bool initialAppearanceResolved = false;
     if (!loadCompleteRuntimeTable(&sd, manifest, reader, 0, 0, config,
@@ -95,7 +95,7 @@ int main(int argc, char **argv)
         return 3;
     }
 
-    ActivePetBehaviorStatSlots slots(config);
+    ActivePetBehaviorStatSlots slots(config.behavior);
     PetStatSnapshot stats = {};
     stats.speciesSlot = 1;
     stats.outfitSlot = 1;
@@ -178,7 +178,7 @@ int main(int argc, char **argv)
         return 5;
 
     printf("valid: stats=%u actions=%u status=%u initial=%u/%u unlock=%u\n",
-           config.statCount, config.actionCount, config.statusSets.count,
+           config.behavior.statCount, config.behavior.actionCount, config.statusSets.count,
            initialAppearance.speciesSlot, initialAppearance.outfitSlot, unlockMask);
     return 0;
 }

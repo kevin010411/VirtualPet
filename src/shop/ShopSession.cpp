@@ -3,14 +3,13 @@
 
 #include <string.h>
 #include "appearance/AppearanceChangeController.h"
-#include "common/SdBinaryRead.h"
 #include "collection/CollectionGameEvent.h"
-#include "display/Renderer.h"
 #include "pet/Pet.h"
 #include "pet/PetBehaviorTypes.h"
 #include "pet/PetSaveController.h"
 #include "resources/AssetResources.h"
 #include "resources/detail/RuntimeTableReader.h"
+#include "shop/ShopRules.h"
 
 using RuntimeTableInternal::readU16;
 using RuntimeTableInternal::readU32;
@@ -18,151 +17,50 @@ using RuntimeTableInternal::readI64;
 
 namespace
 {
-constexpr char path[] = "/shop.data";
-constexpr uint8_t headerSize = 39;
-constexpr uint8_t itemSize = 129;
-constexpr uint8_t productSize = 70;
-constexpr uint8_t navigation = 128;
-constexpr uint8_t exitEntry = 129;
-constexpr uint8_t firstEntryFrame = 16;
 constexpr uint8_t stageDaysEffectSlot = 255;
-constexpr uint8_t bandHeight = 16;
-constexpr uint8_t bandCount = 9;
-constexpr uint8_t receiptCount = 8;
-constexpr uint16_t selectedRow = 0x8000;
-constexpr DisplayRect screen{0, 0, 128, 160};
-constexpr DisplayRect confirmation{0, 88, 128, 48};
-constexpr DisplayRect navigationCard{0, 112, 128, 16};
-
-DisplayRect combine(DisplayRect a, DisplayRect b)
-{
-    if (!a.w) return b;
-    if (!b.w) return a;
-    const uint8_t x = a.x < b.x ? a.x : b.x;
-    const uint8_t y = a.y < b.y ? a.y : b.y;
-    const int right = a.right() > b.right() ? a.right() : b.right();
-    const int bottom = a.bottom() > b.bottom() ? a.bottom() : b.bottom();
-    return {x, y, static_cast<uint8_t>(right - x), static_cast<uint8_t>(bottom - y)};
-}
-
-class ShopFile : public SdBaseFile
-{
-public:
-    ~ShopFile() { close(); }
-};
 }
 
 ShopSession::ShopSession(Pet &pet, PetSaveController &saves, AppearanceChangeController &appearance,
-                         Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config)
-    : pet(pet), saves(saves), appearance(appearance), renderer(renderer), resources(resources), config(config)
+                         Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config
+#if ENABLE_COLLECTION_GAME_EVENTS
+                         , const RuntimeTableConfig &collectionSource
+#endif
+                         )
+    : pet(pet), saves(saves), appearance(appearance),
+#if ENABLE_COLLECTION_GAME_EVENTS
+      collectionSource(collectionSource),
+#endif
+      config(config), data(resources), display(renderer)
 {
 }
 
-bool ShopSession::read(SdBaseFile &file, uint32_t offset, uint8_t *row, size_t length)
+bool ShopSession::configure(bool enabled, const AssetData::BundleId &bundleId)
 {
-    if (file.seekSet(offset) && readSdBinary(file, row, length) == static_cast<int>(length))
-        return true;
-    resources.recordAssetDataErrorResource(path);
-    return false;
+    return data.configure(enabled, bundleId);
 }
 
-bool ShopSession::configure()
+bool ShopSession::redraw()
 {
-    if (!config.shopEnabled)
-    {
-        art = 0;
-        return true;
-    }
-    if (art && AssetData::sameBundleId(bundle, config.assetManifest.bundleId))
-        return true;
-    art = 0;
-    ShopFile file;
-    uint8_t row[headerSize];
-    if (!file.open(path, FILE_READ) || !read(file, 0, row, sizeof(row)))
-    {
-        resources.recordAssetDataErrorResource(path);
-        return false;
-    }
-    memcpy(bundle.bytes, row, sizeof(bundle.bytes));
-    if (!AssetData::sameBundleId(bundle, config.assetManifest.bundleId))
-    {
-        resources.recordAssetDataErrorResource(path);
-        return false;
-    }
-    fingerprint = readU32(row + 16);
-    const uint16_t newArt = readU16(row + 20);
-    wallet = row[22];
-    itemCount = row[23];
-    productCount = row[24];
-    rowHeight = row[25];
-    speciesCount = row[26];
-    memcpy(&walletRect, row + 27, sizeof(Rect));
-    memcpy(&quantityRect, row + 31, sizeof(Rect));
-    memcpy(&listRect, row + 35, sizeof(Rect));
-    // The optional trailer leaves the original Shop records at their old offsets.
-    const uint32_t recordsEnd = itemOffset(itemCount) + static_cast<uint32_t>(productSize) * productCount;
-    boundsOffset = !rowHeight && file.fileSize() > recordsEnd ? recordsEnd : 0;
-    const uint32_t boundsEnd = recordsEnd + (rowHeight ? 0 : sizeof(Rect) * (itemCount + productCount + 3));
-    confirmationOffset = 0;
-    bandsOffset = 0;
-    styledBrowse = false;
-    listColumns = 1;
-    uint8_t signature[4];
-    if (file.fileSize() >= boundsEnd + sizeof(signature))
-    {
-        if (!read(file, boundsEnd, signature, sizeof(signature))) return false;
-        if (memcmp(signature, "SCF1", sizeof(signature)) == 0) confirmationOffset = boundsEnd;
-    }
-    const uint16_t bandBytes = 2 * bandCount * (rowHeight ? 1 : itemCount + productCount + 4);
-    if (confirmationOffset && file.fileSize() >= boundsEnd + bandBytes + sizeof(signature))
-    {
-        const uint32_t tagOffset = file.fileSize() - sizeof(signature);
-        if (!read(file, tagOffset, signature, sizeof(signature))) return false;
-        styledBrowse = memcmp(signature, "SBD2", sizeof(signature)) == 0;
-        if (styledBrowse || memcmp(signature, "SBD1", sizeof(signature)) == 0)
-            bandsOffset = tagOffset - bandBytes;
-        if (styledBrowse && !read(file, bandsOffset - 1, &listColumns, sizeof(listColumns))) return false;
-    }
-    art = newArt;
-    return true;
-}
-
-uint32_t ShopSession::itemOffset(uint8_t slot) const
-{
-    return headerSize + static_cast<uint32_t>(itemSize + 2 * speciesCount) * slot;
-}
-
-bool ShopSession::item(SdBaseFile &file, uint8_t slot, uint8_t *row)
-{
-    return read(file, itemOffset(slot), row, itemSize);
-}
-
-bool ShopSession::product(SdBaseFile &file, uint8_t slot, uint8_t *row)
-{
-    return read(file, itemOffset(itemCount) + static_cast<uint32_t>(productSize) * slot, row, productSize);
+    return display.paint(data, selection, pet, config, true);
 }
 
 bool ShopSession::arrive(bool &changed)
 {
     changed = false;
-    if (!art) return true;
+    if (!data.art) return true;
     const uint8_t species = pet.speciesSlot();
     const uint8_t mask = 1U << (species & 7U);
     auto &state = pet.st;
-    const bool fresh = state.shopFingerprint != fingerprint;
+    const bool fresh = state.shopFingerprint != data.fingerprint;
     if (!fresh && (state.shopVisited[species / 8] & mask)) return true;
 
-    ShopFile file;
+    ShopData::File file;
     uint16_t quantities[64] = {};
-    if (!file.open(path, FILE_READ))
-    {
-        resources.recordAssetDataErrorResource(path);
-        return false;
-    }
-    for (uint8_t index = 0; index < itemCount; ++index)
+    if (!data.open(file)) return false;
+    for (uint8_t index = 0; index < data.itemCount; ++index)
     {
         uint8_t row[9];
-        if (!read(file, itemOffset(index), row, sizeof(row))) return false;
+        if (!data.arrival(file, index, row)) return false;
         const uint16_t capacity = readU16(row + 2);
         uint16_t quantity = fresh ? readU16(row) : state.shopQuantities[index];
         if (row[7] == species && quantity < capacity) ++quantity;
@@ -170,16 +68,16 @@ bool ShopSession::arrive(bool &changed)
     }
     if (fresh) memset(state.shopVisited, 0, sizeof(state.shopVisited));
     memcpy(state.shopQuantities, quantities, sizeof(quantities));
-    state.shopFingerprint = fingerprint;
+    state.shopFingerprint = data.fingerprint;
     state.shopVisited[species / 8] |= mask;
     changed = true;
     return true;
 }
 
-ShopConfirmationNotice ShopSession::unlockNotice(const uint8_t *row) const
+ShopConfirmationNotice shopUnlockNotice(const Pet &pet, const uint8_t *row)
 {
     const uint8_t species = row[7];
-    if (species && !(pet.st.shopVisited[species / 8] & (1U << (species & 7U))))
+    if (species && !(pet.persistentState().shopVisited[species / 8] & (1U << (species & 7U))))
         return ShopConfirmationNotice::Species;
     const uint8_t *condition = row + 10;
     for (uint8_t index = 0; index < row[9]; ++index, condition += 5)
@@ -188,127 +86,119 @@ ShopConfirmationNotice ShopSession::unlockNotice(const uint8_t *row) const
     return ShopConfirmationNotice::None;
 }
 
-ShopConfirmationNotice ShopSession::purchaseNotice(const uint8_t *offer, const uint8_t *row,
-                                                    uint16_t owned, uint32_t balance) const
+ShopConfirmationNotice shopPurchaseNotice(const Pet &pet, uint32_t minimumBalance,
+                                          const uint8_t *offer, const uint8_t *row,
+                                          uint16_t owned, uint32_t balance)
 {
-    const ShopConfirmationNotice locked = unlockNotice(offer);
+    const ShopConfirmationNotice locked = shopUnlockNotice(pet, offer);
     if (locked != ShopConfirmationNotice::None) return locked;
     if (row[6] && owned) return ShopConfirmationNotice::Owned;
     if (static_cast<uint32_t>(owned) + readU16(offer + 4) > readU16(row + 2))
         return ShopConfirmationNotice::Capacity;
-    const uint32_t minimum = config.stats[wallet].minValue;
-    if (balance < minimum || balance - minimum < readU32(offer)) return ShopConfirmationNotice::Funds;
+    if (balance < minimumBalance || balance - minimumBalance < readU32(offer)) return ShopConfirmationNotice::Funds;
     return ShopConfirmationNotice::None;
 }
 
 bool ShopSession::buildEntries()
 {
-    count = 0;
-    if (inventory)
+    selection.count = 0;
+    if (selection.inventory)
     {
-        for (uint8_t index = 0; index < itemCount; ++index)
-            if (pet.st.shopQuantities[index]) entries[count++] = index;
+        for (uint8_t index = 0; index < data.itemCount; ++index)
+            if (pet.st.shopQuantities[index]) selection.entries[selection.count++] = index;
     }
-    else if (productCount)
+    else if (data.productCount)
     {
-        ShopFile file;
-        if (!file.open(path, FILE_READ))
+        ShopData::File file;
+        if (!data.open(file)) return false;
+        for (uint8_t index = 0; index < data.productCount; ++index)
         {
-            resources.recordAssetDataErrorResource(path);
-            return false;
-        }
-        for (uint8_t index = 0; index < productCount; ++index)
-        {
-            uint8_t row[productSize];
-            if (!product(file, index, row)) return false;
-            if (!row[8] || unlockNotice(row) == ShopConfirmationNotice::None) entries[count++] = index;
+            uint8_t row[ShopData::productSize];
+            if (!data.product(file, index, row)) return false;
+            if (!row[8] || shopUnlockNotice(pet, row) == ShopConfirmationNotice::None) selection.entries[selection.count++] = index;
         }
     }
-    entries[count++] = navigation;
-    entries[count++] = exitEntry;
-    if (cursor >= count) cursor = 0;
+    selection.entries[selection.count++] = ShopSelection::navigation;
+    selection.entries[selection.count++] = ShopSelection::exitEntry;
+    if (selection.cursor >= selection.count) selection.cursor = 0;
     return true;
 }
 
 bool ShopSession::start(bool showInventory)
 {
-    if (!art) return false;
-    inventory = showInventory;
-    cursor = 0;
-    view = View::Browse;
+    if (!data.art) return false;
+    selection.inventory = showInventory;
+    selection.cursor = 0;
+    selection.view = View::Browse;
     return buildEntries() && redraw();
 }
 
 bool ShopSession::move(bool next)
 {
-    if (view == View::Confirm)
+    if (selection.view == View::Confirm)
     {
-        if (cancel == next) return true;
-        cancel = next;
-        return confirmationOffset ? paintConfiguredConfirmation(entries[cursor], true) : paintFooter();
+        if (selection.cancel == next) return true;
+        selection.cancel = next;
+        return display.moveConfirmation(data, selection, pet, config);
     }
-    if (view != View::Browse) return true;
-    cursor = (cursor + (next ? 1 : count - 1)) % count;
-    return paint();
+    if (selection.view != View::Browse) return true;
+    selection.cursor = (selection.cursor + (next ? 1 : selection.count - 1)) % selection.count;
+    return display.paint(data, selection, pet, config);
 }
 
 bool ShopSession::confirm(AssetData::AnimationRef &animation)
 {
-    if (view == View::Receipt)
+    if (selection.view == View::Receipt)
     {
-        view = View::Browse;
-        return buildEntries() && paint();
+        selection.view = View::Browse;
+        return buildEntries() && display.paint(data, selection, pet, config);
     }
-    if (view == View::Confirm)
+    if (selection.view == View::Confirm)
     {
-        if (cancel) view = View::Browse;
+        if (selection.cancel) selection.view = View::Browse;
         else if (!transact(animation)) return false;
-        return animation.valid() || paint();
+        return animation.valid() || display.paint(data, selection, pet, config);
     }
-    const uint8_t entry = entries[cursor];
-    if (entry == exitEntry)
+    const uint8_t entry = selection.entries[selection.cursor];
+    if (entry == ShopSelection::exitEntry)
     {
         close();
         return true;
     }
-    if (entry == navigation)
+    if (entry == ShopSelection::navigation)
     {
-        inventory = !inventory;
-        cursor = 0;
-        return buildEntries() && paint();
+        selection.inventory = !selection.inventory;
+        selection.cursor = 0;
+        return buildEntries() && display.paint(data, selection, pet, config);
     }
-    view = View::Confirm;
-    cancel = true;
-    return paint();
+    selection.view = View::Confirm;
+    selection.cancel = true;
+    return display.paint(data, selection, pet, config);
 }
 
 bool ShopSession::transact(AssetData::AnimationRef &animation)
 {
-    ShopFile file;
-    if (!file.open(path, FILE_READ))
+    ShopData::File file;
+    if (!data.open(file)) return false;
+    uint8_t slot = selection.entries[selection.cursor];
+    uint8_t row[ShopData::itemSize];
+    uint8_t offer[ShopData::productSize];
+    if (!selection.inventory)
     {
-        resources.recordAssetDataErrorResource(path);
-        return false;
-    }
-    uint8_t slot = entries[cursor];
-    uint8_t row[itemSize];
-    uint8_t offer[productSize];
-    if (!inventory)
-    {
-        if (!product(file, slot, offer)) return false;
+        if (!data.product(file, slot, offer)) return false;
         slot = offer[6];
     }
-    if (!item(file, slot, row)) return false;
+    if (!data.item(file, slot, row)) return false;
     const uint16_t owned = pet.st.shopQuantities[slot];
     const bool permanent = row[6] != 0;
-    view = View::Receipt;
+    selection.view = View::Receipt;
     PetStatSnapshot values = pet.statSnapshot();
     uint16_t nextQuantity;
-    if (inventory)
+    if (selection.inventory)
     {
         const uint16_t consumed = readU16(row + 4);
-        if (permanent) { receipt = Owned; return true; }
-        if (owned < consumed) { receipt = Quantity; return true; }
+        if (permanent) { selection.receipt = Footer::Owned; return true; }
+        if (owned < consumed) { selection.receipt = Footer::Quantity; return true; }
         nextQuantity = owned - consumed;
         const uint8_t *effect = row + 9;
         for (uint8_t index = 0; index < row[8]; ++index, effect += 10)
@@ -328,26 +218,26 @@ bool ShopSession::transact(AssetData::AnimationRef &animation)
             if (value > bounds.maxValue) value = bounds.maxValue;
             values.customStats[stat] = static_cast<uint32_t>(value);
         }
-        uint8_t binding[2];
-        if (!read(file, itemOffset(slot) + itemSize + 2 * (pet.speciesSlot() - 1U),
-                  binding, sizeof(binding))) return false;
-        animation = {pet.speciesSlot(), pet.outfitSlot(), readU16(binding)};
-        receipt = Used;
+        uint16_t animationId;
+        if (!data.useAnimation(file, slot, pet.speciesSlot(), animationId)) return false;
+        animation = {pet.speciesSlot(), pet.outfitSlot(), animationId};
+        selection.receipt = Footer::Used;
     }
     else
     {
         const uint32_t price = readU32(offer);
         const uint16_t added = readU16(offer + 4);
-        const ShopConfirmationNotice notice = purchaseNotice(offer, row, owned, values.customStats[wallet]);
+        const ShopConfirmationNotice notice = shopPurchaseNotice(
+            pet, config.stats[data.wallet].minValue, offer, row, owned, values.customStats[data.wallet]);
         if (notice != ShopConfirmationNotice::None)
         {
-            constexpr Footer notices[]{Browse, Locked, Locked, Owned, Full, Funds};
-            receipt = notices[static_cast<uint8_t>(notice)];
+            constexpr Footer notices[]{Footer::Browse, Footer::Locked, Footer::Locked, Footer::Owned, Footer::Full, Footer::Funds};
+            selection.receipt = notices[static_cast<uint8_t>(notice)];
             return true;
         }
-        values.customStats[wallet] -= price;
+        values.customStats[data.wallet] -= price;
         nextQuantity = owned + added;
-        receipt = Bought;
+        selection.receipt = Footer::Bought;
     }
     file.close();
 
@@ -357,243 +247,17 @@ bool ShopSession::transact(AssetData::AnimationRef &animation)
     if (config.statCount) pet.commitPetStats(values.customStats, config.statCount);
     if (
 #if ENABLE_COLLECTION_GAME_EVENTS
-        !recordCollectionGameEvent(resources.sdCard(), config, pet, previous,
-                                  CollectionGameEvent::StatTransition, inventory ? slot : 255) ||
+        !recordCollectionGameEvent(data.sdCard(), collectionSource, pet, previous,
+                                  CollectionGameEvent::StatTransition, selection.inventory ? slot : 255) ||
 #endif
         (!pet.isDead() && !appearance.refreshUnlockState(false, false)) ||
         saves.saveCollectionProgress(true, true) != PetSaveResult::Persisted)
     {
         pet.restoreState(previous);
         animation = {};
-        receipt = SaveFailed;
+        selection.receipt = Footer::SaveFailed;
     }
     return true;
 }
 
-bool ShopSession::show(uint16_t frame, Rect rect, const Rect *crop)
-{
-    return renderer.ShowDataFrame({0, 0, art, 0, frame}, rect.x, rect.y, 12, rect.w, rect.h, crop);
-}
-
-bool ShopSession::restoreBrowse(uint16_t frame, Rect dirty)
-{
-    if (!bandsOffset) return show(frame, screen, &dirty);
-    const uint16_t page = frame ? 1 + (frame - firstEntryFrame) / 2 : 0;
-    const uint8_t first = dirty.y / bandHeight;
-    const uint8_t end = (dirty.bottom() + bandHeight - 1) / bandHeight;
-    uint8_t addresses[2 * bandCount];
-    ShopFile file;
-    if (!file.open(path, FILE_READ))
-    {
-        resources.recordAssetDataErrorResource(path);
-        return false;
-    }
-    if (!read(file, bandsOffset + 2 * (page * bandCount + first), addresses, 2 * (end - first))) return false;
-    file.close();
-    for (uint8_t band = first; band < end; ++band)
-    {
-        const uint8_t y = band * bandHeight;
-        const int top = dirty.y > y ? dirty.y : y;
-        const int bottom = dirty.bottom() < y + bandHeight ? dirty.bottom() : y + bandHeight;
-        const Rect crop{dirty.x, static_cast<uint8_t>(top - y), dirty.w, static_cast<uint8_t>(bottom - top)};
-        if (!show(readU16(addresses + 2 * (band - first)), {0, y, 128, bandHeight}, &crop)) return false;
-    }
-    return true;
-}
-
-void ShopSession::number(Rect rect, uint32_t value)
-{
-    renderer.drawShopNumber(rect.x, rect.y, rect.w, rect.h, value);
-}
-
-uint16_t ShopSession::frameFor(uint8_t entry) const
-{
-    const uint16_t slot = entry >= navigation
-        ? itemCount + productCount + (entry == exitEntry ? 2 : inventory ? 1 : 0)
-        : (inventory ? entry : itemCount + entry);
-    return firstEntryFrame + 2 * slot;
-}
-
-uint16_t ShopSession::confirmationFrame() const
-{
-    return firstEntryFrame + 2 * (itemCount + productCount + 3);
-}
-
-bool ShopSession::redraw()
-{
-    return paint(true);
-}
-
-bool ShopSession::paint(bool full)
-{
-    const uint8_t selected = entries[cursor];
-    if (confirmationOffset && view == View::Confirm)
-    {
-        if (!paintConfiguredConfirmation(selected)) return false;
-        paintedView = View::Confirm;
-        return true;
-    }
-    if (styledBrowse && view == View::Receipt)
-    {
-        if (!show(confirmationFrame() + 1 + receipt - Bought, screen)) return false;
-        paintedView = View::Receipt;
-        return true;
-    }
-    // Authored confirmation blocks can cover any part of the browse scene.
-    full |= (confirmationOffset && paintedView == View::Confirm) || (styledBrowse && paintedView == View::Receipt);
-    const uint16_t current = frameFor(selected);
-    const bool pageChanged = full || current != paintedFrame;
-    const bool restoring = paintedView == View::Confirm && view != View::Confirm;
-    const bool hasQuantity = !rowHeight && quantityRect.w && selected < navigation;
-    Rect dirty = restoring ? confirmation : Rect{};
-    if (!rowHeight && pageChanged)
-    {
-        Rect nextBounds{0, 0, 128, 144}; // Earlier exports have no trailer.
-        if (boundsOffset)
-        {
-            ShopFile file;
-            const uint32_t offset = boundsOffset + sizeof(Rect) * ((current - firstEntryFrame) / 2);
-            if (!file.open(path, FILE_READ))
-            {
-                resources.recordAssetDataErrorResource(path);
-                return false;
-            }
-            if (!read(file, offset, reinterpret_cast<uint8_t *>(&nextBounds), sizeof(nextBounds))) return false;
-        }
-        dirty = combine(dirty, combine(paintedBounds, nextBounds));
-        paintedBounds = nextBounds;
-        if (paintedHasQuantity && !hasQuantity) dirty = combine(dirty, quantityRect);
-    }
-    const uint16_t base = rowHeight ? 0 : current;
-    if (full ? !show(base, screen) : dirty.w && !restoreBrowse(base, dirty)) return false;
-
-    const uint32_t balance = walletRect.w ? pet.customStat(wallet) : 0;
-    bool walletDirty = full || balance != paintedWallet || dirty.overlaps(walletRect);
-    const uint16_t firstNavigationFrame = firstEntryFrame + 2 * (itemCount + productCount);
-    walletDirty |= !styledBrowse && !rowHeight && pageChanged && paintedFrame >= firstNavigationFrame &&
-                   navigationCard.overlaps(walletRect);
-    if (rowHeight)
-    {
-        const uint8_t rows = listRect.h / rowHeight;
-        const uint8_t cursorRow = cursor / listColumns;
-        const uint8_t first = cursorRow < rows ? 0 : (cursorRow - rows + 1) * listColumns;
-        const uint8_t width = listRect.w / listColumns;
-        for (uint8_t cell = 0; cell < rows * listColumns; ++cell)
-        {
-            const uint8_t index = first + cell;
-            const uint16_t frame = index < count ? frameFor(entries[index]) : 0;
-            const uint16_t key = frame | (index == cursor ? selectedRow : 0);
-            const Rect rect{static_cast<uint8_t>(listRect.x + (cell % listColumns) * width),
-                            static_cast<uint8_t>(listRect.y + (cell / listColumns) * rowHeight), width, rowHeight};
-            if (!full && key == paintedRows[cell] && (!frame || !dirty.overlaps(rect))) continue;
-            if (frame)
-            {
-                if (styledBrowse)
-                {
-                    const uint16_t styledFrame = confirmationFrame() + 1 + receiptCount + frame - firstEntryFrame;
-                    if (!show(styledFrame + (index == cursor), rect)) return false;
-                }
-                else
-                {
-                    if (!show(frame, rect)) return false;
-                    if (index == cursor) renderer.highlightShopRow(rect.x, rect.y, rect.w, rect.h);
-                }
-            }
-            else if (!full && !restoreBrowse(0, rect)) return false;
-            paintedRows[cell] = key;
-            walletDirty |= rect.overlaps(walletRect);
-        }
-    }
-    if (walletDirty) number(walletRect, balance);
-    if (hasQuantity)
-    {
-        uint8_t slot = selected;
-        if (!inventory)
-        {
-            ShopFile file;
-            uint8_t row[productSize];
-            if (!file.open(path, FILE_READ) || !product(file, selected, row))
-            {
-                resources.recordAssetDataErrorResource(path);
-                return false;
-            }
-            slot = row[6];
-        }
-        const uint16_t quantity = pet.st.shopQuantities[slot];
-        if (full || !paintedHasQuantity || quantity != paintedQuantity || dirty.overlaps(quantityRect) ||
-            (walletDirty && walletRect.overlaps(quantityRect))) number(quantityRect, quantity);
-        paintedQuantity = quantity;
-    }
-    if (view == View::Confirm)
-    {
-        if (!paintConfirmation(current, selected)) return false;
-    }
-    else if (!styledBrowse && selected >= navigation && !rowHeight &&
-             (pageChanged || (walletDirty && walletRect.overlaps(navigationCard))) &&
-             !show(current + 1, navigationCard))
-        return false;
-
-    paintedFrame = current;
-    paintedView = view;
-    paintedWallet = balance;
-    paintedHasQuantity = hasQuantity;
-    return paintFooter(full);
-}
-
-bool ShopSession::paintConfirmation(uint16_t frame, uint8_t selected)
-{
-    ShopFile file;
-    uint8_t row[itemSize];
-    if (!file.open(path, FILE_READ) ||
-        !(inventory ? item(file, selected, row) : product(file, selected, row)))
-    {
-        resources.recordAssetDataErrorResource(path);
-        return false;
-    }
-    if (!show(frame + 1, {0, 88, 128, 16}) ||
-        !show(inventory ? 15 : 14, {0, 104, 128, 16})) return false;
-    number({0, 120, 60, 16}, inventory ? pet.st.shopQuantities[selected] : readU32(row));
-    number({68, 120, 60, 16}, readU16(row + 4));
-    return true;
-}
-
-bool ShopSession::paintConfiguredConfirmation(uint8_t selected, bool buttonsOnly)
-{
-    const uint16_t background = confirmationFrame();
-    ShopFile file;
-    if (!file.open(path, FILE_READ))
-    {
-        resources.recordAssetDataErrorResource(path);
-        return false;
-    }
-
-    ShopConfirmationValues values{};
-    ShopConfirmationNotice notice = ShopConfirmationNotice::None;
-    if (inventory)
-        values.owned = pet.st.shopQuantities[selected];
-    else
-    {
-        uint8_t offer[productSize], row[itemSize];
-        if (!product(file, selected, offer) || !item(file, offer[6], row)) return false;
-        values = {readU32(offer), readU16(offer + 4), pet.st.shopQuantities[offer[6]]};
-        notice = purchaseNotice(offer, row, values.owned, pet.customStat(wallet));
-    }
-
-    const uint16_t entry = inventory ? selected : itemCount + selected;
-    if (drawShopConfirmation(file, confirmationOffset, entry, cancel, values, notice, renderer,
-                             {0, 0, art, 0, background}, buttonsOnly)) return true;
-    resources.recordAssetDataErrorResource(path);
-    return false;
-}
-
-bool ShopSession::paintFooter(bool full)
-{
-    Footer footer = Browse;
-    if (view == View::Confirm)
-        footer = inventory ? (cancel ? CancelUse : Use) : (cancel ? CancelBuy : Buy);
-    if (view == View::Receipt) footer = receipt;
-    if (!full && footer == paintedFooter) return true;
-    paintedFooter = footer;
-    return show(footer, {0, 144, 128, 16});
-}
 #endif

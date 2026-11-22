@@ -219,10 +219,10 @@ void testEvolutionPlaybackRecords(const std::vector<uint8_t> &exported)
         SdFat sd(fixture.data(), fixture.size());
         uint8_t scratch[AssetData::kIoScratchBytes] = {};
         BundleReader reader(&sd, scratch, sizeof(scratch));
-        PetBehaviorConfig config = {};
+        RuntimeContract config = {};
         const auto manifest = releaseFixtureManifest(fixture);
         assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
-        ActivePetBehaviorStatSlots activeSlots(config);
+        ActivePetBehaviorStatSlots activeSlots(config.behavior);
         PetStatSnapshot stats = {};
         stats.speciesSlot = 1;
         stats.outfitSlot = 1;
@@ -282,11 +282,11 @@ void testEvolutionConditionRanges(const std::vector<uint8_t> &exported)
         putFixtureU16(fixture, evolutionOffset + 6, 0);
         putFixtureU32(fixture, 16, static_cast<uint32_t>(fixture.size()));
         SdFat sd(fixture.data(), fixture.size());
-        PetBehaviorConfig config = {};
+        RuntimeContract config = {};
         const auto manifest = releaseFixtureManifest(fixture);
         assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
         SdAppearanceLoader loader(&sd);
-        loader.configureRuntimeContract(config);
+        loader.configureRuntimeContract(config.table.assetManifest, config.behavior);
         PetStatSnapshot stats = {};
         stats.speciesSlot = 1;
         stats.outfitSlot = 1;
@@ -330,23 +330,23 @@ void testSdCatchUpThresholds(const std::vector<uint8_t> &exported)
         putFixtureU32(selected, offset + 2, 95);
         putFixtureU32(selected, offset + 10, 95);
         SdFat sd(selected.data(), selected.size());
-        PetBehaviorConfig config = {};
-        config.assetManifest = releaseFixtureManifest(selected);
-        config.stats[0] = {true, 100, 0, 100, -1};
-        config.stats[1] = {true, 0, 0, 100, 0};
+        RuntimeContract config = {};
+        config.table.assetManifest = releaseFixtureManifest(selected);
+        config.behavior.stats[0] = {true, 100, 0, 100, -1};
+        config.behavior.stats[1] = {true, 0, 0, 100, 0};
         SdAppearanceLoader loader(&sd);
-        loader.configureRuntimeContract(config);
+        loader.configureRuntimeContract(config.table.assetManifest, config.behavior);
         PetBehaviorStatValues state = {};
         state.values[0] = 100;
         PetBehaviorDailyChangePauses pauses = {};
         uint32_t days = 0;
-        assert(loader.catchUpDays(config, state, pauses, 100, days) && days == 5);
+        assert(loader.catchUpDays(config.behavior, state, pauses, 100, days) && days == 5);
         state.values[0] = 95;
-        assert(loader.catchUpDays(config, state, pauses, 100, days) && days == 1);
+        assert(loader.catchUpDays(config.behavior, state, pauses, 100, days) && days == 1);
         state.values[0] = 94;
-        assert(loader.catchUpDays(config, state, pauses, 100, days) && days == 100);
+        assert(loader.catchUpDays(config.behavior, state, pauses, 100, days) && days == 100);
         HostSd::mountedData = nullptr;
-        assert(!loader.catchUpDays(config, state, pauses, 100, days));
+        assert(!loader.catchUpDays(config.behavior, state, pauses, 100, days));
         assert(std::strcmp(loader.firstAssetDataErrorResource(), "runtime") == 0);
     }
 }
@@ -354,27 +354,27 @@ void testSdCatchUpThresholds(const std::vector<uint8_t> &exported)
 void testDecodedActionRanges(const std::vector<uint8_t> &exported)
 {
     auto fixture = actionModesFixture(exported);
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(),
                                      releaseFixtureManifest(fixture), 1, 1, config));
-    assert(config.actionCount == 3 && config.actionOutcomeCount == 4);
-    assert(config.actionEffectCount == 4 && config.actionConditionCount == 1);
-    assert(config.actions[2].firstOutcome == 2 && config.actions[2].outcomeCount == 2);
+    assert(config.behavior.actionCount == 3 && config.behavior.actionOutcomeCount == 4);
+    assert(config.behavior.actionEffectCount == 4 && config.behavior.actionConditionCount == 1);
+    assert(config.behavior.actions[2].firstOutcome == 2 && config.behavior.actions[2].outcomeCount == 2);
     PetBehaviorStatValues state = {};
     PetBehaviorDailyChangePauses pauses = {};
     PetBehaviorActionPlayback playback = {};
-    assert(config.stats[0].minValue <= 1 && config.stats[0].maxValue >= 10);
+    assert(config.behavior.stats[0].minValue <= 1 && config.behavior.stats[0].maxValue >= 10);
     state.values[0] = 10;
-    assert(applyPetBehaviorAction(config, 0, state, pauses, playback));
+    assert(applyPetBehaviorAction(config.behavior, 0, state, pauses, playback));
     assert(state.values[0] == 1 && playback.playbackCount == 1);
     state.values[0] = 10;
-    assert(applyPetBehaviorAction(config, 1, state, pauses, playback));
+    assert(applyPetBehaviorAction(config.behavior, 1, state, pauses, playback));
     assert(state.values[0] == 2 && playback.playbackCount == 5);
-    assert(applyPetBehaviorAction(config, 1, state, pauses, playback));
+    assert(applyPetBehaviorAction(config.behavior, 1, state, pauses, playback));
     assert(state.values[0] == 2 && playback.playbackCount == 1);
-    assert(applyPetBehaviorAction(config, 2, state, pauses, playback, selectFirstOutcome));
+    assert(applyPetBehaviorAction(config.behavior, 2, state, pauses, playback, selectFirstOutcome));
     assert(state.values[0] == 3);
-    assert(applyPetBehaviorAction(config, 2, state, pauses, playback, selectLastOutcome));
+    assert(applyPetBehaviorAction(config.behavior, 2, state, pauses, playback, selectLastOutcome));
     assert(state.values[0] == 4);
 
     // Exporter validates child ownership. The firmware decodes canonical
@@ -389,7 +389,7 @@ void testDecodedActionRanges(const std::vector<uint8_t> &exported)
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(),
                                      releaseFixtureManifest(fixture), 1, 1, config));
     state.values[0] = 10;
-    assert(applyPetBehaviorAction(config, 1, state, pauses, playback));
+    assert(applyPetBehaviorAction(config.behavior, 1, state, pauses, playback));
     assert(state.values[0] == 2);
 }
 struct StatusContext
@@ -419,34 +419,34 @@ bool statusValue(const StatusSetCondition &condition,
 
 void testBehaviorFullFixture(const std::vector<uint8_t> &fixture)
 {
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     const AssetData::RuntimeManifest manifest = fixtureManifest(fixture);
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
     assert(config.schemaFingerprint == 0x12345678UL);
-    assert(config.statCount == 10);
-    assert(config.actionCount == 8);
-    assert(config.actionConditionCount == 8);
+    assert(config.behavior.statCount == 10);
+    assert(config.behavior.actionCount == 8);
+    assert(config.behavior.actionConditionCount == 8);
     assert(config.statusSets.count == 2);
     assert(config.statusSets.sets[0].conditions[0].valueId == runtimeValueIdForPetStat(0));
     assert(config.statusSets.sets[0].conditions[1].valueId == runtimeValueIdForPetStat(1));
     assert(config.statusSets.sets[0].conditions[2].valueId == runtimeValueIdForPetStat(2));
     assert(config.statusSets.sets[0].conditions[0].petStateMask == 0);
-    assert(config.buttons[0].kind == PetBehaviorButtonKind::UserAction);
-    assert(config.buttons[0].actionSlot == 0);
+    assert(config.buttons.buttons[0].kind == PetBehaviorButtonKind::UserAction);
+    assert(config.buttons.buttons[0].actionSlot == 0);
 
     PetBehaviorStatValues state = {};
     PetBehaviorDailyChangePauses pauses = {};
-    initializePetBehaviorStats(config, state);
+    initializePetBehaviorStats(config.behavior, state);
     PetBehaviorActionPlayback playback = {};
 
     // Standard mode commits every effect before the caller attempts playback.
-    assert(applyPetBehaviorAction(config, 0, state, pauses, playback, selectFirstOutcome));
+    assert(applyPetBehaviorAction(config.behavior, 0, state, pauses, playback, selectFirstOutcome));
     assert(playback.animation.animationId == 1);
     assert(playback.playbackCount == 5);
     assert(state.values[0] == 51);
     assert(state.values[9] == 60);
     assert(pauses.remainingDays[0] == 255);
-    applyPetBehaviorDailyChanges(config, state, pauses);
+    applyPetBehaviorDailyChanges(config.behavior, state, pauses);
     assert(state.values[0] == 51);
     assert(pauses.remainingDays[0] == 254);
 
@@ -460,8 +460,8 @@ void testBehaviorFullFixture(const std::vector<uint8_t> &fixture)
     // implicit Outcome. With all Stats at their initial 50, priority 3 wins.
     state = {};
     pauses = {};
-    initializePetBehaviorStats(config, state);
-    assert(applyPetBehaviorAction(config, 1, state, pauses, playback, selectFirstOutcome));
+    initializePetBehaviorStats(config.behavior, state);
+    assert(applyPetBehaviorAction(config.behavior, 1, state, pauses, playback, selectFirstOutcome));
     assert(playback.animation.animationId == 4);
     assert(playback.playbackCount == 1);
     assert(state.values[0] == 51);
@@ -469,8 +469,8 @@ void testBehaviorFullFixture(const std::vector<uint8_t> &fixture)
     // Random mode uses the bounded source to select the first weighted Outcome.
     state = {};
     pauses = {};
-    initializePetBehaviorStats(config, state);
-    assert(applyPetBehaviorAction(config, 3, state, pauses, playback, selectFirstOutcome));
+    initializePetBehaviorStats(config.behavior, state);
+    assert(applyPetBehaviorAction(config.behavior, 3, state, pauses, playback, selectFirstOutcome));
     assert(playback.animation.animationId == 10);
     assert(playback.playbackCount == 5);
     assert(state.values[9] == 60);
@@ -489,18 +489,18 @@ void testBehaviorFullFixture(const std::vector<uint8_t> &fixture)
 
 void testInvalidFixtureFailsWithoutPartialPublication(const std::vector<uint8_t> &fixture)
 {
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     config.schemaFingerprint = 0xa5a5a5a5UL;
-    config.statCount = 7;
+    config.behavior.statCount = 7;
     const AssetData::RuntimeManifest manifest = fixtureManifest(fixture);
     assert(!parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
     assert(config.schemaFingerprint == 0xa5a5a5a5UL);
-    assert(config.statCount == 7);
+    assert(config.behavior.statCount == 7);
 }
 
 void testValidFixtureLoads(const std::vector<uint8_t> &fixture, const char *label)
 {
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     const bool accepted = parseRuntimeTableBehavior(
         fixture.data(), fixture.size(), fixtureManifest(fixture), 1, 1, config);
     if (!accepted)
@@ -516,10 +516,10 @@ void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
     BundleReader reader(&sd, scratch, sizeof(scratch));
     const AssetData::RuntimeManifest manifest = releaseFixtureManifest(fixture);
 
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
 
-    ActivePetBehaviorStatSlots activeSlots(config);
+    ActivePetBehaviorStatSlots activeSlots(config.behavior);
     PetStatSnapshot stats = {};
     stats.speciesSlot = 1;
     stats.outfitSlot = 7;
@@ -620,11 +620,11 @@ void testOutfitSelectionReleaseFixture(const std::vector<uint8_t> &fixture)
 void testAppearanceQueryAdapter(const std::vector<uint8_t> &fixture)
 {
     SdFat sd(fixture.data(), fixture.size());
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     const AssetData::RuntimeManifest manifest = releaseFixtureManifest(fixture);
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
     SdAppearanceLoader loader(&sd);
-    loader.configureRuntimeContract(config);
+    loader.configureRuntimeContract(config.table.assetManifest, config.behavior);
 
     uint8_t outfits[8] = {};
     size_t outfitCount = 0;
@@ -647,10 +647,10 @@ void testAppearanceQueryAdapter(const std::vector<uint8_t> &fixture)
     assert(unlockMask == 0xE3U && HostSd::openCount == 1);
     assert(loader.firstAssetDataErrorResource()[0] == '\0');
 
-    PetBehaviorConfig mismatched = config;
-    ++mismatched.assetManifest.fileSize;
+    RuntimeContract mismatched = config;
+    ++mismatched.table.assetManifest.fileSize;
     SdAppearanceLoader invalidLoader(&sd);
-    invalidLoader.configureRuntimeContract(mismatched);
+    invalidLoader.configureRuntimeContract(mismatched.table.assetManifest, mismatched.behavior);
     HostSd::openCount = 0;
     outfitCount = 0;
     assert(!invalidLoader.loadOutfits(1, 0xE3U, outfits, 8, outfitCount));
@@ -662,10 +662,10 @@ void testAppearanceQueryAdapter(const std::vector<uint8_t> &fixture)
 void testInvalidAppearanceFixture(const std::vector<uint8_t> &fixture)
 {
     SdFat sd(fixture.data(), fixture.size());
-    PetBehaviorConfig published = {};
+    RuntimeContract published = {};
     published.schemaFingerprint = 0xA5A5A5A5UL;
-    published.statCount = 7;
-    PetBehaviorConfig candidate = published;
+    published.behavior.statCount = 7;
+    RuntimeContract candidate = published;
     const AssetData::RuntimeManifest manifest = releaseFixtureManifest(fixture);
     bool accepted = parseRuntimeTableBehavior(
         fixture.data(), fixture.size(), manifest, 1, 1, candidate);
@@ -675,7 +675,7 @@ void testInvalidAppearanceFixture(const std::vector<uint8_t> &fixture)
         published = candidate;
     assert(!accepted);
     assert(published.schemaFingerprint == 0xA5A5A5A5UL);
-    assert(published.statCount == 7);
+    assert(published.behavior.statCount == 7);
 }
 } // namespace
 
@@ -745,14 +745,14 @@ void testDeathCapability(const std::vector<uint8_t> &base)
     fixture[deathOffset] = 1;
     putFixtureU16(fixture, deathOffset + 2, 1);
     putFixtureU16(fixture, deathOffset + 4, animationReference);
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(),
                                     releaseFixtureManifest(fixture), 1, 1, config) == bool(ENABLE_DEATH));
     fixture[deathOffset] = 0;
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(),
                                     releaseFixtureManifest(fixture), 1, 1, config));
-    assert(!config.deathEnabled);
-    assert(config.deathAnimation.valid() == bool(ENABLE_DEATH));
+    assert(!config.behavior.deathEnabled);
+    assert(config.behavior.deathAnimation.valid() == bool(ENABLE_DEATH));
 }
 
 int main(int argc, char **argv)
@@ -760,14 +760,14 @@ int main(int argc, char **argv)
     if (argc == 3 && std::strcmp(argv[1], "--manual-day") == 0)
     {
         const auto bytes = readFixture(argv[2]);
-        PetBehaviorConfig config = {};
+        RuntimeContract config = {};
         auto manifest = fixtureManifest(bytes);
         std::memcpy(manifest.bundleId.bytes, bytes.data() + 28, 16);
         assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, 1, config));
-        assert(config.manualDays && config.dayResetCount == 1);
-        assert(config.dayResets[0].statSlot == 2 && config.dayResets[0].value == 10);
-        assert(config.actionGateCount == 1 && config.actionGatesOffset > 0);
-        assert(config.buttons[5].systemCommandId == RuntimeSystemCommandId::AdvanceDay);
+        assert(config.behavior.manualDays && config.behavior.dayResetCount == 1);
+        assert(config.behavior.dayResets[0].statSlot == 2 && config.behavior.dayResets[0].value == 10);
+        assert(config.behavior.actionGateCount == 1 && config.behavior.actionGatesOffset > 0);
+        assert(config.buttons.buttons[5].systemCommandId == RuntimeSystemCommandId::AdvanceDay);
         return 0;
     }
     AssetData::AssetFrameAddress ninthSpecies = {};
@@ -782,18 +782,18 @@ int main(int argc, char **argv)
     const auto bytes = readFixture(argv[1]);
     AssetData::RuntimeManifest manifest = fixtureManifest(bytes);
     memcpy(manifest.bundleId.bytes, bytes.data() + 28, 16);
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, 1, config));
-    assert(config.actionCount == 16 && config.actionOutcomeCount == 248);
-    assert(config.buttons[1].actionSlot == 15);
+    assert(config.behavior.actionCount == 16 && config.behavior.actionOutcomeCount == 248);
+    assert(config.buttons.buttons[1].actionSlot == 15);
     for (uint8_t slot = 0; slot < 16; ++slot)
     {
         PetBehaviorStatValues values = {};
-        initializePetBehaviorStats(config, values);
+        initializePetBehaviorStats(config.behavior, values);
         PetBehaviorDailyChangePauses pauses = {};
         PetBehaviorActionPlayback playback = {};
-        assert(applyPetBehaviorAction(config, slot, values, pauses, playback, [](uint16_t) -> uint16_t { return 0; }));
-        assert(config.actions[slot].outcomeCount == (slot < 8 ? 3 : 28));
+        assert(applyPetBehaviorAction(config.behavior, slot, values, pauses, playback, [](uint16_t) -> uint16_t { return 0; }));
+        assert(config.behavior.actions[slot].outcomeCount == (slot < 8 ? 3 : 28));
         assert(playback.versionSelection == (slot < 8 ? 0 : 1));
     }
     puts("[PASS] Actual Web export: eight ordinary actions plus eight independent lotteries, 248 outcomes and button slot15");
@@ -802,10 +802,10 @@ int main(int argc, char **argv)
     const auto bytes = readFixture(argv[1]);
     AssetData::RuntimeManifest manifest = fixtureManifest(bytes);
     memcpy(manifest.bundleId.bytes, bytes.data() + 28, 16);
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, 1, config));
-    assert(config.actionCount == 8 && config.actionOutcomeCount == 224);
-    assert(config.actionEffectCount == 2688 && config.actionEffectsStreamed);
+    assert(config.behavior.actionCount == 8 && config.behavior.actionOutcomeCount == 224);
+    assert(config.behavior.actionEffectCount == 2688 && config.behavior.actionEffectsStreamed);
     uint8_t exportedOutfitCount = 0;
     const uint16_t sectionCount = RuntimeTableInternal::readU16(bytes.data() + 24);
     for (uint16_t section = 0; section < sectionCount; ++section)
@@ -817,18 +817,18 @@ int main(int argc, char **argv)
     assert(exportedOutfitCount >= 1 && exportedOutfitCount <= 8);
     for (uint8_t outfit = 2; outfit <= exportedOutfitCount; ++outfit)
     {
-        PetBehaviorConfig alternate = {};
+        RuntimeContract alternate = {};
         assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, outfit, alternate));
         for (uint16_t index = 0; index < 224; ++index)
         {
-            const auto &primary = alternate.actionOutcomes[index].animationPlayback;
-            assert(primary.versionSelection == config.actionOutcomes[index].animationPlayback.versionSelection);
-            assert(primary.animation.animationId == config.actionOutcomes[index].animationPlayback.animation.animationId);
+            const auto &primary = alternate.behavior.actionOutcomes[index].animationPlayback;
+            assert(primary.versionSelection == config.behavior.actionOutcomes[index].animationPlayback.versionSelection);
+            assert(primary.animation.animationId == config.behavior.actionOutcomes[index].animationPlayback.animation.animationId);
             assert(primary.animation.outfitSlot == outfit);
         }
     }
     printf("[PASS] Maximum lottery mappings resolved for %u exported Outfits\n", exportedOutfitCount);
-    struct Effects { const std::vector<uint8_t> &bytes; uint32_t offset; unsigned reads; } effects = {bytes, config.actionEffectsOffset, 0};
+    struct Effects { const std::vector<uint8_t> &bytes; uint32_t offset; unsigned reads; } effects = {bytes, config.behavior.actionEffectsOffset, 0};
     const auto reader = [](void *context, uint16_t row, PetBehaviorActionEffectConfig &effect) -> bool {
         auto &source = *static_cast<Effects *>(context);
         const auto *record = source.bytes.data() + source.offset + row * 12;
@@ -840,28 +840,28 @@ int main(int argc, char **argv)
     const auto random = [](uint16_t) -> uint16_t { return draw; };
     for (uint8_t actionSlot = 0; actionSlot < 8; ++actionSlot)
     {
-        const auto &action = config.actions[actionSlot];
+        const auto &action = config.behavior.actions[actionSlot];
         assert(action.outcomeCount == 28);
         uint16_t weight = 0;
         for (uint8_t option = 0; option < 28; ++option)
         {
-            const auto &outcome = config.actionOutcomes[action.firstOutcome + option];
+            const auto &outcome = config.behavior.actionOutcomes[action.firstOutcome + option];
             PetBehaviorStatValues values = {};
-            initializePetBehaviorStats(config, values);
+            initializePetBehaviorStats(config.behavior, values);
             auto expected = values;
             for (uint8_t effect = 0; effect < 12; ++effect)
             {
-                const auto *record = bytes.data() + config.actionEffectsOffset + (outcome.firstEffect + effect) * 12;
+                const auto *record = bytes.data() + config.behavior.actionEffectsOffset + (outcome.firstEffect + effect) * 12;
                 const uint8_t stat = record[0];
                 const auto delta = RuntimeTableInternal::readI64(record + 2);
                 const int64_t value = (record[1] == 1 ? 0 : expected.values[stat]) + delta;
-                expected.values[stat] = value < 0 ? 0 : value > config.stats[stat].maxValue ? config.stats[stat].maxValue : value;
+                expected.values[stat] = value < 0 ? 0 : value > config.behavior.stats[stat].maxValue ? config.behavior.stats[stat].maxValue : value;
             }
             PetBehaviorDailyChangePauses pauses = {};
             PetBehaviorActionPlayback playback = {};
             effects.reads = 0;
             draw = weight;
-            assert(applyPetBehaviorAction(config, actionSlot, values, pauses, playback, random, reader, &effects));
+            assert(applyPetBehaviorAction(config.behavior, actionSlot, values, pauses, playback, random, reader, &effects));
             assert(effects.reads == 12 && playback.versionSelection == option + 1);
             assert(memcmp(values.values, expected.values, sizeof(values.values)) == 0);
             weight += outcome.weight;
@@ -878,11 +878,11 @@ int main(int argc, char **argv)
     testEvolutionPlaybackRecords(startup);
     testEvolutionConditionRanges(startup);
     testSdCatchUpThresholds(startup);
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     assert(parseRuntimeTableBehavior(valid.data(), valid.size(),
                                      releaseFixtureManifest(valid), 1, 1, config));
-    assert(config.layoutUnselected.valid() && config.layoutUnselected.shared());
-    assert(config.layoutSelected.valid() && config.layoutSelected.shared());
+    assert(config.layout.layoutUnselected.valid() && config.layout.layoutUnselected.shared());
+    assert(config.layout.layoutSelected.valid() && config.layout.layoutSelected.shared());
     SdFat sd(startup.data(), startup.size());
     uint8_t scratch[AssetData::kIoScratchBytes] = {};
     BundleReader reader(&sd, scratch, sizeof(scratch));
@@ -943,7 +943,7 @@ int main(int argc, char **argv)
     assert(!loadCompleteRuntimeTable(&sd, mismatched, reader,
                                      0, 0, config, &initial, &initialResolved));
     assert(!initialResolved);
-    PetBehaviorConfig unpublished = {};
+    RuntimeContract unpublished = {};
     unpublished.schemaFingerprint = 0xA5A5A5A5UL;
     assert(!parseRuntimeTableBehavior(legacy.data(), legacy.size(),
                                       fixtureManifest(legacy), 1, 1, unpublished));
@@ -953,14 +953,14 @@ int main(int argc, char **argv)
     const std::vector<uint8_t> applied = readFixture(argv[4]);
     assert(parseRuntimeTableBehavior(applied.data(), applied.size(),
                                      releaseFixtureManifest(applied), 1, 1, config));
-    assert(config.screenBlockCount == 9);
-    assert(config.screenBlocks[0].kind == ScreenBlockKind::Animation);
-    assert(config.screenBlocks[0].source == 0);
-    assert(config.screenBlocks[0].x == 0 && config.screenBlocks[0].y == 32);
-    assert(config.screenBlocks[0].width == 128 && config.screenBlocks[0].height == 96);
+    assert(config.layout.screenBlockCount == 9);
+    assert(config.layout.screenBlocks[0].kind == ScreenBlockKind::Animation);
+    assert(config.layout.screenBlocks[0].source == 0);
+    assert(config.layout.screenBlocks[0].x == 0 && config.layout.screenBlocks[0].y == 32);
+    assert(config.layout.screenBlocks[0].width == 128 && config.layout.screenBlocks[0].height == 96);
     for (uint8_t slot = 1; slot <= 8; ++slot)
     {
-        const ScreenBlockConfig &block = config.screenBlocks[slot];
+        const ScreenBlockConfig &block = config.layout.screenBlocks[slot];
         assert(block.kind == ScreenBlockKind::Button && block.source == slot);
         assert(block.x == ((slot - 1) % 4) * 32);
         assert(block.y == (slot <= 4 ? 0 : 128));
@@ -970,43 +970,43 @@ int main(int argc, char **argv)
     std::memcpy(sequenceManifest.bundleId.bytes, sequence.data() + 28, 16);
     assert(parseRuntimeTableBehavior(sequence.data(), sequence.size(),
                                      sequenceManifest, 1, 1, config));
-    assert(config.actions[0].followingAnimationCount == 3);
-    const uint8_t start = config.actions[0].firstFollowingAnimation;
-    assert(config.followingAnimations[start].playbackCount == 2);
-    assert(config.followingAnimations[start + 1].playbackCount == 1);
-    assert(config.followingAnimations[start + 2].playbackCount == 5);
-    assert(config.followingAnimations[start].animation.animationId ==
-           config.followingAnimations[start + 2].animation.animationId);
-    assert(config.followingAnimations[start].animation.animationId !=
-           config.followingAnimations[start + 1].animation.animationId);
-    for (uint8_t slot = 1; slot < config.actionCount; ++slot)
-        assert(config.actions[slot].followingAnimationCount == 0);
+    assert(config.behavior.actions[0].followingAnimationCount == 3);
+    const uint8_t start = config.behavior.actions[0].firstFollowingAnimation;
+    assert(config.behavior.followingAnimations[start].playbackCount == 2);
+    assert(config.behavior.followingAnimations[start + 1].playbackCount == 1);
+    assert(config.behavior.followingAnimations[start + 2].playbackCount == 5);
+    assert(config.behavior.followingAnimations[start].animation.animationId ==
+           config.behavior.followingAnimations[start + 2].animation.animationId);
+    assert(config.behavior.followingAnimations[start].animation.animationId !=
+           config.behavior.followingAnimations[start + 1].animation.animationId);
+    for (uint8_t slot = 1; slot < config.behavior.actionCount; ++slot)
+        assert(config.behavior.actions[slot].followingAnimationCount == 0);
     const std::vector<uint8_t> optional = readFixture(argv[argc - 1]);
     auto optionalManifest = fixtureManifest(optional);
     std::memcpy(optionalManifest.bundleId.bytes, optional.data() + 28, 16);
     assert(parseRuntimeTableBehavior(optional.data(), optional.size(),
                                      optionalManifest, 1, 1, config));
-    assert(config.actionCount == 5);
-    assert(config.actions[0].mode == PetBehaviorActionMode::Standard);
-    assert(config.actions[1].mode == PetBehaviorActionMode::ConditionalAnimation);
-    assert(!config.actions[1].hasFallbackAnimation);
-    assert(config.actions[2].mode == PetBehaviorActionMode::RandomOutcome);
+    assert(config.behavior.actionCount == 5);
+    assert(config.behavior.actions[0].mode == PetBehaviorActionMode::Standard);
+    assert(config.behavior.actions[1].mode == PetBehaviorActionMode::ConditionalAnimation);
+    assert(!config.behavior.actions[1].hasFallbackAnimation);
+    assert(config.behavior.actions[2].mode == PetBehaviorActionMode::RandomOutcome);
     for (uint8_t slot = 0; slot < 3; ++slot)
     {
-        const auto &action = config.actions[slot];
-        const auto &primary = config.actionOutcomes[action.firstOutcome].animationPlayback;
+        const auto &action = config.behavior.actions[slot];
+        const auto &primary = config.behavior.actionOutcomes[action.firstOutcome].animationPlayback;
         assert(!primary.animation.valid() && primary.playbackCount == 0);
         assert(action.followingAnimationCount == 1);
-        const auto &following = config.followingAnimations[action.firstFollowingAnimation];
+        const auto &following = config.behavior.followingAnimations[action.firstFollowingAnimation];
         assert(following.animation.valid() && following.playbackCount == 2);
     }
-    const auto &emptyCondition = config.actionConditions[config.actions[1].firstCondition];
+    const auto &emptyCondition = config.behavior.actionConditions[config.behavior.actions[1].firstCondition];
     assert(!emptyCondition.animationPlayback.animation.valid());
     assert(emptyCondition.animationPlayback.playbackCount == 0);
-    const auto &animatedCondition = config.actionConditions[config.actions[1].firstCondition + 1];
+    const auto &animatedCondition = config.behavior.actionConditions[config.behavior.actions[1].firstCondition + 1];
     assert(animatedCondition.animationPlayback.animation.valid());
     assert(animatedCondition.animationPlayback.playbackCount == 2);
-    const auto &animatedOutcome = config.actionOutcomes[config.actions[2].firstOutcome + 1];
+    const auto &animatedOutcome = config.behavior.actionOutcomes[config.behavior.actions[2].firstOutcome + 1];
     assert(animatedOutcome.animationPlayback.animation.valid());
     assert(animatedOutcome.animationPlayback.playbackCount == 3);
     // Backend layout tests own geometry, source and uniqueness validation.
@@ -1016,27 +1016,27 @@ int main(int argc, char **argv)
     for (int argument = 5; argument < argc - 2; ++argument)
     {
         const std::vector<uint8_t> invalid = readFixture(argv[argument]);
-        unpublished.screenBlockCount = 0xAA;
+        unpublished.layout.screenBlockCount = 0xAA;
         const uint32_t fingerprintBefore = unpublished.schemaFingerprint;
         const bool accepted = parseRuntimeTableBehavior(invalid.data(), invalid.size(),
             releaseFixtureManifest(invalid), 1, 1, unpublished);
         assert(accepted == expectedAcceptance[argument - 5]);
         if (!accepted)
         {
-            assert(unpublished.screenBlockCount == 0xAA);
+            assert(unpublished.layout.screenBlockCount == 0xAA);
             assert(unpublished.schemaFingerprint == fingerprintBefore);
         }
     }
 #elif RUNTIME_TABLE_FULL_FEATURE
     assert(argc == 5);
     const std::vector<uint8_t> fixture = readFixture(argv[1]);
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     const AssetData::RuntimeManifest manifest = releaseFixtureManifest(fixture);
     assert(parseRuntimeTableBehavior(fixture.data(), fixture.size(), manifest, 1, 1, config));
-    assert(config.petStateCount == 5);
-    assert(config.petStates[0].idleAnimation.valid());
-    assert(config.idleAnimation.valid());
-    assert(config.layoutUnselected.valid() && config.layoutSelected.valid());
+    assert(config.behavior.petStateCount == 5);
+    assert(config.behavior.petStates[0].idleAnimation.valid());
+    assert(config.behavior.idleAnimation.valid());
+    assert(config.layout.layoutUnselected.valid() && config.layout.layoutSelected.valid());
     testOutfitSelectionReleaseFixture(fixture);
     for (int index = 2; index < argc; ++index)
         testInvalidAppearanceFixture(readFixture(argv[index]));

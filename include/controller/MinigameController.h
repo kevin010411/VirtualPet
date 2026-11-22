@@ -11,7 +11,8 @@
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
 #include "game/InstructionPresentation.h"
-struct PetBehaviorConfig;
+struct InstructionRuntimeSettings;
+struct RuntimePlaybackConfig;
 #endif
 #if ENABLE_CAPTURE_GAME || ENABLE_INSTRUCTION_RESPONSE
 class Renderer;
@@ -53,7 +54,8 @@ public:
     bool startPredict();
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
-    void startInstruction(Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config);
+    void startInstruction(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
+                          const RuntimePlaybackConfig &playback);
     bool capturesInstructionInput() const;
     void instructionInput(uint8_t held, uint8_t pressed, uint32_t timestamp);
     void instructionPending(bool pending, uint32_t at, uint8_t raw)

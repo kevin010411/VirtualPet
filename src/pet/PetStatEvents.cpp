@@ -59,7 +59,7 @@ bool resolveEventValue(RuntimeValueId id, const RuntimeValueContext &context, in
     return true;
 }
 
-bool matchesConditions(EventFile &file, const PetBehaviorConfig &config,
+bool matchesConditions(EventFile &file, const StatEventSettings &events,
                        uint16_t first, uint8_t count, const RuntimeValueContext &context,
                        bool &matches)
 {
@@ -67,7 +67,7 @@ bool matchesConditions(EventFile &file, const PetBehaviorConfig &config,
     for (uint8_t offset = 0; offset < count; ++offset)
     {
         uint8_t condition[8];
-        if (!file.read(config.statEventConditionsOffset, first + offset, condition)) return false;
+        if (!file.read(events.statEventConditionsOffset, first + offset, condition)) return false;
         int64_t lhs = 0;
         int64_t rhs = readU32(condition + 4);
         if (!resolveEventValue(condition[0], context, lhs) ||
@@ -81,14 +81,14 @@ bool matchesConditions(EventFile &file, const PetBehaviorConfig &config,
     return true;
 }
 
-bool applyNode(EventFile &file, const PetBehaviorConfig &config, const uint8_t (&node)[12],
+bool applyNode(EventFile &file, const StatEventSettings &events, const PetBehaviorConfig &config, const uint8_t (&node)[12],
                PetStatEventResult &result)
 {
     const uint16_t firstEffect = readU16(node + 2);
     for (uint8_t offset = 0; offset < node[9]; ++offset)
     {
         uint8_t effect[12];
-        if (!file.read(config.statEventEffectsOffset, firstEffect + offset, effect)) return false;
+        if (!file.read(events.statEventEffectsOffset, firstEffect + offset, effect)) return false;
         const uint8_t slot = effect[0];
         if (slot == kStageDaysEffectSlot)
         {
@@ -110,26 +110,26 @@ bool applyNode(EventFile &file, const PetBehaviorConfig &config, const uint8_t (
     return true;
 }
 
-bool runEvent(EventFile &file, const PetBehaviorConfig &config, uint16_t nodeIndex,
+bool runEvent(EventFile &file, const StatEventSettings &events, const PetBehaviorConfig &config, uint16_t nodeIndex,
               const PetStatSnapshot &before, const PetStatSnapshot &after,
               PetStatEventResult &result, bool resume = false)
 {
     const uint16_t activeMask = activePetBehaviorStatMask(config);
     // Immediate paths are acyclic. Waiting nodes may be revisited on a later mutation.
-    for (uint16_t remaining = config.statEventNodeCount; remaining != 0; --remaining)
+    for (uint16_t remaining = events.statEventNodeCount; remaining != 0; --remaining)
     {
         uint8_t node[12];
-        if (nodeIndex >= config.statEventNodeCount ||
-            !file.read(config.statEventNodesOffset, nodeIndex, node)) return false;
+        if (nodeIndex >= events.statEventNodeCount ||
+            !file.read(events.statEventNodesOffset, nodeIndex, node)) return false;
         if (!resume)
         {
-            if (!applyNode(file, config, node, result)) return false;
+            if (!applyNode(file, events, config, node, result)) return false;
             if (result.terminal)
             {
                 result.values.activeStatEvent = kNoActiveStatEvent;
                 return true;
             }
-            if (config.persistentStatEvents)
+            if (events.persistentStatEvents)
             {
                 result.values.activeStatEvent = nodeIndex;
                 if ((node[11] & kEventWait) || !node[8]) return true;
@@ -142,13 +142,13 @@ bool runEvent(EventFile &file, const PetBehaviorConfig &config, uint16_t nodeInd
         for (uint8_t offset = 0; offset < node[8]; ++offset)
         {
             uint8_t edge[8];
-            if (!file.read(config.statEventEdgesOffset, firstEdge + offset, edge)) return false;
+            if (!file.read(events.statEventEdgesOffset, firstEdge + offset, edge)) return false;
             const uint16_t changeSlot = readU16(edge + 6);
             if (changeSlot && before.customStats[changeSlot - 1U] == after.customStats[changeSlot - 1U]) continue;
             const PetStatSnapshot &snapshot = edge[5] == 1 ? before : edge[5] == 2 ? after : result.values;
             const RuntimeValueContext context = makeRuntimeValueContext(
                 snapshot.customStats, activeMask, snapshot.stage_days, snapshot.speciesSlot, snapshot.outfitSlot);
-            if (!matchesConditions(file, config, readU16(edge + 2), edge[4], context, hasNext)) return false;
+            if (!matchesConditions(file, events, readU16(edge + 2), edge[4], context, hasNext)) return false;
             if (hasNext)
             {
                 nodeIndex = readU16(edge);
@@ -161,7 +161,7 @@ bool runEvent(EventFile &file, const PetBehaviorConfig &config, uint16_t nodeInd
 }
 } // namespace
 
-bool settleStatEvents(SdFat *sd, const PetBehaviorConfig &config,
+bool settleStatEvents(SdFat *sd, const StatEventSettings &events, const PetBehaviorConfig &config,
                       const PetStatSnapshot &before, const PetStatSnapshot &after,
                       PetStatEventResult &result)
 {
@@ -169,38 +169,38 @@ bool settleStatEvents(SdFat *sd, const PetBehaviorConfig &config,
     result.values.activeStatEvent = before.activeStatEvent;
     result.terminal = false;
     result.pageCount = 0;
-    if (config.statEventTriggerCount == 0) return true;
+    if (events.statEventTriggerCount == 0) return true;
     EventFile file;
     if (!file.open(sd)) return false;
-    if (config.persistentStatEvents && before.activeStatEvent != kNoActiveStatEvent)
+    if (events.persistentStatEvents && before.activeStatEvent != kNoActiveStatEvent)
     {
         bool changed = before.stage_days != after.stage_days;
         for (uint8_t slot = 0; slot < config.statCount && !changed; ++slot)
             changed = before.customStats[slot] != after.customStats[slot];
         if (!changed) return true;
-        return runEvent(file, config, before.activeStatEvent, before, after, result, true);
+        return runEvent(file, events, config, before.activeStatEvent, before, after, result, true);
     }
-    for (uint16_t index = 0; index < config.statEventTriggerCount && !result.terminal; ++index)
+    for (uint16_t index = 0; index < events.statEventTriggerCount && !result.terminal; ++index)
     {
         uint8_t trigger[8];
-        if (!file.read(config.statEventTriggersOffset, index, trigger)) return false;
+        if (!file.read(events.statEventTriggersOffset, index, trigger)) return false;
         const uint8_t slot = trigger[2];
         if (slot >= config.statCount) return false;
         if (!matchesTrigger(trigger[3], readU32(trigger + 4), before.customStats[slot], after.customStats[slot]))
             continue;
-        if (!runEvent(file, config, readU16(trigger), before, after, result)) return false;
-        if (config.persistentStatEvents) break;
+        if (!runEvent(file, events, config, readU16(trigger), before, after, result)) return false;
+        if (events.persistentStatEvents) break;
     }
     return true;
 }
 
-bool readStatEventPage(SdFat *sd, const PetBehaviorConfig &config, uint16_t index,
+bool readStatEventPage(SdFat *sd, const StatEventSettings &events, uint16_t index,
                        uint16_t &animationId, uint16_t &durationMs)
 {
     EventFile file;
     uint8_t page[4];
-    if (index >= config.statEventPageCount || !file.open(sd) ||
-        !file.read(config.statEventPagesOffset, index, page)) return false;
+    if (index >= events.statEventPageCount || !file.open(sd) ||
+        !file.read(events.statEventPagesOffset, index, page)) return false;
     animationId = readU16(page);
     durationMs = readU16(page + 2);
     return true;

@@ -147,20 +147,20 @@ int main(int argc, char **argv)
     speciesPack = readBytes((root / "assets/species_1.data").string().c_str());
     sharedPack = readBytes((root / "assets/shared.data").string().c_str());
     bundleId = manifest(bytes).bundleId;
-    PetBehaviorConfig config = {};
+    RuntimeContract config = {};
     assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest(bytes), 1, 1, config));
     if (animationFixture)
     {
-        const auto primary = config.idleAnimation;
-        const auto following = config.followingAnimations[config.actions[0].firstFollowingAnimation].animation;
-        auto &primaryAudio = config.animationAudio[primary.animationId - 1];
-        const auto followingAudio = config.animationAudio[following.animationId - 1];
+        const auto primary = config.behavior.idleAnimation;
+        const auto following = config.behavior.followingAnimations[config.behavior.actions[0].firstFollowingAnimation].animation;
+        auto &primaryAudio = config.playback.animationAudio[primary.animationId - 1];
+        const auto followingAudio = config.playback.animationAudio[following.animationId - 1];
         assert(primaryAudio.bound() && followingAudio.bound());
         assert(primaryAudio.offset != followingAudio.offset);
         AssetResources resources(nullptr);
         Renderer renderer(nullptr, resources);
         AnimationController controller(renderer, resources);
-        controller.configureRuntimeContract(config);
+        controller.configureRuntimeContract(config.playback);
         controller.setup(primary);
         tick(controller, 1000);
 #if FIRMWARE_MUTE
@@ -216,7 +216,7 @@ int main(int argc, char **argv)
         primaryAudio = originalAudio;
         controller.cancelAll();
         Pet pet;
-        PetBehaviorRuntime runtime(config, pet, controller, resources);
+        PetBehaviorRuntime runtime(config.behavior, pet, controller, resources);
         runtime.initializeStats();
         pet.setCustomStat(0, 20);
         assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
@@ -250,10 +250,10 @@ int main(int argc, char **argv)
         controller.cancelAll();
         auto failureCase = [&](SequenceAudioError expected, uint32_t origin) {
             AnimationController failed(renderer, resources);
-            failed.configureRuntimeContract(config);
-            failed.setup(config.idleAnimation);
+            failed.configureRuntimeContract(config.playback);
+            failed.setup(config.behavior.idleAnimation);
             Pet failedPet;
-            PetBehaviorRuntime failedRuntime(config, failedPet, failed, resources);
+            PetBehaviorRuntime failedRuntime(config.behavior, failedPet, failed, resources);
             failedRuntime.initializeStats();
             failedPet.setCustomStat(0, 20);
             failRead = expected == SequenceAudioError::ReadFailed;
@@ -298,14 +298,14 @@ int main(int argc, char **argv)
     AssetResources resources(nullptr);
     Renderer renderer(nullptr, resources);
     AnimationController controller(renderer, resources);
-    controller.configureRuntimeContract(config);
-    controller.setup(config.idleAnimation);
+    controller.configureRuntimeContract(config.playback);
+    controller.setup(config.behavior.idleAnimation);
     Pet pet;
-    PetBehaviorRuntime runtime(config, pet, controller, resources);
+    PetBehaviorRuntime runtime(config.behavior, pet, controller, resources);
     runtime.initializeStats();
     pet.setCustomStat(0, 20);
-    config.trackedActionCount = 1;
-    config.trackedActions[0] = slot;
+    config.behavior.trackedActionCount = 1;
+    config.behavior.trackedActions[0] = slot;
     pet.configureTrackedActions(1);
     assert(runtime.executeAction(slot) == PetBehaviorActionResult::Applied);
     assert(pet.customStat(0) == 60 && pet.actionCount(0) == expectedTrackedActionCount);

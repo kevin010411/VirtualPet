@@ -64,7 +64,7 @@ int main(int argc,char **argv)
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)),{});
     Source source={&bytes,memoryRead,static_cast<uint32_t>(bytes.size())};
     AssetData::RuntimeManifest manifest={};assert(readRuntimeManifest(source,manifest));
-    PetBehaviorConfig config={};
+    RuntimeContract config ={};
     assert(parseRuntimeTableBehavior(bytes.data(),bytes.size(),manifest,1,1,config));
     assert(readU16(bytes.data()+4)==26);
     const bool maximum=strcmp(argv[2],"maximum")==0;
@@ -73,34 +73,34 @@ int main(int argc,char **argv)
         InstructionResponseSettings{20,10000,10000,{65535,65535,65535}} : weighted ?
         InstructionResponseSettings{20,10000,10000,{0,65535,65535}} : minimum ?
         InstructionResponseSettings{1,500,100,{65535,0,0}} : InstructionResponseSettings{};
-    const auto &settings=config.instructionSettings;
+    const auto &settings=config.instruction.instructionSettings;
     const bool noGo=maximum || strcmp(argv[2],"nogo")==0;
     assert(settings.hard==(noGo || strcmp(argv[2],"hard")==0) && settings.noGoEnabled==noGo);
     assert(settings.typeWeights[0]==(maximum?65535:noGo?0:1) && settings.typeWeights[1]==(noGo?65535:0));
     assert(settings.roundCount==expected.roundCount && settings.answerMs==expected.answerMs &&
            settings.feedbackMs==expected.feedbackMs);
     for(uint8_t item=0;item<3;++item) assert(settings.targetWeights[item]==expected.targetWeights[item]);
-    if (maximum) { assert(config.instructionEffectCount==24); }
+    if (maximum) { assert(config.instruction.instructionEffectCount==24); }
     else if (strcmp(argv[2],"effects")==0) {
-        assert(config.instructionEffectCount==2);
-        const auto &correct=config.instructionEffects[0];
-        const auto &wrong=config.instructionEffects[1];
+        assert(config.instruction.instructionEffectCount==2);
+        const auto &correct=config.instruction.instructionEffects[0];
+        const auto &wrong=config.instruction.instructionEffects[1];
         assert(correct.group==0 && wrong.group==1 && correct.statSlot==wrong.statSlot);
         assert(correct.value==5 && wrong.value==-5);
         PetBehaviorStatValues values={};
-        for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) values.values[slot]=config.stats[slot].initialValue;
-        assert(values.values[correct.statSlot]==9 && config.stats[correct.statSlot].maxValue==10);
-        assert(applyPetBehaviorInstructionResults(config,1,2,values));
+        for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) values.values[slot]=config.behavior.stats[slot].initialValue;
+        assert(values.values[correct.statSlot]==9 && config.behavior.stats[correct.statSlot].maxValue==10);
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 1,2,values));
         assert(values.values[correct.statSlot]==5);
-    } else assert(config.instructionEffectCount==0);
-    assert(config.buttons[0].systemCommandId==RuntimeSystemCommandId::InstructionResponse);
+    } else assert(config.instruction.instructionEffectCount==0);
+    assert(config.buttons.buttons[0].systemCommandId==RuntimeSystemCommandId::InstructionResponse);
     for (uint8_t i=0;i<3;++i) {
-        assert(config.instructionOptions[i].valid() && config.instructionOptions[i].shared());
-        assert(config.systemAnimations[35+i].valid());
-        for (uint8_t j=0;j<i;++j) assert(config.instructionOptions[i].animationId!=config.instructionOptions[j].animationId);
+        assert(config.instruction.instructionOptions[i].valid() && config.instruction.instructionOptions[i].shared());
+        assert(config.playback.systemAnimations[35+i].valid());
+        for (uint8_t j=0;j<i;++j) assert(config.instruction.instructionOptions[i].animationId!=config.instruction.instructionOptions[j].animationId);
     }
-    assert(config.systemAnimations[38].valid()==(weighted||noGo) && config.systemAnimations[39].valid()==(weighted||noGo));
-    for(uint8_t role=40;role<43;++role) assert(config.systemAnimations[role].valid()==noGo);
+    assert(config.playback.systemAnimations[38].valid()==(weighted||noGo) && config.playback.systemAnimations[39].valid()==(weighted||noGo));
+    for(uint8_t role=40;role<43;++role) assert(config.playback.systemAnimations[role].valid()==noGo);
     InstructionResponse game;
     game.start(settings,[](uint32_t bound)->uint32_t {return bound-1;});
     uint32_t now=0;
@@ -124,10 +124,10 @@ int main(int argc,char **argv)
     if(maximum) {
         assert(results==0x55555);
         PetBehaviorStatValues values={};
-        for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) values.values[slot]=config.stats[slot].initialValue;
-        assert(applyPetBehaviorInstructionResults(config,results,count,values));
+        for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) values.values[slot]=config.behavior.stats[slot].initialValue;
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, results,count,values));
         for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) {
-            const uint32_t index=config.stats[slot].initialValue-9;
+            const uint32_t index=config.behavior.stats[slot].initialValue-9;
             assert(index<12 && values.values[slot]==UINT32_MAX-(index+5)-(index%2?index:0));
         }
         puts("[PASS] maximum 20 rounds/24 effects/12 distinct Stat identities: ordered changes, sets, per-step clamps and single consumption");

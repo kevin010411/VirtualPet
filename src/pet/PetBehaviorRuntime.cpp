@@ -90,12 +90,19 @@ bool readActionEffect(void *context, uint16_t row, PetBehaviorActionEffectConfig
 PetBehaviorRuntime::PetBehaviorRuntime(const PetBehaviorConfig &configRef,
                                        Pet &petRef,
                                        AnimationController &animationsRef,
-                                       AssetResources &resourcesRef)
+                                       AssetResources &resourcesRef
+#if ENABLE_COLLECTION_GAME_EVENTS
+                                       , const RuntimeTableConfig &collectionSource
+#endif
+                                       )
     : config(configRef),
       pet(petRef),
       animations(animationsRef),
       resources(resourcesRef),
       dailyChangePauses{}
+#if ENABLE_COLLECTION_GAME_EVENTS
+      , collectionSource(collectionSource)
+#endif
 {
 }
 
@@ -156,7 +163,7 @@ bool PetBehaviorRuntime::advancePetDay(uint32_t days)
         if (!writeStats(state, pet)) return false;
         if (
 #if ENABLE_COLLECTION_GAME_EVENTS
-            !recordCollectionGameEvent(resources.sdCard(), config, pet, before, CollectionGameEvent::StatTransition) ||
+            !recordCollectionGameEvent(resources.sdCard(), collectionSource, pet, before, CollectionGameEvent::StatTransition) ||
 #endif
             (config.manualDays && saveMutation != nullptr && !saveMutation(saveContext, false)))
         {
@@ -258,7 +265,7 @@ PetBehaviorActionResult PetBehaviorRuntime::commitActionValues(
 #endif
         if (
 #if ENABLE_COLLECTION_GAME_EVENTS
-            !recordCollectionGameEvent(resources.sdCard(), config, pet, before, CollectionGameEvent::StatTransition) ||
+            !recordCollectionGameEvent(resources.sdCard(), collectionSource, pet, before, CollectionGameEvent::StatTransition) ||
 #endif
             (saveMutation != nullptr && !saveMutation(saveContext, true)))
         {
@@ -394,11 +401,11 @@ ActivePetState PetBehaviorRuntime::activePetState(
 }
 
 #if ENABLE_INSTRUCTION_RESPONSE
-bool PetBehaviorRuntime::applyInstructionResults(uint32_t correctMask, uint8_t count)
+bool PetBehaviorRuntime::applyInstructionResults(const InstructionRuntimeSettings &settings, uint32_t correctMask, uint8_t count)
 {
     if (pet.isDead()) return false;
     PetBehaviorStatValues state = readStats(pet);
-    if (!applyPetBehaviorInstructionResults(config, correctMask, count, state)) return false;
+    if (!applyPetBehaviorInstructionResults(config, settings, correctMask, count, state)) return false;
 #if ENABLE_STAT_EVENTS
     if (usesStatEvents()) return commitStatMutation(state, UINT8_MAX);
 #endif

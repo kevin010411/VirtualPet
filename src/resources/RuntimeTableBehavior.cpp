@@ -32,14 +32,14 @@ bool parseRuntimeTableBehavior(const uint8_t *bytes,
                                const AssetData::RuntimeManifest &manifest,
                                uint8_t speciesSlot,
                                uint8_t outfitSlot,
-                               PetBehaviorConfig &config)
+                               RuntimeContract &config)
 {
     if (bytes == nullptr || byteCount > UINT32_MAX)
         return false;
     MemorySource memory = {bytes, static_cast<uint32_t>(byteCount)};
     const Source source = {&memory, readMemory, memory.size};
     RuntimeTable table = {};
-    PetBehaviorConfig candidate = {};
+    RuntimeContract candidate = {};
     if (!readRuntimeTable(source, &manifest, table) ||
         !decodeRuntimeTableBehavior(table, manifest, speciesSlot, outfitSlot, candidate) ||
         !decodeRuntimePresentation(table, speciesSlot, outfitSlot, candidate))
@@ -53,7 +53,7 @@ bool loadCompleteRuntimeTable(SdFat *sd,
                               BundleReader &bundleReader,
                               uint8_t speciesSlot,
                               uint8_t outfitSlot,
-                              PetBehaviorConfig &config,
+                              RuntimeContract &config,
                               AppearanceSelection *initialAppearance,
                               bool *initialAppearanceResolved)
 {
@@ -89,7 +89,7 @@ bool loadCompleteRuntimeTable(SdFat *sd,
     if (decoded && initialAppearance == nullptr)
         decoded = decodeInitialAppearance(table, bundleReader, decodedInitial);
     if (decoded)
-        decoded = AssetData::animationReferenceExists(bundleReader, config.idleAnimation);
+        decoded = AssetData::animationReferenceExists(bundleReader, config.behavior.idleAnimation);
     // The former second /runtime.bin read only checked these required
     // appearance sections. Keep that check after used asset references.
     if (decoded)

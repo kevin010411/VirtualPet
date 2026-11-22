@@ -11,7 +11,7 @@
 #endif
 
 PetSession::PetSession(Pet &petRef, PetStorage &storageRef, AssetResources &resourcesRef,
-                       AppearanceLoader &loaderRef, PetBehaviorConfig &configRef,
+                       AppearanceLoader &loaderRef, RuntimeContract &configRef,
                        PetBehaviorRuntime &runtimeRef, AppearanceChangeController &changesRef,
                        PetSessionHost &hostRef)
     : pet(petRef), storage(storageRef), resources(resourcesRef), loader(loaderRef),
@@ -70,7 +70,7 @@ bool PetSession::prepare()
     }
 #if ENABLE_COLLECTION_CATALOG
     bool collectionChanged = false;
-    if (!evaluateCollectionCatalog(sd, config, pet, collectionChanged)) return false;
+    if (!evaluateCollectionCatalog(sd, config.table, pet, collectionChanged)) return false;
 #endif
     const bool ready = initialState == InitialState::Restored
         ? changes.refreshUnlockState(false)
@@ -114,7 +114,7 @@ AppearanceChangeResult PetSession::reset()
         if (loadPetState(false) != InitialState::Failed)
         {
 #if ENABLE_COLLECTION_GAME_EVENTS
-            if (completedRound || config.retainCollectionOnRestart)
+            if (completedRound || config.table.collection.retainCollectionOnRestart)
                 pet.retainCollectionFrom(previous);
 #elif ENABLE_STAT_EVENTS
             if (completedRound) pet.retainCollectionFrom(previous);
@@ -124,7 +124,7 @@ AppearanceChangeResult PetSession::reset()
             {
 #if ENABLE_COLLECTION_CATALOG
                 bool changed = false;
-                if (!evaluateCollectionCatalog(resources.sdCard(), config, pet, changed))
+                if (!evaluateCollectionCatalog(resources.sdCard(), config.table, pet, changed))
                     result = AppearanceChangeResult::ConfigurationFailed;
                 else
 #endif
@@ -161,7 +161,7 @@ PetSession::InitialState PetSession::loadPetState(bool allowSavedState)
         storage.discard();
     }
     pet.setDefaultState();
-    pet.configureDeath(config.deathEnabled, config.deathStatMask);
+    pet.configureDeath(config.behavior.deathEnabled, config.behavior.deathStatMask);
     pet.setSchemaFingerprint(config.schemaFingerprint);
     runtime.initializeStats();
     return pet.setSpeciesSlot(initialSpeciesSlot) && pet.setOutfitSlot(initialOutfitSlot)

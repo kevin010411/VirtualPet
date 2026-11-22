@@ -6,7 +6,9 @@
 
 class AssetResources;
 class Renderer;
-struct PetBehaviorConfig;
+
+namespace AssetData { struct RuntimeManifest; }
+
 namespace RuntimeTableInternal
 {
 struct RuntimeTable;
@@ -22,7 +24,7 @@ public:
         uint16_t target = 0;
     };
 
-    ProjectMenuSession(Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config);
+    ProjectMenuSession(Renderer &renderer, AssetResources &resources, const AssetData::RuntimeManifest &manifest);
     bool open(uint8_t menu);
     bool redraw();
     bool move(bool forward);
@@ -45,7 +47,7 @@ private:
 
     Renderer &renderer;
     AssetResources &resources;
-    const PetBehaviorConfig &config;
+    const AssetData::RuntimeManifest &manifest;
     Cursor stack[16] = {};
     uint8_t depth = 0;
     uint16_t card = 0xffffU;

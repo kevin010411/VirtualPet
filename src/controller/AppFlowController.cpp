@@ -5,6 +5,11 @@ bool AppFlowController::allowsPetTime() const
     return is(AppStage::Command) || is(AppStage::Minigame) || is(AppStage::Appearance) || is(AppStage::Evolution);
 }
 
+bool AppFlowController::holdsPetClock() const
+{
+    return is(AppStage::Menu) || is(AppStage::Shop) || is(AppStage::Collection);
+}
+
 bool AppFlowController::allowsMenuNavigation() const
 {
     return is(AppStage::Command) || is(AppStage::Appearance) || is(AppStage::Collection) ||

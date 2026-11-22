@@ -6,7 +6,7 @@ if ($GuessClassic -and -not $UseRtcClock) { throw 'GuessClassic requires the pro
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $sources = @(
  'test/collection_catalog/test_main.cpp', 'src/collection/CollectionCatalog.cpp',
- 'src/controller/Game.cpp', 'src/controller/GameStartup.cpp',
+ 'src/controller/Game.cpp', 'src/controller/GameForeground.cpp', 'src/controller/GameStartup.cpp',
  'src/controller/AppFlowController.cpp', 'src/controller/CommandController.cpp',
  'src/controller/CommandExecutor.cpp', 'src/controller/SystemCommandCatalog.cpp',
  'src/controller/StatusSetContract.cpp', 'src/controller/StatusSetSelection.cpp',
@@ -24,11 +24,11 @@ $sources = @(
  'src/pet/RuntimeValueResolver.cpp', 'src/common/CopyResourceName.cpp',
  'src/common/FirmwareRandom.cpp', 'src/common/Crc32.cpp'
 )
-if ($Shop) { $sources += 'src/shop/ShopSession.cpp', 'src/shop/ShopConfirmation.cpp' }
+if ($Shop) { $sources += 'src/shop/ShopSession.cpp', 'src/shop/ShopData.cpp', 'src/shop/ShopView.cpp', 'src/shop/ShopConfirmation.cpp' }
 if ($ProjectMenus) { $sources += 'src/controller/ProjectMenuSession.cpp' }
 if ($StatEvents) { $sources += 'src/controller/GameStatEvents.cpp', 'src/pet/PetStatEvents.cpp' }
 if ($CaptureGame) {
- $sources += 'src/controller/CaptureOutcome.cpp', 'src/game/CaptureAssets.cpp', 'src/game/CaptureGame.cpp'
+ $sources += 'src/controller/CaptureOutcome.cpp', 'src/game/CaptureAssets.cpp', 'src/game/CaptureGame.cpp', 'src/game/CaptureScene.cpp'
 }
 if ($GuessGame -or $GuessClassic -or $CaptureGame) { $sources += 'src/controller/MinigameController.cpp' }
 if ($GuessGame -or $GuessClassic) { $sources += 'src/game/GuessItemGame.cpp' }

@@ -71,11 +71,12 @@ __attribute__((noinline)) bool header(const RuntimeTable &table, uint8_t *record
 }
 }
 
-bool loadCollectionCatalog(const RuntimeTable &table, PetBehaviorConfig &config)
+bool loadCollectionCatalog(const RuntimeTable &table, CollectionSettings &config,
+                           uint8_t (&trackedActions)[8], uint8_t &trackedActionCount)
 {
     config.collectionFingerprint = 0;
     config.trackedActionFingerprint = 0;
-    config.trackedActionCount = 0;
+    trackedActionCount = 0;
 #if ENABLE_COLLECTION_GAME_EVENTS
     config.retainCollectionOnRestart = false;
     config.captureOnlyMask = 0;
@@ -95,11 +96,11 @@ bool loadCollectionCatalog(const RuntimeTable &table, PetBehaviorConfig &config)
     {
         uint8_t row[4];
         if (!readRecord(table.source, *tracked, index, row)) return false;
-        config.trackedActions[index] = row[1];
+        trackedActions[index] = row[1];
     }
     config.collectionFingerprint = readU32(cfg);
     config.trackedActionFingerprint = readU32(cfg + 20);
-    config.trackedActionCount = tracked->count;
+    trackedActionCount = tracked->count;
 #if ENABLE_COLLECTION_GAME_EVENTS
     if (table.featureFlags & kCollectionGameEventsFeature)
     {
@@ -118,17 +119,17 @@ namespace
 {
 // Grant-only queries share the table lifetime without acquiring items or
 // changing fingerprints. Acquisition completes before grants are applied.
-__attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &pet, bool *changed)
+__attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const RuntimeTableConfig &config, Pet &pet, bool *changed)
 {
     if (changed != nullptr)
     {
-        *changed = pet.configureCollection(config.collectionFingerprint);
-        *changed |= pet.configureTrackedActions(config.trackedActionFingerprint);
+        *changed = pet.configureCollection(config.collection.collectionFingerprint);
+        *changed |= pet.configureTrackedActions(config.collection.trackedActionFingerprint);
 #if ENABLE_COLLECTION_GAME_EVENTS
-        *changed |= pet.configureCollectionProgress(config.collectionProgressFingerprint);
+        *changed |= pet.configureCollectionProgress(config.collection.collectionProgressFingerprint);
 #endif
     }
-    if (config.collectionFingerprint == 0) return true;
+    if (config.collection.collectionFingerprint == 0) return true;
     RuntimeTableFile file;
     if (!file.open(sd, config.assetManifest)) return false;
     const RuntimeTable &table = file.table();
@@ -159,7 +160,7 @@ __attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const PetBehav
 #endif
             if (pet.isCollectionOwned(index)) continue;
 #if ENABLE_COLLECTION_GAME_EVENTS
-            if (config.captureOnlyMask & (uint64_t(1) << index)) continue;
+            if (config.collection.captureOnlyMask & (uint64_t(1) << index)) continue;
 #endif
             uint8_t item[36];
             if (!readItem(table, index, item)) return false;
@@ -206,12 +207,12 @@ __attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const PetBehav
 }
 }
 
-bool evaluateCollectionCatalog(SdFat *sd, const PetBehaviorConfig &config, Pet &pet, bool &changed)
+bool evaluateCollectionCatalog(SdFat *sd, const RuntimeTableConfig &config, Pet &pet, bool &changed)
 {
     return updateCollectionCatalog(sd, config, pet, &changed);
 }
 
-bool applyCollectionOutfitGrants(SdFat *sd, const PetBehaviorConfig &config, Pet &pet)
+bool applyCollectionOutfitGrants(SdFat *sd, const RuntimeTableConfig &config, Pet &pet)
 {
     return updateCollectionCatalog(sd, config, pet, nullptr);
 }
@@ -288,18 +289,18 @@ uint32_t statIncrement(const uint8_t *rule, const PersistedPetState &before,
 }
 }
 
-bool recordCollectionGameEvent(SdFat *sd, const PetBehaviorConfig &config, Pet &pet,
+bool recordCollectionGameEvent(SdFat *sd, const RuntimeTableConfig &config, Pet &pet,
                                const PersistedPetState &before, CollectionGameEvent event,
                                uint8_t shopItem, const CollectionRoundStats *round)
 {
-    if (config.collectionProgressFingerprint == 0 || pet.isDead()) return true;
+    if (config.collection.collectionProgressFingerprint == 0 || pet.isDead()) return true;
     RuntimeTableFile file;
     if (!file.open(sd, config.assetManifest)) return false;
     const RuntimeTable &table = file.table();
     const Section *rules = table.find(CollectionEventRules);
     if (rules == nullptr) return false;
 
-    pet.configureCollectionProgress(config.collectionProgressFingerprint);
+    pet.configureCollectionProgress(config.collection.collectionProgressFingerprint);
     const PersistedPetState &after = pet.persistentState();
     for (uint16_t slot = 0; slot < rules->count; ++slot)
     {
@@ -327,12 +328,12 @@ bool recordCollectionGameEvent(SdFat *sd, const PetBehaviorConfig &config, Pet &
 }
 #endif
 
-CollectionCatalog::CollectionCatalog(Pet &petRef, Renderer &rendererRef, AssetResources &resourcesRef, const PetBehaviorConfig &configRef)
+CollectionCatalog::CollectionCatalog(Pet &petRef, Renderer &rendererRef, AssetResources &resourcesRef, const RuntimeTableConfig &configRef)
     : pet(petRef), renderer(rendererRef), resources(resourcesRef), config(configRef) {}
 
 bool CollectionCatalog::start()
 {
-    if (config.collectionFingerprint == 0) return false;
+    if (config.collection.collectionFingerprint == 0) return false;
     RuntimeTableFile file;
     uint8_t cfg[24];
     if (!file.open(resources.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;

@@ -2,6 +2,7 @@
 
 #if ENABLE_CAPTURE_GAME
 #include "game/CaptureGame.h"
+#include "game/CaptureScene.h"
 
 #include <Arduino.h>
 #include <stdlib.h>
@@ -13,7 +14,7 @@ namespace
 {
 constexpr uint32_t frameIntervalMs = 50;
 constexpr uint32_t fishLifetimeMs = 5000;
-constexpr uint32_t fullFrame = (1UL << CaptureGame::bandCount) - 1UL;
+constexpr uint32_t fullFrame = (1UL << CaptureScene::bandCount) - 1UL;
 
 int roundedPixel(int halfPixels)
 {
@@ -25,8 +26,8 @@ uint32_t verticalBands(int from, int to)
     if (from < 0) from = 0;
     if (to > CaptureAssets::screenHeight) to = CaptureAssets::screenHeight;
     if (to <= from) return 0;
-    const int first = from / CaptureGame::bandRows;
-    const int end = (to + CaptureGame::bandRows - 1) / CaptureGame::bandRows;
+    const int first = from / CaptureScene::bandRows;
+    const int end = (to + CaptureScene::bandRows - 1) / CaptureScene::bandRows;
     return ((1UL << end) - 1UL) ^ ((1UL << first) - 1UL);
 }
 }
@@ -155,7 +156,7 @@ bool CaptureGame::draw(uint32_t age, bool full)
     const uint32_t dropAge = state_ == State::Drop ? age - dropStart_ : 0;
     const int hookTop = roundedPixel(hookY(dropAge));
     const int hookLeft = roundedPixel(2 * hookX_ - scene.hook.width);
-    Frame frame = {};
+    CaptureScene::Frame frame = {};
     frame.hookX = hookX_;
     frame.lineStart = scene.startY;
     frame.lineEnd = hookTop;
@@ -184,8 +185,8 @@ bool CaptureGame::draw(uint32_t age, bool full)
         bands |= verticalBands(layer.y, layer.y + layer.sprite->height);
     }
     const uint32_t dirtyTimer = frame.secondsLeft != drawnSeconds_
-        ? verticalBands(scene.timerY, scene.timerY + timerHeight) : 0;
-    if (!renderer_->drawCaptureBands(assets_, frame, full ? fullFrame : bands | previousBands_ | dirtyTimer))
+        ? verticalBands(scene.timerY, scene.timerY + CaptureScene::timerHeight) : 0;
+    if (!CaptureScene::drawBands(*renderer_, assets_, frame, full ? fullFrame : bands | previousBands_ | dirtyTimer))
         return false;
     drawnSeconds_ = frame.secondsLeft;
     previousBands_ = bands;
@@ -218,7 +219,7 @@ bool CaptureGame::collect(const CaptureAssets::Target &caught)
             cardStarted_ = millis();
             cardPage_ = 0;
             state_ = State::Card;
-            return renderer_->showCaptureCard(assets_, card_, cardPage_);
+            return CaptureScene::showCard(*renderer_, assets_, card_, cardPage_);
         }
     }
     return true;
@@ -233,11 +234,11 @@ void CaptureGame::readFailed()
 
 void CaptureGame::redraw()
 {
-    if (state_ == State::Result) renderer_->showCaptureScore(score_);
+    if (state_ == State::Result) CaptureScene::showScore(*renderer_, score_);
     else if (state_ == State::ReadFailed) renderer_->showResourceError("/capture.data");
     else if (state_ == State::Card)
     {
-        if (!renderer_->showCaptureCard(assets_, card_, cardPage_)) readFailed();
+        if (!CaptureScene::showCard(*renderer_, assets_, card_, cardPage_)) readFailed();
     }
     else if (state_ != State::Closed)
     {
@@ -281,7 +282,7 @@ void CaptureGame::update(bool confirmPending)
             readFailed();
             return;
         }
-        renderer_->showCaptureScore(score_);
+        CaptureScene::showScore(*renderer_, score_);
         state_ = State::Result;
         return;
     }
