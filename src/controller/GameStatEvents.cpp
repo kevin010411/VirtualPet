@@ -88,7 +88,7 @@ bool Game::settleStatMutation(const PetStatSnapshot &after, uint8_t actionSlot, 
         }
         else target = {};
     }
-    if (ready && !pet.isDead()) ready = refreshOutfitUnlockMask(activatedTarget, false);
+    if (ready && !pet.isDead()) ready = appearanceChanges.resolveOutfitUnlocks(activatedTarget);
 #if ENABLE_COLLECTION_GAME_EVENTS
     if (ready) ready = recordCollectionGameEvent(resources.sdCard(), petBehaviorConfig, pet, previous,
                                                  CollectionGameEvent::StatTransition);

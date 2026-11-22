@@ -34,7 +34,8 @@ public:
                        AssetResources &resources);
 
     bool hasAction(uint8_t actionSlot) const;
-    void setPersistence(bool (*save)(void *), void *context) { saveMutation = save; saveContext = context; }
+    // Settle derived unlocks only once the selected Action effects are applied.
+    void setPersistence(bool (*save)(void *, bool settleActionEffects), void *context) { saveMutation = save; saveContext = context; }
 #if ENABLE_STAT_EVENTS
     void setStatEventSettlement(bool (*settle)(void *, const PetStatSnapshot &, uint8_t, bool))
     {
@@ -68,7 +69,7 @@ private:
     bool pendingPlaybackStarted = false;
     PlaybackResult playAction(const PetBehaviorActionConfig &action, const PetBehaviorActionPlayback &playback);
     PetBehaviorActionResult commitActionValues(const PetBehaviorStatValues &state, uint8_t slot, const PersistedPetState &before);
-    bool (*saveMutation)(void *) = nullptr;
+    bool (*saveMutation)(void *, bool settleActionEffects) = nullptr;
     void *saveContext = nullptr;
 #if ENABLE_STAT_EVENTS
     bool (*settleStatMutation)(void *, const PetStatSnapshot &, uint8_t, bool) = nullptr;

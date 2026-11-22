@@ -191,10 +191,10 @@ private:
     bool deathPresented = false;
     bool deathSavePending = false;
     unsigned long deathSaveRetryAt = 0;
-    bool enterDeathIfNeeded();
+    bool enterDeathIfNeeded(bool persisted = false);
     void retryDeathSave();
 #else
-    bool enterDeathIfNeeded() { return isDead(); }
+    bool enterDeathIfNeeded(bool = false) { return isDead(); }
     void retryDeathSave() {}
 #endif
     RuntimeLoadState runtimeLoadState = RuntimeLoadState::Unloaded;
@@ -209,7 +209,7 @@ private:
     bool completePlaybackTick(const PlaybackTickResult &playbackResult);
     void routeDirectionKey(KeyDirection direction);
     void handleCommandResult(const CommandResult &result);
-    enum class Settlement : uint8_t { UserAction, GuessOutcome, InstructionCompletion, DailyProgress };
+    enum class Settlement : uint8_t { GuessOutcome, InstructionCompletion, DailyProgress };
     EvolutionResult settleMutation(Settlement source);
     void handleSystemCommandRequest(const CommandResult &result);
     // Returns clock consumption; blocked or fatal work consumes no backlog.

@@ -240,7 +240,11 @@ bool Game::continuePendingAction()
     }
     if (progress == PendingActionProgress::Settled)
     {
-        settleMutation(Settlement::UserAction);
+        if (enterDeathIfNeeded(true)) return true;
+#if ENABLE_STAT_EVENTS
+        if (!statEventsActive())
+#endif
+            refreshBaseAnimation();
         requestFullRedraw();
         synchronizePlaybackClock();
         return true;
@@ -423,8 +427,16 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
     animations->configureRuntimeContract(petBehaviorConfig);
     commandExecutor->configureRuntimeContract(petBehaviorConfig);
     petSaves.configureRuntimeContract(petBehaviorConfig);
-    petBehaviorRuntime->setPersistence([](void *context) {
-        return static_cast<Game *>(context)->petSaves.saveCollectionProgress(true, true) != PetSaveResult::Failed;
+    petBehaviorRuntime->setPersistence([](void *context, bool settleActionEffects) {
+        auto &game = *static_cast<Game *>(context);
+        if (settleActionEffects && !game.pet.isDead() && !game.appearanceChanges.resolveOutfitUnlocks(false))
+            return false;
+        if (game.petSaves.saveCollectionProgress(true, true) != PetSaveResult::Persisted)
+            return false;
+#if ENABLE_COLLECTION_CATALOG
+        game.collectionSavePending = false;
+#endif
+        return true;
     }, this);
 #if ENABLE_STAT_EVENTS
     petBehaviorRuntime->setStatEventSettlement([](void *context, const PetStatSnapshot &after, uint8_t actionSlot, bool daily) {
@@ -1002,7 +1014,7 @@ void Game::synchronizePlaybackClock()
 
 void Game::handleCommandResult(const CommandResult &result)
 {
-    if (enterDeathIfNeeded()) return;
+    if (enterDeathIfNeeded(result.kind == CommandResultKind::UserAction)) return;
     if (result.resourceError)
         renderer.showResourceError();
     if (result.kind == CommandResultKind::None)
@@ -1010,7 +1022,10 @@ void Game::handleCommandResult(const CommandResult &result)
 
     if (result.kind == CommandResultKind::UserAction)
     {
-        settleMutation(Settlement::UserAction);
+#if ENABLE_STAT_EVENTS
+        if (statEventsActive()) return;
+#endif
+        refreshBaseAnimation();
         return;
     }
 
@@ -1030,17 +1045,17 @@ EvolutionResult Game::settleMutation(Settlement source)
     if (!refreshOutfitUnlockMask(false, false))
     {
         renderer.showResourceError();
-        // Action and Instruction still save committed arithmetic on unlock failure.
+        // Instruction still saves committed arithmetic on unlock failure.
         if (daily || source == Settlement::GuessOutcome) return EvolutionResult::NoChange;
     }
 #if ENABLE_COLLECTION_CATALOG
     if (!daily) collectionSavePending = true;
     const bool saved = daily
         ? finishCollectionSave(petSaves.saveDailyProgress(collectionSavePending))
-        : updateCollectionProgress(source != Settlement::UserAction);
+        : updateCollectionProgress(true);
     if (!saved) return EvolutionResult::NoChange;
 #else
-    if (!daily && source != Settlement::UserAction &&
+    if (!daily &&
         petSaves.saveCollectionProgress(true, true) == PetSaveResult::Failed)
         renderer.showResourceError("pet state");
 #endif
@@ -1049,7 +1064,7 @@ EvolutionResult Game::settleMutation(Settlement source)
         const EvolutionResult result = handleEvolution();
         if (result != EvolutionResult::NoChange) return result;
     }
-    if (daily || source == Settlement::UserAction) refreshBaseAnimation();
+    if (daily) refreshBaseAnimation();
     return EvolutionResult::NoChange;
 }
 
@@ -1488,7 +1503,7 @@ void Game::OnDeathKey()
 }
 
 #if ENABLE_DEATH
-bool Game::enterDeathIfNeeded()
+bool Game::enterDeathIfNeeded(bool persisted)
 {
     if (!pet.evaluateDeath()) return false;
     if (deathPresented) return true;
@@ -1502,7 +1517,7 @@ bool Game::enterDeathIfNeeded()
     petClock.reset(latestRtcSeconds);
     clockStarted = false;
     petSaves.resetTransientState();
-    deathSavePending = petSaves.saveLifeState() != PetSaveResult::Persisted;
+    deathSavePending = !persisted && petSaves.saveLifeState() != PetSaveResult::Persisted;
     deathSaveRetryAt = millis();
     refreshBaseAnimation();
     animations->requestFullRedraw();

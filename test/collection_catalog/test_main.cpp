@@ -1238,7 +1238,10 @@ int main(int argc, char **argv)
         verifyRuntimeDirectoryCache(sd);
         // Real button dispatch commits effects + counts + acquisition together.
         game.OnRightKey();
+        const uint32_t firstSequence = storage.lastSaveSequence();
+        const auto firstWrites = sd.writeAttempts();
         game.OnConfirmKey();
+        assert(storage.lastSaveSequence() == firstSequence + 1 && sd.writeAttempts() == firstWrites + 1);
         assert(pet.actionCount(0) == 1 && pet.customStat(0) == 1 && !pet.isCollectionOwned(0));
         for (unsigned long now = 50; now <= 1000; now += 50) tick(game, now);
         assert(pet.actionCount(0) == 1); // five repeats do not count again
@@ -1250,7 +1253,17 @@ int main(int argc, char **argv)
         // the next command; production input intentionally waits for catch-up.
         tick(game, 2050);
         game.OnRightKey();
+        const auto beforeAction = pet.persistentState();
+        const uint32_t beforeFailure = storage.lastSaveSequence();
+        const auto beforeWrites = sd.writeAttempts();
+        sd.limitWrite(12, 0, 0);
         game.OnConfirmKey();
+        assert(storage.lastSaveSequence() == beforeFailure + 1 && sd.writeAttempts() == beforeWrites + 1);
+        assert(memcmp(&beforeAction, &pet.persistentState(), sizeof(beforeAction)) == 0);
+        sd.limitWrite(static_cast<size_t>(-1), 0, 0);
+        const uint32_t beforeSuccess = storage.lastSaveSequence();
+        game.OnConfirmKey();
+        assert(storage.lastSaveSequence() == beforeSuccess && sd.writeAttempts() == beforeWrites + 2);
         assert(pet.actionCount(1) == 1 && pet.isCollectionOwned(0));
         Pet committed;
         PetStorage restoredStorage(&sd);

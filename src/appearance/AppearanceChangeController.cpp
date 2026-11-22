@@ -67,12 +67,17 @@ AppearanceChangeResult AppearanceChangeController::applyOutfit(
 
 bool AppearanceChangeController::resolveUnlockState(bool initialize)
 {
+    return resolveOutfitUnlocks(initialize) && saves.applyCollectionGrants();
+}
+
+bool AppearanceChangeController::resolveOutfitUnlocks(bool initialize)
+{
     uint8_t mask = 0;
     if (!loader.resolveOutfitUnlockMask(
             pet.speciesSlot(), pet.statSnapshot(), pet.outfitUnlockMask(), initialize, mask))
         return false;
     pet.initializeOutfitUnlockMask(mask);
-    return saves.applyCollectionGrants();
+    return true;
 }
 
 bool AppearanceChangeController::refreshUnlockState(bool initialize, bool persist)

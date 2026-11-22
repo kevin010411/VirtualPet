@@ -158,7 +158,7 @@ bool PetBehaviorRuntime::advancePetDay(uint32_t days)
 #if ENABLE_COLLECTION_GAME_EVENTS
             !recordCollectionGameEvent(resources.sdCard(), config, pet, before, CollectionGameEvent::StatTransition) ||
 #endif
-            (config.manualDays && saveMutation != nullptr && !saveMutation(saveContext)))
+            (config.manualDays && saveMutation != nullptr && !saveMutation(saveContext, false)))
         {
             pet.restoreState(before);
             return false;
@@ -212,7 +212,7 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
         pet.setPendingActionOutcome(selectedOutcome);
     if (action.effectsAfterPlayback)
     {
-        if (saveMutation != nullptr && !saveMutation(saveContext))
+        if (saveMutation != nullptr && !saveMutation(saveContext, false))
         {
             pet.restoreState(before);
             return PetBehaviorActionResult::ResourceReadFailed;
@@ -260,7 +260,7 @@ PetBehaviorActionResult PetBehaviorRuntime::commitActionValues(
 #if ENABLE_COLLECTION_GAME_EVENTS
             !recordCollectionGameEvent(resources.sdCard(), config, pet, before, CollectionGameEvent::StatTransition) ||
 #endif
-            (saveMutation != nullptr && !saveMutation(saveContext)))
+            (saveMutation != nullptr && !saveMutation(saveContext, true)))
         {
             pet.restoreState(before);
             return PetBehaviorActionResult::ResourceReadFailed;

@@ -1279,7 +1279,7 @@ void testRandomOutcomeEvolutionResumesSelectedResult()
     animations.setup(config.idleAnimation);
     PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
-    runtime.setPersistence([](void *) { return false; }, nullptr);
+    runtime.setPersistence([](void *, bool) { return false; }, nullptr);
     assert(runtime.executeAction(0) == PetBehaviorActionResult::ResourceReadFailed);
     assert(pet.pendingActionOutcome() == UINT8_MAX && pet.customStat(0) == 0);
     runtime.setPersistence(nullptr, nullptr);
@@ -1458,14 +1458,24 @@ void testGameRoutesUserActionResult()
         const int unlocks = data.unlocks;
         const int errors = data.resourceShows;
         const int saves = data.saves;
+        const auto previousMask = pet.outfitUnlockMask();
+        const bool previousPlayback = game.hasTransientAnimation();
+        data.replaceUnlockMask = true;
+        data.resolvedUnlockMask = previousMask | 2;
+        data.saveSucceeds = false;
         assert(pet.customStat(0) == 2);
         game.OnConfirmKey();
+        assert(pet.customStat(0) == 2 && pet.outfitUnlockMask() == previousMask);
+        assert(game.hasTransientAnimation() == previousPlayback);
+        assert(data.saves == saves + 1 && data.resourceShows == errors + 1);
+        data.saveSucceeds = true;
+        game.OnConfirmKey();
         assert(pet.customStat(0) == 8);
-        assert(data.unlocks == unlocks + 1);
+        assert(data.unlocks == unlocks + 2);
         assert(data.unlockInput.customStats[0] == 8);
-        assert(data.resourceShows == errors + (missing ? 1 : 0));
+        assert(data.resourceShows == errors + 1 + (missing ? 1 : 0));
         // Numeric effects persist before playback, including catalog-disabled builds.
-        assert(data.saves == saves + 1 + ENABLE_COLLECTION_CATALOG);
+        assert(data.saves == saves + 2 && data.savedPet.outfitUnlockMask() == data.resolvedUnlockMask);
         assert(game.hasTransientAnimation() == !missing);
     }
 }
@@ -2096,7 +2106,7 @@ void testDailyPostProcessingDisabled()
     data.unlockSucceeds = true;
     game.OnConfirmKey();
     assert(pet.customStat(0) == 8);
-    assert(data.saves == initialSaves + ENABLE_COLLECTION_CATALOG);
+    assert(data.saves == initialSaves + 1);
 }
 
 void testDailySaveRetry()
@@ -2317,6 +2327,7 @@ CollectionCatalog::CollectionCatalog(Pet &p, Renderer &r, AssetResources &a, con
 bool CollectionCatalog::start() { return false; }
 bool CollectionCatalog::move(bool) { return false; }
 bool CollectionCatalog::confirm() { return false; }
+bool CollectionCatalog::takeReplay(AssetData::AnimationRef &, uint8_t &) { return false; }
 bool CollectionCatalog::redraw() { return false; }
 bool CollectionCatalog::takeActivation(uint8_t &, uint8_t &) { return false; }
 #endif
