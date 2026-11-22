@@ -479,6 +479,12 @@ bool CollectionCatalog::confirm()
         const uint16_t pages = readU16(item + (pet.isCollectionOwned(page * 15 + focus - 1) ? 34 : 32));
         if (++detailPage < pages) return drawDetail(file.table(), item);
         detail = false; detailPage = 0;
+        const uint8_t slot = page * 15 + focus - 1;
+        if (pet.isCollectionOwned(slot))
+        {
+            if (!selectReplay(file.table(), slot)) return false;
+            if (replayAnimation.valid()) return true;
+        }
         return restoreDetail(file.table());
     }
     if (focus == 0) { exit(); return true; }
@@ -496,10 +502,39 @@ bool CollectionCatalog::confirm()
             return true;
         }
     }
-    if (readU16(item + (pet.isCollectionOwned(slot) ? 34 : 32)) == 0) return true;
+    if (readU16(item + (pet.isCollectionOwned(slot) ? 34 : 32)) == 0)
+        return !pet.isCollectionOwned(slot) || selectReplay(file.table(), slot);
     detailPage = 0;
     detail = true;
     return drawDetail(file.table(), item);
+}
+
+bool CollectionCatalog::selectReplay(const RuntimeTable &table, uint8_t slot)
+{
+    const Section *section = table.find(CollectionReplays);
+    if (!section) return true;
+    for (uint16_t index = 0; index < section->count; ++index)
+    {
+        uint8_t row[6];
+        if (!readRecord(table.source, *section, index, row)) return false;
+        if (row[0] < slot) continue;
+        if (row[0] == slot)
+        {
+            replayAnimation = {row[1], row[2], readU16(row + 4)};
+            replayVersion = row[3];
+        }
+        break;
+    }
+    return true;
+}
+
+bool CollectionCatalog::takeReplay(AssetData::AnimationRef &animation, uint8_t &version)
+{
+    if (!replayAnimation.valid()) return false;
+    animation = replayAnimation;
+    version = replayVersion;
+    replayAnimation = {};
+    return true;
 }
 
 bool CollectionCatalog::takeActivation(uint8_t &species, uint8_t &outfit)

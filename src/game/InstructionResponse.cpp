@@ -1,6 +1,6 @@
 #include "game/InstructionResponse.h"
 
-#if ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
 void InstructionResponse::start(const InstructionResponseSettings &configuration, RandomBelow source)
 {
     settings = configuration;

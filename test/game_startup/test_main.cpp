@@ -1250,6 +1250,102 @@ void testUserActionPlaybackSequence()
     assert(data.displayedAnimation.animationId == 5 && pet.customStat(0) == 30);
 }
 
+void testRandomOutcomeEvolutionResumesSelectedResult()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
+    PetBehaviorConfig config = {};
+    config.stats[0] = {true, 0, 0, 100, 0};
+    config.idleAnimation = {1, 1, 5};
+    config.actionCount = 1;
+    config.actions[0].active = true;
+    config.actions[0].mode = PetBehaviorActionMode::RandomOutcome;
+    config.actions[0].outcomeCount = 2;
+    config.actionOutcomeCount = 2;
+    config.actionEffectCount = 2;
+    for (uint8_t index = 0; index < 2; ++index)
+    {
+        config.actionOutcomes[index] = {
+            {{1, 1, static_cast<uint16_t>(index + 1)}, 2, 1, static_cast<uint8_t>(index + 2), 1},
+            index, 1, 1,
+        };
+        config.actionEffects[index] = {0, PetBehaviorEffectOperation::Change, index + 1};
+    }
+    animations.setup(config.idleAnimation);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
+    runtime.initializeStats();
+    runtime.setPersistence([](void *) { return false; }, nullptr);
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::ResourceReadFailed);
+    assert(pet.pendingActionOutcome() == UINT8_MAX && pet.customStat(0) == 0);
+    runtime.setPersistence(nullptr, nullptr);
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+    const auto selection = pet.pendingActionOutcome();
+    assert(selection < 2 && pet.customStat(0) == selection + 1);
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::Rejected);
+
+    Pet restored;
+    assert(restored.restoreState(pet.persistentState()));
+    AnimationController resumedAnimations(renderer, resources);
+    resumedAnimations.setup(config.idleAnimation);
+    PetBehaviorRuntime resumed(config, restored, resumedAnimations, resources);
+    uint8_t species = 0, outfit = 0;
+    assert(resumed.continuePendingAction(species, outfit) == PendingActionProgress::Playing);
+    assert(species == 0 && outfit == 0);
+    for (unsigned long tick = 1; tick <= 2; ++tick)
+    {
+        resumedAnimations.tick(tick);
+        assert(data.displayedAnimation.animationId == selection + 1);
+    }
+    assert(resumed.continuePendingAction(species, outfit) == PendingActionProgress::Evolve);
+    assert(species == selection + 2 && outfit == 1 && restored.customStat(0) == selection + 1);
+}
+
+void testDeferredSpeciesActionSettlesOnce()
+{
+    Scenario data;
+    scenario = &data;
+    SdFat sd;
+    Pet pet;
+    AssetResources resources(&sd);
+    Renderer renderer(nullptr, resources);
+    AnimationController animations(renderer, resources);
+    PetBehaviorConfig config = {};
+    config.stats[0] = {true, 0, 0, 100, 0};
+    config.idleAnimation = {3, 1, 5};
+    config.actionCount = config.actionOutcomeCount = config.actionConditionCount = config.actionEffectCount = 1;
+    auto &action = config.actions[0];
+    action.active = action.hasFallbackAnimation = action.effectsAfterPlayback = true;
+    action.mode = PetBehaviorActionMode::ConditionalAnimation;
+    action.outcomeCount = action.conditionCount = 1;
+    config.actionOutcomes[0] = {{{3, 1, 2}, 1}, 0, 0, 1};
+    config.actionConditions[0] = {{kRuntimeValueSpeciesSlot, 3, 3}, {{3, 1, 1}, 2}, 0};
+    config.actionEffects[0] = {0, PetBehaviorEffectOperation::Change, 1};
+    assert(pet.setSpeciesSlot(3));
+    animations.setup(config.idleAnimation);
+    PetBehaviorRuntime runtime(config, pet, animations, resources);
+    runtime.initializeStats();
+    assert(runtime.executeAction(0) == PetBehaviorActionResult::AwaitingCompletion);
+    assert(pet.customStat(0) == 0 && pet.pendingActionOutcome() == 0);
+
+    // Recover a pending result after an interrupted playback and recompute the
+    // animation against the saved species before committing its effect.
+    animations.cancelAll();
+    runtime.interruptPendingActionPlayback();
+    uint8_t species = 0, outfit = 0;
+    assert(runtime.continuePendingAction(species, outfit) == PendingActionProgress::Playing);
+    animations.tick(1);
+    assert(data.displayedAnimation.animationId == 1 && pet.customStat(0) == 0);
+    animations.tick(2);
+    assert(data.displayedAnimation.animationId == 1 && pet.customStat(0) == 0);
+    assert(runtime.continuePendingAction(species, outfit) == PendingActionProgress::Settled);
+    assert(pet.pendingActionOutcome() == UINT8_MAX && pet.customStat(0) == 1);
+}
+
 void testCommandReplacesSequenceAcrossDayBoundary()
 {
     for (bool secondSegment : {false, true})
@@ -2762,6 +2858,105 @@ void Renderer::showInstructionFeedback(bool)
     ++scenario->instructionFeedbackDraws;
     hostMillis += scenario->feedbackFirstDrawMs;
 }
+void Renderer::showTrainingResult(uint8_t, uint8_t, bool) {}
+void Renderer::showTrainingRecall(uint16_t, uint8_t) {}
+
+void testTrainingCourses()
+{
+    using Phase = TrainingCourse::Phase;
+    auto last = [](uint32_t ceiling) { return ceiling - 1; };
+    TrainingCourse course;
+    TrainingCourseSettings settings;
+    settings.rounds = 5;
+    settings.mode = TrainingMode::Timing;
+    settings.frameCount = 19;
+    settings.cueStart = 13;
+    settings.cueEnd = 17;
+    settings.frameMs = 58;
+    settings.cueMs = 120;
+    uint32_t now = 0;
+    course.start(settings, last);
+    course.ready(now);
+    course.input(0, 0, now);
+    course.update(now);
+    course.input(2, 2, now);
+    assert(course.phase == Phase::Feedback && course.completed == 1 && !course.lastCorrect);
+    course.input(0, 0, now);
+    course.ready(now);
+    course.update(now += 280);
+    course.ready(now);
+    course.update(now += 317);
+    for (uint8_t frame = 1; frame < 13; ++frame)
+    {
+        assert(course.frame == frame);
+        course.ready(now);
+        course.update(now += 58);
+    }
+    assert(course.frame == 13);
+    course.ready(now);
+    course.input(2, 2, now + 119);
+    assert(course.score == 1 && course.completed == 2);
+    course.input(5, 5, now);
+    course.update(now += 1000);
+    uint32_t mask;
+    uint8_t count;
+    assert(course.phase == Phase::Cancelled && !course.consumeCompletion(mask, count));
+
+    settings.mode = TrainingMode::OrderedMemory;
+    settings.frameMs = 180;
+    settings.cueMs = 760;
+    const uint8_t sequence[] = {0, 1, 2, 2, 2};
+    course.start(settings, last);
+    course.input(0, 0, now);
+    for (auto flag : sequence)
+    {
+        assert(course.phase == Phase::Prompt && course.frame == flag);
+        course.ready(now);
+        course.update(now);
+        course.update(now += 760);
+        assert(course.phase == Phase::Prompt && course.frame == 4);
+        course.ready(now);
+        course.update(now += 180);
+    }
+    for (auto flag : sequence)
+    {
+        assert(course.phase == Phase::Answer && course.frame == 3);
+        course.ready(now);
+        const uint8_t mask = 1U << flag;
+        course.input(mask, mask, now);
+        course.input(0, 0, now);
+        course.ready(now);
+        course.update(now += 280);
+    }
+    assert(course.phase == Phase::Result && course.score == 5 && course.recentChoices == 106);
+    assert(!course.consumeCompletion(mask, count));
+    course.ready(now);
+    course.update(now += 1400);
+    assert(course.consumeCompletion(mask, count) && count == 5 && mask == 31);
+    assert(!course.consumeCompletion(mask, count));
+
+    settings.mode = TrainingMode::Matching;
+    settings.frameCount = 15;
+    course.start(settings, last);
+    course.input(0, 0, now);
+    for (int tool = 4; tool >= 0; --tool)
+    {
+        assert(course.phase == Phase::Answer && course.frame == tool * 3 + 2);
+        course.ready(now);
+        course.update(now);
+        const uint8_t mask = tool > 1 ? 4 : 1;
+        course.input(mask, mask, now);
+        course.input(0, 0, now);
+        course.ready(now);
+        course.update(now += 280);
+    }
+    assert(course.phase == Phase::Result && course.score == 3);
+    course.ready(now);
+    course.update(now += 1400);
+    assert(course.consumeCompletion(mask, count) && count == 5 && mask == 7);
+    puts("[PASS] Timing cue boundaries, ordered recall, unique matching prompts and one completion after feedback");
+}
+
 void testInstructionResetOwnership()
 {
     hostMillis = 0;
@@ -3159,6 +3354,7 @@ int main(int argc, char **argv)
 #if ENABLE_INSTRUCTION_RESPONSE
     if (argc == 2 && strcmp(argv[1], "--instruction") == 0)
     {
+        testTrainingCourses();
         testInstructionResetOwnership();
         testInstructionLifecycle();
         testInstructionBatteryReturn();
@@ -3196,6 +3392,8 @@ int main(int argc, char **argv)
     {
         testEvolutionResults();
         testExportedEvolutionPlaybackCounts();
+        testRandomOutcomeEvolutionResumesSelectedResult();
+        testDeferredSpeciesActionSettlesOnce();
         return 0;
     }
     if (argc == 2 && strcmp(argv[1], "--status") == 0)

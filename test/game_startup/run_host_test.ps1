@@ -45,7 +45,7 @@ $sources = @(
 )
 if ($EnableAppearanceSelection) { $sources += 'src/appearance/AppearanceSelectionController.cpp' }
 if ($EnableSequenceAudio) { $sources += @('src/audio/SequenceAudio.cpp', 'src/animation/SequencePlayback.cpp') }
-if ($EnableInstructionResponse) { $sources += @('src/game/InstructionResponse.cpp', 'src/game/InstructionPresentation.cpp') }
+if ($EnableInstructionResponse) { $sources += @('src/game/InstructionResponse.cpp', 'src/game/InstructionPresentation.cpp', 'src/game/TrainingCourse.cpp') }
 if ($EnableInstructionResponse -or $EnablePredict -or $EnableGuessGame) { $sources += 'src/controller/MinigameController.cpp' }
 if ($EnablePredict) { $sources += 'src/game/PredictGame.cpp' }
 if ($EnableGuessGame) { $sources += 'src/game/GuessItemGame.cpp' }
@@ -58,6 +58,7 @@ try {
         "-DENABLE_DEATH=$DeathEnabled" `
         "-DENABLE_DAILY_POST_PROCESSING=$([int](-not $DisableDailyPostProcessing.IsPresent))" `
         "-DENABLE_INSTRUCTION_RESPONSE=$([int]$EnableInstructionResponse.IsPresent)" -DENABLE_DEBUG=0 "-DENABLE_GUESS_GAME=$([int]$EnableGuessGame.IsPresent)" "-DENABLE_COLLECTION_CATALOG=$([int]$EnableCollectionCatalog.IsPresent)" "-DENABLE_COMMAND_OUTFIT=$appearanceEnabled" `
+        "-DENABLE_TRAINING_COURSES=$([int]$EnableInstructionResponse.IsPresent)" `
         "-DENABLE_GUESS_GAME_SINGLE_ROUND=$([int]$EnableGuessSingleRound.IsPresent)" "-DENABLE_GUESS_GAME_PLAYER_CHOICE_RESULT=$([int]$EnableGuessPlayerChoiceResult.IsPresent)" `
         "-DENABLE_COMMAND_PREDICT=$([int]$EnablePredict.IsPresent)" "-DENABLE_APPEARANCE_SELECTION=$appearanceEnabled" `
         "-DENABLE_STARTUP_ANIMATION=$startupEnabled" "-DENABLE_FIRST_START_ANIMATION=$startupEnabled" `

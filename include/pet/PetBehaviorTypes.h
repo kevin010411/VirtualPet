@@ -12,6 +12,7 @@
 #include "audio/SequenceAudio.h"
 #if ENABLE_INSTRUCTION_RESPONSE
 #include "game/InstructionResponseSettings.h"
+#include "game/TrainingCourse.h"
 #endif
 
 constexpr uint8_t kPetBehaviorSlotCount = APP_MAX_PET_STATS;
@@ -155,7 +156,11 @@ struct PetBehaviorConfig
 #if ENABLE_SHOP
     bool shopEnabled;
 #endif
-#if ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_TRAINING_COURSES
+    TrainingCourseSettings trainingSettings;
+    AssetData::AnimationRef trainingFrames;
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     InstructionResponseSettings instructionSettings;
     AssetData::AnimationRef instructionOptions[3];
     PetBehaviorInstructionEffect instructionEffects[2 * kPetBehaviorSlotCount];

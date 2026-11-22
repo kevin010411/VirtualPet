@@ -164,6 +164,7 @@ bool decodeActions(const Source &source,
         action.mode = static_cast<PetBehaviorActionMode>(mode);
         action.suspendDailyChangeDays = actionRecord[2];
         action.hasFallbackAnimation = hasFallback;
+        action.effectsAfterPlayback = (actionRecord[3] & 2U) != 0;
         action.firstOutcome = static_cast<uint8_t>(nextOutcome);
         action.outcomeCount = outcomeCount;
         action.firstCondition = static_cast<uint8_t>(nextCondition);
@@ -191,7 +192,10 @@ bool decodeActions(const Source &source,
             outcome.weight = weight;
             outcome.animationPlayback.animation = animation;
             outcome.animationPlayback.playbackCount = playbackCount;
-            outcome.animationPlayback.versionSelection = readU16(outcomeRecord + 8);
+            const uint16_t selection = readU16(outcomeRecord + 8);
+            outcome.animationPlayback.versionSelection = selection & 0x1f;
+            outcome.animationPlayback.evolutionSpecies = selection >> 8;
+            outcome.animationPlayback.evolutionOutfit = ((selection >> 5) & 7) + 1;
             outcome.firstEffect = nextEffect;
             outcome.effectCount = static_cast<uint8_t>(effectCount);
 
@@ -277,14 +281,26 @@ bool decodeFollowingAnimations(const Source &source, const Section *playbacks,
     return true;
 }
 
-bool decodeButtons(const Source &source, const Section &buttons, PetBehaviorConfig &config)
+bool decodeButtons(const Source &source, const Section &buttons, uint8_t species, PetBehaviorConfig &config)
 {
-    if (buttons.count != kPetBehaviorButtonCount)
+    if (buttons.count < kPetBehaviorButtonCount)
         return false;
-    for (uint16_t index = 0; index < buttons.count; ++index)
+    uint16_t first = 0;
+    for (uint16_t index = kPetBehaviorButtonCount; index < buttons.count; index += kPetBehaviorButtonCount)
+    {
+        uint8_t record[8];
+        if (!readRecord(source, buttons, index, record))
+            return false;
+        if (record[4] == species)
+        {
+            first = index;
+            break;
+        }
+    }
+    for (uint16_t index = 0; index < kPetBehaviorButtonCount; ++index)
     {
         uint8_t record[8] = {};
-        if (!readRecord(source, buttons, index, record))
+        if (!readRecord(source, buttons, first + index, record))
             return false;
         PetBehaviorButtonConfig &button = config.buttons[index];
         button.active = true;
@@ -311,7 +327,7 @@ bool decodeButtons(const Source &source, const Section &buttons, PetBehaviorConf
 #endif
         }
     }
-    config.buttonCount = static_cast<uint8_t>(buttons.count);
+    config.buttonCount = kPetBehaviorButtonCount;
     return true;
 }
 
@@ -483,8 +499,37 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     if ((table.featureFlags & kCollectionFeature) != 0) return false;
 #endif
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
-#if ENABLE_INSTRUCTION_RESPONSE
-    if (table.featureFlags & kInstructionResponseFeature)
+#if ENABLE_TRAINING_COURSES
+    if (table.featureFlags & kTrainingCoursesFeature)
+    {
+        const Section *courses = table.find(TrainingCourses);
+        if (courses == nullptr) return false;
+        for (uint16_t index = 0; index < courses->count; ++index)
+        {
+            uint8_t row[20];
+            if (!readRecord(source, *courses, index, row)) return false;
+            if (row[0] != speciesSlot) continue;
+            auto &training = config.trainingSettings;
+            training.mode = static_cast<TrainingMode>(row[1]);
+            training.gateSlot = row[2];
+            training.completionSlot = row[3];
+            training.gateValue = readU32(row + 4);
+            training.scoreSlot = row[10];
+            training.rounds = row[11];
+            training.cueStart = row[12];
+            training.cueEnd = row[13];
+            training.frameMs = readU16(row + 14);
+            training.cueMs = readU16(row + 16);
+            training.passScore = row[18];
+            training.frameCount = row[19];
+            if (!resolveAnimation(source, *assets, *animations, readU16(row + 8), scope, config.trainingFrames))
+                return false;
+            break;
+        }
+    }
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    if ((table.featureFlags & (kInstructionResponseFeature | kTrainingCoursesFeature)) == kInstructionResponseFeature)
     {
         const Section *instruction = table.find(InstructionResponseConfig);
         uint8_t record[24] = {};
@@ -503,8 +548,6 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                                   scope, config.instructionOptions[item])) return false;
         }
     }
-#endif
-#if ENABLE_INSTRUCTION_RESPONSE
     const Section *instructionEffects = table.find(InstructionResponseEffects);
     if (instructionEffects != nullptr)
     {
@@ -543,7 +586,7 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                                    *assets, *animations, scope, config) ||
         !decodeAnimationAudio(table, *animations, config) ||
         !decodeGuessEffects(source, table.featureFlags, guessEffects, config) ||
-        !decodeButtons(source, *buttons, config) ||
+        !decodeButtons(source, *buttons, scope.speciesSlot, config) ||
         !decodeStatus(source, table.featureFlags,
                       table.find(StatusSets), table.find(StatusConditions),
                       *assets, *animations, scope, config))

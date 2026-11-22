@@ -86,6 +86,8 @@ public:
     bool evaluateDeath() { return isDead(); }
 #endif
     void setSchemaFingerprint(uint32_t fingerprint);
+    uint8_t pendingActionOutcome() const;
+    void setPendingActionOutcome(uint8_t index);
 
     uint8_t speciesSlot() const;
     uint8_t outfitSlot() const;

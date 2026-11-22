@@ -2,10 +2,13 @@
 #define CUSTOM_LAYOUT_HOST_TFT_H
 #include <algorithm>
 #include <assert.h>
+#include <cstdlib>
 #include <stdint.h>
 #include <vector>
 constexpr uint16_t ST77XX_BLACK = 0;
 constexpr uint16_t ST77XX_RED = 0xf800;
+constexpr uint16_t ST77XX_GREEN = 0x07e0;
+constexpr uint16_t ST77XX_WHITE = 0xffff;
 // Framebuffer and write log belong only to this host capture.
 class Adafruit_ST7735
 {
@@ -62,6 +65,13 @@ public:
             screen[j * 128 + x] = color;
             screen[j * 128 + x + w - 1] = color;
         }
+    }
+    void drawLine(int x0, int y0, int x1, int y1, uint16_t color)
+    {
+        const int steps = std::max(std::abs(x1 - x0), std::abs(y1 - y0));
+        if (!steps) { writePixel(x0, y0, color); return; }
+        for (int step = 0; step <= steps; ++step)
+            writePixel(x0 + (x1 - x0) * step / steps, y0 + (y1 - y0) * step / steps, color);
     }
     void setCursor(int, int) {}
     void print(const char *) {}

@@ -43,6 +43,8 @@ uint16_t recordSizeFor(uint16_t type)
     case CollectionGameConfig: return 16;
     case CollectionEventRules: return 16;
     case CollectionRoundRequirements: return 8;
+    case CollectionReplays: return 6;
+    case TrainingCourses: return 20;
     case Profile: return 38;
     case Persistence: return 16;
     case AssetRefs: return 12;

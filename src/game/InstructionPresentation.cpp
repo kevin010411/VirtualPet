@@ -8,25 +8,136 @@
 void InstructionPresentation::start(Renderer &renderer, AssetResources &resources, const PetBehaviorConfig &config)
 {
     instructionRenderer = &renderer;
-    instructionResources = &resources;
     instructionConfig = &config;
+#if ENABLE_TRAINING_COURSES
+    if (usesTraining())
+    {
+        course.start(config.trainingSettings, FirmwareRandom::belowWide);
+        return;
+    }
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    instructionResources = &resources;
     instructionHeld = 7;
     drawnPhase = InstructionResponse::Phase::Idle;
     auto settings = config.instructionSettings;
     settings.feedbackMs = 500;
     instruction.start(settings, FirmwareRandom::belowWide);
+#else
+    (void)resources;
+#endif
 }
 
 void InstructionPresentation::update()
 {
+#if ENABLE_TRAINING_COURSES
+    if (usesTraining())
+    {
+        course.update(millis());
+        if (course.active() && course.redraw && !renderCourse())
+        {
+            course.cancel();
+            instructionRenderer->showResourceError();
+        }
+        return;
+    }
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     instruction.update(millis());
     if (instruction.active() && !render())
     {
         instruction.cancel();
         instructionRenderer->showResourceError();
     }
+#endif
 }
 
+#if ENABLE_TRAINING_COURSES
+bool InstructionPresentation::usesTraining() const
+{
+    return !ENABLE_LEGACY_INSTRUCTION_RESPONSE ||
+           (instructionConfig && instructionConfig->trainingSettings.mode != TrainingMode::None);
+}
+
+bool InstructionPresentation::renderCourse()
+{
+    Renderer &renderer = *instructionRenderer;
+    using Phase = TrainingCourse::Phase;
+    if (course.phase == Phase::Result)
+        renderer.showTrainingResult(course.score, course.completed,
+                                    course.score >= instructionConfig->trainingSettings.passScore);
+    else if (course.phase == Phase::Feedback)
+        renderer.showInstructionFeedback(course.lastCorrect);
+    else
+    {
+        if (!renderer.ShowAnimationFrame(instructionConfig->trainingFrames, 0, course.frame + 1,
+                                         0, 0, 12, 128, 160))
+            return false;
+        if (course.phase == Phase::Answer &&
+            instructionConfig->trainingSettings.mode == TrainingMode::OrderedMemory)
+            renderer.showTrainingRecall(course.recentChoices, course.completed);
+    }
+    course.ready(millis());
+    return true;
+}
+#endif
+
+void InstructionPresentation::cancel()
+{
+#if ENABLE_TRAINING_COURSES
+    if (usesTraining()) { course.cancel(); return; }
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    instruction.cancel();
+#endif
+}
+
+bool InstructionPresentation::active() const
+{
+#if ENABLE_TRAINING_COURSES
+    if (usesTraining()) return course.active();
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    return instruction.active();
+#else
+    return false;
+#endif
+}
+
+void InstructionPresentation::input(uint8_t held, uint8_t pressed, uint32_t timestamp)
+{
+#if ENABLE_TRAINING_COURSES
+    if (usesTraining()) { course.input(held, pressed, timestamp); return; }
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    instructionHeld = held;
+    instruction.input(held, pressed, timestamp);
+#endif
+}
+
+void InstructionPresentation::pendingInput(bool pending, uint32_t at, uint8_t raw)
+{
+#if ENABLE_TRAINING_COURSES
+    if (usesTraining()) { course.pendingInput(pending, at, raw); return; }
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    instruction.pendingInput(pending, at, raw);
+#endif
+}
+
+bool InstructionPresentation::consumeCompletion(uint32_t &mask, uint8_t &count)
+{
+#if ENABLE_TRAINING_COURSES
+    if (usesTraining()) return course.consumeCompletion(mask, count);
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    return instruction.consumeCompletion(mask, count);
+#else
+    return false;
+#endif
+}
+
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
 bool InstructionPresentation::render()
 {
     const auto phase = instruction.phase();
@@ -89,4 +200,5 @@ bool InstructionPresentation::render()
     }
     return true;
 }
+#endif
 #endif

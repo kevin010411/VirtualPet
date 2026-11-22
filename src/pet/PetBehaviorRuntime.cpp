@@ -19,6 +19,7 @@ PetBehaviorStatValues readStats(const Pet &pet)
     for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
         state.values[slot] = snapshot.customStats[slot];
     state.stageDays = snapshot.stage_days;
+    state.speciesSlot = snapshot.speciesSlot;
     return state;
 }
 
@@ -165,7 +166,7 @@ bool PetBehaviorRuntime::advancePetDay(uint32_t days)
 
 PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
 {
-    if (pet.isDead() || !hasAction(actionSlot))
+    if (pet.isDead() || pet.pendingActionOutcome() != UINT8_MAX || !hasAction(actionSlot))
         return PetBehaviorActionResult::Rejected;
 
     PetBehaviorStatValues state = readStats(pet);
@@ -194,22 +195,59 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     const PersistedPetState before = pet.persistentState();
     PetBehaviorDailyChangePauses nextPauses = dailyChangePauses;
     PetBehaviorActionPlayback playback = {};
+    uint8_t selectedOutcome = UINT8_MAX;
     ActionEffectFile effectSource;
     effectSource.offset = config.actionEffectsOffset;
     effectSource.sd = resources.sdCard();
     if (!applyPetBehaviorAction(
             config, actionSlot, state, nextPauses, playback, firmwareRandomBelow,
-            readActionEffect, &effectSource))
+            readActionEffect, &effectSource, &selectedOutcome))
         return effectSource.failed ? PetBehaviorActionResult::ResourceReadFailed : PetBehaviorActionResult::Rejected;
+    const auto &action = config.actions[actionSlot];
+    if (action.effectsAfterPlayback || playback.evolutionSpecies)
+        pet.setPendingActionOutcome(selectedOutcome);
+    if (action.effectsAfterPlayback)
+    {
+        if (saveMutation != nullptr && !saveMutation(saveContext))
+        {
+            pet.restoreState(before);
+            return PetBehaviorActionResult::ResourceReadFailed;
+        }
+        pendingPlaybackStarted = playAction(action, playback) == PlaybackResult::Accepted;
+        return PetBehaviorActionResult::AwaitingCompletion;
+    }
+
+    const auto committed = commitActionValues(state, actionSlot, before);
+    if (committed != PetBehaviorActionResult::Applied) return committed;
+    dailyChangePauses = nextPauses;
+    if (pet.isDead()) return PetBehaviorActionResult::Applied;
+
+    const PlaybackResult result = playAction(action, playback);
+    pendingPlaybackStarted = playback.evolutionSpecies && result == PlaybackResult::Accepted;
+    return result == PlaybackResult::AnimationMissing
+           ? PetBehaviorActionResult::AppliedAnimationMissing : PetBehaviorActionResult::Applied;
+}
+
+PetBehaviorActionResult PetBehaviorRuntime::commitActionValues(
+    const PetBehaviorStatValues &state, uint8_t actionSlot, const PersistedPetState &before)
+{
 #if ENABLE_STAT_EVENTS
     if (usesStatEvents())
     {
-        if (!commitStatMutation(state, actionSlot)) return PetBehaviorActionResult::ResourceReadFailed;
+        if (!commitStatMutation(state, actionSlot))
+        {
+            pet.restoreState(before);
+            return PetBehaviorActionResult::ResourceReadFailed;
+        }
     }
     else
 #endif
     {
-        if (!writeStats(state, pet)) return PetBehaviorActionResult::Rejected;
+        if (!writeStats(state, pet))
+        {
+            pet.restoreState(before);
+            return PetBehaviorActionResult::Rejected;
+        }
 #if ENABLE_COLLECTION_CATALOG
         for (uint8_t index = 0; index < config.trackedActionCount; ++index)
             if (config.trackedActions[index] == actionSlot) { pet.incrementActionCount(index); break; }
@@ -224,21 +262,22 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
             return PetBehaviorActionResult::ResourceReadFailed;
         }
     }
-    dailyChangePauses = nextPauses;
-    if (pet.isDead()) return PetBehaviorActionResult::Applied;
+    return PetBehaviorActionResult::Applied;
+}
 
-    const PetBehaviorActionConfig &action = config.actions[actionSlot];
+PlaybackResult PetBehaviorRuntime::playAction(const PetBehaviorActionConfig &action,
+                                             const PetBehaviorActionPlayback &playback)
+{
     Animation sequence[2 + kMaxPetBehaviorFollowingAnimationsPerAction];
     uint8_t count = 0;
     if (action.followingAnimationCount > kMaxPetBehaviorFollowingAnimationsPerAction ||
         static_cast<uint16_t>(action.firstFollowingAnimation) + action.followingAnimationCount >
             kMaxPetBehaviorFollowingAnimations)
-        return PetBehaviorActionResult::Applied;
+        return PlaybackResult::PlaybackFailed;
     if (action.prelude.animation.valid())
     {
         const PlaybackResult result = resolveActionAnimation(action.prelude, resources, sequence[count]);
-        if (result == PlaybackResult::AnimationMissing) return PetBehaviorActionResult::AppliedAnimationMissing;
-        if (result != PlaybackResult::Accepted) return PetBehaviorActionResult::Applied;
+        if (result != PlaybackResult::Accepted) return result;
         ++count;
     }
     for (uint8_t index = 0; index <= action.followingAnimationCount; ++index)
@@ -248,21 +287,69 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
         if (index == 0 && !segment.animation.valid())
             continue;
         const PlaybackResult buildResult = resolveActionAnimation(segment, resources, sequence[count]);
-        if (buildResult == PlaybackResult::AnimationMissing)
-            return PetBehaviorActionResult::AppliedAnimationMissing;
         if (buildResult != PlaybackResult::Accepted)
-            return PetBehaviorActionResult::Applied;
+            return buildResult;
         ++count;
     }
 
     if (count == 0)
-        return PetBehaviorActionResult::Applied;
+        return PlaybackResult::Accepted;
 
     AnimationSequence request(sequence, count);
-    const PlaybackResult replaceResult = animations.replace(request);
-    return replaceResult == PlaybackResult::AnimationMissing
-               ? PetBehaviorActionResult::AppliedAnimationMissing
-               : PetBehaviorActionResult::Applied;
+    return animations.replace(request);
+}
+
+PendingActionProgress PetBehaviorRuntime::continuePendingAction(uint8_t &species, uint8_t &outfit)
+{
+    const uint8_t index = pet.pendingActionOutcome();
+    for (uint8_t slot = 0; slot < config.actionCount; ++slot)
+    {
+        const auto &action = config.actions[slot];
+        if (index < action.firstOutcome || index >= action.firstOutcome + action.outcomeCount)
+            continue;
+        const auto &playback = config.actionOutcomes[index].animationPlayback;
+        if (!playback.evolutionSpecies && !action.effectsAfterPlayback)
+            break;
+        if (pendingPlaybackStarted && animations.hasFinitePlayback())
+            return PendingActionProgress::Playing;
+        if (action.effectsAfterPlayback)
+        {
+            const PersistedPetState before = pet.persistentState();
+            auto state = readStats(pet);
+            auto nextPauses = dailyChangePauses;
+            PetBehaviorActionPlayback selected = {};
+            ActionEffectFile effectSource;
+            effectSource.offset = config.actionEffectsOffset;
+            effectSource.sd = resources.sdCard();
+            if (!applyPetBehaviorAction(config, slot, state, nextPauses, selected, nullptr, readActionEffect, &effectSource))
+                return PendingActionProgress::Failed;
+            if (!pendingPlaybackStarted)
+            {
+                if (playAction(action, selected) != PlaybackResult::Accepted)
+                    return PendingActionProgress::Failed;
+                pendingPlaybackStarted = true;
+                return PendingActionProgress::Playing;
+            }
+            pendingPlaybackStarted = false;
+            pet.setPendingActionOutcome(UINT8_MAX);
+            if (commitActionValues(state, slot, before) != PetBehaviorActionResult::Applied)
+                return PendingActionProgress::Failed;
+            dailyChangePauses = nextPauses;
+            return PendingActionProgress::Settled;
+        }
+        if (!pendingPlaybackStarted)
+        {
+            if (playAction(action, playback) != PlaybackResult::Accepted)
+                return PendingActionProgress::Failed;
+            pendingPlaybackStarted = true;
+            return PendingActionProgress::Playing;
+        }
+        pendingPlaybackStarted = false;
+        species = playback.evolutionSpecies;
+        outfit = playback.evolutionOutfit;
+        return PendingActionProgress::Evolve;
+    }
+    return PendingActionProgress::Failed;
 }
 
 #if ENABLE_GUESS_GAME

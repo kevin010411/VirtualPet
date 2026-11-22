@@ -93,7 +93,7 @@ bool selectPlayback(const PetBehaviorConfig &config,
         return false;
 
     const auto context = makeRuntimeValueContext(state.values,
-        activePetBehaviorStatMask(config), state.stageDays);
+        activePetBehaviorStatMask(config), state.stageDays, state.speciesSlot);
     const PetBehaviorActionConditionConfig *selected = nullptr;
     for (uint8_t index = 0; index < action.conditionCount; ++index)
     {
@@ -259,7 +259,8 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
                             PetBehaviorDailyChangePauses &pauses,
                             PetBehaviorActionPlayback &playback,
                             PetBehaviorRandomBoundedSource randomSource,
-                            PetBehaviorEffectReader effectReader, void *effectContext)
+                            PetBehaviorEffectReader effectReader, void *effectContext,
+                            uint8_t *selectedOutcome)
 {
     playback = {};
     if (actionSlot >= kMaxPetBehaviorActions || !config.actions[actionSlot].active)
@@ -286,6 +287,8 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
         }
     }
     state = next;
+    if (selectedOutcome != nullptr)
+        *selectedOutcome = static_cast<uint8_t>(outcome - config.actionOutcomes);
     return true;
 }
 
@@ -315,6 +318,23 @@ bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
                                         PetBehaviorStatValues &state)
 {
     PetBehaviorStatValues next = state;
+#if ENABLE_TRAINING_COURSES
+    if (config.trainingSettings.mode != TrainingMode::None)
+    {
+        const auto &training = config.trainingSettings;
+        if (count != training.rounds) return false;
+        uint8_t score = 0;
+        for (uint8_t round = 0; round < count; ++round)
+            if (correctMask & (1UL << round)) ++score;
+        bool affectedSlots[kPetBehaviorSlotCount + 1] = {};
+        if (!applyEffect(config, training.scoreSlot, PetBehaviorEffectOperation::Set, score, next, affectedSlots) ||
+            !applyEffect(config, training.completionSlot, PetBehaviorEffectOperation::Set, 1, next, affectedSlots))
+            return false;
+        state = next;
+        return true;
+    }
+#endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     for (uint8_t round = 0; round < count; ++round)
     {
         const uint8_t group = (correctMask & (1UL << round)) ? 0 : 1;
@@ -329,5 +349,8 @@ bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
     }
     state = next;
     return true;
+#else
+    return false;
+#endif
 }
 #endif

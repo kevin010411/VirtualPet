@@ -33,10 +33,18 @@ constexpr uint32_t kShopStageDaysFeature = 1UL << 21;
 constexpr uint32_t kPersistentStatEventsFeature = 1UL << 23;
 constexpr uint32_t kCollectionGameEventsFeature = 1UL << 24;
 constexpr uint32_t kCaptureGameV2Feature = 1UL << 25;
+constexpr uint32_t kActionOutcomeEvolutionFeature = 1UL << 26;
+constexpr uint32_t kSpeciesButtonBindingsFeature = 1UL << 27;
+constexpr uint32_t kCollectionReplayFeature = 1UL << 28;
+constexpr uint32_t kActionEffectsAfterPlaybackFeature = 1UL << 29;
+constexpr uint32_t kActionSpeciesConditionsFeature = 1UL << 30;
+constexpr uint32_t kTrainingCoursesFeature = 1UL << 31;
 constexpr uint32_t kKnownFeatures = (((1UL << 17) - 1UL) & ~(1UL << 8)) |
     kScreenStatSumFeature | kScreenStatDimensionsFeature | kScreenStatSumSegmentsFeature |
     kStatEventsFeature | kShopStageDaysFeature | kStageDaysEffectsFeature | kPersistentStatEventsFeature |
-    kCollectionGameEventsFeature | kCaptureGameV2Feature;
+    kCollectionGameEventsFeature | kCaptureGameV2Feature | kActionOutcomeEvolutionFeature |
+    kSpeciesButtonBindingsFeature | kCollectionReplayFeature | kActionEffectsAfterPlaybackFeature |
+    kActionSpeciesConditionsFeature | kTrainingCoursesFeature;
 
 enum SectionType : uint16_t
 {
@@ -56,6 +64,8 @@ enum SectionType : uint16_t
     CollectionGameConfig = 83,
     CollectionEventRules = 84,
     CollectionRoundRequirements = 85,
+    CollectionReplays = 86,
+    TrainingCourses = 87,
     Profile = 1,
     Persistence = 2,
     AssetRefs = 3,

@@ -87,7 +87,9 @@ CommandResult CommandExecutor::execute(AppCommandId id, uint8_t targetSlot)
     case AppCommandId::UserAction:
     {
         const auto action = petBehaviorRuntime.executeAction(targetSlot);
-        if (action != PetBehaviorActionResult::Rejected && action != PetBehaviorActionResult::ResourceReadFailed)
+        if (action == PetBehaviorActionResult::AwaitingCompletion)
+            result.kind = CommandResultKind::Playback;
+        else if (action != PetBehaviorActionResult::Rejected && action != PetBehaviorActionResult::ResourceReadFailed)
             result.kind = CommandResultKind::UserAction;
         result.resourceError = action == PetBehaviorActionResult::AppliedAnimationMissing ||
             action == PetBehaviorActionResult::ResourceReadFailed;

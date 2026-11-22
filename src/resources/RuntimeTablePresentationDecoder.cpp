@@ -15,6 +15,13 @@ bool compiledFeaturesAccept(uint32_t flags)
 #if !ENABLE_INSTRUCTION_RESPONSE
     if ((flags & kInstructionResponseFeature) != 0) return false;
 #endif
+#if !ENABLE_TRAINING_COURSES
+    if ((flags & kTrainingCoursesFeature) != 0) return false;
+#endif
+#if !ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    if ((flags & (kInstructionResponseFeature | kTrainingCoursesFeature)) == kInstructionResponseFeature)
+        return false;
+#endif
 #if !ENABLE_SEQUENCE_AUDIO
     if ((flags & kSequenceAudioFeature) != 0) return false;
 #endif

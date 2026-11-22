@@ -51,6 +51,8 @@ public:
 #if ENABLE_INSTRUCTION_RESPONSE
     void clearInstructionOptions();
     void showInstructionFeedback(bool correct);
+    void showTrainingResult(uint8_t score, uint8_t total, bool passed);
+    void showTrainingRecall(uint16_t recentChoices, uint8_t count);
 #endif
 #if ENABLE_SHOP
     void drawShopNumber(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint32_t value);

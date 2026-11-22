@@ -528,6 +528,41 @@ void Renderer::showInstructionFeedback(bool correct)
         tft->drawLine(88, 56, 40, 104, ST77XX_RED);
     }
 }
+
+#if ENABLE_TRAINING_COURSES
+void Renderer::showTrainingRecall(uint16_t choices, uint8_t count)
+{
+    constexpr uint16_t colors[] = {0xAAA8, 0xEF18, 0x53F3};
+    uint8_t remaining = count > 5 ? 5 : count;
+    while (remaining)
+    {
+        const uint8_t x = 21 + 19 * --remaining;
+        tft->fillRect(x, 82, 1, 12, ST77XX_WHITE);
+        tft->fillRect(x + 1, 82, 8, 6, colors[choices & 3]);
+        choices >>= 2;
+    }
+}
+
+void Renderer::showTrainingResult(uint8_t score, uint8_t total, bool passed)
+{
+    tft->fillScreen(ST77XX_BLACK);
+    showInstructionFeedback(passed);
+    const char display[] = {
+        char('0' + score / 10), char('0' + score % 10), '/',
+        char('0' + total / 10), char('0' + total % 10), '\0',
+    };
+    tft->setCursor(total < 10 ? 46 : 34, 117);
+    tft->setTextColor(ST77XX_WHITE);
+    tft->setTextSize(2);
+    if (total < 10)
+    {
+        const char singleDigit[] = {display[1], '/', display[4], '\0'};
+        tft->print(singleDigit);
+    }
+    else
+        tft->print(display);
+}
+#endif
 #endif
 
 #if ENABLE_SHOP

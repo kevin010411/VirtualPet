@@ -7,6 +7,7 @@ struct PetBehaviorStatValues
 {
     uint32_t values[kPetBehaviorSlotCount];
     uint32_t stageDays;
+    uint8_t speciesSlot = 0;
 };
 
 struct PetBehaviorDailyChangePauses
@@ -40,7 +41,8 @@ bool applyPetBehaviorAction(const PetBehaviorConfig &config,
                             PetBehaviorDailyChangePauses &pauses,
                             PetBehaviorActionPlayback &playback,
                             PetBehaviorRandomBoundedSource randomSource = nullptr,
-                            PetBehaviorEffectReader effectReader = nullptr, void *effectContext = nullptr);
+                            PetBehaviorEffectReader effectReader = nullptr, void *effectContext = nullptr,
+                            uint8_t *selectedOutcome = nullptr);
 #if ENABLE_GUESS_GAME
 bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
                                   PetBehaviorGuessOutcome outcome,

@@ -208,6 +208,19 @@ const PersistedPetState &Pet::persistentState() const
     return st;
 }
 
+uint8_t Pet::pendingActionOutcome() const
+{
+    const uint8_t encoded = (st.flowFlags >> 13) & 0xff;
+    return encoded ? encoded - 1 : UINT8_MAX;
+}
+
+void Pet::setPendingActionOutcome(uint8_t index)
+{
+    const uint32_t encoded = index == UINT8_MAX ? 0 : index + 1;
+    constexpr uint32_t mask = 0xffUL << 13;
+    st.flowFlags = (st.flowFlags & ~mask) | (encoded << 13);
+}
+
 uint8_t Pet::speciesSlot() const
 {
     return parseAppearanceSlot(st.speciesSlotText);

@@ -25,7 +25,8 @@ public:
     bool confirm();
     bool redraw();
     bool takeActivation(uint8_t &species, uint8_t &outfit);
-    void exit() { opened = false; detail = false; }
+    bool takeReplay(AssetData::AnimationRef &animation, uint8_t &version);
+    void exit() { opened = false; detail = false; replayAnimation = {}; }
 private:
     Pet &pet;
     Renderer &renderer;
@@ -40,6 +41,9 @@ private:
     uint8_t detailPage = 0;
     uint8_t targetSpecies = 0;
     uint8_t targetOutfit = 0;
+    AssetData::AnimationRef replayAnimation = {};
+    uint8_t replayVersion = 0;
+    bool selectReplay(const RuntimeTableInternal::RuntimeTable &table, uint8_t slot);
     uint8_t lastCell() const;
     bool drawCell(const RuntimeTableInternal::RuntimeTable &table, uint8_t cell, bool selected,
                   const DisplayRect *crop = nullptr);

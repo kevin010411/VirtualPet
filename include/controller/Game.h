@@ -145,6 +145,7 @@ private:
 #endif
 #if ENABLE_COLLECTION_CATALOG
     std::unique_ptr<CollectionCatalog> collectionCatalog;
+    bool collectionReplayPlaying = false;
     bool collectionSavePending = false;
 #endif
 #if ENABLE_APPEARANCE_SELECTION
@@ -203,6 +204,7 @@ private:
     AppearanceChangeResult enterSpecies(uint8_t speciesSlot, uint8_t entryOutfitSlot) override;
     void refreshBaseAnimation() override;
     PlaybackTickResult tickPlayback(unsigned long now);
+    bool continuePendingAction();
     void synchronizePlaybackClock();
     bool completePlaybackTick(const PlaybackTickResult &playbackResult);
     void routeDirectionKey(KeyDirection direction);

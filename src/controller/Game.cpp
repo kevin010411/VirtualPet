@@ -87,6 +87,7 @@ void Game::loop_game(bool confirmPending)
         handlePlaybackResult(tickPlayback(millis()).result);
         return;
     }
+    if (flow.is(AppStage::Command) && continuePendingAction()) return;
 #if ENABLE_STAT_EVENTS
     if (presentStatEvents(millis())) return;
 #endif
@@ -111,7 +112,21 @@ void Game::loop_game(bool confirmPending)
     }
 #endif
 #if ENABLE_COLLECTION_CATALOG
-    if (flow.is(AppStage::Collection)) return;
+    if (flow.is(AppStage::Collection))
+    {
+        if (collectionReplayPlaying)
+        {
+            if (tickPlayback(millis()).result == PlaybackResult::PlaybackFailed)
+            { enterRuntimeFatal(); return; }
+            if (!animations->hasFinitePlayback())
+            {
+                collectionReplayPlaying = false;
+                animations->cancelAll();
+                if (!collectionCatalog->redraw()) enterRuntimeFatal();
+            }
+        }
+        return;
+    }
 #endif
 #if ENABLE_PROJECT_MENUS
     if (flow.is(AppStage::Menu)) return;
@@ -205,6 +220,48 @@ void Game::loop_game(bool confirmPending)
 #endif
 }
 
+bool Game::continuePendingAction()
+{
+    if (pet.pendingActionOutcome() == UINT8_MAX)
+        return false;
+
+    uint8_t species = 0, outfit = 0;
+    const auto progress = petBehaviorRuntime->continuePendingAction(species, outfit);
+    if (progress == PendingActionProgress::Playing)
+    {
+        if (tickPlayback(millis()).result == PlaybackResult::PlaybackFailed)
+            enterRuntimeFatal();
+        return true;
+    }
+    if (progress == PendingActionProgress::Failed)
+    {
+        enterRuntimeFatal();
+        return true;
+    }
+    if (progress == PendingActionProgress::Settled)
+    {
+        settleMutation(Settlement::UserAction);
+        requestFullRedraw();
+        synchronizePlaybackClock();
+        return true;
+    }
+
+    const PersistedPetState previous = pet.persistentState();
+    pet.setPendingActionOutcome(UINT8_MAX);
+    if (enterSpecies(species, outfit) != AppearanceChangeResult::Applied)
+    {
+        pet.restoreState(previous);
+        enterRuntimeFatal();
+        return true;
+    }
+    cheatEvolutionPending = false;
+    commands->resetSelection();
+    refreshBaseAnimation();
+    requestFullRedraw();
+    synchronizePlaybackClock();
+    return true;
+}
+
 #if ENABLE_SHOP
 void Game::redrawShop()
 {
@@ -262,7 +319,8 @@ void Game::requestFullRedraw()
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection))
     {
-        if (!collectionCatalog->redraw()) enterRuntimeFatal();
+        if (collectionReplayPlaying) animations->requestFullRedraw();
+        else if (!collectionCatalog->redraw()) enterRuntimeFatal();
         return;
     }
 #endif
@@ -296,7 +354,8 @@ void Game::redrawAllNow()
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection))
     {
-        if (!collectionCatalog->redraw()) enterRuntimeFatal();
+        if (collectionReplayPlaying) animations->requestFullRedraw();
+        else if (!collectionCatalog->redraw()) enterRuntimeFatal();
         return;
     }
 #endif
@@ -448,6 +507,7 @@ void Game::OnCaptureCancel()
 void Game::stopPlaybackForSleep()
 {
     animations->cancelAll();
+    petBehaviorRuntime->interruptPendingActionPlayback();
     synchronizePlaybackClock();
 }
 bool Game::audioActive() const
@@ -560,6 +620,7 @@ void Game::routeDirectionKey(KeyDirection direction)
     if (isRoundComplete() || statEventPageCount || committedEvolution.speciesSlot) return;
 #endif
     if (initialized && pet.isDead()) { OnDeathKey(); return; }
+    if (pet.pendingActionOutcome() != UINT8_MAX) return;
     // Menu selection does not mutate pet values. Keep it responsive while
     // historical days settle; minigame decisions still wait for catch-up.
     if (!initialized || (hasPendingTime() && !flow.allowsMenuNavigation()))
@@ -581,6 +642,7 @@ void Game::routeDirectionKey(KeyDirection direction)
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection))
     {
+        if (collectionReplayPlaying) return;
         if (!collectionCatalog->move(direction == KeyDirection::Right)) enterRuntimeFatal();
         return;
     }
@@ -626,6 +688,7 @@ void Game::OnConfirmKey()
     if (initialized && isRoundComplete()) { resetPet(); return; }
 #endif
     if (initialized && pet.isDead()) { OnDeathKey(); return; }
+    if (pet.pendingActionOutcome() != UINT8_MAX) return;
     // Command playback itself postpones day boundaries. Keep replacement
     // responsive while it plays; idle RTC catch-up still precedes new actions.
     if (!initialized || (hasPendingTime() &&
@@ -673,7 +736,25 @@ void Game::OnConfirmKey()
 #if ENABLE_COLLECTION_CATALOG
     if (flow.is(AppStage::Collection))
     {
+        if (collectionReplayPlaying)
+        {
+            collectionReplayPlaying = false;
+            animations->cancelAll();
+            if (!collectionCatalog->redraw()) enterRuntimeFatal();
+            return;
+        }
         if (!collectionCatalog->confirm()) { enterRuntimeFatal(); return; }
+        AssetData::AnimationRef replay = {};
+        uint8_t version = 0;
+        if (collectionCatalog->takeReplay(replay, version))
+        {
+            Animation animation = Animation::complete(replay);
+            animation.versionIndex = version;
+            if (animations->replace(AnimationSequence(&animation, 1)) != PlaybackResult::Accepted)
+            { enterRuntimeFatal(); return; }
+            collectionReplayPlaying = true;
+            return;
+        }
         if (!collectionCatalog->active())
         {
             uint8_t species = 0, outfit = 0;
@@ -884,6 +965,11 @@ bool Game::completePlaybackTick(const PlaybackTickResult &playbackResult)
 
 void Game::synchronizePlaybackClock()
 {
+    if (pet.pendingActionOutcome() != UINT8_MAX)
+    {
+        petClock.pause(latestRtcSeconds);
+        return;
+    }
 #if ENABLE_CAPTURE_GAME
     if (flow.is(AppStage::Minigame) && minigame->capturesScreen())
     {
@@ -1044,6 +1130,12 @@ void Game::handleSystemCommandRequest(const CommandResult &result)
 #if ENABLE_INSTRUCTION_RESPONSE
         if (result.kind == CommandResultKind::Instruction)
         {
+#if ENABLE_TRAINING_COURSES
+            const auto &training = petBehaviorConfig.trainingSettings;
+            if (training.mode != TrainingMode::None && training.gateSlot != UINT8_MAX &&
+                pet.customStat(training.gateSlot) != training.gateValue)
+                return;
+#endif
             petClock.pause(latestRtcSeconds);
             minigame->startInstruction(renderer, resources, petBehaviorConfig);
             flow.enter(AppStage::Minigame);
@@ -1071,6 +1163,11 @@ void Game::synchronizeTime(uint32_t rtcSeconds)
     latestRtcSeconds = rtcSeconds;
     if (!initialized) return;
     if (enterDeathIfNeeded()) return;
+    if (pet.pendingActionOutcome() != UINT8_MAX)
+    {
+        petClock.pause(rtcSeconds);
+        return;
+    }
 #if ENABLE_STAT_EVENTS
     if (isRoundComplete() || statEventPageCount || committedEvolution.speciesSlot) return;
 #endif
@@ -1366,6 +1463,7 @@ void Game::cancelForeground()
     evolution->cancel();
 #if ENABLE_COLLECTION_CATALOG
     collectionCatalog->exit();
+    collectionReplayPlaying = false;
 #endif
 #if ENABLE_APPEARANCE_SELECTION
     appearanceSelection->exit();

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "animation/Animation.h"
 #include "pet/PetBehaviorRuntimeRules.h"
 #include "pet/PetStateClassifier.h"
 
@@ -11,6 +12,7 @@ class Pet;
 class AssetResources;
 class AppearanceLoader;
 struct PetStatSnapshot;
+struct PersistedPetState;
 
 enum class PetBehaviorActionResult : uint8_t
 {
@@ -18,7 +20,10 @@ enum class PetBehaviorActionResult : uint8_t
     ResourceReadFailed,
     Applied,
     AppliedAnimationMissing,
+    AwaitingCompletion,
 };
+
+enum class PendingActionProgress : uint8_t { Playing, Evolve, Settled, Failed };
 
 class PetBehaviorRuntime
 {
@@ -37,11 +42,13 @@ public:
     }
 #endif
     void initializeStats();
-    void resetTransientState() { dailyChangePauses = {}; }
+    void resetTransientState() { dailyChangePauses = {}; pendingPlaybackStarted = false; }
+    void interruptPendingActionPlayback() { pendingPlaybackStarted = false; }
     bool isDead() const;
     bool advancePetDay(uint32_t days = 1);
     bool catchUpDays(AppearanceLoader &loader, uint32_t limit, uint32_t &days) const;
     PetBehaviorActionResult executeAction(uint8_t actionSlot);
+    PendingActionProgress continuePendingAction(uint8_t &species, uint8_t &outfit);
 #if ENABLE_GUESS_GAME
     bool applyGuessOutcome(PetBehaviorGuessOutcome outcome);
 #endif
@@ -58,6 +65,9 @@ private:
     AnimationController &animations;
     AssetResources &resources;
     PetBehaviorDailyChangePauses dailyChangePauses;
+    bool pendingPlaybackStarted = false;
+    PlaybackResult playAction(const PetBehaviorActionConfig &action, const PetBehaviorActionPlayback &playback);
+    PetBehaviorActionResult commitActionValues(const PetBehaviorStatValues &state, uint8_t slot, const PersistedPetState &before);
     bool (*saveMutation)(void *) = nullptr;
     void *saveContext = nullptr;
 #if ENABLE_STAT_EVENTS

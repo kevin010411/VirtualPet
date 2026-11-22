@@ -45,7 +45,9 @@ struct PetBehaviorAnimationPlaybackConfig
     AssetData::AnimationRef animation;
     uint8_t playbackCount;
     // Zero preserves ordinary random Version choice; otherwise exact index + 1.
-    uint16_t versionSelection = 0;
+    uint8_t versionSelection = 0;
+    uint8_t evolutionSpecies = 0;
+    uint8_t evolutionOutfit = 0;
 };
 
 // Ranges own contiguous records in PetBehaviorConfig. Standard/conditional
@@ -64,6 +66,7 @@ struct PetBehaviorActionConfig
     uint8_t firstFollowingAnimation;
     uint8_t followingAnimationCount;
     PetBehaviorAnimationPlaybackConfig prelude;
+    bool effectsAfterPlayback = false;
 };
 
 struct PetBehaviorActionOutcomeConfig
