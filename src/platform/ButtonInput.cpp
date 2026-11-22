@@ -68,6 +68,9 @@ CheatButtonEvent ButtonInput::update(ButtonCallback onPrevious,
                                      ButtonCallback onAnyPress,
                                      ButtonCallback onConfirmHold)
 {
+#if !ENABLE_PROJECT_MENUS && !ENABLE_CAPTURE_GAME
+    (void)onConfirmHold;
+#endif
     const unsigned long now = millis();
     const uint8_t observed = readMask();
     const uint8_t previousMask = stableMask;

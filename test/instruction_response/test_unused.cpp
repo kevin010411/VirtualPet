@@ -63,22 +63,23 @@ int main(int argc,char **argv)
     for(int card=1;card<=2;++card) {
         std::ifstream input(argv[card],std::ios::binary);assert(input);
         std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)),{});
-        assert(bytes.size() >= 64 && bytes[4] == 26 && bytes[5] == 0);
-        for (uint8_t version : {22, 23, 24, 25, 27})
+        Source source = {&bytes, memoryRead, static_cast<uint32_t>(bytes.size())};
+        AssetData::RuntimeManifest manifest = {};
+        assert(readRuntimeManifest(source, manifest));
+        for (uint8_t version : {22, 23, 24, 25, 26, 27})
         {
             auto incompatible = bytes;
             incompatible[4] = version;
+            incompatible[5] = 0;
             Source rejected = {&incompatible, memoryRead, static_cast<uint32_t>(incompatible.size())};
             AssetData::RuntimeManifest rejectedManifest = {};
             assert(!readRuntimeManifest(rejected, rejectedManifest));
         }
-        Source source={&bytes,memoryRead,static_cast<uint32_t>(bytes.size())};
-        AssetData::RuntimeManifest manifest={};assert(readRuntimeManifest(source,manifest));
         RuntimeContract config ={};
         const bool accepted=parseRuntimeTableBehavior(bytes.data(),bytes.size(),manifest,1,1,config);
         assert(accepted==(card==1));
         if(accepted) assert(config.buttons.buttons[0].systemCommandId!=RuntimeSystemCommandId::InstructionResponse);
     }
-    puts("[PASS] feature-disabled reader accepts actual unused v26 export and rejects enabled maximum package");
-    puts("[PASS] v22/v23/v24/v25 and unknown v27 headers rejected; no legacy compatibility parser");
+    puts("[PASS] feature-disabled reader accepts the unused export and rejects the enabled maximum package");
+    puts("[PASS] legacy Runtime Table v22 through v27 headers rejected");
 }

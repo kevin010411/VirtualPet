@@ -66,7 +66,6 @@ int main(int argc,char **argv)
     AssetData::RuntimeManifest manifest={};assert(readRuntimeManifest(source,manifest));
     RuntimeContract config ={};
     assert(parseRuntimeTableBehavior(bytes.data(),bytes.size(),manifest,1,1,config));
-    assert(readU16(bytes.data()+4)==26);
     const bool maximum=strcmp(argv[2],"maximum")==0;
     const bool weighted=strcmp(argv[2],"weighted")==0, minimum=strcmp(argv[2],"minimum")==0;
     const InstructionResponseSettings expected = maximum ?
@@ -132,5 +131,5 @@ int main(int argc,char **argv)
         }
         puts("[PASS] maximum 20 rounds/24 effects/12 distinct Stat identities: ordered changes, sets, per-step clamps and single consumption");
     }
-    puts("[PASS] actual Web v26 save/upload/export: settings/weights/roles decoded and drive configured game through full final feedback; option references remain distinct");
+    puts("[PASS] Web export settings, weights and roles drive the game through final feedback with distinct option references");
 }

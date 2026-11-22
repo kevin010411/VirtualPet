@@ -49,6 +49,9 @@ Web 的 `scripts/preflight.ps1 -BackendOnly`。
 # Runtime Table、口令反應、版面與素材包
 pwsh -NoProfile -NonInteractive -File scripts/generate_screen_layout_fixtures.ps1
 
+# 動畫配樂，產生至 tests/fixtures/sequence_audio。
+.\backend\.venv\Scripts\python.exe -m scripts.generate_sequence_audio_fixtures
+
 # 圖鑑卡片。其他案例可用產生器的 --help 查詢模式。
 .\backend\.venv\Scripts\python.exe -m scripts.generate_collection_catalog_fixtures --cards --output .verification/firmware-host/cards
 
