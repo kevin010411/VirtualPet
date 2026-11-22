@@ -42,13 +42,17 @@ PlaybackResult resolveActionAnimation(const PetBehaviorActionPlayback &playback,
 {
     if (!playback.animation.valid() || playback.playbackCount == 0)
         return PlaybackResult::PlaybackFailed;
+    animation = Animation::complete(playback.animation, playback.playbackCount);
+    if (playback.versionSelection != 0)
+    {
+        animation.versionIndex = playback.versionSelection - 1;
+        return resources.frameCountFor(playback.animation, animation.versionIndex) != 0
+            ? PlaybackResult::Accepted : PlaybackResult::AnimationMissing;
+    }
     const uint16_t versionCount = resources.versionCountFor(playback.animation);
     if (versionCount == 0)
         return PlaybackResult::AnimationMissing;
-    animation = Animation::complete(playback.animation, playback.playbackCount);
-    if (playback.versionSelection > versionCount) return PlaybackResult::AnimationMissing;
-    animation.versionIndex = playback.versionSelection != 0 ? playback.versionSelection - 1 :
-        (versionCount == 1 ? 0 : static_cast<uint8_t>(FirmwareRandom::below(versionCount)));
+    animation.versionIndex = versionCount == 1 ? 0 : static_cast<uint8_t>(FirmwareRandom::below(versionCount));
     return PlaybackResult::Accepted;
 }
 struct ActionEffectFile

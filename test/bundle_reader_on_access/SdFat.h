@@ -10,6 +10,8 @@ namespace BundleReaderHostSd
 {
 inline const uint8_t *mountedData = nullptr;
 inline size_t mountedSize = 0;
+inline size_t openCalls = 0;
+inline size_t readCalls = 0;
 }
 
 class File
@@ -18,6 +20,7 @@ public:
     explicit operator bool() const { return data_ != nullptr; }
     int read(void *destination, size_t count)
     {
+        ++BundleReaderHostSd::readCalls;
         if (destination == nullptr || count > size_ - position_)
             return -1;
         uint8_t *bytes = static_cast<uint8_t *>(destination);
@@ -36,6 +39,7 @@ public:
     uint32_t fileSize() const { return static_cast<uint32_t>(size_); }
     bool open(const char *, uint8_t)
     {
+        ++BundleReaderHostSd::openCalls;
         data_ = BundleReaderHostSd::mountedData;
         size_ = BundleReaderHostSd::mountedSize;
         position_ = 0;

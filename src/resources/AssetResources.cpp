@@ -38,17 +38,7 @@ uint16_t AssetResources::frameCountFor(const AssetData::AnimationRef &animation,
 
 uint16_t AssetResources::versionCountFor(const AssetData::AnimationRef &animation)
 {
-    uint16_t count = 0;
-    for (uint16_t version = 0; version < AssetData::kMaxVersions; ++version)
-    {
-        AssetData::AnimationRecord record = {};
-        if (!animation.valid() ||
-            !reader_.tryResolveAnimation(
-                frameAddress(animation, static_cast<uint8_t>(version), 0), record))
-            break;
-        ++count;
-    }
-    return count;
+    return animation.valid() ? reader_.animationVersionCount(frameAddress(animation, 0, 0)) : 0;
 }
 
 unsigned long AssetResources::frameIntervalFor(const AssetData::AnimationRef &animation,

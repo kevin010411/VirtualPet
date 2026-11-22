@@ -114,6 +114,7 @@ public:
                           AssetData::AnimationRecord &animation);
     bool tryResolveAnimation(const AssetData::AssetFrameAddress &address,
                              AssetData::AnimationRecord &animation);
+    uint16_t animationVersionCount(AssetData::AssetFrameAddress address);
     bool openFrame(const AssetData::AssetFrameAddress &address,
                    AssetData::OpenFrame &frame);
     void rejectDecodedFrame(const AssetData::AssetFrameAddress &address);
@@ -138,6 +139,10 @@ private:
                        const PackHeader &header,
                        const AssetData::AssetFrameAddress &address,
                        AssetData::AnimationRecord &animation);
+    bool findAnimationAtOrBefore(SdBaseFile &file,
+                                const PackHeader &header,
+                                const AssetData::AssetFrameAddress &address,
+                                AssetData::AnimationRecord &animation) const;
     bool readAnimation(SdBaseFile &file,
                        const PackHeader &header,
                        uint32_t index,

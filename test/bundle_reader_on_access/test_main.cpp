@@ -1,8 +1,11 @@
-#include "resources/BundleReader.h"
+#include "resources/AssetResources.h"
 #include "display/FrameDecoder.h"
 #include "SPI.h"
 
 #include <assert.h>
+#include <fstream>
+#include <iterator>
+#include <string>
 #include <string.h>
 #include <vector>
 
@@ -75,11 +78,12 @@ std::vector<uint8_t> packForPayload(const AssetData::BundleId &bundleId,
                                     uint8_t codec,
                                     const std::vector<uint8_t> &payload,
                                     uint16_t width,
-                                    uint16_t height)
+                                    uint16_t height,
+                                    uint16_t versionCount = 1)
 {
     constexpr uint32_t kAnimationOffset = 80;
-    constexpr uint32_t kFrameOffset = kAnimationOffset + 16;
-    constexpr uint32_t kPayloadOffset = kFrameOffset + 24;
+    const uint32_t kFrameOffset = kAnimationOffset + versionCount * 16;
+    const uint32_t kPayloadOffset = kFrameOffset + 24;
     std::vector<uint8_t> bytes(kPayloadOffset + payload.size(), 0);
     const uint8_t magic[8] = {'V', 'P', 'A', 'D', 'A', 'T', 'A', 0};
     memcpy(bytes.data(), magic, sizeof(magic));
@@ -88,14 +92,19 @@ std::vector<uint8_t> packForPayload(const AssetData::BundleId &bundleId,
     bytes[12] = AssetData::kPackKindShared;
     memcpy(bytes.data() + 16, bundleId.bytes, sizeof(bundleId.bytes));
     writeU32(bytes, 32, static_cast<uint32_t>(bytes.size()));
-    writeU32(bytes, 36, 1);
+    writeU32(bytes, 36, versionCount);
     writeU32(bytes, 40, 1);
     writeU32(bytes, 44, kAnimationOffset);
     writeU32(bytes, 48, kFrameOffset);
     writeU32(bytes, 52, kPayloadOffset);
     writeU16(bytes, 56, 16);
     writeU16(bytes, 58, 24);
-    writeAnimation(bytes, kAnimationOffset, 1, 0);
+    for (uint16_t version = 0; version < versionCount; ++version)
+    {
+        const uint32_t offset = kAnimationOffset + version * 16;
+        writeAnimation(bytes, offset, 1, 0);
+        bytes[offset + 3] = static_cast<uint8_t>(version);
+    }
     bytes[kFrameOffset] = codec;
     writeU16(bytes, kFrameOffset + 2, width);
     writeU16(bytes, kFrameOffset + 4, height);
@@ -131,9 +140,95 @@ bool decodePayload(const AssetData::BundleId &bundleId,
         reader, address, &display, readBuffer, sizeof(readBuffer),
         lineBuffer, width * size_t{12}, 0, 0, 12, width, height, pixelSpi);
 }
+
+void assertVersionCount(AssetResources &resources, const AssetData::AnimationRef &ref,
+                        uint16_t expected)
+{
+    BundleReaderHostSd::openCalls = 0;
+    BundleReaderHostSd::readCalls = 0;
+    assert(resources.versionCountFor(ref) == expected);
+    assert(BundleReaderHostSd::openCalls == 1);
+    // One header and at most 13 probes for the largest legal animation table.
+    assert(BundleReaderHostSd::readCalls <= 14);
+}
+
+void testMaximumVersion(const AssetData::BundleId &bundleId, const std::vector<uint8_t> &payload)
+{
+    const auto bytes = packForPayload(bundleId, AssetData::kCodecRgb565RunLiteral,
+                                      payload, 32, 32, AssetData::kMaxVersions);
+    SdFat sd(bytes.data(), bytes.size());
+    AssetResources resources(&sd);
+    assert(resources.configureBundle(bundleId));
+    const AssetData::AnimationRef ref{0, 0, 1};
+    assertVersionCount(resources, ref, 256);
+    assert(resources.frameCountFor(ref, 255) == 1);
+    assertVersionCount(resources, {0, 0, 2}, 0);
+    assert(resources.firstAssetDataError() == AssetData::BundleError::None);
+}
+
+void testWebFixture(const std::string &root)
+{
+    std::ifstream pack(root + "/assets/species_1.data", std::ios::binary);
+    assert(pack.good());
+    const std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(pack),
+                                     std::istreambuf_iterator<char>()};
+    assert(bytes.size() >= AssetData::kHeaderSize);
+    std::ifstream metadata(root + "/animation-id.txt");
+    unsigned animationId;
+    assert(metadata >> animationId);
+    assert(animationId < AssetData::kMaxRuntimeAnimationId);
+    AssetData::BundleId bundleId;
+    memcpy(bundleId.bytes, bytes.data() + 16, sizeof(bundleId.bytes));
+    SdFat sd(bytes.data(), bytes.size());
+    AssetResources resources(&sd);
+    assert(resources.configureBundle(bundleId));
+    const AssetData::AnimationRef ref{1, 1, static_cast<uint16_t>(animationId)};
+    assertVersionCount(resources, ref, 28);
+    assertVersionCount(resources, {1, 1, AssetData::kMaxRuntimeAnimationId}, 0);
+    assertVersionCount(resources, {1, 2, ref.animationId}, 0);
+    assert(resources.frameCountFor(ref, 28) == 0);
+    for (const uint8_t version : {0, 13, 14, 27})
+    {
+        assert(resources.frameCountFor(ref, version) == 1);
+        assert(resources.frameIntervalFor(ref, version, 0) == 180U + version);
+        const AssetData::AssetFrameAddress address{1, 1, ref.animationId, version, 0};
+        AssetData::OpenFrame frame;
+        assert(resources.frameReader().openFrame(address, frame));
+        assert(frame.descriptor.codec == (version % 2 ? AssetData::kCodecRgb565RunLiteral :
+                                                         AssetData::kCodecPal8RunLiteral));
+        assert(frame.descriptor.width == 128 && frame.descriptor.height == 96);
+        frame.file.close();
+        uint16_t lineBuffer[FrameDecoder::kLineBufferPixels] = {};
+        Adafruit_ST7735 display;
+        SPIClass pixelSpi;
+        assert(FrameDecoder::showDataFrame(
+            resources.frameReader(), address, &display,
+            resources.readBuffer(), AssetData::kDataReadBufferBytes,
+            lineBuffer, FrameDecoder::kLineBufferPixels, 0, 0, FrameDecoder::kWorkingBatchLines,
+            128, 96, &pixelSpi));
+        constexpr size_t pixelCount = 128 * 96;
+#if defined(STM32F103xB)
+        assert(pixelSpi.bytes.size() == pixelCount * 2);
+#else
+        assert(display.pixels.size() == pixelCount);
+#endif
+        for (size_t index = 0; index < pixelCount; ++index)
+        {
+            const uint16_t expected = version % 2 ? (index < 200 ? index + 1 : 0)
+                                                 : (index % 2 ? 0x07E0 : 0xF800);
+#if defined(STM32F103xB)
+            const uint16_t pixel = (pixelSpi.bytes[index * 2] << 8) | pixelSpi.bytes[index * 2 + 1];
+#else
+            const uint16_t pixel = display.pixels[index];
+#endif
+            assert(pixel == expected);
+        }
+    }
+    assert(resources.firstAssetDataError() == AssetData::BundleError::None);
+}
 } // namespace
 
-int main()
+int main(int argc, char **argv)
 {
     AssetData::BundleId bundleId;
     for (size_t index = 0; index < sizeof(bundleId.bytes); ++index)
@@ -173,6 +268,7 @@ int main()
         validPayload.push_back(0x12);
     }
     assert(decodePayload(bundleId, AssetData::kCodecRgb565RunLiteral, validPayload));
+    testMaximumVersion(bundleId, validPayload);
 #if defined(STM32F103xB)
     std::vector<uint8_t> fullScreenPayload;
     for (int row = 0; row < 160; ++row)
@@ -200,5 +296,7 @@ int main()
     assert(!decodePayload(bundleId, AssetData::kCodecRgb565RunLiteral, {0xFF, 0x34}));
     assert(!decodePayload(bundleId, AssetData::kCodecPal8RunLiteral,
                           {0, 0x34, 0x12, 0xFF, 1}));
+    if (argc == 2)
+        testWebFixture(argv[1]);
     return 0;
 }

@@ -30,7 +30,7 @@ bool readExact(SdBaseFile &file, uint32_t offset, uint8_t *destination, size_t s
 }
 
 int compareAnimationKey(const AssetData::AnimationRecord &left,
-                        const AssetData::AnimationRecord &right)
+                        const AssetData::AssetFrameAddress &right)
 {
     if (left.outfitSlot != right.outfitSlot)
         return left.outfitSlot < right.outfitSlot ? -1 : 1;
@@ -109,6 +109,30 @@ bool BundleReader::tryResolveAnimation(const AssetData::AssetFrameAddress &addre
     const bool found = findAnimation(file, header, address, animation);
     file.close();
     return found;
+}
+
+uint16_t BundleReader::animationVersionCount(AssetData::AssetFrameAddress address)
+{
+#if ENABLE_DEBUG
+    debugAttemptAddress_ = address;
+#endif
+    if (!validateAddress(address))
+        return 0;
+
+    SdBaseFile file;
+    PackHeader header;
+    if (!openPack(address.speciesSlot, file, header))
+        return 0;
+
+    AssetData::AnimationRecord last;
+    address.versionIndex = AssetData::kMaxVersions - 1;
+    const bool found = findAnimationAtOrBefore(file, header, address, last);
+    file.close();
+    if (!found || last.outfitSlot != address.outfitSlot || last.animationId != address.animationId)
+        return 0;
+
+    // Exported versions within an outfit and animation are dense and zero-based.
+    return static_cast<uint16_t>(last.versionIndex) + 1;
 }
 
 bool BundleReader::openFrame(const AssetData::AssetFrameAddress &address,
@@ -319,11 +343,21 @@ bool BundleReader::findAnimation(SdBaseFile &file,
         return true;
     }
 
-    AssetData::AnimationRecord target;
-    target.outfitSlot = address.outfitSlot;
-    target.animationId = address.animationId;
-    target.versionIndex = address.versionIndex;
+    if (!findAnimationAtOrBefore(file, header, address, animation) ||
+        compareAnimationKey(animation, address) != 0)
+        return false;
+    resolvedAddress_ = address;
+    resolvedAnimation_ = animation;
+    hasResolvedAnimation_ = true;
+    return true;
+}
 
+bool BundleReader::findAnimationAtOrBefore(SdBaseFile &file,
+                                           const PackHeader &header,
+                                           const AssetData::AssetFrameAddress &address,
+                                           AssetData::AnimationRecord &animation) const
+{
+    bool found = false;
     uint32_t low = 0;
     uint32_t high = header.animationCount;
     while (low < high)
@@ -332,20 +366,19 @@ bool BundleReader::findAnimation(SdBaseFile &file,
         AssetData::AnimationRecord candidate;
         if (!readAnimation(file, header, middle, candidate))
             return false;
-        const int comparison = compareAnimationKey(candidate, target);
-        if (comparison < 0)
-            low = middle + 1;
-        else
+        const int comparison = compareAnimationKey(candidate, address);
+        if (comparison > 0)
+        {
             high = middle;
+            continue;
+        }
+        animation = candidate;
+        if (comparison == 0)
+            return true;
+        found = true;
+        low = middle + 1;
     }
-
-    if (low >= header.animationCount || !readAnimation(file, header, low, animation) ||
-        compareAnimationKey(animation, target) != 0)
-        return false;
-    resolvedAddress_ = address;
-    resolvedAnimation_ = animation;
-    hasResolvedAnimation_ = true;
-    return true;
+    return found;
 }
 
 bool BundleReader::readAnimation(SdBaseFile &file,

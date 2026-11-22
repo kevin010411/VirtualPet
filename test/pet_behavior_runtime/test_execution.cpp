@@ -11,6 +11,7 @@ namespace
 uint16_t renderedAnimation;
 unsigned animationLookups;
 unsigned missingLookups;
+unsigned multiVersionCountLookups;
 uint8_t renderedVersion;
 SdFat *effectCard;
 
@@ -172,7 +173,9 @@ void testFixedVersionReplaysAndPrelude()
     animations.setup(config.idleAnimation);
     PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();
+    multiVersionCountLookups = 0;
     assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+    assert(multiVersionCountLookups == 0);
     bool sawPrelude = false, sawResult = false, sawFollowing = false;
     for (unsigned tick = 0; tick < 30; ++tick)
     {
@@ -186,8 +189,35 @@ void testFixedVersionReplaysAndPrelude()
     assert(sawPrelude && sawResult && sawFollowing && !animations.isBusy());
     config.actionOutcomes[0].animationPlayback.versionSelection = 29;
     assert(runtime.executeAction(0) == PetBehaviorActionResult::AppliedAnimationMissing);
-    assert(pet.customStat(0) == 20);
+    assert(pet.customStat(0) == 20 && multiVersionCountLookups == 0);
 }
+
+void testFixedMiddleAndRandomVersion()
+{
+    const uint8_t selections[] = {14, 0};
+    for (const uint8_t selection : selections)
+    {
+        auto config = effectsOnlyConfig();
+        config.actionOutcomes[0].animationPlayback = {{1, 1, 4}, 1, selection};
+        Pet pet;
+        AssetResources resources(nullptr);
+        Renderer renderer(nullptr, resources);
+        AnimationController animations(renderer, resources);
+        animations.setup(config.idleAnimation);
+        PetBehaviorRuntime runtime(config, pet, animations, resources);
+        runtime.initializeStats();
+        multiVersionCountLookups = 0;
+        FirmwareRandom::seed(12);
+        const uint8_t expected = selection ? selection - 1 : FirmwareRandom::below(28);
+        FirmwareRandom::seed(12);
+        assert(runtime.executeAction(0) == PetBehaviorActionResult::Applied);
+        assert(multiVersionCountLookups == (selection ? 0U : 1U));
+        animations.preparePlayback(0);
+        animations.tick(0);
+        assert(renderedAnimation == 4 && renderedVersion == expected);
+    }
+}
+
 void testActualEffectFileReadAndFailureAreAtomic()
 {
     auto config = effectsOnlyConfig();
@@ -275,12 +305,17 @@ bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &, uint8_t, uint
                                   int, int, int, uint16_t, uint16_t) { return true; }
 bool Renderer::willRestartAnimationLoop() const { return false; }
 bool Renderer::animationFrameFailed() const { return false; }
-uint16_t AssetResources::frameCountFor(const AssetData::AnimationRef &, uint8_t) { return 1; }
+uint16_t AssetResources::frameCountFor(const AssetData::AnimationRef &reference, uint8_t version)
+{
+    return reference.animationId != 2 && version < (reference.animationId == 4 ? 28 : 1) ? 1 : 0;
+}
 uint16_t AssetResources::versionCountFor(const AssetData::AnimationRef &reference)
 {
     ++animationLookups;
     if (reference.animationId == 2) { ++missingLookups; return 0; }
-    return reference.animationId == 4 ? 28 : 1;
+    if (reference.animationId != 4) return 1;
+    ++multiVersionCountLookups;
+    return 28;
 }
 unsigned long AssetResources::frameIntervalFor(const AssetData::AnimationRef &, uint8_t,
                                         unsigned long) { return 1; }
@@ -304,7 +339,7 @@ int main()
         runtime.initializeStats();
         pet.setCustomStat(0, 0);
         bool saveSucceeds = false;
-        runtime.setPersistence([](void *context) { return *static_cast<bool *>(context); }, &saveSucceeds);
+        runtime.setPersistence([](void *context, bool) { return *static_cast<bool *>(context); }, &saveSucceeds);
         assert(!runtime.advancePetDay());
         assert(pet.stageDays() == 0 && pet.customStat(0) == 0);
         saveSucceeds = true;
@@ -327,6 +362,7 @@ int main()
     testEmptyPrimaryWithFollowing();
     testReferencedMissingAnimationRetainsCommit();
     testFixedVersionReplaysAndPrelude();
+    testFixedMiddleAndRandomVersion();
     testActualEffectFileReadAndFailureAreAtomic();
     testQuotaGateReadAndReject();
     return 0;
