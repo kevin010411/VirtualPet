@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <SdFat.h>
 #include <HardwareTimer.h>
+#include <string.h>
 #include "platform/BoardConfig.h"
 
 namespace
@@ -10,8 +11,7 @@ namespace
 constexpr uint16_t kHalfSamples = 512;
 constexpr uint16_t kFadeSamples = 160; // 20ms at 8kHz.
 SdBaseFile audioFile;
-uint16_t samples[2 * kHalfSamples];
-uint8_t readScratch[kHalfSamples];
+uint8_t samples[2 * kHalfSamples];
 volatile uint8_t refillMask = 0;
 volatile uint32_t completed = 0;
 volatile bool running = false;
@@ -35,12 +35,9 @@ bool fillHalf(uint8_t half)
 {
     const uint32_t available = sampleCount - loaded;
     const uint16_t count = available < kHalfSamples ? available : kHalfSamples;
-    if (count && audioFile.read(readScratch, count) != count) return false;
-    for (uint16_t index = 0; index < kHalfSamples; ++index)
-    {
-        int16_t value = index < count ? int16_t(readScratch[index]) - 128 : 0;
-        samples[half * kHalfSamples + index] = uint16_t(value + 128);
-    }
+    uint8_t *const destination = samples + half * kHalfSamples;
+    if (count && audioFile.read(destination, count) != count) return false;
+    memset(destination + count, 128, kHalfSamples - count);
     loaded += count;
     return true;
 }
@@ -149,8 +146,9 @@ bool start()
     DMA1_Channel7->CPAR = reinterpret_cast<uint32_t>(&TIM2->CCR3);
     DMA1_Channel7->CMAR = reinterpret_cast<uint32_t>(samples);
     DMA1_Channel7->CNDTR = 2 * kHalfSamples;
+    // DMA zero-extends each 8-bit PCM sample for the 16-bit compare write.
     DMA1_Channel7->CCR = DMA_CCR_DIR | DMA_CCR_CIRC | DMA_CCR_MINC |
-        DMA_CCR_PSIZE_0 | DMA_CCR_MSIZE_0 | DMA_CCR_PL_1 |
+        DMA_CCR_PSIZE_0 | DMA_CCR_PL_1 |
         DMA_CCR_HTIE | DMA_CCR_TCIE | DMA_CCR_TEIE | DMA_CCR_EN;
     NVIC_SetPriority(DMA1_Channel7_IRQn, 2);
     NVIC_EnableIRQ(DMA1_Channel7_IRQn);

@@ -1181,8 +1181,10 @@ void testManualDayCommand()
     game.synchronizeTime(100000);
     assert(pet.stageDays() == 0);
     pet.setCustomStat(0, 0);
+    const unsigned savesBefore = data.saves;
     data.saveSucceeds = false;
     game.OnConfirmKey();
+    assert(data.saves == savesBefore + 1);
     assert(pet.stageDays() == 0 && pet.customStat(0) == 0);
     data.saveSucceeds = true;
     game.OnConfirmKey();
@@ -2354,6 +2356,7 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
     {
         config.behavior.manualDays = true;
         config.behavior.stats[0] = {true, 10, 0, 10, -1};
+        config.behavior.statCount = 1;
         config.behavior.dayResetCount = 1;
         config.behavior.dayResets[0] = {0, PetBehaviorEffectOperation::Set, 10};
         config.buttons.buttons[0] = {true, PetBehaviorButtonKind::SystemCommand, 0, RuntimeSystemCommandId::AdvanceDay};

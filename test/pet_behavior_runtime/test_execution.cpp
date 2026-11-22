@@ -1,6 +1,7 @@
 #include "resources/AssetResources.h"
 #include <assert.h>
 #include "animation/AnimationController.h"
+#include "animation/RuntimePlaybackConfig.h"
 #include "common/FirmwareRandom.h"
 #include "display/Renderer.h"
 #include "pet/Pet.h"
@@ -40,7 +41,8 @@ void assertActionApplied(PetBehaviorConfig &config, bool hasFollowing = false)
     AssetResources resources(nullptr);
     Renderer renderer(nullptr, resources);
     AnimationController animations(renderer, resources);
-    animations.configureRuntimeContract(config);
+    const RuntimePlaybackConfig playback = {};
+    animations.configureRuntimeContract(playback);
     animations.setup(config.idleAnimation);
     PetBehaviorRuntime runtime(config, pet, animations, resources);
     runtime.initializeStats();

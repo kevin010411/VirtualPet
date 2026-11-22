@@ -39,14 +39,27 @@ Resolver 根據專案功能、MCU 與容量產生完整設定，並有自己的�
 受旗標控制的行為應驗證適用的開啟和關閉組態。[Host 測試清單](../test/README.md)
 
 ```powershell
-pwsh -NoProfile -NonInteractive -File test/run_host_tests.ps1 -List
-pwsh -NoProfile -NonInteractive -File test/run_host_tests.ps1 -Case pet-behavior
+pwsh -NoProfile -NonInteractive -File test/run_host_tests.ps1 -Core
+python tools/profile_size_report.py --check-capacity
 ```
 
-完成建置後，以 `arm-none-eabi-size`／`nm` 檢查該 env 的新 ELF。
-Flash = `text + data`，靜態 RAM = `data + bss`。A/B 必須固定來源、工具鏈、
-board、容量及其餘 flags，不能把歷史 project 數字直接相減。
-靜態 RAM 不包含 heap／stack 峰值；擴張 linker allowance 不證明實體 Flash 容量。
+容量驗收使用 PlatformIO 建置下列組態，從本次 ELF 的 `text + data` 計算 Flash。
+建置失敗或超出任一門檻都會回傳非零退出碼。
+
+| 組態 | 功能 | Flash 驗收 |
+| --- | --- | --- |
+| `stm32_base` | STM32F103C8T6。關閉可選功能與按鍵音，保留日結算、存檔與基本播放。 | 嚴格低於 64 KiB 的 90%，最多 58,982 bytes。 |
+| `gd32_full` | GD32F103CBT6 108 MHz。啟用目前所有可選遊戲與產品功能，含音訊及兩代口令玩法。關閉除錯輸出。 | 不超過 128 KiB。 |
+
+`gd32_full` 使用 12 個 Pet Stat、16 條版面數值規則、3 個 Action、8 個 Outcome 與 12 筆常駐 Action Effect。
+新增可選功能時，在 `gd32_full` 開啟對應旗標。`stm32_base` 使用 `AppProfile.h` 的關閉預設。
+交付時用該專案匯出的 `platformio.ini` 建置，確認實際資料容量所需的空間。
+同 checkout 若需平行建置，為每個程序指定不同的 `PLATFORMIO_BUILD_DIR`。
+
+用 `arm-none-eabi-size -A` 檢查 ELF 的 `.data` 和 `.bss` 可核對靜態 RAM。
+工具鏈的 Berkeley `bss` 總計可能包含 linker 預留的 heap 與 stack。實際 heap 與 stack 峰值須另量測。
+同組態比較須固定板型、工具鏈、儲存容量與其餘旗標。
 
 實機需另驗收 SD／TFT／按鍵、RTC／STOP、低電壓及音訊輸出。
+驗收 STM32 在喚醒和低電壓切換後的背光亮度，以及 GD32 連續動畫配樂的 DMA 補樣。
 軟體通過不表示上述設備行為已通過。未完成需求集中在[功能待辦](bingbing-development-todo.md)。

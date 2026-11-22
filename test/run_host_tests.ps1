@@ -1,6 +1,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Run')]
 param(
     [Parameter(Mandatory, ParameterSetName = 'List')][switch]$List,
+    [Parameter(Mandatory, ParameterSetName = 'Core')][switch]$Core,
     [Parameter(Mandatory, ParameterSetName = 'Run')][string[]]$Case,
     [Parameter(ParameterSetName = 'Run')][hashtable]$RunnerOptions = @{}
 )
@@ -42,6 +43,11 @@ $integrationModes = [ordered]@{
 foreach ($name in $integrationModes.Keys) {
     $cases[$name] = 'collection_catalog'
 }
+$coreCases = @(
+    'pet-behavior', 'pet-persistence', 'stat-event-rules', 'startup', 'runtime-contract',
+    'transactions', 'random', 'button-input', 'rtc-clock', 'rtc-power', 'storage-sd',
+    'bundle-reader', 'startup-error-rendering'
+)
 
 if ($List) {
     foreach ($name in $cases.Keys) {
@@ -53,9 +59,11 @@ if ($List) {
         }
         Write-Output "$name  $runner$flags"
     }
+    Write-Output "`n-Core runs: $($coreCases -join ', ')"
     return
 }
 
+if ($Core) { $Case = $coreCases }
 foreach ($name in $Case) {
     if (-not $cases.Contains($name)) {
         throw "Unknown host case '$name'. Run test/run_host_tests.ps1 -List."
@@ -70,7 +78,7 @@ if (-not (Get-Command g++ -ErrorAction SilentlyContinue)) {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $collectionFixture = Join-Path $repoRoot '../../web/tests/fixtures/collection_catalog_v10/valid'
-foreach ($name in $Case) {
+function Get-CaseOptions($name) {
     $options = $RunnerOptions.Clone()
     foreach ($flag in $integrationModes[$name]) {
         if ($options.ContainsKey($flag)) {
@@ -101,14 +109,31 @@ foreach ($name in $Case) {
         -not (Test-Path -LiteralPath (Join-Path $options['FixtureRoot'] 'runtime.bin') -PathType Leaf)) {
         throw "Case '$name' expects runtime.bin at the root of the extracted fixture: $($options['FixtureRoot'])"
     }
-
-    New-Item -ItemType Directory -Force (Join-Path $repoRoot '.pio') | Out-Null
-    Write-Host "=== $name ==="
-    $runner = Join-Path $PSScriptRoot "$($cases[$name])/run_host_test.ps1"
-    & $runner @options
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "[FAIL] $name (exit $LASTEXITCODE)"
-        exit $LASTEXITCODE
-    }
-    Write-Host "[PASS] $name"
+    return $options
 }
+
+New-Item -ItemType Directory -Force (Join-Path $repoRoot '.pio') | Out-Null
+$failed = @()
+$exitCode = 0
+foreach ($name in $Case) {
+    Write-Host "=== $name ==="
+    try {
+        $options = Get-CaseOptions $name
+        $runner = Join-Path $PSScriptRoot "$($cases[$name])/run_host_test.ps1"
+        & $runner @options
+        $result = $LASTEXITCODE
+    } catch {
+        Write-Host $_.Exception.Message
+        $result = 1
+    }
+    if ($result -ne 0) {
+        Write-Host "[FAIL] $name (exit $result)"
+        $failed += $name
+        if ($exitCode -eq 0) { $exitCode = $result }
+    } else {
+        Write-Host "[PASS] $name"
+    }
+}
+Write-Host "$($Case.Count - $failed.Count)/$($Case.Count) host cases passed."
+if ($failed.Count) { Write-Host "Failed: $($failed -join ', ')" }
+exit $exitCode

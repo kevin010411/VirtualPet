@@ -1,3 +1,6 @@
+#include "common/AppProfile.h"
+
+#if ENABLE_COLLECTION_CATALOG || ENABLE_COLLECTION_GAME_EVENTS
 #include "resources/AssetResources.h"
 #include "collection/CollectionCatalog.h"
 #include "collection/CollectionGameEvent.h"
@@ -582,3 +585,4 @@ bool CollectionCatalog::takeActivation(uint8_t &species, uint8_t &outfit)
     targetSpecies = targetOutfit = 0;
     return true;
 }
+#endif

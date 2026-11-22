@@ -28,9 +28,13 @@ DEFAULT_PROFILES = [
 
 SIZE_RE = re.compile(
     r"^\s*(?P<text>\d+)\s+(?P<data>\d+)\s+(?P<bss>\d+)\s+"
-    r"(?P<dec>\d+)\s+(?P<hex>[0-9a-fA-F]+)\s+(?P<filename>\S+firmware\.elf)\s*$",
+    r"(?P<dec>\d+)\s+(?P<hex>[0-9a-fA-F]+)[ \t]+[^\r\n]*firmware\.elf[ \t]*$",
     re.MULTILINE,
 )
+
+STM32_FLASH_BYTES = 64 * 1024
+GD32_FLASH_BYTES = 128 * 1024
+CAPACITY_PROFILES = ("stm32_base", "gd32_full")
 
 
 @dataclass(frozen=True)
@@ -208,6 +212,19 @@ def regression_failures(
     return failures
 
 
+def check_capacity(results: list[SizeResult]) -> bool:
+    stm32, gd32 = results
+    stm32_fits = stm32.flash * 100 < STM32_FLASH_BYTES * 90
+    gd32_fits = gd32.flash <= GD32_FLASH_BYTES
+    for result, capacity, limit, fits in (
+        (stm32, STM32_FLASH_BYTES, "< 90%", stm32_fits),
+        (gd32, GD32_FLASH_BYTES, "<= 100%", gd32_fits),
+    ):
+        print(f"[{'PASS' if fits else 'FAIL'}] {result.profile}: "
+              f"{result.flash}/{capacity} bytes Flash ({result.flash / capacity:.2%}, required {limit})")
+    return stm32_fits and gd32_fits
+
+
 def top_bss_symbols(profile: str, count: int, root: Path, nm: str) -> list[str]:
     if count <= 0:
         return []
@@ -267,6 +284,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="JSON baseline to compare against.",
     )
     parser.add_argument(
+        "--check-capacity",
+        action="store_true",
+        help="Build stm32_base and gd32_full, then enforce their Flash limits.",
+    )
+    parser.add_argument(
         "--write-json",
         type=Path,
         help="Write measured sizes as a JSON baseline/report.",
@@ -299,13 +321,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=default_nm(),
         help="Path to nm executable used by --top-bss.",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.check_capacity and args.profiles:
+        parser.error("--check-capacity selects both capacity profiles; omit --profile.")
+    return args
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     root = repo_root()
-    profiles = args.profiles or DEFAULT_PROFILES
+    profiles = CAPACITY_PROFILES if args.check_capacity else (args.profiles or DEFAULT_PROFILES)
     baseline = load_baseline(args.baseline) if args.baseline else None
 
     results: list[SizeResult] = []
@@ -327,6 +352,7 @@ def main(argv: list[str]) -> int:
             for line in top_bss_symbols(result.profile, args.top_bss, root, args.nm):
                 print(f"  {line}")
 
+    capacity_ok = not args.check_capacity or check_capacity(results)
     failures = regression_failures(
         results,
         baseline,
@@ -341,7 +367,7 @@ def main(argv: list[str]) -> int:
             print(f"- {failure}")
         return 1
 
-    return 0
+    return 0 if capacity_ok else 1
 
 
 if __name__ == "__main__":

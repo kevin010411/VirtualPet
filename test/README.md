@@ -1,8 +1,8 @@
 # 韌體 host 測試
 
 使用 PowerShell 7 和可從 PATH 執行的 Windows MinGW-w64 `g++`（C++17）。測試在
-韌體根目錄的 `.pio/` 產生並執行 Windows 測試程式。各案例依序跑，第一個失敗會傳回
-非零退出碼。同一 checkout 的 runner 共用輸出路徑，請依序執行。
+韌體根目錄的 `.pio/` 產生並執行 Windows 測試程式。同一 checkout 的 runner 共用輸出路徑，請依序執行。
+執行結束後會列出通過與失敗案例。任一失敗都會傳回非零退出碼。
 
 需要 Web fixture 時，使用配對的 [Web checkout](../docs/README.md#跨端規格)。
 預設位置為韌體的 `../../web`。產生 fixture 須安裝 Web 的 Python 環境，並通過
@@ -10,10 +10,14 @@ Web 的 `scripts/preflight.ps1 -BackendOnly`。
 
 ```powershell
 .\test\run_host_tests.ps1 -List
+.\test\run_host_tests.ps1 -Core
 .\test\run_host_tests.ps1 -Case pet-behavior,stat-event-rules
 .\test\run_host_tests.ps1 -Case startup -RunnerOptions @{ EvolutionOnly = $true }
 .\test\run_host_tests.ps1 -Case shop -RunnerOptions @{ FixtureRoot = '../path/to/shop/list/card' }
 ```
+
+`-Core` 執行不需要 Web fixture 的案例，涵蓋啟動、寵物規則、數值事件規則、交易、存檔、SD 和電源。
+用 `-Case` 單獨驗證需讀取 Web 匯出資料的功能。兩款 MCU 的 Flash 門檻使用[容量驗收](../docs/development-workflow.md#驗證與尺寸)。
 
 `-RunnerOptions` 傳遞單一案例的原有 PowerShell 參數。下表列出常用入口，
 完整名稱及對應腳本以 `-List` 為準。腳本的 `param` 列出可用旗標。
@@ -33,10 +37,9 @@ Web 的 `scripts/preflight.ps1 -BackendOnly`。
 
 數值事件整合測試使用 37 筆圖鑑、13 次日結算後的退伍分支及第 3 天分發條件。
 請提供該版本的解壓 SD 套件。此案例同時啟用專案選單，以載入該套件的選單區段。
-測試所用的按鈕、數值槽位與結局素材見
-[`verifyBingbingEvents`](collection_catalog/test_main.cpp)。
+測試所用的按鈕、數值槽位與結局素材見[兵兵數值事件案例](collection_catalog/test_stat_events.cpp)。
 圖鑑、商店、抓取、專案選單與數值事件的整合執行均沿用
-[`collection_catalog` runner](collection_catalog/run_host_test.ps1)。
+[`collection_catalog` runner](collection_catalog/run_host_test.ps1)，商店、抓取與數值事件各有測試來源檔。
 
 ## 取得可重跑的 Web fixture
 

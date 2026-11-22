@@ -1,4 +1,7 @@
 #pragma once
+#include "common/AppProfile.h"
+
+#if ENABLE_COLLECTION_CATALOG || ENABLE_COLLECTION_GAME_EVENTS
 #include "display/DisplayRect.h"
 #include "resources/RuntimeTableConfig.h"
 #include "resources/detail/RuntimeTableReader.h"
@@ -53,3 +56,4 @@ private:
     bool restoreBackground(const RuntimeTableInternal::RuntimeTable &table, const uint8_t *cfg,
                            DisplayRect rect);
 };
+#endif

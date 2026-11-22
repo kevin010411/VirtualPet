@@ -129,6 +129,7 @@ static uint8_t brightnessForVoltageState(VoltageState state)
 
 static void writeBacklightPwm(uint8_t brightness)
 {
+#if defined(PLATFORM_MCU_GD32F103CBT6) && PLATFORM_MCU_GD32F103CBT6
   if (brightness == 0)
   {
     analogWrite(BoardConfig::TftBacklightPin, 0);
@@ -138,6 +139,36 @@ static void writeBacklightPwm(uint8_t brightness)
   }
 
   analogWrite(BoardConfig::TftBacklightPin, brightness);
+#else
+  static_assert(BoardConfig::TftBacklightPin == PA9, "Backlight PWM uses TIM1 channel 2 on PA9.");
+  if (brightness == 0)
+  {
+    if (RCC->APB2ENR & RCC_APB2ENR_TIM1EN)
+      TIM1->CR1 = 0;
+    pinMode(BoardConfig::TftBacklightPin, OUTPUT);
+    digitalWrite(BoardConfig::TftBacklightPin, LOW);
+    return;
+  }
+
+  const uint32_t compare = (1000U * brightness + 127) / 255;
+  if (!(TIM1->CR1 & TIM_CR1_CEN))
+  {
+    __HAL_RCC_TIM1_CLK_ENABLE();
+    uint32_t timerHz = HAL_RCC_GetPCLK2Freq();
+    if (RCC->CFGR & RCC_CFGR_PPRE2_2) timerHz *= 2;
+    TIM1->PSC = timerHz / 1000000 - 1;
+    TIM1->ARR = 999; // Arduino analogWrite uses a 1 kHz PWM period.
+    TIM1->CCMR1 = TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2PE;
+    TIM1->CCER = TIM_CCER_CC2E;
+    TIM1->BDTR = TIM_BDTR_MOE;
+    TIM1->CCR2 = compare;
+    TIM1->EGR = TIM_EGR_UG;
+    TIM1->CR1 = TIM_CR1_ARPE | TIM_CR1_CEN;
+    pin_function(PA_9, STM_PIN_DATA(STM_MODE_AF_PP, GPIO_NOPULL, AFIO_NONE));
+    return;
+  }
+  TIM1->CCR2 = compare;
+#endif
 }
 
 static void setBacklightImmediate(uint8_t brightness)

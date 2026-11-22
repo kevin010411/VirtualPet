@@ -24,11 +24,11 @@ $sources = @(
  'src/pet/RuntimeValueResolver.cpp', 'src/common/CopyResourceName.cpp',
  'src/common/FirmwareRandom.cpp', 'src/common/Crc32.cpp'
 )
-if ($Shop) { $sources += 'src/shop/ShopSession.cpp', 'src/shop/ShopData.cpp', 'src/shop/ShopView.cpp', 'src/shop/ShopConfirmation.cpp' }
+if ($Shop) { $sources += 'test/collection_catalog/test_shop.cpp', 'src/shop/ShopSession.cpp', 'src/shop/ShopData.cpp', 'src/shop/ShopView.cpp', 'src/shop/ShopConfirmation.cpp' }
 if ($ProjectMenus) { $sources += 'src/controller/ProjectMenuSession.cpp' }
-if ($StatEvents) { $sources += 'src/controller/GameStatEvents.cpp', 'src/pet/PetStatEvents.cpp' }
+if ($StatEvents) { $sources += 'test/collection_catalog/test_stat_events.cpp', 'src/controller/GameStatEvents.cpp', 'src/pet/PetStatEvents.cpp' }
 if ($CaptureGame) {
- $sources += 'src/controller/CaptureOutcome.cpp', 'src/game/CaptureAssets.cpp', 'src/game/CaptureGame.cpp', 'src/game/CaptureScene.cpp'
+ $sources += 'test/collection_catalog/test_capture.cpp', 'src/controller/CaptureOutcome.cpp', 'src/game/CaptureAssets.cpp', 'src/game/CaptureGame.cpp', 'src/game/CaptureScene.cpp'
 }
 if ($GuessGame -or $GuessClassic -or $CaptureGame) { $sources += 'src/controller/MinigameController.cpp' }
 if ($GuessGame -or $GuessClassic) { $sources += 'src/game/GuessItemGame.cpp' }
