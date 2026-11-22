@@ -1,5 +1,22 @@
 #include "audio/SequenceAudio.h"
 #if ENABLE_SEQUENCE_AUDIO
+#if FIRMWARE_MUTE
+void SequenceAudioPlayer::prepare(SdFat *, const SequenceAudioRef &) { stop(); }
+
+void SequenceAudioPlayer::start(uint32_t now)
+{
+    startedAt_ = now;
+    timelineStarted_ = true;
+}
+
+uint32_t SequenceAudioPlayer::timelineMs(uint32_t now)
+{
+    return timelineStarted_ ? now - startedAt_ : 0;
+}
+
+void SequenceAudioPlayer::stop(bool) { timelineStarted_ = false; }
+bool SequenceAudioPlayer::audible() const { return false; }
+#else
 void SequenceAudioPlayer::prepare(SdFat *sd, const SequenceAudioRef &reference)
 {
     stop();
@@ -48,4 +65,5 @@ void SequenceAudioPlayer::stop(bool fade)
     timelineStarted_ = false;
 }
 bool SequenceAudioPlayer::audible() const { return SequenceAudioPlatform::active(); }
+#endif
 #endif

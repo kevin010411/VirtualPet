@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$Silent, [switch]$Disabled, [switch]$Animation)
+param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$Silent, [switch]$Disabled, [switch]$Animation, [switch]$MutedFirmware)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -26,7 +26,8 @@ Push-Location $repoRoot
 try {
     New-Item -ItemType Directory -Force '.pio' | Out-Null
     & g++ -std=c++17 -O1 -ffunction-sections -fdata-sections '-Wl,--gc-sections' `
-        "-DENABLE_SEQUENCE_AUDIO=$([int](-not $Disabled.IsPresent))" -DENABLE_DEATH=1 -DENABLE_GUESS_GAME=0 -DENABLE_COLLECTION_CATALOG=0 `
+        "-DENABLE_SEQUENCE_AUDIO=$([int](-not $Disabled.IsPresent))" "-DFIRMWARE_MUTE=$([int]$MutedFirmware.IsPresent)" `
+        -DENABLE_DEATH=1 -DENABLE_GUESS_GAME=0 -DENABLE_COLLECTION_CATALOG=0 `
         -DENABLE_STARTUP_ANIMATION=0 -DENABLE_COMMAND_PREDICT=0 -DENABLE_COMMAND_OUTFIT=0 `
         -DENABLE_APPEARANCE_SELECTION=0 -Itest/sequence_audio -Itest/animation_scene_playback -Itest/host_stubs -Iinclude `
         @sources -o '.pio/sequence_audio_host.exe'

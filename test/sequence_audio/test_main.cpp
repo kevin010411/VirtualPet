@@ -116,7 +116,7 @@ void stop(bool fade)
 AssetResources::AssetResources(SdFat *sd)
     : sd_(sd), reader_(sd, readBuffer_, AssetData::kIoScratchBytes) {}
 
-Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef)
+Renderer::Renderer(Adafruit_ST7735 *display, AssetResources &resourceRef, SPIClass *)
     : tft(display), resources(resourceRef), state(nullptr) {}
 Renderer::~Renderer() = default;
 void Renderer::initAnimations() {}
@@ -163,6 +163,25 @@ int main(int argc, char **argv)
         controller.configureRuntimeContract(config);
         controller.setup(primary);
         tick(controller, 1000);
+#if FIRMWARE_MUTE
+        assert(drawnAnimation == primary.animationId && drawnFrame == 1);
+        tick(controller, 1100);
+        assert(drawnFrame == 2);
+        Animation items[] = {Animation::complete(primary, 2), Animation::complete(following, 1)};
+        AnimationSequence sequence(items, 2);
+        assert(controller.replace(sequence) == PlaybackResult::Accepted);
+        tick(controller, 4000);
+        tick(controller, 4200);
+        assert(drawnAnimation == primary.animationId && drawnFrame == 1);
+        tick(controller, 4400);
+        assert(drawnAnimation == following.animationId && controller.isBusy());
+        tick(controller, 4600);
+        assert(!controller.isBusy() && drawnAnimation == primary.animationId);
+        assert(preparations == 0 && starts == 0 && !amplifier);
+        assert(controller.audioError() == SequenceAudioError::None);
+        puts("[PASS] Muted firmware plays audio-tagged animation sequences on the visual clock without opening audio or starting playback");
+        return 0;
+#else
         assert(starts == 1 && amplifier && !controller.isBusy());
         const auto selectedVersionQueries = versionQueries;
         // A state-only change using the same animation keeps its current loop.
@@ -270,6 +289,7 @@ int main(int argc, char **argv)
         assert(!amplifier && !controller.isBusy());
         puts("[PASS] v21 animation BGM: shared context, loop/version rotation, per-repeat and following audio, cutoff, short EOF, effects once, bounded SD retry and cancellation");
         return 0;
+#endif
     }
     // Legacy action/idle fixtures no longer define production playback. Keep
     // silent export coverage through the same public Action execution seam.

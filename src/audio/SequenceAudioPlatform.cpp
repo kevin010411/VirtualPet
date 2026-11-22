@@ -1,5 +1,5 @@
 #include "audio/SequenceAudio.h"
-#if ENABLE_SEQUENCE_AUDIO
+#if ENABLE_SEQUENCE_AUDIO && !FIRMWARE_MUTE
 #include <Arduino.h>
 #include <SdFat.h>
 #include <HardwareTimer.h>

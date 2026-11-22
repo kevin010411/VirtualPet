@@ -101,6 +101,14 @@
 #error "ENABLE_SEQUENCE_AUDIO must be 0 or 1."
 #endif
 
+// Suppress hardware audio while retaining the project's animation timing.
+#ifndef FIRMWARE_MUTE
+#define FIRMWARE_MUTE 0
+#endif
+#if FIRMWARE_MUTE != 0 && FIRMWARE_MUTE != 1
+#error "FIRMWARE_MUTE must be 0 or 1."
+#endif
+
 #ifndef ENABLE_DEATH
 #define ENABLE_DEATH 0
 #endif

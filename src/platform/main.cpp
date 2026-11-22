@@ -13,6 +13,7 @@
 #include "display/Renderer.h"
 #include "display/FrameTiming.h"
 #include "pet/PetStorage.h"
+#include "common/AppProfile.h"
 #include "common/FirmwareRandom.h"
 #include <SdFat.h>
 
@@ -184,6 +185,11 @@ static void showSdInitError()
 }
 
 bool g_isSleeping = false;
+#if FIRMWARE_MUTE
+static void updateButtonBeep(unsigned long) {}
+static void playButtonBeep() {}
+static void playCheatStageDaysBeep() {}
+#else
 static bool g_buttonBeepActive = false;
 static unsigned long g_buttonBeepStartedAt = 0;
 
@@ -209,11 +215,6 @@ void playButtonBeep()
   g_buttonBeepActive = true;
 }
 
-static uint8_t desiredBacklight(unsigned long now)
-{
-  return powerController.brightness(now, brightnessForVoltageState(voltageMonitor.state()));
-}
-
 void playCheatStageDaysBeep()
 {
   playButtonBeep();
@@ -221,6 +222,12 @@ void playCheatStageDaysBeep()
   updateButtonBeep(millis());
   delay(65);
   playButtonBeep();
+}
+#endif
+
+static uint8_t desiredBacklight(unsigned long now)
+{
+  return powerController.brightness(now, brightnessForVoltageState(voltageMonitor.state()));
 }
 
 void noteInteraction(unsigned long now = millis())
@@ -261,7 +268,9 @@ void enterSleep()
   buttons.clearFlags();
   setBacklightImmediate(0);
   digitalWrite(BoardConfig::buzzerPin, LOW);
+#if !FIRMWARE_MUTE
   g_buttonBeepActive = false;
+#endif
 
   tft.enableDisplay(false);
   tft.enableSleep(true);
