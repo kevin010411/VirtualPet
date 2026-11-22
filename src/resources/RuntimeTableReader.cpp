@@ -14,6 +14,7 @@ constexpr uint16_t kGuessItemVersion = 30;
 constexpr uint16_t kCollectionCardsVersion = 31;
 constexpr uint16_t kCollectionUnlockOrderVersion = 32;
 constexpr uint16_t kActionDayAdvanceVersion = 33;
+constexpr uint16_t kLotteryEvolutionVersion = 34;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -114,7 +115,7 @@ bool readEnvelope(const Source &source, uint16_t &version, uint16_t &sectionCoun
     version = readU16(header + 4);
     if (version != kBaseVersion && version != kMenuVersion && version != kGuessItemVersion &&
         version != kCollectionCardsVersion && version != kCollectionUnlockOrderVersion &&
-        version != kActionDayAdvanceVersion)
+        version != kActionDayAdvanceVersion && version != kLotteryEvolutionVersion)
         return false;
 
     featureFlags = readU32(header + 12);

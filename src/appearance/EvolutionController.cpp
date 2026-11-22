@@ -22,7 +22,7 @@ EvolutionController::EvolutionController(Pet &petRef,
 {
 }
 
-EvolutionResult EvolutionController::check()
+EvolutionResult EvolutionController::check(bool pendingAction)
 {
     if (isActive())
         return EvolutionResult::InProgress;
@@ -38,17 +38,34 @@ EvolutionResult EvolutionController::check()
     if (result != EvolutionLookupResult::Found || selection.speciesSlot == pet.speciesSlot())
         return EvolutionResult::NoChange;
 
+    fromPendingAction = pendingAction;
     if (selection.evolutionMode == EvolutionAnimationMode::Disabled)
     {
-        const AppearanceChangeResult applied = host.enterSpecies(selection.speciesSlot, selection.outfitSlot);
+        const AppearanceChangeResult applied = applyTarget(selection.speciesSlot, selection.outfitSlot);
         if (applied != AppearanceChangeResult::Applied)
+        {
+            cancel();
             return applied == AppearanceChangeResult::ConfigurationFailed
                 ? EvolutionResult::FatalFailure : EvolutionResult::Failed;
+        }
         finish();
         return EvolutionResult::Completed;
     }
 
-    return begin(selection) ? EvolutionResult::InProgress : playbackFailure(resources);
+    if (begin(selection)) return EvolutionResult::InProgress;
+    cancel();
+    return playbackFailure(resources);
+}
+
+AppearanceChangeResult EvolutionController::applyTarget(uint8_t speciesSlot, uint8_t outfitSlot)
+{
+    if (!fromPendingAction) return host.enterSpecies(speciesSlot, outfitSlot);
+
+    const PersistedPetState before = pet.persistentState();
+    pet.setPendingActionOutcome(UINT8_MAX);
+    const AppearanceChangeResult result = host.enterSpecies(speciesSlot, outfitSlot);
+    if (result != AppearanceChangeResult::Applied) pet.restoreState(before);
+    return result;
 }
 
 bool EvolutionController::begin(const AppearanceSelection &selection)
@@ -108,7 +125,7 @@ EvolutionResult EvolutionController::advance()
 
     if (phase == Phase::ApplyingTarget)
     {
-        const AppearanceChangeResult applied = host.enterSpecies(targetSpeciesSlot, targetOutfitSlot);
+        const AppearanceChangeResult applied = applyTarget(targetSpeciesSlot, targetOutfitSlot);
         if (applied != AppearanceChangeResult::Applied)
         {
             cancel();
@@ -145,6 +162,7 @@ void EvolutionController::finish()
 void EvolutionController::cancel()
 {
     phase = Phase::None;
+    fromPendingAction = false;
     targetSpeciesSlot = 0;
     targetOutfitSlot = 0;
     targetAnimation = {};

@@ -1252,7 +1252,7 @@ void testUserActionPlaybackSequence()
     assert(data.displayedAnimation.animationId == 5 && pet.customStat(0) == 30);
 }
 
-void testRandomOutcomeEvolutionResumesSelectedResult()
+void testRandomOutcomeEvolutionResumesSelectedResult(bool ordinaryEvolution)
 {
     Scenario data;
     scenario = &data;
@@ -1267,13 +1267,16 @@ void testRandomOutcomeEvolutionResumesSelectedResult()
     config.actionCount = 1;
     config.actions[0].active = true;
     config.actions[0].mode = PetBehaviorActionMode::RandomOutcome;
+    config.actions[0].evolutionAfterPlayback = ordinaryEvolution;
     config.actions[0].outcomeCount = 2;
     config.actionOutcomeCount = 2;
     config.actionEffectCount = 2;
     for (uint8_t index = 0; index < 2; ++index)
     {
         config.actionOutcomes[index] = {
-            {{1, 1, static_cast<uint16_t>(index + 1)}, 2, 1, static_cast<uint8_t>(index + 2), 1},
+            {{1, 1, static_cast<uint16_t>(index + 1)}, 2, 1,
+             static_cast<uint8_t>(ordinaryEvolution ? 0 : index + 2),
+             static_cast<uint8_t>(ordinaryEvolution ? 0 : 1)},
             index, 1, 1,
         };
         config.actionEffects[index] = {0, PetBehaviorEffectOperation::Change, index + 1};
@@ -1303,8 +1306,30 @@ void testRandomOutcomeEvolutionResumesSelectedResult()
         resumedAnimations.tick(tick);
         assert(data.displayedAnimation.animationId == selection + 1);
     }
-    assert(resumed.continuePendingAction(species, outfit) == PendingActionProgress::Evolve);
-    assert(species == selection + 2 && outfit == 1 && restored.customStat(0) == selection + 1);
+    const auto result = resumed.continuePendingAction(species, outfit);
+    assert(restored.customStat(0) == selection + 1);
+    if (ordinaryEvolution)
+    {
+        assert(result == PendingActionProgress::CheckEvolution && species == 0 && outfit == 0);
+        assert(restored.pendingActionOutcome() == selection);
+        restored.setSpeciesSlot(1);
+        FakeAppearanceLoader loader;
+        EvolutionTestHost host;
+        EvolutionController evolution(restored, resumedAnimations, loader, resources, host);
+        data.evolutionResult = EvolutionLookupResult::Found;
+        data.evolutionSpecies = selection + 2;
+        data.evolutionMode = EvolutionAnimationMode::Disabled;
+        host.result = AppearanceChangeResult::SaveFailed;
+        assert(evolution.check(true) == EvolutionResult::Failed);
+        assert(restored.pendingActionOutcome() == selection);
+        host.result = AppearanceChangeResult::Applied;
+        assert(evolution.check(true) == EvolutionResult::Completed);
+        assert(restored.pendingActionOutcome() == UINT8_MAX);
+    }
+    else
+    {
+        assert(result == PendingActionProgress::Evolve && species == selection + 2 && outfit == 1);
+    }
 }
 
 void testDeferredSpeciesActionSettlesOnce()
@@ -3406,7 +3431,8 @@ int main(int argc, char **argv)
     {
         testEvolutionResults();
         testExportedEvolutionPlaybackCounts();
-        testRandomOutcomeEvolutionResumesSelectedResult();
+        testRandomOutcomeEvolutionResumesSelectedResult(false);
+        testRandomOutcomeEvolutionResumesSelectedResult(true);
         testDeferredSpeciesActionSettlesOnce();
         return 0;
     }

@@ -223,7 +223,7 @@ private:
     void handleSystemCommandRequest(const CommandResult &result);
     // Returns clock consumption; blocked or fatal work consumes no backlog.
     uint32_t settlePetDays(uint32_t dueDays);
-    EvolutionResult handleEvolution();
+    EvolutionResult handleEvolution(bool fromPendingAction = false);
     void handleEvolutionResult(EvolutionResult result);
     // State-only: prepare runs before display initialization.
     void enterFatalState();

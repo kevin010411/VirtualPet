@@ -24,7 +24,7 @@ enum class PetBehaviorActionResult : uint8_t
     AwaitingCompletion,
 };
 
-enum class PendingActionProgress : uint8_t { Playing, Evolve, Settled, DayAdvanced, Failed };
+enum class PendingActionProgress : uint8_t { Playing, Evolve, CheckEvolution, Settled, DayAdvanced, Failed };
 
 class PetBehaviorRuntime
 {

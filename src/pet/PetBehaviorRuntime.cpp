@@ -222,7 +222,8 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
             readActionEffect, &effectSource, &selectedOutcome))
         return effectSource.failed ? PetBehaviorActionResult::ResourceReadFailed : PetBehaviorActionResult::Rejected;
     const auto &action = config.actions[actionSlot];
-    if (action.effectsAfterPlayback || playback.evolutionSpecies)
+    const bool evolvesAfterPlayback = playback.evolutionSpecies || action.evolutionAfterPlayback;
+    if (action.effectsAfterPlayback || evolvesAfterPlayback)
         pet.setPendingActionOutcome(selectedOutcome);
     if (action.effectsAfterPlayback)
     {
@@ -241,7 +242,7 @@ PetBehaviorActionResult PetBehaviorRuntime::executeAction(uint8_t actionSlot)
     if (pet.isDead()) return PetBehaviorActionResult::Applied;
 
     const PlaybackResult result = playAction(action, playback);
-    pendingPlaybackStarted = playback.evolutionSpecies && result == PlaybackResult::Accepted;
+    pendingPlaybackStarted = evolvesAfterPlayback && result == PlaybackResult::Accepted;
     return result == PlaybackResult::AnimationMissing
            ? PetBehaviorActionResult::AppliedAnimationMissing : PetBehaviorActionResult::Applied;
 }
@@ -328,7 +329,7 @@ PendingActionProgress PetBehaviorRuntime::continuePendingAction(uint8_t &species
         if (index < action.firstOutcome || index >= action.firstOutcome + action.outcomeCount)
             continue;
         const auto &playback = config.actionOutcomes[index].animationPlayback;
-        if (!playback.evolutionSpecies && !action.effectsAfterPlayback)
+        if (!playback.evolutionSpecies && !action.effectsAfterPlayback && !action.evolutionAfterPlayback)
             break;
         if (pendingPlaybackStarted && animations.hasFinitePlayback())
             return PendingActionProgress::Playing;
@@ -368,6 +369,8 @@ PendingActionProgress PetBehaviorRuntime::continuePendingAction(uint8_t &species
             return PendingActionProgress::Playing;
         }
         pendingPlaybackStarted = false;
+        if (action.evolutionAfterPlayback)
+            return PendingActionProgress::CheckEvolution;
         species = playback.evolutionSpecies;
         outfit = playback.evolutionOutfit;
         return PendingActionProgress::Evolve;

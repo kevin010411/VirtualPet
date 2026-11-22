@@ -204,6 +204,28 @@ bool Game::continuePendingAction()
         enterRuntimeFatal();
         return true;
     }
+    if (progress == PendingActionProgress::CheckEvolution)
+    {
+        const EvolutionResult result = handleEvolution(true);
+        if (result == EvolutionResult::NoChange)
+        {
+            const uint8_t pendingOutcome = pet.pendingActionOutcome();
+            pet.setPendingActionOutcome(UINT8_MAX);
+            if (petSaves.saveCollectionProgress(true, true) != PetSaveResult::Persisted)
+            {
+                pet.setPendingActionOutcome(pendingOutcome);
+                enterRuntimeFatal();
+                return true;
+            }
+            refreshBaseAnimation();
+        }
+        if (!flow.is(AppStage::FatalError))
+        {
+            requestFullRedraw();
+            synchronizePlaybackClock();
+        }
+        return true;
+    }
     if (progress == PendingActionProgress::Settled || progress == PendingActionProgress::DayAdvanced)
     {
         if (enterDeathIfNeeded(true)) return true;
@@ -608,10 +630,13 @@ uint32_t Game::settlePetDays(uint32_t dueDays)
     return days;
 }
 
-EvolutionResult Game::handleEvolution()
+EvolutionResult Game::handleEvolution(bool fromPendingAction)
 {
     if (enterDeathIfNeeded()) return EvolutionResult::NoChange;
-    const EvolutionResult result = evolution->check();
+#if ENABLE_STAT_EVENTS
+    if (fromPendingAction && isRoundComplete()) return EvolutionResult::NoChange;
+#endif
+    const EvolutionResult result = evolution->check(fromPendingAction);
     handleEvolutionResult(result);
     return result;
 }
@@ -628,7 +653,8 @@ void Game::handleEvolutionResult(EvolutionResult result)
 #endif
     if (result == EvolutionResult::InProgress) flow.beginEvolution();
     else flow.endEvolution();
-    if (result == EvolutionResult::FatalFailure)
+    if (result == EvolutionResult::FatalFailure ||
+        (result == EvolutionResult::Failed && pet.pendingActionOutcome() != UINT8_MAX))
         enterRuntimeFatal();
     else if (result == EvolutionResult::Failed)
         renderer.showResourceError();

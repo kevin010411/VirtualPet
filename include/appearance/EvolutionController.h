@@ -38,7 +38,7 @@ public:
                         AppearanceLoader &appearanceLoader, AssetResources &resources,
                         EvolutionHost &host);
 
-    EvolutionResult check();
+    EvolutionResult check(bool fromPendingAction = false);
     EvolutionResult update(PlaybackResult result);
     // Forget an interrupted Evolution. Playback cancellation belongs to its owner.
     void cancel();
@@ -63,8 +63,10 @@ private:
     uint8_t targetOutfitSlot = 0;
     AssetData::AnimationRef targetAnimation = {};
     uint8_t targetPlaybackCount = 0;
+    bool fromPendingAction = false;
 
     bool begin(const AppearanceSelection &selection);
+    AppearanceChangeResult applyTarget(uint8_t speciesSlot, uint8_t outfitSlot);
     EvolutionResult advance();
     void finish();
 };
