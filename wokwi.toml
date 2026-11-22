@@ -1,4 +1,0 @@
-[wokwi]
-version = 1
-firmware = './.pio/build/stm32/firmware.hex'
-elf = './.pio/build/stm32/firmware.elf'
