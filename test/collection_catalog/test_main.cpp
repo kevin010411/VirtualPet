@@ -877,6 +877,45 @@ static void verifyBingbingEvents(const std::filesystem::path &root)
 }
 #endif
 
+static void verifyCards(Game &game, Pet &pet, Adafruit_ST7735 &display)
+{
+    const auto pixel = [&display]() { return display.screen[50 * 128 + 64]; };
+    tick(game, 1000);
+    game.OnConfirmKey();
+    assert(game.isCollectionCatalogActive() && !pet.isCollectionOwned(0));
+    assert(pixel() == 0x001f);
+    const auto locked = display.screen;
+    game.OnRightKey();
+    assert(display.screen != locked);
+    game.OnRightKey();
+    assert(pixel() == 0);
+    game.OnRightKey();
+    assert(display.screen == locked);
+    tick(game, 101000);
+    game.OnLeftKey();
+    game.OnConfirmKey();
+    assert(!game.isCollectionCatalogActive());
+    tick(game, 102000);
+    tick(game, 104000);
+    assert(pet.isCollectionOwned(0) && pet.isCollectionOwned(1));
+    game.OnConfirmKey();
+    assert(game.isCollectionCatalogActive() && pixel() == 0xf800);
+    const auto owned = display.screen;
+    game.OnConfirmKey();
+    game.redrawAllNow();
+    assert(pixel() == 0xf800 && display.screen[120 * 128 + 64] == 0x07e0);
+    game.OnConfirmKey();
+    assert(game.isCollectionCatalogActive() && display.screen == owned);
+    game.OnRightKey();
+    const auto replayCard = display.screen;
+    game.OnConfirmKey();
+    tick(game, 104001);
+    assert(display.screen != replayCard);
+    tick(game, 104250);
+    assert(game.isCollectionCatalogActive() && display.screen == replayCard);
+    puts("[PASS] Real collection card export: locked/owned pixels, wrap, story, replay and redraw");
+}
+
 int main(int argc, char **argv)
 {
 #if ENABLE_CAPTURE_GAME
@@ -1263,6 +1302,11 @@ int main(int argc, char **argv)
         return 0;
     }
     assert(!pet.isCollectionOwned(0));
+    if (argc == 3 && strcmp(argv[2], "cards") == 0)
+    {
+        verifyCards(game, pet, display);
+        return 0;
+    }
     if (argc == 3 && (strcmp(argv[2], "grid64") == 0 || strcmp(argv[2], "pages64") == 0))
     {
         verify64Grid(game, pet, display, strcmp(argv[2], "pages64") == 0);

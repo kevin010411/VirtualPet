@@ -11,6 +11,7 @@ constexpr uint8_t kMagic[4] = {'V', 'P', 'R', 'T'};
 constexpr uint16_t kBaseVersion = 28;
 constexpr uint16_t kMenuVersion = 29;
 constexpr uint16_t kGuessItemVersion = 30;
+constexpr uint16_t kCollectionCardsVersion = 31;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -44,6 +45,7 @@ uint16_t recordSizeFor(uint16_t type)
     case CollectionEventRules: return 16;
     case CollectionRoundRequirements: return 8;
     case CollectionReplays: return 6;
+    case CollectionCards: return 1;
     case TrainingCourses: return 20;
     case Profile: return 38;
     case Persistence: return 16;
@@ -107,7 +109,8 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         readU16(header + 26) != kSectionEntrySize)
         return false;
     const uint16_t version = readU16(header + 4);
-    if (version != kBaseVersion && version != kMenuVersion && version != kGuessItemVersion)
+    if (version != kBaseVersion && version != kMenuVersion && version != kGuessItemVersion &&
+        version != kCollectionCardsVersion)
         return false;
 
     featureFlags = readU32(header + 12);

@@ -66,6 +66,7 @@ enum SectionType : uint16_t
     CollectionRoundRequirements = 85,
     CollectionReplays = 86,
     TrainingCourses = 87,
+    CollectionCards = 88,
     Profile = 1,
     Persistence = 2,
     AssetRefs = 3,

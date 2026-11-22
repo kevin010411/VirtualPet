@@ -37,6 +37,7 @@ private:
     uint8_t page = 0;
     bool opened = false;
     bool detail = false;
+    bool cards = false;
     bool backgroundBands = false;
     uint8_t detailPage = 0;
     uint8_t targetSpecies = 0;

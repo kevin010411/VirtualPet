@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock, [switch]$ActionCounts, [switch]$Grid64, [switch]$Pages64, [switch]$Activation, [switch]$Recovery, [switch]$ActivationEvolution, [Alias('InvalidContracts')][switch]$CapacityLimits, [switch]$GuessGame, [switch]$GuessClassic, [switch]$Shop, [switch]$TransactionsOnly, [switch]$ManualDay, [switch]$ProjectMenus, [switch]$StatEvents, [switch]$CaptureGame)
+param([Parameter(Mandatory=$true)][string]$FixtureRoot, [switch]$UseRtcClock, [switch]$ActionCounts, [switch]$Grid64, [switch]$Pages64, [switch]$Activation, [switch]$Recovery, [switch]$ActivationEvolution, [Alias('InvalidContracts')][switch]$CapacityLimits, [switch]$GuessGame, [switch]$GuessClassic, [switch]$Shop, [switch]$TransactionsOnly, [switch]$ManualDay, [switch]$ProjectMenus, [switch]$StatEvents, [switch]$CaptureGame, [switch]$Cards)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($GuessClassic -and -not $UseRtcClock) { throw 'GuessClassic requires the production RTC clock.' }
@@ -38,7 +38,7 @@ Push-Location $repoRoot
 try {
  New-Item -ItemType Directory -Force .pio | Out-Null
  & g++ -std=c++17 -O1 -ffunction-sections -fdata-sections '-Wl,--gc-sections' `
-  "-DCOLLECTION_USE_RTC=$([int]$UseRtcClock.IsPresent)" `
+  "-DCOLLECTION_USE_RTC=$([int]($UseRtcClock.IsPresent -or $Cards.IsPresent))" `
   "-DENABLE_STAT_EVENTS=$([int]$StatEvents.IsPresent)" `
   "-DENABLE_CAPTURE_GAME=$([int]$CaptureGame.IsPresent)" `
   "-DENABLE_COLLECTION_GAME_EVENTS=$([int]$CaptureGame.IsPresent)" `
@@ -48,6 +48,6 @@ try {
   "-DENABLE_APPEARANCE_SELECTION=$([int]($Activation.IsPresent -or $ActivationEvolution.IsPresent))" "-DENABLE_COMMAND_OUTFIT=$([int]($Activation.IsPresent -or $ActivationEvolution.IsPresent))" -DENABLE_COMMAND_PREDICT=0 `
   -Itest/collection_catalog -Itest/host_stubs -Iinclude @sources $(if ($Activation -or $ActivationEvolution) { 'src/appearance/AppearanceSelectionController.cpp' }) -o $outputPath
  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
- & $outputPath ([IO.Path]::GetFullPath($FixtureRoot)) $(if ($CaptureGame) { 'capture' } elseif ($StatEvents) { 'stat-events' } elseif ($TransactionsOnly) { 'transactions' } elseif ($ManualDay) { 'manual-day' } elseif ($Shop) { 'shop' } elseif ($ProjectMenus) { 'project-menus' } elseif ($GuessClassic) { 'guess-classic' } elseif ($GuessGame) { 'guess' } elseif ($CapacityLimits) { 'capacity' } elseif ($Recovery) { 'recovery' } elseif ($ActivationEvolution) { 'activation-evolution' } elseif ($Activation) { 'activation' } elseif ($ActionCounts) { 'counts' } elseif ($Pages64) { 'pages64' } elseif ($Grid64) { 'grid64' } else { 'single' })
+ & $outputPath ([IO.Path]::GetFullPath($FixtureRoot)) $(if ($Cards) { 'cards' } elseif ($CaptureGame) { 'capture' } elseif ($StatEvents) { 'stat-events' } elseif ($TransactionsOnly) { 'transactions' } elseif ($ManualDay) { 'manual-day' } elseif ($Shop) { 'shop' } elseif ($ProjectMenus) { 'project-menus' } elseif ($GuessClassic) { 'guess-classic' } elseif ($GuessGame) { 'guess' } elseif ($CapacityLimits) { 'capacity' } elseif ($Recovery) { 'recovery' } elseif ($ActivationEvolution) { 'activation-evolution' } elseif ($Activation) { 'activation' } elseif ($ActionCounts) { 'counts' } elseif ($Pages64) { 'pages64' } elseif ($Grid64) { 'grid64' } else { 'single' })
  exit $LASTEXITCODE
 } finally { Pop-Location }

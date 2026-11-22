@@ -334,11 +334,12 @@ bool CollectionCatalog::start()
         return false;
     backgroundBands = chrome.frameCount > 3;
     count = static_cast<uint8_t>(readU16(cfg + 16));
+    cards = file.table().find(CollectionCards) != nullptr;
     opened = true;
     targetSpecies = targetOutfit = 0;
     detail = false;
     detailPage = 0;
-    focus = 0;
+    focus = cards ? 1 : 0;
     page = 0;
     return redraw();
 }
@@ -392,6 +393,13 @@ bool CollectionCatalog::restoreBackground(const RuntimeTable &table, const uint8
 
 bool CollectionCatalog::restoreDetail(const RuntimeTable &table)
 {
+    if (cards)
+    {
+        uint8_t item[36];
+        const DisplayRect band{0, 112, 128, 48};
+        return readItem(table, focus - 1, item) &&
+            show(renderer, table, item + 14, 0, 0, 128, 160, &band);
+    }
     uint8_t cfg[24];
     if (!header(table, cfg)) return false;
     const uint8_t last = lastCell();
@@ -412,6 +420,19 @@ bool CollectionCatalog::redraw()
     RuntimeTableFile file;
     uint8_t cfg[24];
     if (!file.open(resources.sdCard(), config.assetManifest) || !header(file.table(), cfg)) return false;
+    if (cards)
+    {
+        if (focus == 0)
+        {
+            const uint8_t back[] = {cfg[4], cfg[5], 8, 0};
+            return show(renderer, file.table(), back, 0, 0, 128, 160);
+        }
+        const uint8_t slot = focus - 1;
+        uint8_t item[36];
+        return readItem(file.table(), slot, item) &&
+            show(renderer, file.table(), item + (pet.isCollectionOwned(slot) ? 14 : 6), 0, 0, 128, 160) &&
+            (!detail || drawDetail(file.table(), item));
+    }
     if (!show(renderer, file.table(), cfg + 4, 0, 0, 128, 160)) return false;
     for (uint8_t cell = 0; cell <= lastCell(); ++cell)
         if (!drawCell(file.table(), cell, cell == focus)) return false;
@@ -427,6 +448,12 @@ bool CollectionCatalog::redraw()
 bool CollectionCatalog::move(bool right)
 {
     if (detail) return true;
+    if (cards)
+    {
+        if (right) focus = focus == count ? 0 : focus + 1;
+        else focus = focus == 0 ? count : focus - 1;
+        return redraw();
+    }
     const uint8_t previous = focus;
     const uint8_t previousPage = page;
     const uint8_t last = lastCell();
