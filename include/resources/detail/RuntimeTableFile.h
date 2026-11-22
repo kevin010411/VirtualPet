@@ -5,8 +5,8 @@
 
 namespace RuntimeTableInternal
 {
-// One fresh, validated snapshot per load/query. Owns the file and Source context;
-// destroying the snapshot closes the file, including failed opens/decodes.
+// Owns the file and Source context for a load/query. The copied directory
+// remains valid even if another query opens a different bundle.
 class RuntimeTableFile
 {
 public:

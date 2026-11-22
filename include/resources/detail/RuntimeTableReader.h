@@ -67,6 +67,7 @@ enum SectionType : uint16_t
     CollectionReplays = 86,
     TrainingCourses = 87,
     CollectionCards = 88,
+    CollectionUnlockOrder = 89,
     Profile = 1,
     Persistence = 2,
     AssetRefs = 3,
@@ -108,11 +109,12 @@ enum SectionType : uint16_t
 
 struct Section
 {
-    uint16_t type;
-    uint16_t count;
-    uint16_t recordSize;
     uint32_t offset;
+    uint16_t count;
+    uint8_t recordSize;
+    uint8_t type;
 };
+static_assert(sizeof(Section) == 8, "Keep the runtime directory compact");
 
 struct ActiveAssetScope
 {
@@ -129,16 +131,21 @@ struct Source
     uint32_t size;
 };
 
-struct RuntimeTable
+struct RuntimeTableDirectory
 {
-    Source source;
     Section sections[kMaxSections];
     uint16_t sectionCount;
+    uint16_t version;
     uint32_t featureFlags;
     uint32_t schemaFingerprint;
     AssetData::BundleId bundleId;
 
     const Section *find(SectionType type) const;
+};
+
+struct RuntimeTable : RuntimeTableDirectory
+{
+    Source source;
 };
 
 inline uint16_t readU16(const uint8_t *bytes)
@@ -173,7 +180,8 @@ inline int64_t readI64(const uint8_t *bytes)
 bool readRuntimeManifest(const Source &source, AssetData::RuntimeManifest &manifest);
 bool readRuntimeTable(const Source &source,
                       const AssetData::RuntimeManifest *expectedManifest,
-                      RuntimeTable &table);
+                      RuntimeTable &table,
+                      const RuntimeTableDirectory *cached = nullptr);
 
 // record must hold the validated section's recordSize bytes.
 bool readRecord(const Source &source, const Section &section,

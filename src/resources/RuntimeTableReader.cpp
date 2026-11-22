@@ -12,6 +12,7 @@ constexpr uint16_t kBaseVersion = 28;
 constexpr uint16_t kMenuVersion = 29;
 constexpr uint16_t kGuessItemVersion = 30;
 constexpr uint16_t kCollectionCardsVersion = 31;
+constexpr uint16_t kCollectionUnlockOrderVersion = 32;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -46,6 +47,7 @@ uint16_t recordSizeFor(uint16_t type)
     case CollectionRoundRequirements: return 8;
     case CollectionReplays: return 6;
     case CollectionCards: return 1;
+    case CollectionUnlockOrder: return 1;
     case TrainingCourses: return 20;
     case Profile: return 38;
     case Persistence: return 16;
@@ -96,7 +98,7 @@ const Section *findSection(const Section *sections, uint16_t count, uint16_t typ
     return nullptr;
 }
 
-bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCount,
+bool readEnvelope(const Source &source, uint16_t &version, uint16_t &sectionCount,
                   uint32_t &featureFlags, uint32_t &schemaFingerprint,
                   AssetData::BundleId &bundleId, uint32_t &fileCrc32)
 {
@@ -108,9 +110,9 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
         readU32(header + 8) != 0x01020304UL || readU32(header + 16) != source.size ||
         readU16(header + 26) != kSectionEntrySize)
         return false;
-    const uint16_t version = readU16(header + 4);
+    version = readU16(header + 4);
     if (version != kBaseVersion && version != kMenuVersion && version != kGuessItemVersion &&
-        version != kCollectionCardsVersion)
+        version != kCollectionCardsVersion && version != kCollectionUnlockOrderVersion)
         return false;
 
     featureFlags = readU32(header + 12);
@@ -140,13 +142,12 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
     sectionCount = readU16(header + 24);
     if (sectionCount == 0 || sectionCount > kMaxSections)
         return false;
-    const uint32_t directoryBytes = static_cast<uint32_t>(sectionCount) * kSectionEntrySize;
-    uint32_t directoryEnd = 0;
-    if (!addU32(kHeaderSize, directoryBytes, directoryEnd) || directoryEnd > source.size)
-        return false;
-    if (sections == nullptr)
-        return true;
+    return kHeaderSize + static_cast<uint32_t>(sectionCount) * kSectionEntrySize <= source.size;
+}
 
+bool readDirectory(const Source &source, Section *sections, uint16_t sectionCount)
+{
+    const uint32_t directoryEnd = kHeaderSize + static_cast<uint32_t>(sectionCount) * kSectionEntrySize;
     for (uint16_t index = 0; index < sectionCount; ++index)
     {
         uint8_t entry[kSectionEntrySize] = {};
@@ -155,27 +156,29 @@ bool readEnvelope(const Source &source, Section *sections, uint16_t &sectionCoun
                            entry, sizeof(entry)))
             return false;
         Section &section = sections[index];
-        section.type = readU16(entry);
+        const uint16_t type = readU16(entry);
         section.offset = readU32(entry + 4);
         section.count = readU16(entry + 8);
-        section.recordSize = readU16(entry + 10);
+        const uint16_t recordSize = readU16(entry + 10);
         const uint32_t length = readU32(entry + 12);
-        const uint16_t expectedRecordSize = recordSizeFor(section.type);
+        const uint16_t expectedRecordSize = recordSizeFor(type);
         const uint32_t expectedLength =
-            static_cast<uint32_t>(section.count) * section.recordSize;
+            static_cast<uint32_t>(section.count) * recordSize;
         uint32_t end = 0;
         if (expectedRecordSize == 0 ||
-            section.recordSize != expectedRecordSize || length != expectedLength ||
+            recordSize != expectedRecordSize || length != expectedLength ||
             section.offset < directoryEnd ||
             !addU32(section.offset, length, end) || end > source.size)
             return false;
+        section.type = static_cast<uint8_t>(type);
+        section.recordSize = static_cast<uint8_t>(recordSize);
     }
     return true;
 }
 
 } // namespace
 
-const Section *RuntimeTable::find(SectionType type) const
+const Section *RuntimeTableDirectory::find(SectionType type) const
 {
     return findSection(sections, sectionCount, type);
 }
@@ -192,31 +195,40 @@ bool readRecord(const Source &source, const Section &section,
 
 bool readRuntimeTable(const Source &source,
                       const AssetData::RuntimeManifest *expectedManifest,
-                      RuntimeTable &table)
+                      RuntimeTable &table,
+                      const RuntimeTableDirectory *cached)
 {
     if (expectedManifest == nullptr || expectedManifest->fileSize == 0)
         return false;
-    table = {};
     table.source = source;
     uint32_t fileCrc32 = 0;
-    if (!readEnvelope(source, table.sections, table.sectionCount,
+    if (!readEnvelope(source, table.version, table.sectionCount,
                        table.featureFlags, table.schemaFingerprint, table.bundleId, fileCrc32) ||
-        !AssetData::sameBundleId(table.bundleId, expectedManifest->bundleId))
+        !AssetData::sameBundleId(table.bundleId, expectedManifest->bundleId) ||
+        expectedManifest->fileSize != source.size ||
+        expectedManifest->schemaFingerprint != table.schemaFingerprint ||
+        expectedManifest->fileCrc32 != fileCrc32)
         return false;
-    return expectedManifest->fileSize == source.size &&
-           expectedManifest->schemaFingerprint == table.schemaFingerprint &&
-           expectedManifest->fileCrc32 == fileCrc32;
+    if (cached != nullptr && cached->version == table.version && cached->sectionCount == table.sectionCount &&
+        cached->featureFlags == table.featureFlags)
+    {
+        const uint16_t count = table.sectionCount;
+        memcpy(table.sections, cached->sections, count * sizeof(Section));
+        return true;
+    }
+    return readDirectory(source, table.sections, table.sectionCount);
 }
 
 bool readRuntimeManifest(const Source &source, AssetData::RuntimeManifest &manifest)
 {
     manifest = {};
+    uint16_t version = 0;
     uint16_t sectionCount = 0;
     uint32_t featureFlags = 0;
     uint32_t schemaFingerprint = 0;
     uint32_t fileCrc32 = 0;
     AssetData::BundleId bundleId = {};
-    if (!readEnvelope(source, nullptr, sectionCount, featureFlags,
+    if (!readEnvelope(source, version, sectionCount, featureFlags,
                       schemaFingerprint, bundleId, fileCrc32))
         return false;
     manifest.bundleId = bundleId;

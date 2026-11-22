@@ -141,13 +141,22 @@ __attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const PetBehav
     const PersistedPetState &state = pet.persistentState();
     const int32_t identities[] = {pet.speciesSlot(), pet.speciesSlot() * 256 + pet.outfitSlot()};
 #if ENABLE_COLLECTION_GAME_EVENTS
+    const Section *order = table.find(CollectionUnlockOrder);
+    // Catalog loading already bounds item count to the 64 ownership slots.
+    uint8_t orderedSlots[64];
+    if (order && !table.source.readAt(table.source.context, order->offset, orderedSlots, items->count))
+        return false;
     bool acquired;
     do
     {
         acquired = false;
 #endif
-        for (uint16_t index = 0; index < items->count; ++index)
+        for (uint16_t position = 0; position < items->count; ++position)
         {
+            uint16_t index = position;
+#if ENABLE_COLLECTION_GAME_EVENTS
+            if (order) index = orderedSlots[position];
+#endif
             if (pet.isCollectionOwned(index)) continue;
 #if ENABLE_COLLECTION_GAME_EVENTS
             if (config.captureOnlyMask & (uint64_t(1) << index)) continue;
@@ -188,7 +197,7 @@ __attribute__((noinline)) bool updateCollectionCatalog(SdFat *sd, const PetBehav
             }
         }
 #if ENABLE_COLLECTION_GAME_EVENTS
-    } while (acquired && (table.featureFlags & kCollectionGameEventsFeature) != 0);
+    } while (order == nullptr && acquired && (table.featureFlags & kCollectionGameEventsFeature) != 0);
 #endif
     const uint8_t previousMask = pet.outfitUnlockMask();
     if (!applyGrants(table, pet)) return false;

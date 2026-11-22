@@ -18,6 +18,8 @@ constexpr uint8_t FS_ATTRIB_READ_ONLY = 0x01;
 struct HostFileEntry
 {
     std::vector<uint8_t> bytes;
+    std::map<size_t, size_t> reads;
+    size_t unreadableOffset = static_cast<size_t>(-1);
     bool readOnly = false;
 };
 
@@ -35,6 +37,9 @@ public:
     int read(void *destination, size_t count)
     {
         if (entry_ == nullptr || position_ + count > entry_->bytes.size())
+            return -1;
+        ++entry_->reads[position_];
+        if (position_ <= entry_->unreadableOffset && entry_->unreadableOffset - position_ < count)
             return -1;
         uint8_t *output = static_cast<uint8_t *>(destination);
         for (size_t index = 0; index < count; ++index)
@@ -108,6 +113,7 @@ public:
             return File();
         if ((flags & O_CREAT) != 0)
         {
+            ++writeAttempts_;
             if (failOpen_)
                 return File();
             auto entry = found == files_.end()
@@ -175,10 +181,19 @@ public:
         auto entry = files_.at(path);
         entry->bytes.at(offset) ^= 0x80;
     }
+    void failReadAt(const char *path, size_t offset) { files_.at(path)->unreadableOffset = offset; }
+    size_t readsAt(const char *path, size_t offset) const
+    {
+        const auto &reads = files_.at(path)->reads;
+        const auto found = reads.find(offset);
+        return found == reads.end() ? 0 : found->second;
+    }
+    size_t writeAttempts() const { return writeAttempts_; }
 
 private:
     std::map<std::string, std::shared_ptr<HostFileEntry>> files_;
     bool failOpen_ = false;
+    size_t writeAttempts_ = 0;
     size_t writeLimit_ = static_cast<size_t>(-1);
     size_t successfulWritesBeforeLimit_ = 0;
     bool syncOk_ = true;

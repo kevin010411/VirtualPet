@@ -18,6 +18,8 @@
 #include "pet/PetBehaviorRuntime.h"
 #include "animation/AnimationController.h"
 #include "resources/RuntimeContractLoader.h"
+#include "resources/RuntimeTableBehavior.h"
+#include "resources/detail/RuntimeTableFile.h"
 #include "common/FirmwareRandom.h"
 #include "collection/CollectionCatalog.h"
 #include "appearance/RuntimeTableAppearance.h"
@@ -47,6 +49,49 @@ static void mountBundle(SdFat &sd, const std::filesystem::path &root)
         const auto path = "/" + std::filesystem::relative(entry.path(), root).generic_string();
         sd.seedReadOnly(path.c_str(), bytes);
     }
+}
+
+static void verifyRuntimeDirectoryCache(SdFat &sd)
+{
+    using namespace RuntimeTableInternal;
+    constexpr char path[] = "/runtime.bin";
+    constexpr size_t firstEntry = 64, readable = static_cast<size_t>(-1);
+    AssetData::RuntimeManifest manifest = {};
+    assert(loadRuntimeManifest(&sd, manifest));
+    RuntimeTableFile first;
+    assert(first.open(&sd, manifest));
+    const auto start = sd.readsAt(path, firstEntry);
+    const auto *stats = first.table().find(PetStats);
+    assert(stats && stats->count);
+    const auto headerReads = sd.readsAt(path, 0);
+    RuntimeTableFile cached;
+    assert(cached.open(&sd, manifest));
+    assert(sd.readsAt(path, 0) == headerReads + 1 && sd.readsAt(path, firstEntry) == start);
+
+    uint8_t stat[24];
+    const auto &table = cached.table();
+    sd.failReadAt(path, stats->offset);
+    assert(!readRecord(table.source, *stats, 0, stat));
+    sd.failReadAt(path, firstEntry);
+    RuntimeTableFile invalidated;
+    assert(!invalidated.open(&sd, manifest) && sd.readsAt(path, firstEntry) == start + 1);
+    sd.failReadAt(path, readable);
+    RuntimeTableFile retry;
+    assert(retry.open(&sd, manifest) && sd.readsAt(path, firstEntry) == start + 2);
+
+    // A different directory on the same card, with a same-size envelope.
+    sd.corrupt(path, 28); // Bundle identity
+    RuntimeTableFile replaced;
+    assert(!replaced.open(&sd, manifest));
+    AssetData::RuntimeManifest replacement = {};
+    assert(loadRuntimeManifest(&sd, replacement));
+    RuntimeTableFile switched;
+    assert(switched.open(&sd, replacement) && sd.readsAt(path, firstEntry) == start + 3);
+    assert(AssetData::sameBundleId(first.table().bundleId, manifest.bundleId));
+    sd.corrupt(path, 28);
+    RuntimeTableFile restored;
+    assert(restored.open(&sd, manifest) && sd.readsAt(path, firstEntry) == start + 4);
+    puts("[PASS] Runtime directory cache: reads only the header on hit; retries after read failure and refreshes on bundle switch");
 }
 
 #if ENABLE_CAPTURE_GAME
@@ -149,6 +194,14 @@ static void verifyCapture(const std::filesystem::path &root, bool shouldPause)
     constexpr uint16_t scoreBackground = 0x11e9;
     SdFat sd;
     mountBundle(sd, root);
+    AssetData::RuntimeManifest manifest = {};
+    RuntimeTableInternal::RuntimeTableFile tableFile;
+    assert(loadRuntimeManifest(&sd, manifest) && tableFile.open(&sd, manifest));
+    const auto *items = tableFile.table().find(RuntimeTableInternal::CollectionItems);
+    assert(items && (items->count == 1 || items->count == 4));
+    const bool reverseDependencies = items->count == 4;
+    const bool hasUnlockOrder = tableFile.table().find(RuntimeTableInternal::CollectionUnlockOrder) != nullptr;
+    const uint32_t dependentOffset = items->offset + items->recordSize;
     Adafruit_ST7735 display;
     Pet pet;
     PetStorage storage(&sd);
@@ -187,6 +240,8 @@ static void verifyCapture(const std::filesystem::path &root, bool shouldPause)
     {
         assert(pet.stageDays() == 10 && pet.persistentState().captureSeenMask == 0 && !pet.isCollectionOwned(0));
         assert(storage.lastSaveSequence() == before);
+        if (reverseDependencies)
+            for (uint8_t slot = 1; slot <= 3; ++slot) assert(!pet.isCollectionOwned(slot));
     };
 
     CaptureAssets capture;
@@ -205,7 +260,14 @@ static void verifyCapture(const std::filesystem::path &root, bool shouldPause)
         for (int x = 8; x < 24; ++x)
             timerChanged |= timerPixel(x, y) != initial[(scene.timerY + y) * CaptureAssets::screenWidth + scene.timerX + x];
     assert(timerChanged && timerPixel(2, 12) == 0x1148);
+    const auto readsBeforeCatch = sd.readsAt("/runtime.bin", dependentOffset);
     catchFish();
+    if (reverseDependencies)
+    {
+        const auto reads = sd.readsAt("/runtime.bin", dependentOffset) - readsBeforeCatch;
+        // The first dependent item is read once to acquire it and once to grant its appearance.
+        assert(hasUnlockOrder ? reads == 2 : reads > 2);
+    }
     assert(display.screen.front() == cardBackground);
     assertUnchanged();
     game.OnCaptureCancel();
@@ -262,6 +324,13 @@ static void verifyCapture(const std::filesystem::path &root, bool shouldPause)
     Pet recovered;
     PetStorage recovery(&sd);
     assert(recovery.load(recovered, pet.persistentState().schemaFingerprint) && recovered.stageDays() == 12);
+    if (reverseDependencies)
+    {
+        for (uint8_t slot = 1; slot <= 3; ++slot)
+            assert(pet.isCollectionOwned(slot) && restored.isCollectionOwned(slot) && recovered.isCollectionOwned(slot));
+        puts(hasUnlockOrder ? "[PASS] Reverse collection chain settles in one pass" :
+                               "[PASS] Reverse collection chain settles from a legacy bundle");
+    }
     puts("[PASS] Capture bundle: countdown, card paging and clock policy, cancellation before settlement, committed first catch after reboot, and failed-write rollback");
 }
 
@@ -1134,6 +1203,7 @@ int main(int argc, char **argv)
     }
     if (argc == 3 && std::string(argv[2]) == "counts")
     {
+        verifyRuntimeDirectoryCache(sd);
         // Real button dispatch commits effects + counts + acquisition together.
         game.OnRightKey();
         game.OnConfirmKey();
