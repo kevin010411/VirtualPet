@@ -66,6 +66,31 @@ int main(int argc,char **argv)
     AssetData::RuntimeManifest manifest={};assert(readRuntimeManifest(source,manifest));
     RuntimeContract config ={};
     assert(parseRuntimeTableBehavior(bytes.data(),bytes.size(),manifest,1,1,config));
+#if ENABLE_TRAINING_COURSES
+    if (strcmp(argv[2], "mixed") == 0)
+    {
+        const auto &course = config.instruction.trainingSettings;
+        assert(course.mode == TrainingMode::OrderedMemory && course.rounds == 5);
+        assert(config.instruction.trainingFrames.valid());
+        assert(config.buttons.buttons[0].systemCommandId == RuntimeSystemCommandId::InstructionResponse);
+        assert(config.buttons.buttons[1].systemCommandId == RuntimeSystemCommandId::InstructionResponseGame);
+        assert(config.instruction.instructionSettings.roundCount == 10 && config.instruction.instructionEffectCount == 2);
+        const auto effectSlot = config.instruction.instructionEffects[0].statSlot;
+        PetBehaviorStatValues stats = {};
+        for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
+            stats.values[slot] = config.behavior.stats[slot].initialValue;
+        auto initial = stats;
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 1, 2, false, stats));
+        assert(stats.values[effectSlot] == 5);
+        assert(stats.values[course.scoreSlot] == initial.values[course.scoreSlot]);
+        assert(stats.values[course.completionSlot] == initial.values[course.completionSlot]);
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 7, 5, true, stats));
+        assert(stats.values[course.scoreSlot] == 3 && stats.values[course.completionSlot] == 1);
+        assert(stats.values[effectSlot] == 5);
+        puts("[PASS] Both exported game buttons and independent result effects load for the same species");
+        return 0;
+    }
+#endif
     const bool maximum=strcmp(argv[2],"maximum")==0;
     const bool weighted=strcmp(argv[2],"weighted")==0, minimum=strcmp(argv[2],"minimum")==0;
     const InstructionResponseSettings expected = maximum ?
@@ -89,7 +114,7 @@ int main(int argc,char **argv)
         PetBehaviorStatValues values={};
         for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) values.values[slot]=config.behavior.stats[slot].initialValue;
         assert(values.values[correct.statSlot]==9 && config.behavior.stats[correct.statSlot].maxValue==10);
-        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 1,2,values));
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 1, 2, false, values));
         assert(values.values[correct.statSlot]==5);
     } else assert(config.instruction.instructionEffectCount==0);
     assert(config.buttons.buttons[0].systemCommandId==RuntimeSystemCommandId::InstructionResponse);
@@ -124,7 +149,7 @@ int main(int argc,char **argv)
         assert(results==0x55555);
         PetBehaviorStatValues values={};
         for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) values.values[slot]=config.behavior.stats[slot].initialValue;
-        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, results,count,values));
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, results, count, false, values));
         for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) {
             const uint32_t index=config.behavior.stats[slot].initialValue-9;
             assert(index<12 && values.values[slot]==UINT32_MAX-(index+5)-(index%2?index:0));

@@ -25,6 +25,7 @@ namespace
 #define COMMAND_SLOT_GUESS_GAME CommandController::emptySlot()
 #endif
 #define COMMAND_SLOT_INSTRUCTION_RESPONSE COMMAND_SLOT(AppCommandId::InstructionResponse)
+#define COMMAND_SLOT_INSTRUCTION_RESPONSE_GAME COMMAND_SLOT(AppCommandId::InstructionResponseGame)
 #define COMMAND_SLOT_STATUS COMMAND_SLOT(AppCommandId::Status)
 #define COMMAND_SLOT_COLLECTION_CATALOG COMMAND_SLOT(AppCommandId::CollectionCatalog)
 #define COMMAND_SLOT_SHOP COMMAND_SLOT(AppCommandId::Shop)

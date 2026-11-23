@@ -52,7 +52,7 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
 struct InstructionRuntimeSettings;
 bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
                                         const InstructionRuntimeSettings &settings,
-                                        uint32_t correctMask, uint8_t count,
+                                        uint32_t correctMask, uint8_t count, bool trainingResult,
                                         PetBehaviorStatValues &state);
 #endif
 #endif // PET_BEHAVIOR_RUNTIME_RULES_H

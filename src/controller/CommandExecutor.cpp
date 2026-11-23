@@ -100,6 +100,11 @@ CommandResult CommandExecutor::execute(AppCommandId id, uint8_t targetSlot)
         result.kind = CommandResultKind::Instruction;
         break;
 #endif
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    case AppCommandId::InstructionResponseGame:
+        result.kind = CommandResultKind::InstructionGame;
+        break;
+#endif
 #if ENABLE_SHOP
     case AppCommandId::Shop:
         result.kind = CommandResultKind::Shop;

@@ -122,11 +122,12 @@ void Game::loop_game(bool confirmPending)
 #if ENABLE_INSTRUCTION_RESPONSE
         uint32_t instructionMask = 0;
         uint8_t instructionCount = 0;
-        if (minigame->consumeInstructionCompletion(instructionMask, instructionCount))
+        bool trainingResult = false;
+        if (minigame->consumeInstructionCompletion(instructionMask, instructionCount, trainingResult))
         {
             const uint32_t previousDays = pet.stageDays();
             // Consume before commit/save: a failed disk write must never replay arithmetic.
-            if (!petBehaviorRuntime->applyInstructionResults(runtime.instruction, instructionMask, instructionCount))
+            if (!petBehaviorRuntime->applyInstructionResults(runtime.instruction, instructionMask, instructionCount, trainingResult))
                 renderer.showResourceError("pet state");
             else
             {

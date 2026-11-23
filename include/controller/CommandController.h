@@ -24,6 +24,7 @@ enum class AppCommandId : uint8_t
     AdvanceDay = 16,
     Menu = 17,
     CaptureGame = APP_COMMAND_CAPTURE_GAME,
+    InstructionResponseGame = 19,
 };
 
 class CommandController

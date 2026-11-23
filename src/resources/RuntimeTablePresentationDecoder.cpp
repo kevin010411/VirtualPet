@@ -7,8 +7,9 @@ namespace RuntimeTableInternal
 {
 namespace
 {
-bool compiledFeaturesAccept(uint32_t flags)
+bool compiledFeaturesAccept(const RuntimeTable &table)
 {
+    const uint32_t flags = table.featureFlags;
 #if !ENABLE_SHOP
     if ((flags & kShopFeature) != 0) return false;
 #endif
@@ -19,7 +20,7 @@ bool compiledFeaturesAccept(uint32_t flags)
     if ((flags & kTrainingCoursesFeature) != 0) return false;
 #endif
 #if !ENABLE_LEGACY_INSTRUCTION_RESPONSE
-    if ((flags & (kInstructionResponseFeature | kTrainingCoursesFeature)) == kInstructionResponseFeature)
+    if (table.find(InstructionResponseConfig) != nullptr)
         return false;
 #endif
 #if !ENABLE_SEQUENCE_AUDIO
@@ -98,8 +99,7 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
     config.shopEnabled = (table.featureFlags & kShopFeature) != 0;
 #endif
     const Source &source = table.source;
-    const uint32_t featureFlags = table.featureFlags;
-    if (!compiledFeaturesAccept(featureFlags) || !decodeScreenBlocks(table, config.layout))
+    if (!compiledFeaturesAccept(table) || !decodeScreenBlocks(table, config.layout))
         return false;
 
     const Section *assets = table.find(AssetRefs);
@@ -121,8 +121,10 @@ bool decodeRuntimePresentation(const RuntimeTable &table,
         const bool optionalGuessFeedback =
             role == static_cast<uint8_t>(FirmwarePlaybackRole::GuessRight) ||
             role == static_cast<uint8_t>(FirmwarePlaybackRole::GuessWrong);
+        const bool scopedInstruction = role >= static_cast<uint8_t>(FirmwarePlaybackRole::InstructionPrompt1) &&
+            role <= static_cast<uint8_t>(FirmwarePlaybackRole::InstructionNoGo3);
         if (!resolveAnimation(source, *assets, *animations, readU16(record + 2), scope,
-                              animation, optionalGuessFeedback))
+                              animation, optionalGuessFeedback || scopedInstruction))
         {
             // Evolution uses references on each evolution record. Start
             // belongs to the initial appearance, not later species.

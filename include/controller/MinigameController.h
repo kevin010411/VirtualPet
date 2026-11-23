@@ -55,13 +55,13 @@ public:
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
     void startInstruction(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
-                          const RuntimePlaybackConfig &playback);
+                          const RuntimePlaybackConfig &playback, bool useTraining);
     bool capturesInstructionInput() const;
     void instructionInput(uint8_t held, uint8_t pressed, uint32_t timestamp);
     void instructionPending(bool pending, uint32_t at, uint8_t raw)
     { instruction.pendingInput(pending, at, raw); }
-    bool consumeInstructionCompletion(uint32_t &mask, uint8_t &count)
-    { return activeGame == Kind::Instruction && instruction.consumeCompletion(mask, count); }
+    bool consumeInstructionCompletion(uint32_t &mask, uint8_t &count, bool &trainingResult)
+    { return activeGame == Kind::Instruction && instruction.consumeCompletion(mask, count, trainingResult); }
 #endif
 #if ENABLE_CAPTURE_GAME
     bool startCapture(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes);

@@ -24,6 +24,7 @@ enum class RuntimeSystemCommandId : uint16_t
     Inventory = 8,
     AdvanceDay = 9,
     CaptureGame = 10,
+    InstructionResponseGame = 11,
 };
 
 struct CompiledSystemCommand

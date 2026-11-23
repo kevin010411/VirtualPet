@@ -416,11 +416,11 @@ ActivePetState PetBehaviorRuntime::activePetState(
 }
 
 #if ENABLE_INSTRUCTION_RESPONSE
-bool PetBehaviorRuntime::applyInstructionResults(const InstructionRuntimeSettings &settings, uint32_t correctMask, uint8_t count)
+bool PetBehaviorRuntime::applyInstructionResults(const InstructionRuntimeSettings &settings, uint32_t correctMask, uint8_t count, bool trainingResult)
 {
     if (pet.isDead()) return false;
     PetBehaviorStatValues state = readStats(pet);
-    if (!applyPetBehaviorInstructionResults(config, settings, correctMask, count, state)) return false;
+    if (!applyPetBehaviorInstructionResults(config, settings, correctMask, count, trainingResult, state)) return false;
 #if ENABLE_STAT_EVENTS
     if (usesStatEvents()) return commitStatMutation(state, UINT8_MAX);
 #endif

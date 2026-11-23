@@ -206,11 +206,11 @@ void MinigameController::settleOutcome(GuessItemOutcome outcome)
 
 #if ENABLE_INSTRUCTION_RESPONSE
 void MinigameController::startInstruction(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
-                          const RuntimePlaybackConfig &playback)
+                          const RuntimePlaybackConfig &playback, bool useTraining)
 {
     reset();
     animations.cancelAll();
-    instruction.start(renderer, resources, config, playback);
+    instruction.start(renderer, resources, config, playback, useTraining);
     activeGame = Kind::Instruction;
 }
 

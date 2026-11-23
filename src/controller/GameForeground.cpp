@@ -684,20 +684,22 @@ void Game::handleSystemCommandRequest(const CommandResult &result)
         return;
     }
 #endif
-    if (result.kind == CommandResultKind::Instruction ||
+    if (result.kind == CommandResultKind::Instruction || result.kind == CommandResultKind::InstructionGame ||
         result.kind == CommandResultKind::Predict || result.kind == CommandResultKind::Guess)
     {
 #if ENABLE_INSTRUCTION_RESPONSE
-        if (result.kind == CommandResultKind::Instruction)
+        if (result.kind == CommandResultKind::Instruction || result.kind == CommandResultKind::InstructionGame)
         {
+            bool useTraining = false;
 #if ENABLE_TRAINING_COURSES
             const auto &training = runtime.instruction.trainingSettings;
-            if (training.mode != TrainingMode::None && training.gateSlot != UINT8_MAX &&
+            useTraining = result.kind == CommandResultKind::Instruction && training.mode != TrainingMode::None;
+            if (useTraining && training.gateSlot != UINT8_MAX &&
                 pet.customStat(training.gateSlot) != training.gateValue)
                 return;
 #endif
             petClock.pause(latestRtcSeconds);
-            minigame->startInstruction(renderer, resources, runtime.instruction, runtime.playback);
+            minigame->startInstruction(renderer, resources, runtime.instruction, runtime.playback, useTraining);
             flow.enter(AppStage::Minigame);
             return;
         }

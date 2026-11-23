@@ -13,19 +13,19 @@ class InstructionPresentation
 {
 public:
     void start(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
-                          const RuntimePlaybackConfig &playback);
+                          const RuntimePlaybackConfig &playback, bool useTraining);
     void update();
     void cancel();
     bool active() const;
     void input(uint8_t held, uint8_t pressed, uint32_t timestamp);
     void pendingInput(bool pending, uint32_t at, uint8_t raw);
-    bool consumeCompletion(uint32_t &mask, uint8_t &count);
+    bool consumeCompletion(uint32_t &mask, uint8_t &count, bool &trainingResult);
 
 private:
 #if ENABLE_TRAINING_COURSES
     TrainingCourse course;
     bool renderCourse();
-    bool usesTraining() const;
+    bool trainingActive = false;
 #endif
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     InstructionResponse instruction;

@@ -52,6 +52,14 @@ pwsh -NoProfile -NonInteractive -File scripts/generate_screen_layout_fixtures.ps
 # 動畫配樂，產生至 tests/fixtures/sequence_audio。
 .\backend\.venv\Scripts\python.exe -m scripts.generate_sequence_audio_fixtures
 
+# 共用入口與獨立指令反應入口在同一物種的 Runtime Table。
+$env:DREAMOLI_MIXED_INSTRUCTION_FIXTURE = Join-Path $PWD '.verification/firmware-host/mixed-instruction'
+try {
+    .\scripts\verify.ps1 -BackendOnly -TestGroup instruction-response
+} finally {
+    Remove-Item Env:DREAMOLI_MIXED_INSTRUCTION_FIXTURE
+}
+
 # 圖鑑卡片。其他案例可用產生器的 --help 查詢模式。
 .\backend\.venv\Scripts\python.exe -m scripts.generate_collection_catalog_fixtures --cards --output .verification/firmware-host/cards
 
@@ -78,6 +86,7 @@ foreach ($presentation in 'single', 'list') {
 $fixtures = '../../web/.verification/firmware-host'
 .\test\run_host_tests.ps1 -Case capture -RunnerOptions @{ FixtureRoot = "$fixtures/capture" }
 .\test\run_host_tests.ps1 -Case project-menus -RunnerOptions @{ FixtureRoot = "$fixtures/project-menus" }
+.\test\run_host_tests.ps1 -Case instruction-response -RunnerOptions @{ FixtureRoot = "$fixtures/mixed-instruction"; FixtureKind = 'mixed' }
 ```
 
 硬體驗收步驟見[開發流程](../docs/development-workflow.md)。

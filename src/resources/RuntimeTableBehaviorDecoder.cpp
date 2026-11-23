@@ -544,11 +544,10 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     }
 #endif
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
-    if ((table.featureFlags & (kInstructionResponseFeature | kTrainingCoursesFeature)) == kInstructionResponseFeature)
+    if (const Section *instruction = table.find(InstructionResponseConfig))
     {
-        const Section *instruction = table.find(InstructionResponseConfig);
         uint8_t record[24] = {};
-        if (instruction == nullptr || !readRecord(source, *instruction, 0, record)) return false;
+        if (!readRecord(source, *instruction, 0, record)) return false;
         contract.instruction.instructionSettings.roundCount = record[0];
         contract.instruction.instructionSettings.hard = record[1] != 0;
         contract.instruction.instructionSettings.noGoEnabled = (readU16(record + 6) & 1) != 0;
