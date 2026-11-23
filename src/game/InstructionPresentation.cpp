@@ -175,10 +175,10 @@ bool InstructionPresentation::render()
                                                      FirmwarePlaybackRole::InstructionWrong;
     if (changed)
     {
-        renderer.setAnimationArea(0, 32, 128, 96);
         AssetData::AnimationRef prompt = {};
         if (phase == InstructionResponse::Phase::Preparing)
         {
+            renderer.setAnimationArea(0, 0, 128, 128);
             renderer.clearInstructionOptions();
             for (uint8_t position = 0; position < 3; ++position)
                 if (!renderer.ShowAnimationFrame(
@@ -189,7 +189,11 @@ bool InstructionPresentation::render()
                 static_cast<uint8_t>(instruction.isNoGo() ? FirmwarePlaybackRole::InstructionNoGo1 : FirmwarePlaybackRole::InstructionPrompt1) + instruction.targetItem()];
         }
         else if (phase == InstructionResponse::Phase::Feedback)
+        {
+            renderer.clearInstructionPromptTop();
+            renderer.setAnimationArea(0, 32, 128, 96);
             prompt = instructionPlayback->systemAnimations[static_cast<uint8_t>(feedbackRole)];
+        }
         if (prompt.valid())
         {
             promptVersion = static_cast<uint8_t>(FirmwareRandom::below(instructionResources->versionCountFor(prompt)));

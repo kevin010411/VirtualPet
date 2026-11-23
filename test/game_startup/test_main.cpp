@@ -2891,6 +2891,9 @@ void testSwitchFromGuessToPredict()
 #endif
 
 #if ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+void Renderer::clearInstructionPromptTop() {}
+#endif
 void Renderer::clearInstructionOptions() { ++scenario->instructionOptionGroups; }
 void Renderer::showInstructionFeedback(bool)
 {
@@ -3319,6 +3322,8 @@ void testInstructionLifecycle()
         assert(game.capturesInstructionInput() && game.preventsIdleSleep());
         game.instructionInput(0, 0, 0);
         game.loop_game();
+        const uint8_t promptArea[] = {0, 0, 128, 128};
+        assert(memcmp(data.animationArea, promptArea, sizeof(promptArea)) == 0);
         if (cancel)
         {
             hostMillis = settings.answerMs - 100;
@@ -3346,6 +3351,8 @@ void testInstructionLifecycle()
                         settings.hard, settings.noGoEnabled, settings.roundCount, round, frameMs, animatedFeedback,
                         game.capturesInstructionInput(), data.instructionFeedbackDraws, round + 1, hostMillis, data.displayedAnimation.animationId);
                 assert(data.instructionFeedbackDraws == round + 1);
+                const uint8_t feedbackArea[] = {0, 32, 128, 96};
+                assert(memcmp(data.animationArea, feedbackArea, sizeof(feedbackArea)) == 0);
                 const unsigned groups = data.instructionOptionGroups;
                 if (animatedFeedback)
                 {

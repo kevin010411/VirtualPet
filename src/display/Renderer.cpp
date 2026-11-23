@@ -285,6 +285,9 @@ bool Renderer::hasRenderedFrame() const { return state->hasRenderedFrame; }
 #endif
 
 #if ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+void Renderer::clearInstructionPromptTop() { tft->fillRect(0, 0, 128, 32, ST77XX_BLACK); }
+#endif
 void Renderer::clearInstructionOptions() { tft->fillRect(0, 128, 128, 32, ST77XX_BLACK); }
 void Renderer::showInstructionFeedback(bool correct)
 {

@@ -38,6 +38,8 @@ int main(int argc,char **argv)
     if(maximum) {
         const uint16_t intervals[]={50,10000,167,500};
         for(uint8_t role=35;role<43;++role) for(uint8_t version=0;version<4;++version) {
+            const bool feedback = role == 38 || role == 39;
+            const unsigned top = feedback ? 32 : 0;
             const auto &ref=config.playback.systemAnimations[role];
             AssetData::AssetFrameAddress address={ref.speciesSlot,ref.outfitSlot,ref.animationId,version,0};
             AssetData::AnimationRecord animation;
@@ -47,8 +49,9 @@ int main(int argc,char **argv)
             for(uint8_t frame=0;frame<2;++frame) {
                 address.frameIndex=frame;
                 assert(FrameDecoder::showDataFrame(reader,address,&display,readBuffer,sizeof(readBuffer),lines,
-                    FrameDecoder::kLineBufferPixels,0,32,12,128,96));
-                for(unsigned pixel=0;pixel<128*32;++pixel) assert(display.screen[pixel]==0xdead);
+                    FrameDecoder::kLineBufferPixels,0,top,12,128,128-top));
+                for(unsigned pixel=0;pixel<128*top;++pixel) assert(display.screen[pixel]==options[pixel]);
+                assert(display.screen[128*top] != 0xdead);
                 for(unsigned pixel=128*128;pixel<128*160;++pixel) assert(display.screen[pixel]==options[pixel]);
             }
         }
@@ -74,18 +77,19 @@ int main(int argc,char **argv)
             for(unsigned pixel=128*128;pixel<128*160;++pixel) assert(display.screen[pixel]==options[pixel]);
         }
     }
-    for(uint8_t role=40;role<43;++role)
+    for (const auto role : {35, 36, 37, 40, 41, 42})
     {
         const auto &ref=config.playback.systemAnimations[role];
         if(!ref.valid()) continue;
         AssetData::AssetFrameAddress address={ref.speciesSlot,ref.outfitSlot,ref.animationId,0,0};
         const auto options=display.screen;
         assert(FrameDecoder::showDataFrame(reader,address,&display,readBuffer,sizeof(readBuffer),lines,
-                FrameDecoder::kLineBufferPixels,0,32,12,128,96));
-        for(unsigned pixel=0;pixel<128*32;++pixel) assert(display.screen[pixel]==0xdead);
+                FrameDecoder::kLineBufferPixels,0,0,12,128,128));
+        for(unsigned pixel=0;pixel<128*128;++pixel) assert(display.screen[pixel]!=0xdead);
         for(unsigned pixel=128*128;pixel<128*160;++pixel) assert(display.screen[pixel]==options[pixel]);
     }
     puts("[PASS] actual exported 42x32 option frames decoded into TFT capture at x0/43/86, exact 1px gaps, bounded scanline writes");
+    puts("[PASS] exported 128x128 prompts fill the top of the screen without changing option pixels");
     if(config.playback.systemAnimations[38].valid())
         puts("[PASS] actual single/multi-frame feedback decodes inside 128x96 without changing top or option pixels");
 }

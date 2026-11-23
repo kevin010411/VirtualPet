@@ -43,6 +43,9 @@ public:
     void clearMenuBelow(uint8_t y);
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
+#if ENABLE_LEGACY_INSTRUCTION_RESPONSE
+    void clearInstructionPromptTop();
+#endif
     void clearInstructionOptions();
     void showInstructionFeedback(bool correct);
     void showTrainingResult(uint8_t score, uint8_t total, bool passed);
