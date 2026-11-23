@@ -25,6 +25,9 @@ enum class RuntimeSystemCommandId : uint16_t
     AdvanceDay = 9,
     CaptureGame = 10,
     InstructionResponseGame = 11,
+    TrainingTiming = 12,
+    OrderedMemory = 13,
+    TrainingMatching = 14,
 };
 
 struct CompiledSystemCommand

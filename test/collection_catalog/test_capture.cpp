@@ -120,6 +120,7 @@ void verifyCapture(const std::filesystem::path &root, bool shouldPause)
     RuntimeTableInternal::RuntimeTableFile tableFile;
     assert(loadRuntimeManifest(&sd, manifest) && tableFile.open(&sd, manifest));
     const auto *items = tableFile.table().find(RuntimeTableInternal::CollectionItems);
+    const bool hasArtwork = tableFile.table().find(RuntimeTableInternal::CaptureArtworkSpecies) != nullptr;
     assert(items && (items->count == 1 || items->count == 4));
     const bool reverseDependencies = items->count == 4;
     const bool hasUnlockOrder = tableFile.table().find(RuntimeTableInternal::CollectionUnlockOrder) != nullptr;
@@ -142,6 +143,14 @@ void verifyCapture(const std::filesystem::path &root, bool shouldPause)
         FirmwareRandom::seed(1);
         game.OnConfirmKey();
         assert(game.isCaptureActive());
+        if (hasArtwork)
+        {
+            uint16_t sharedBackground[128];
+            CaptureAssets fallback;
+            assert(fallback.open(&sd) && fallback.readBackground(159, 1, sharedBackground));
+            assert(sharedBackground[127] != 0x07e0);
+            assert(display.screen[159 * 128 + 127] == 0x07e0);
+        }
     };
     const auto catchFish = [&]
     {

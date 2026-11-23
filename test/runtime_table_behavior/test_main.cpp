@@ -757,6 +757,24 @@ void testDeathCapability(const std::vector<uint8_t> &base)
 
 int main(int argc, char **argv)
 {
+    if (argc == 3 && std::strcmp(argv[1], "--idle-buttons") == 0)
+    {
+        const auto bytes = readFixture(argv[2]);
+        auto manifest = fixtureManifest(bytes);
+        std::memcpy(manifest.bundleId.bytes, bytes.data() + 28, 16);
+        RuntimeContract config = {};
+        assert(parseRuntimeTableBehavior(bytes.data(), bytes.size(), manifest, 1, 1, config));
+        assert(config.buttons.buttons[4].systemCommandId == RuntimeSystemCommandId::AdvanceDay);
+        assert(!config.idleButtonOffsets[0] && config.idleButtonOffsets[1]);
+        SdFat sd(bytes.data(), bytes.size());
+        ButtonBindings night = {};
+        assert(loadRuntimeIdleButtons(&sd, config.idleButtonOffsets[1], night));
+        assert(night.buttons[4].kind == PetBehaviorButtonKind::Empty);
+        assert(night.buttons[7].kind == PetBehaviorButtonKind::SystemCommand);
+        assert(night.buttons[7].systemCommandId == RuntimeSystemCommandId::AdvanceDay);
+        puts("[PASS] Exported Runtime Table v40 uses the night commands for the alternate idle state");
+        return 0;
+    }
     if (argc == 3 && std::strcmp(argv[1], "--manual-day") == 0)
     {
         const auto bytes = readFixture(argv[2]);

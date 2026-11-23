@@ -41,11 +41,12 @@ bool MinigameController::startPredict()
 #endif
 
 #if ENABLE_CAPTURE_GAME
-bool MinigameController::startCapture(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes)
+bool MinigameController::startCapture(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes,
+                                    uint8_t artworkSpeciesSlot)
 {
     reset();
     animations.cancelAll();
-    if (!capture.start(renderer, resources, outcomes)) return false;
+    if (!capture.start(renderer, resources, outcomes, artworkSpeciesSlot)) return false;
     activeGame = Kind::Capture;
     return true;
 }
@@ -206,11 +207,11 @@ void MinigameController::settleOutcome(GuessItemOutcome outcome)
 
 #if ENABLE_INSTRUCTION_RESPONSE
 void MinigameController::startInstruction(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
-                          const RuntimePlaybackConfig &playback, bool useTraining)
+                          const RuntimePlaybackConfig &playback, const TrainingRuntimeCourse *training)
 {
     reset();
     animations.cancelAll();
-    instruction.start(renderer, resources, config, playback, useTraining);
+    instruction.start(renderer, resources, config, playback, training);
     activeGame = Kind::Instruction;
 }
 

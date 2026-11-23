@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$FixtureRoot, [string]$UnusedFixtureRoot, [ValidateSet('valid', 'minimum', 'weighted', 'effects', 'hard', 'nogo', 'maximum', 'mixed')][string]$FixtureKind = 'valid')
+param([string]$FixtureRoot, [string]$UnusedFixtureRoot, [ValidateSet('valid', 'minimum', 'weighted', 'effects', 'hard', 'nogo', 'maximum', 'mixed', 'training-modes')][string]$FixtureKind = 'valid')
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 Push-Location $repoRoot
@@ -20,13 +20,14 @@ try {
             'src/resources/RuntimeTableFile.cpp', 'src/appearance/RuntimeTableAppearance.cpp',
             'src/pet/PetBehaviorRuntimeRules.cpp', 'src/pet/RuntimeValueResolver.cpp',
             'src/controller/StatusSetContract.cpp', 'src/controller/SystemCommandCatalog.cpp')
-        $trainingFlag = if ($FixtureKind -eq 'mixed') { '-DENABLE_TRAINING_COURSES=1' } else { '-DENABLE_TRAINING_COURSES=0' }
+        $hasTraining = $FixtureKind -in ('mixed', 'training-modes')
+        $trainingFlag = "-DENABLE_TRAINING_COURSES=$([int]$hasTraining)"
         & g++ -std=c++17 -O1 -DENABLE_INSTRUCTION_RESPONSE=1 $trainingFlag -Itest/host_stubs -Iinclude test/instruction_response/test_export.cpp src/game/InstructionResponse.cpp @runtimeSources -o .pio/instruction_export_host.exe
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         & ./.pio/instruction_export_host.exe (Join-Path $FixtureRoot 'runtime.bin') $FixtureKind
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         if ($FixtureKind -eq 'mixed') { exit 0 }
-        & g++ -std=c++17 -O1 -DENABLE_INSTRUCTION_RESPONSE=1 -Itest/custom_layout_export -Itest/host_stubs -Iinclude test/instruction_response/test_render.cpp @runtimeSources src/resources/BundleReader.cpp src/resources/AssetRuntimeContract.cpp src/common/CopyResourceName.cpp src/display/FrameDecoder.cpp -o .pio/instruction_render_host.exe
+        & g++ -std=c++17 -O1 -DENABLE_INSTRUCTION_RESPONSE=1 $trainingFlag -Itest/custom_layout_export -Itest/host_stubs -Iinclude test/instruction_response/test_render.cpp @runtimeSources src/resources/BundleReader.cpp src/resources/AssetRuntimeContract.cpp src/common/CopyResourceName.cpp src/display/FrameDecoder.cpp -o .pio/instruction_render_host.exe
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         & ./.pio/instruction_render_host.exe $FixtureRoot $FixtureKind
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

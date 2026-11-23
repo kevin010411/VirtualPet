@@ -26,7 +26,7 @@ protected:
 class CaptureGame
 {
 public:
-    bool start(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes);
+    bool start(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes, uint8_t artworkSpeciesSlot = 0);
     void cancel();
     void update(bool confirmPending);
     void redraw();

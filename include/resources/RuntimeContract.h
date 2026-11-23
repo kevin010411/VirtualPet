@@ -22,6 +22,8 @@ struct RuntimeContract
     RuntimePlaybackConfig playback;
     StatusSetsConfig statusSets;
     ButtonBindings buttons;
+    // Slot 0 is default idle; the remaining slots match PET_STATES in order.
+    uint32_t idleButtonOffsets[kMaxRuntimePetStates + 1];
 #if ENABLE_INSTRUCTION_RESPONSE
     InstructionRuntimeSettings instruction;
 #endif
@@ -31,6 +33,9 @@ struct RuntimeContract
     uint32_t schemaFingerprint;
     uint8_t activeSpeciesSlot;
     uint8_t activeOutfitSlot;
+#if ENABLE_CAPTURE_GAME
+    uint8_t captureArtworkSpeciesSlot;
+#endif
 #if ENABLE_SHOP
     bool shopEnabled;
 #endif

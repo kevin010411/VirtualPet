@@ -32,10 +32,10 @@ uint32_t verticalBands(int from, int to)
 }
 }
 
-bool CaptureGame::start(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes)
+bool CaptureGame::start(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes, uint8_t artworkSpeciesSlot)
 {
     cancel();
-    if (!assets_.open(resources.sdCard())) return false;
+    if (!assets_.open(resources.sdCard(), artworkSpeciesSlot)) return false;
     renderer_ = &renderer;
     outcomes_ = &outcomes;
     round_ = {};

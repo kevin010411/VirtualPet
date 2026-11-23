@@ -22,6 +22,25 @@ int main(int argc,char **argv)
     Adafruit_ST7735 display;
     uint8_t readBuffer[FrameDecoder::kDataReadBufferBytes]={};
     uint16_t lines[FrameDecoder::kLineBufferPixels]={};
+#if ENABLE_TRAINING_COURSES
+    if (strcmp(argv[2], "training-modes") == 0)
+    {
+        const auto *memory = config.instruction.trainingCourse(TrainingMode::OrderedMemory);
+        assert(memory != nullptr && memory->settings.customRecall);
+        const auto &ref = memory->frames;
+        const AssetData::AssetFrameAddress address = {ref.speciesSlot, ref.outfitSlot, ref.animationId, 1, 0};
+        const unsigned left = memory->settings.recallPositions[0][0];
+        const unsigned top = memory->settings.recallPositions[0][1];
+        assert(FrameDecoder::showDataFrame(reader, address, &display, readBuffer, sizeof(readBuffer), lines,
+            FrameDecoder::kLineBufferPixels, left, top, 4, 12, 12));
+        for (unsigned y = 0; y < 160; ++y)
+            for (unsigned x = 0; x < 128; ++x)
+                assert((display.screen[y * 128 + x] != 0xdead) ==
+                       (x >= left && x < left + 12 && y >= top && y < top + 12));
+        puts("[PASS] exported 12x12 recall patch decodes into the configured TFT rectangle");
+        return 0;
+    }
+#endif
     for (uint8_t item=0;item<3;++item)
     {
         const auto &ref=config.instruction.instructionOptions[item];

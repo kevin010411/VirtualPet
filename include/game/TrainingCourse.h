@@ -3,8 +3,9 @@
 #include "common/AppProfile.h"
 #include <stdint.h>
 
-#if ENABLE_TRAINING_COURSES
 enum class TrainingMode : uint8_t { None, Timing, OrderedMemory, Matching };
+
+#if ENABLE_TRAINING_COURSES
 constexpr uint8_t kOrderedMemoryScreenFrames = 5;
 constexpr uint8_t kOrderedMemoryRecallCells = 5;
 constexpr uint8_t kOrderedMemoryAnswerChoices = 3;
@@ -25,6 +26,8 @@ struct TrainingCourseSettings
     uint8_t frameCount = 0;
     uint16_t frameMs = 0;
     uint16_t cueMs = 0;
+    bool usesHitFrames = false;
+    uint8_t hitFrames[32] = {};
     bool customRecall = false;
     uint8_t recallPositions[kOrderedMemoryRecallCells][2] = {};
 
@@ -66,7 +69,12 @@ private:
     void beginQuestion();
     void enter(Phase next, uint8_t nextFrame, uint16_t duration = 0);
     void answer(bool hit);
-    bool inCue() const { return frame >= settings.cueStart && frame < settings.cueEnd; }
+    bool inCue() const
+    {
+        if (settings.usesHitFrames)
+            return (settings.hitFrames[frame / 8] & (1U << (frame % 8))) != 0;
+        return frame >= settings.cueStart && frame < settings.cueEnd;
+    }
     bool expired(uint32_t now) const { return now - began >= interval; }
     TrainingCourseSettings settings;
     RandomBelow random = nullptr;

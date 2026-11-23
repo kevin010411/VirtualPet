@@ -43,6 +43,7 @@ bool Game::prepare_game()
 
     animations->setup(petBehaviorRuntime->baseAnimation());
     refreshBaseAnimation();
+    if (flow.is(AppStage::FatalError)) return false;
 #if ENABLE_DEATH
     deathPresented = false;
 #endif
@@ -162,6 +163,7 @@ bool Game::resetPet()
 #endif
     cancelForeground();
     refreshBaseAnimation();
+    if (flow.is(AppStage::FatalError)) return false;
     animations->requestFullRedraw();
     // startStartupAnimation() deliberately rejects calls before the game is
     // ready.  A left+right reset must therefore re-enable the game before it

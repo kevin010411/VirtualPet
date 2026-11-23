@@ -12,6 +12,7 @@ struct AppearanceSelection;
 // Reads the bounded /runtime.bin envelope before any asset pack is configured.
 // Export and the host inspector own complete catalog and integrity validation.
 bool loadRuntimeManifest(SdFat *sd, AssetData::RuntimeManifest &manifest);
+bool loadRuntimeIdleButtons(SdFat *sd, uint32_t offset, ButtonBindings &bindings);
 
 // Loads execution-owned records from one validated /runtime.bin snapshot into
 // caller-owned storage. Failure invalidates config and is fatal to the session;

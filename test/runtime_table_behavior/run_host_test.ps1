@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet(0, 1)][int]$DeathEnabled = 0, [string]$WebFixturesRoot = "", [string]$LotteryFixture = "", [string]$IndependentLotteryFixture = "")
+param([ValidateSet(0, 1)][int]$DeathEnabled = 0, [string]$WebFixturesRoot = "", [string]$LotteryFixture = "", [string]$IndependentLotteryFixture = "", [string]$IdleButtonsFixture = "")
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -66,6 +66,10 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $outputPath --manual-day (Join-Path $webFixtures 'runtime_table_v8/manual_day/runtime.bin')
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if ($IdleButtonsFixture) {
+        & $outputPath --idle-buttons $IdleButtonsFixture
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
     Write-Host '[PASS] Runtime Table v28 manual day, gates, optional action animations, applied screen and legacy rejection'
     exit 0
 }

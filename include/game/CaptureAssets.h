@@ -75,7 +75,7 @@ public:
     };
 
     ~CaptureAssets();
-    bool open(SdFat *sd);
+    bool open(SdFat *sd, uint8_t artworkSpeciesSlot = 0);
     void close();
     const Scene &scene() const { return scene_; }
     uint32_t targetFingerprint() const { return targetFingerprint_; }

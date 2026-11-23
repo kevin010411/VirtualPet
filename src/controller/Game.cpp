@@ -1,4 +1,5 @@
 #include "resources/AssetResources.h"
+#include "resources/RuntimeTableBehavior.h"
 #include "controller/Game.h"
 
 #include "animation/AnimationController.h"
@@ -122,12 +123,12 @@ void Game::loop_game(bool confirmPending)
 #if ENABLE_INSTRUCTION_RESPONSE
         uint32_t instructionMask = 0;
         uint8_t instructionCount = 0;
-        bool trainingResult = false;
-        if (minigame->consumeInstructionCompletion(instructionMask, instructionCount, trainingResult))
+        TrainingMode trainingMode = TrainingMode::None;
+        if (minigame->consumeInstructionCompletion(instructionMask, instructionCount, trainingMode))
         {
             const uint32_t previousDays = pet.stageDays();
             // Consume before commit/save: a failed disk write must never replay arithmetic.
-            if (!petBehaviorRuntime->applyInstructionResults(runtime.instruction, instructionMask, instructionCount, trainingResult))
+            if (!petBehaviorRuntime->applyInstructionResults(runtime.instruction, instructionMask, instructionCount, trainingMode))
                 renderer.showResourceError("pet state");
             else
             {
@@ -308,6 +309,7 @@ bool Game::activateLoadedAppearance(uint8_t speciesSlot, uint8_t outfitSlot)
         petBehaviorRuntime->setStatEventSettlement(nullptr);
 #endif
     commands->configure(runtime.buttons, runtime.layout);
+    activeIdleButtonsOffset = 0;
     layout->configureRuntimeContract(runtime.layout, runtime.behavior, runtime.table.assetManifest.bundleId);
     runtimeLoadState = RuntimeLoadState::Ready;
     return true;
@@ -402,6 +404,24 @@ void Game::onGuessOutcomeApplied()
 void Game::refreshBaseAnimation()
 {
     animations->setBaseAnimation(petBehaviorRuntime->baseAnimation());
+    if (runtimeLoadState != RuntimeLoadState::Ready || pet.isDead())
+        return;
+    const ActivePetState state = petBehaviorRuntime->activePetState();
+    const uint32_t offset = runtime.idleButtonOffsets[state.isDefault ? 0 : state.slot + 1];
+    if (offset == activeIdleButtonsOffset)
+        return;
+    ButtonBindings idleButtons;
+    if (offset && !loadRuntimeIdleButtons(resources.sdCard(), offset, idleButtons))
+    {
+        resources.recordAssetDataErrorResource("runtime.bin");
+        enterRuntimeFatal();
+        return;
+    }
+    commands->configure(offset ? idleButtons : runtime.buttons, runtime.layout);
+    if (!commands->isSlotVisible(commands->selectedSlot()))
+        commands->resetSelection();
+    activeIdleButtonsOffset = offset;
+    requestFullRedraw();
 }
 
 bool Game::setStageDaysForCheat(uint32_t value)

@@ -130,6 +130,7 @@ private:
     AppearanceLoader &appearanceLoader;
     AppFlowController flow;
     RuntimeContract runtime = {};
+    uint32_t activeIdleButtonsOffset = 0;
     PetSaveController petSaves;
     AppearanceChangeController appearanceChanges;
     std::unique_ptr<AnimationController> animations;

@@ -105,6 +105,20 @@ CommandResult CommandExecutor::execute(AppCommandId id, uint8_t targetSlot)
         result.kind = CommandResultKind::InstructionGame;
         break;
 #endif
+#if ENABLE_TRAINING_COURSES
+    case AppCommandId::TrainingTiming:
+        result.kind = CommandResultKind::Instruction;
+        result.trainingMode = TrainingMode::Timing;
+        break;
+    case AppCommandId::OrderedMemory:
+        result.kind = CommandResultKind::Instruction;
+        result.trainingMode = TrainingMode::OrderedMemory;
+        break;
+    case AppCommandId::TrainingMatching:
+        result.kind = CommandResultKind::Instruction;
+        result.trainingMode = TrainingMode::Matching;
+        break;
+#endif
 #if ENABLE_SHOP
     case AppCommandId::Shop:
         result.kind = CommandResultKind::Shop;

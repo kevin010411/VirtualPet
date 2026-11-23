@@ -319,14 +319,16 @@ bool applyPetBehaviorGuessOutcome(const PetBehaviorConfig &config,
 #if ENABLE_INSTRUCTION_RESPONSE
 bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
                                         const InstructionRuntimeSettings &settings,
-                                        uint32_t correctMask, uint8_t count, bool trainingResult,
+                                        uint32_t correctMask, uint8_t count, TrainingMode trainingMode,
                                         PetBehaviorStatValues &state)
 {
     PetBehaviorStatValues next = state;
 #if ENABLE_TRAINING_COURSES
-    if (trainingResult)
+    if (trainingMode != TrainingMode::None)
     {
-        const auto &training = settings.trainingSettings;
+        const auto *course = settings.trainingCourse(trainingMode);
+        if (course == nullptr) return false;
+        const auto &training = course->settings;
         if (count != training.rounds) return false;
         uint8_t score = 0;
         for (uint8_t round = 0; round < count; ++round)
@@ -339,7 +341,7 @@ bool applyPetBehaviorInstructionResults(const PetBehaviorConfig &config,
         return true;
     }
 #else
-    (void)trainingResult;
+    (void)trainingMode;
 #endif
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     for (uint8_t round = 0; round < count; ++round)

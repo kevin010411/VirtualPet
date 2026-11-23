@@ -5,6 +5,9 @@
 #include "animation/AnimationController.h"
 #include "controller/CommandController.h"
 #include "pet/PetBehaviorRuntime.h"
+#if ENABLE_TRAINING_COURSES
+#include "game/TrainingCourse.h"
+#endif
 
 class Pet;
 
@@ -34,6 +37,9 @@ struct CommandResult
 {
     CommandResultKind kind = CommandResultKind::None;
     bool resourceError = false;
+#if ENABLE_TRAINING_COURSES
+    TrainingMode trainingMode = TrainingMode::None;
+#endif
 #if ENABLE_PROJECT_MENUS
     uint8_t menuSlot = 0;
 #endif

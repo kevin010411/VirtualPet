@@ -33,11 +33,16 @@ uint32_t readU32(const uint8_t *bytes)
 
 CaptureAssets::~CaptureAssets() { close(); }
 
-bool CaptureAssets::open(SdFat *sd)
+bool CaptureAssets::open(SdFat *sd, uint8_t artworkSpeciesSlot)
 {
     close();
+    char artworkPath[] = "/capture_000.data";
+    artworkPath[9] += artworkSpeciesSlot / 100;
+    artworkPath[10] += artworkSpeciesSlot / 10 % 10;
+    artworkPath[11] += artworkSpeciesSlot % 10;
     uint8_t header[headerSize];
-    if (sd == nullptr || !file_.open(sd, path, FILE_READ) || !read(0, header, sizeof(header)))
+    if (sd == nullptr || !file_.open(sd, artworkSpeciesSlot ? artworkPath : path, FILE_READ) ||
+        !read(0, header, sizeof(header)))
     {
         close();
         return false;

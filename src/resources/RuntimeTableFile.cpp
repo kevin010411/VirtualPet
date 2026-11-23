@@ -81,3 +81,31 @@ bool loadRuntimeManifest(SdFat *sd, AssetData::RuntimeManifest &manifest)
     if (!decoded || !cache.matches(sd, manifest)) cache.card = nullptr;
     return decoded;
 }
+
+bool loadRuntimeIdleButtons(SdFat *sd, uint32_t offset, ButtonBindings &bindings)
+{
+    using namespace RuntimeTableInternal;
+    SdBaseFile file;
+    uint8_t row[20];
+    if (sd == nullptr || !file.open(kRuntimeTablePath, FILE_READ))
+        return false;
+    const bool loaded = readFile(&file, offset, row, sizeof(row));
+    file.close();
+    if (!loaded)
+        return false;
+    bindings = {};
+    bindings.buttonCount = kPetBehaviorButtonCount;
+    for (uint8_t slot = 0; slot < kPetBehaviorButtonCount; ++slot)
+    {
+        auto &button = bindings.buttons[slot];
+        button.active = true;
+        button.kind = static_cast<PetBehaviorButtonKind>(row[4 + slot * 2]);
+        const uint8_t target = row[5 + slot * 2];
+        button.actionSlot = target;
+        button.systemCommandId = static_cast<RuntimeSystemCommandId>(target);
+#if ENABLE_PROJECT_MENUS
+        button.menuSlot = target;
+#endif
+    }
+    return true;
+}

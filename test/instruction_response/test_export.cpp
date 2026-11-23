@@ -67,11 +67,52 @@ int main(int argc,char **argv)
     RuntimeContract config ={};
     assert(parseRuntimeTableBehavior(bytes.data(),bytes.size(),manifest,1,1,config));
 #if ENABLE_TRAINING_COURSES
+    if (strcmp(argv[2], "training-modes") == 0)
+    {
+        assert(bytes[4] == 38 && bytes[5] == 0);
+        const RuntimeSystemCommandId commands[] = {
+            RuntimeSystemCommandId::InstructionResponse, RuntimeSystemCommandId::InstructionResponseGame,
+            RuntimeSystemCommandId::TrainingTiming, RuntimeSystemCommandId::OrderedMemory,
+            RuntimeSystemCommandId::TrainingMatching,
+        };
+        for (uint8_t slot = 0; slot < sizeof(commands) / sizeof(commands[0]); ++slot)
+            assert(config.buttons.buttons[slot].systemCommandId == commands[slot]);
+        const auto *matching = config.instruction.trainingCourse(TrainingMode::Matching);
+        const auto *memory = config.instruction.trainingCourse(TrainingMode::OrderedMemory);
+        const auto *timing = config.instruction.trainingCourse(TrainingMode::Timing);
+        assert(matching != nullptr && memory != nullptr && timing != nullptr);
+        assert(config.instruction.trainingCourse(TrainingMode::None) == matching);
+        assert(matching->settings.rounds == 3 && memory->settings.rounds == 5 && timing->settings.rounds == 4);
+        assert(!matching->settings.customRecall && !timing->settings.customRecall);
+        assert(memory->settings.customRecall && memory->settings.recallPositions[0][0] == 14 &&
+               memory->settings.recallPositions[0][1] == 82);
+        assert(matching->frames.valid() && memory->frames.valid() && timing->frames.valid());
+        assert(matching->frames.animationId != memory->frames.animationId);
+        assert(memory->frames.animationId != timing->frames.animationId);
+        assert(timing->frames.animationId != matching->frames.animationId);
+        PetBehaviorStatValues stats = {};
+        for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
+            stats.values[slot] = config.behavior.stats[slot].initialValue;
+        for (const auto *course : {matching, memory, timing})
+        {
+            const auto &settings = course->settings;
+            assert(stats.values[settings.completionSlot] == 0);
+            const auto before = stats;
+            assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 3, settings.rounds, settings.mode, stats));
+            for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
+                assert(stats.values[slot] == (slot == settings.scoreSlot ? 2 :
+                                             slot == settings.completionSlot ? 1 : before.values[slot]));
+        }
+        puts("[PASS] v38 fixture loads five commands, three distinct course banks and independent course stat updates");
+        return 0;
+    }
     if (strcmp(argv[2], "mixed") == 0)
     {
-        const auto &course = config.instruction.trainingSettings;
+        const auto *training = config.instruction.trainingCourse(TrainingMode::None);
+        assert(training != nullptr);
+        const auto &course = training->settings;
         assert(course.mode == TrainingMode::OrderedMemory && course.rounds == 5);
-        assert(config.instruction.trainingFrames.valid());
+        assert(training->frames.valid());
         assert(config.buttons.buttons[0].systemCommandId == RuntimeSystemCommandId::InstructionResponse);
         assert(config.buttons.buttons[1].systemCommandId == RuntimeSystemCommandId::InstructionResponseGame);
         assert(config.instruction.instructionSettings.roundCount == 10 && config.instruction.instructionEffectCount == 2);
@@ -80,11 +121,11 @@ int main(int argc,char **argv)
         for (uint8_t slot = 0; slot < kPetBehaviorSlotCount; ++slot)
             stats.values[slot] = config.behavior.stats[slot].initialValue;
         auto initial = stats;
-        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 1, 2, false, stats));
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 1, 2, TrainingMode::None, stats));
         assert(stats.values[effectSlot] == 5);
         assert(stats.values[course.scoreSlot] == initial.values[course.scoreSlot]);
         assert(stats.values[course.completionSlot] == initial.values[course.completionSlot]);
-        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 7, 5, true, stats));
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 7, 5, course.mode, stats));
         assert(stats.values[course.scoreSlot] == 3 && stats.values[course.completionSlot] == 1);
         assert(stats.values[effectSlot] == 5);
         puts("[PASS] Both exported game buttons and independent result effects load for the same species");
@@ -114,7 +155,7 @@ int main(int argc,char **argv)
         PetBehaviorStatValues values={};
         for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) values.values[slot]=config.behavior.stats[slot].initialValue;
         assert(values.values[correct.statSlot]==9 && config.behavior.stats[correct.statSlot].maxValue==10);
-        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 1, 2, false, values));
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, 1, 2, TrainingMode::None, values));
         assert(values.values[correct.statSlot]==5);
     } else assert(config.instruction.instructionEffectCount==0);
     assert(config.buttons.buttons[0].systemCommandId==RuntimeSystemCommandId::InstructionResponse);
@@ -149,7 +190,7 @@ int main(int argc,char **argv)
         assert(results==0x55555);
         PetBehaviorStatValues values={};
         for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) values.values[slot]=config.behavior.stats[slot].initialValue;
-        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, results, count, false, values));
+        assert(applyPetBehaviorInstructionResults(config.behavior, config.instruction, results, count, TrainingMode::None, values));
         for(uint8_t slot=0;slot<kPetBehaviorSlotCount;++slot) {
             const uint32_t index=config.behavior.stats[slot].initialValue-9;
             assert(index<12 && values.values[slot]==UINT32_MAX-(index+5)-(index%2?index:0));

@@ -55,16 +55,16 @@ public:
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
     void startInstruction(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
-                          const RuntimePlaybackConfig &playback, bool useTraining);
+                          const RuntimePlaybackConfig &playback, const TrainingRuntimeCourse *training);
     bool capturesInstructionInput() const;
     void instructionInput(uint8_t held, uint8_t pressed, uint32_t timestamp);
     void instructionPending(bool pending, uint32_t at, uint8_t raw)
     { instruction.pendingInput(pending, at, raw); }
-    bool consumeInstructionCompletion(uint32_t &mask, uint8_t &count, bool &trainingResult)
-    { return activeGame == Kind::Instruction && instruction.consumeCompletion(mask, count, trainingResult); }
+    bool consumeInstructionCompletion(uint32_t &mask, uint8_t &count, TrainingMode &trainingMode)
+    { return activeGame == Kind::Instruction && instruction.consumeCompletion(mask, count, trainingMode); }
 #endif
 #if ENABLE_CAPTURE_GAME
-    bool startCapture(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes);
+    bool startCapture(Renderer &renderer, AssetResources &resources, CaptureOutcomeHost &outcomes, uint8_t artworkSpeciesSlot = 0);
     bool capturesScreen() const { return activeGame == Kind::Capture && capture.active(); }
     bool captureClockRunning() const { return activeGame == Kind::Capture && capture.clockRunning(); }
     void redrawCapture() { capture.redraw(); }

@@ -7,24 +7,25 @@
 #include "common/FirmwareRandom.h"
 
 void InstructionPresentation::start(Renderer &renderer, AssetResources &resources, const InstructionRuntimeSettings &config,
-                          const RuntimePlaybackConfig &playback, bool useTraining)
+                                    const RuntimePlaybackConfig &playback, const TrainingRuntimeCourse *training)
 {
     instructionRenderer = &renderer;
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     instructionPlayback = &playback;
+    instructionConfig = &config;
 #else
     (void)playback;
+    (void)config;
 #endif
-    instructionConfig = &config;
 #if ENABLE_TRAINING_COURSES
-    trainingActive = useTraining;
-    if (trainingActive)
+    activeTraining = training;
+    if (activeTraining != nullptr)
     {
-        course.start(config.trainingSettings, FirmwareRandom::belowWide);
+        course.start(activeTraining->settings, FirmwareRandom::belowWide);
         return;
     }
 #else
-    (void)useTraining;
+    (void)training;
 #endif
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     instructionResources = &resources;
@@ -41,7 +42,7 @@ void InstructionPresentation::start(Renderer &renderer, AssetResources &resource
 void InstructionPresentation::update()
 {
 #if ENABLE_TRAINING_COURSES
-    if (trainingActive)
+    if (activeTraining != nullptr)
     {
         course.update(millis());
         if (course.active() && course.redraw && !renderCourse())
@@ -67,7 +68,7 @@ bool InstructionPresentation::renderCourse()
 {
     Renderer &renderer = *instructionRenderer;
     using Phase = TrainingCourse::Phase;
-    const auto &settings = instructionConfig->trainingSettings;
+    const auto &settings = activeTraining->settings;
     const bool answerArtwork = settings.hasAnswerArtwork();
     if (course.phase == Phase::Result)
         renderer.showTrainingResult(course.score, course.completed, course.score >= settings.passScore);
@@ -75,7 +76,7 @@ bool InstructionPresentation::renderCourse()
         renderer.showInstructionFeedback(course.lastCorrect);
     else
     {
-        if (!renderer.ShowAnimationFrame(instructionConfig->trainingFrames, 0, course.frame + 1,
+        if (!renderer.ShowAnimationFrame(activeTraining->frames, 0, course.frame + 1,
                                          0, 0, 12, 128, 160))
             return false;
         if (answerArtwork && (course.phase == Phase::Answer || course.phase == Phase::Feedback))
@@ -89,7 +90,7 @@ bool InstructionPresentation::renderCourse()
                 const uint8_t patch = cell * kOrderedMemoryAnswerChoices + (choices & 3) + 1;
                 const uint8_t x = settings.customRecall ? settings.recallPositions[cell][0] : 18 + 19 * cell;
                 const uint8_t y = settings.customRecall ? settings.recallPositions[cell][1] : 80;
-                if (!renderer.ShowAnimationFrame(instructionConfig->trainingFrames, 1, patch,
+                if (!renderer.ShowAnimationFrame(activeTraining->frames, 1, patch,
                                                  x, y, 4, patchSize, patchSize))
                     return false;
                 choices >>= 2;
@@ -106,7 +107,7 @@ bool InstructionPresentation::renderCourse()
 void InstructionPresentation::cancel()
 {
 #if ENABLE_TRAINING_COURSES
-    if (trainingActive) { course.cancel(); return; }
+    if (activeTraining != nullptr) { course.cancel(); return; }
 #endif
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     instruction.cancel();
@@ -116,7 +117,7 @@ void InstructionPresentation::cancel()
 bool InstructionPresentation::active() const
 {
 #if ENABLE_TRAINING_COURSES
-    if (trainingActive) return course.active();
+    if (activeTraining != nullptr) return course.active();
 #endif
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     return instruction.active();
@@ -128,7 +129,7 @@ bool InstructionPresentation::active() const
 void InstructionPresentation::input(uint8_t held, uint8_t pressed, uint32_t timestamp)
 {
 #if ENABLE_TRAINING_COURSES
-    if (trainingActive) { course.input(held, pressed, timestamp); return; }
+    if (activeTraining != nullptr) { course.input(held, pressed, timestamp); return; }
 #endif
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     instructionHeld = held;
@@ -139,20 +140,20 @@ void InstructionPresentation::input(uint8_t held, uint8_t pressed, uint32_t time
 void InstructionPresentation::pendingInput(bool pending, uint32_t at, uint8_t raw)
 {
 #if ENABLE_TRAINING_COURSES
-    if (trainingActive) { course.pendingInput(pending, at, raw); return; }
+    if (activeTraining != nullptr) { course.pendingInput(pending, at, raw); return; }
 #endif
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     instruction.pendingInput(pending, at, raw);
 #endif
 }
 
-bool InstructionPresentation::consumeCompletion(uint32_t &mask, uint8_t &count, bool &trainingResult)
+bool InstructionPresentation::consumeCompletion(uint32_t &mask, uint8_t &count, TrainingMode &trainingMode)
 {
-    trainingResult = false;
+    trainingMode = TrainingMode::None;
 #if ENABLE_TRAINING_COURSES
-    if (trainingActive)
+    if (activeTraining != nullptr)
     {
-        trainingResult = true;
+        trainingMode = activeTraining->settings.mode;
         return course.consumeCompletion(mask, count);
     }
 #endif

@@ -40,7 +40,8 @@ void TrainingCourse::beginQuestion()
 {
     if (settings.mode == TrainingMode::Timing)
     {
-        enter(Phase::Prompt, 0, settings.frameMs + random(260));
+        frame = 0;
+        enter(Phase::Prompt, frame, inCue() ? settings.cueMs : settings.frameMs + random(260));
         return;
     }
     const uint8_t toolCount = settings.frameCount / 3;

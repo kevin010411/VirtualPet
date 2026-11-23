@@ -64,6 +64,9 @@ struct Scenario
     bool instructionAnimatedFeedback = false;
 #if ENABLE_INSTRUCTION_RESPONSE
     InstructionResponseSettings instructionSettings;
+    bool commandTrainingModes = false;
+    bool trainingTimingGated = false;
+    uint16_t drawnTrainingBank = 0;
 #endif
     uint8_t animationArea[4] = {};
     unsigned instructionOptionGroups = 0;
@@ -2479,6 +2482,42 @@ bool loadInitialRuntimeContract(SdFat *, AppearanceSelection &selection,
             if (config.instruction.instructionSettings.noGoEnabled)
                 config.playback.systemAnimations[40 + item] = {1, 1, static_cast<uint16_t>(85 + item)};
         }
+#if ENABLE_TRAINING_COURSES
+        if (scenario->commandTrainingModes)
+        {
+            const RuntimeSystemCommandId commands[] = {
+                RuntimeSystemCommandId::InstructionResponse, RuntimeSystemCommandId::InstructionResponseGame,
+                RuntimeSystemCommandId::TrainingTiming, RuntimeSystemCommandId::OrderedMemory,
+                RuntimeSystemCommandId::TrainingMatching,
+            };
+            config.layout.screenBlockCount = sizeof(commands) / sizeof(commands[0]);
+            for (uint8_t slot = 0; slot < config.layout.screenBlockCount; ++slot)
+            {
+                config.buttons.buttons[slot] = {true, PetBehaviorButtonKind::SystemCommand, 0, commands[slot]};
+                config.layout.screenBlocks[slot].kind = ScreenBlockKind::Button;
+                config.layout.screenBlocks[slot].source = slot + 1;
+            }
+            const TrainingMode modes[] = {TrainingMode::Matching, TrainingMode::OrderedMemory, TrainingMode::Timing};
+            for (uint8_t index = 0; index < InstructionRuntimeSettings::kMaxCourses; ++index)
+            {
+                auto &course = config.instruction.trainingCourses[index];
+                course.settings.mode = modes[index];
+                course.settings.rounds = 1;
+                course.settings.frameCount = modes[index] == TrainingMode::OrderedMemory ? 5 : 3;
+                course.settings.frameMs = 60;
+                course.settings.cueMs = 120;
+                course.frames = {0, 0, static_cast<uint16_t>(100 + index)};
+            }
+            auto &timing = config.instruction.trainingCourses[2].settings;
+            timing.cueStart = 1;
+            timing.cueEnd = 2;
+            if (scenario->trainingTimingGated)
+            {
+                timing.gateSlot = 0;
+                timing.gateValue = 9;
+            }
+        }
+#endif
     }
 #endif
     if (scenario->commandPredict)
@@ -2525,6 +2564,14 @@ bool loadRuntimeContract(SdFat *, uint8_t species, uint8_t outfit,
     config.activeOutfitSlot = outfit;
     config.behavior.idleAnimation = {species, outfit, 5};
     return true;
+}
+
+bool loadRuntimeIdleButtons(SdFat *, uint32_t, ButtonBindings &)
+{
+    // Startup scenarios use static button bindings. The Runtime Table host
+    // test covers loading idle-specific bindings from an exported SD image.
+    assert(false);
+    return false;
 }
 
 PetStorage::PetStorage(SdFat *) {}
@@ -2591,6 +2638,10 @@ bool Renderer::ShowAnimationFrame(const AssetData::AnimationRef &animation, uint
 {
     if (animation.animationId >= 80 && animation.animationId <= 82)
         scenario->instructionOptionIds[x / 43] = animation.animationId;
+#if ENABLE_TRAINING_COURSES
+    if (animation.animationId >= 100 && animation.animationId <= 102)
+        scenario->drawnTrainingBank = animation.animationId;
+#endif
     if (animation.animationId == 8) scenario->selectedButtonFrame = frame;
     ++scenario->playbackDraws;
     return true;
@@ -3030,6 +3081,46 @@ void testInstructionResetOwnership()
     puts("[PASS] Reset discards Instruction session, preserves new-life startup, and accepts a fresh session");
 }
 
+void testTrainingCommandCoexistence()
+{
+    const uint16_t banks[] = {100, 0, 102, 101, 100};
+    for (bool gated : {false, true})
+    for (uint8_t slot = 0; slot < sizeof(banks) / sizeof(banks[0]); ++slot)
+    {
+        hostMillis = 0;
+        Scenario data;
+        scenario = &data;
+        data.commandAction = data.commandInstruction = data.commandTrainingModes = true;
+        data.trainingTimingGated = gated;
+        SdFat sd;
+        Pet pet;
+        PetStorage storage(&sd);
+        AssetResources resources(&sd);
+        Renderer renderer(nullptr, resources);
+        FakeAppearanceLoader appearance;
+        Game game(pet, storage, renderer, resources, appearance);
+        assert(game.setup_game());
+        for (uint8_t index = 0; index < slot; ++index)
+            game.OnRightKey();
+        game.OnConfirmKey();
+        if (gated && slot == 2)
+        {
+            assert(!game.capturesInstructionInput());
+            game.OnRightKey();
+            game.OnConfirmKey();
+            assert(game.capturesInstructionInput());
+            game.loop_game();
+            assert(data.drawnTrainingBank == 101);
+            continue;
+        }
+        assert(game.capturesInstructionInput());
+        game.loop_game();
+        assert(data.drawnTrainingBank == banks[slot]);
+        if (slot == 1) assert(data.displayedAnimation.animationId >= 90 && data.displayedAnimation.animationId <= 92);
+    }
+    puts("[PASS] Legacy entry and four independent game commands select the right game; blocked timing leaves memory playable");
+}
+
 void testInstructionDeferredEffects()
 {
     // Complete, cancelled, precommit read failure, failed save, postcommit visual failure, death.
@@ -3401,6 +3492,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--instruction") == 0)
     {
         testTrainingCourses();
+        testTrainingCommandCoexistence();
         testInstructionResetOwnership();
         testInstructionLifecycle();
         testInstructionBatteryReturn();

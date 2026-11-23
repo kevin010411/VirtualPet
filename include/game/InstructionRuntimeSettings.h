@@ -14,11 +14,28 @@ struct PetBehaviorInstructionEffect
 };
 #endif
 
+#if ENABLE_TRAINING_COURSES
+struct TrainingRuntimeCourse
+{
+    TrainingCourseSettings settings;
+    AssetData::AnimationRef frames;
+};
+#endif
+
 struct InstructionRuntimeSettings
 {
 #if ENABLE_TRAINING_COURSES
-    TrainingCourseSettings trainingSettings;
-    AssetData::AnimationRef trainingFrames;
+    static constexpr uint8_t kMaxCourses = 3;
+    TrainingRuntimeCourse trainingCourses[kMaxCourses];
+
+    const TrainingRuntimeCourse *trainingCourse(TrainingMode mode) const
+    {
+        for (const auto &course : trainingCourses)
+            if (course.settings.mode != TrainingMode::None &&
+                (mode == TrainingMode::None || course.settings.mode == mode))
+                return &course;
+        return nullptr;
+    }
 #endif
 #if ENABLE_LEGACY_INSTRUCTION_RESPONSE
     InstructionResponseSettings instructionSettings;

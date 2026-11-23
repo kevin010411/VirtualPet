@@ -59,7 +59,7 @@ public:
     bool applyGuessOutcome(PetBehaviorGuessOutcome outcome);
 #endif
 #if ENABLE_INSTRUCTION_RESPONSE
-    bool applyInstructionResults(const InstructionRuntimeSettings &settings, uint32_t correctMask, uint8_t count, bool trainingResult);
+    bool applyInstructionResults(const InstructionRuntimeSettings &settings, uint32_t correctMask, uint8_t count, TrainingMode trainingMode);
 #endif
     AssetData::AnimationRef baseAnimation() const;
     ActivePetState activePetState() const;

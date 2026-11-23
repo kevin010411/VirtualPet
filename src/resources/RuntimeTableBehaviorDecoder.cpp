@@ -283,6 +283,22 @@ bool decodeFollowingAnimations(const Source &source, const Section *playbacks,
     return true;
 }
 
+bool indexIdleButtons(const RuntimeTable &table, ActiveAssetScope scope, uint32_t *offsets)
+{
+    const Section *rows = table.find(IdleButtons);
+    if (rows == nullptr)
+        return true;
+    for (uint16_t index = 0; index < rows->count; ++index)
+    {
+        uint8_t row[20];
+        if (!readRecord(table.source, *rows, index, row))
+            return false;
+        if (row[0] == scope.speciesSlot && row[1] == scope.outfitSlot && row[2] <= kMaxRuntimePetStates)
+            offsets[row[2]] = rows->offset + index * rows->recordSize;
+    }
+    return true;
+}
+
 bool decodeButtons(const Source &source, const Section &buttons, uint8_t species, uint8_t actionCount, ButtonBindings &bindings)
 {
     if (buttons.count < kPetBehaviorButtonCount)
@@ -502,17 +518,36 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
     if ((table.featureFlags & kCollectionFeature) != 0) return false;
 #endif
     const ActiveAssetScope scope = {speciesSlot, outfitSlot};
+#if ENABLE_CAPTURE_GAME
+    contract.captureArtworkSpeciesSlot = 0;
+    if (const Section *artwork = table.find(CaptureArtworkSpecies))
+    {
+        for (uint16_t index = 0; index < artwork->count; ++index)
+        {
+            uint8_t slot;
+            if (!readRecord(source, *artwork, index, &slot)) return false;
+            if (slot == speciesSlot)
+            {
+                contract.captureArtworkSpeciesSlot = slot;
+                break;
+            }
+        }
+    }
+#endif
 #if ENABLE_TRAINING_COURSES
     if (table.featureFlags & kTrainingCoursesFeature)
     {
         const Section *courses = table.find(TrainingCourses);
         if (courses == nullptr) return false;
-        for (uint16_t index = 0; index < courses->count; ++index)
+        uint8_t courseCount = 0;
+        for (uint16_t index = 0;
+             index < courses->count && courseCount < InstructionRuntimeSettings::kMaxCourses; ++index)
         {
             uint8_t row[20];
             if (!readRecord(source, *courses, index, row)) return false;
             if (row[0] != speciesSlot) continue;
-            auto &training = contract.instruction.trainingSettings;
+            auto &course = contract.instruction.trainingCourses[courseCount++];
+            auto &training = course.settings;
             training.mode = static_cast<TrainingMode>(row[1]);
             training.gateSlot = row[2];
             training.completionSlot = row[3];
@@ -525,7 +560,23 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
             training.cueMs = readU16(row + 16);
             training.passScore = row[18];
             training.frameCount = row[19];
-            if (const Section *layouts = table.find(OrderedMemoryLayouts))
+            const Section *timingHits = training.mode == TrainingMode::Timing
+                ? table.find(TimingHitFrames) : nullptr;
+            if (timingHits != nullptr)
+            {
+                for (uint16_t hitIndex = 0; hitIndex < timingHits->count; ++hitIndex)
+                {
+                    uint8_t hitRow[1 + sizeof(training.hitFrames)];
+                    if (!readRecord(source, *timingHits, hitIndex, hitRow)) return false;
+                    if (hitRow[0] != speciesSlot) continue;
+                    memcpy(training.hitFrames, hitRow + 1, sizeof(training.hitFrames));
+                    training.usesHitFrames = true;
+                    break;
+                }
+            }
+            const Section *layouts = training.mode == TrainingMode::OrderedMemory
+                ? table.find(OrderedMemoryLayouts) : nullptr;
+            if (layouts != nullptr)
             {
                 for (uint16_t layoutIndex = 0; layoutIndex < layouts->count; ++layoutIndex)
                 {
@@ -537,9 +588,8 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
                     break;
                 }
             }
-            if (!resolveAnimation(source, *assets, *animations, readU16(row + 8), scope, contract.instruction.trainingFrames))
+            if (!resolveAnimation(source, *assets, *animations, readU16(row + 8), scope, course.frames))
                 return false;
-            break;
         }
     }
 #endif
@@ -601,6 +651,7 @@ bool decodeRuntimeTableBehavior(const RuntimeTable &table,
         !decodeAnimationAudio(table, *animations, contract.playback) ||
         !decodeGuessEffects(source, table.featureFlags, guessEffects, config) ||
         !decodeButtons(source, *buttons, scope.speciesSlot, config.actionCount, contract.buttons) ||
+        !indexIdleButtons(table, scope, contract.idleButtonOffsets) ||
         !decodeStatus(source, table.featureFlags,
                       table.find(StatusSets), table.find(StatusConditions),
                       *assets, *animations, scope, contract.statusSets))

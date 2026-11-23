@@ -669,7 +669,7 @@ void Game::handleSystemCommandRequest(const CommandResult &result)
 #if ENABLE_CAPTURE_GAME
     if (result.kind == CommandResultKind::CaptureGame)
     {
-        if (minigame->startCapture(renderer, resources, *this))
+        if (minigame->startCapture(renderer, resources, *this, runtime.captureArtworkSpeciesSlot))
         {
             capturePet.restoreState(pet.persistentState());
             captureChanged = false;
@@ -690,16 +690,26 @@ void Game::handleSystemCommandRequest(const CommandResult &result)
 #if ENABLE_INSTRUCTION_RESPONSE
         if (result.kind == CommandResultKind::Instruction || result.kind == CommandResultKind::InstructionGame)
         {
-            bool useTraining = false;
+            const TrainingRuntimeCourse *training = nullptr;
 #if ENABLE_TRAINING_COURSES
-            const auto &training = runtime.instruction.trainingSettings;
-            useTraining = result.kind == CommandResultKind::Instruction && training.mode != TrainingMode::None;
-            if (useTraining && training.gateSlot != UINT8_MAX &&
-                pet.customStat(training.gateSlot) != training.gateValue)
-                return;
+            if (result.kind == CommandResultKind::Instruction)
+            {
+                training = runtime.instruction.trainingCourse(result.trainingMode);
+                if (training != nullptr)
+                {
+                    const auto &settings = training->settings;
+                    if (settings.gateSlot != UINT8_MAX && pet.customStat(settings.gateSlot) != settings.gateValue)
+                        return;
+                }
+                else if (result.trainingMode != TrainingMode::None)
+                    return;
+            }
+#endif
+#if !ENABLE_LEGACY_INSTRUCTION_RESPONSE
+            if (training == nullptr) return;
 #endif
             petClock.pause(latestRtcSeconds);
-            minigame->startInstruction(renderer, resources, runtime.instruction, runtime.playback, useTraining);
+            minigame->startInstruction(renderer, resources, runtime.instruction, runtime.playback, training);
             flow.enter(AppStage::Minigame);
             return;
         }
