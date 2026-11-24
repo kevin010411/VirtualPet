@@ -121,9 +121,10 @@ bool Game::settleStatMutation(const PetStatSnapshot &after, uint8_t actionSlot, 
 
 bool Game::redrawStatEvents()
 {
-    if (statEventAnimationId)
+    if (statEventPresentation.address)
     {
-        if (!renderer.ShowAnimationFrame({0, 0, statEventAnimationId}, 0, 1, 0, 0, 12, 128, 160))
+        if (!renderer.ShowAnimationFrame({0, 0, statEventPresentation.animationId()}, 0,
+                                         statEventPresentation.frameIndex() + 1, 0, 0, 12, 128, 160))
             enterRuntimeFatal();
         return true;
     }
@@ -144,16 +145,16 @@ bool Game::presentStatEvents(unsigned long now)
             return true;
         }
     }
-    if (statEventAnimationId)
+    if (statEventPresentation.address)
     {
-        if (now - statEventPageStarted < statEventPageDuration) return true;
-        statEventAnimationId = 0;
+        if (now - statEventPageStarted < statEventPresentation.durationMs) return true;
+        statEventPresentation = {};
         ++statEventPage;
     }
     if (statEventPage < statEventPageCount)
     {
         if (!readStatEventPage(resources.sdCard(), runtime.statEvents, statEventPages[statEventPage],
-                               statEventAnimationId, statEventPageDuration))
+                               statEventPresentation))
         {
             resources.recordAssetDataErrorResource("runtime.bin");
             enterRuntimeFatal();
@@ -209,7 +210,7 @@ bool Game::presentStatEvents(unsigned long now)
 void Game::clearStatEventPresentation()
 {
     statEventPageCount = statEventPage = 0;
-    statEventAnimationId = 0;
+    statEventPresentation = {};
     committedEvolution = {};
     playingCommittedEvolution = false;
 }

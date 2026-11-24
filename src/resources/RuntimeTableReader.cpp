@@ -22,6 +22,7 @@ constexpr uint16_t kTrainingModesVersion = 38;
 constexpr uint16_t kCaptureArtworkVersion = 39;
 constexpr uint16_t kIdleButtonsVersion = 40;
 constexpr uint16_t kTimingHitFramesVersion = 41;
+constexpr uint16_t kStatEventFramesVersion = 42;
 constexpr uint16_t kHeaderSize = 64;
 constexpr uint16_t kSectionEntrySize = 16;
 constexpr uint32_t kMaxFileSize = 16777216UL;
@@ -130,7 +131,7 @@ bool readEnvelope(const Source &source, uint16_t &version, uint16_t &sectionCoun
         version != kOrderedMemoryArtworkVersion && version != kOrderedMemoryLayoutVersion &&
         version != kInstructionGamesVersion && version != kTrainingModesVersion &&
         version != kCaptureArtworkVersion && version != kIdleButtonsVersion &&
-        version != kTimingHitFramesVersion)
+        version != kTimingHitFramesVersion && version != kStatEventFramesVersion)
         return false;
 
     featureFlags = readU32(header + 12);

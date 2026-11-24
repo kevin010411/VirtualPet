@@ -194,15 +194,13 @@ bool settleStatEvents(SdFat *sd, const StatEventSettings &events, const PetBehav
     return true;
 }
 
-bool readStatEventPage(SdFat *sd, const StatEventSettings &events, uint16_t index,
-                       uint16_t &animationId, uint16_t &durationMs)
+bool readStatEventPage(SdFat *sd, const StatEventSettings &events, uint16_t index, StatEventPage &result)
 {
     EventFile file;
     uint8_t page[4];
     if (index >= events.statEventPageCount || !file.open(sd) ||
         !file.read(events.statEventPagesOffset, index, page)) return false;
-    animationId = readU16(page);
-    durationMs = readU16(page + 2);
+    result = {readU16(page), readU16(page + 2)};
     return true;
 }
 #endif

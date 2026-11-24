@@ -9,6 +9,15 @@
 
 constexpr uint8_t kMaxStatEventPages = 64;
 
+struct StatEventPage
+{
+    uint16_t address = 0;
+    uint16_t durationMs = 0;
+
+    uint16_t animationId() const { return address & 0xff; }
+    uint16_t frameIndex() const { return address >> 8; }
+};
+
 struct PetStatEventResult
 {
     PetStatSnapshot values;
@@ -20,8 +29,7 @@ struct PetStatEventResult
 bool settleStatEvents(SdFat *sd, const StatEventSettings &events, const PetBehaviorConfig &config,
                       const PetStatSnapshot &before, const PetStatSnapshot &after,
                       PetStatEventResult &result);
-bool readStatEventPage(SdFat *sd, const StatEventSettings &events, uint16_t index,
-                       uint16_t &animationId, uint16_t &durationMs);
+bool readStatEventPage(SdFat *sd, const StatEventSettings &events, uint16_t index, StatEventPage &result);
 #endif
 
 #endif // PET_STAT_EVENTS_H

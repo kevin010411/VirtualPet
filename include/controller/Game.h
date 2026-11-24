@@ -180,8 +180,7 @@ private:
     AppearanceSelection committedEvolution = {};
     uint8_t statEventPageCount = 0;
     uint8_t statEventPage = 0;
-    uint16_t statEventAnimationId = 0;
-    uint16_t statEventPageDuration = 0;
+    StatEventPage statEventPresentation;
     unsigned long statEventPageStarted = 0;
     bool playingCommittedEvolution = false;
     bool statEventsActive() const;

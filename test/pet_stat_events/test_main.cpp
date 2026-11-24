@@ -57,7 +57,7 @@ PetBehaviorConfig fixture(std::vector<uint8_t> &bytes, StatEventSettings &events
     events.statEventPageCount = 3;
     append(bytes, {45, 0, 160, 0});
     append(bytes, {46, 0, 0, 1});
-    append(bytes, {47, 0, 5, 0});
+    append(bytes, {46, 1, 5, 0});
     return config;
 }
 
@@ -145,11 +145,12 @@ int main()
     assert(settleStatEvents(&daysSd, events, config, before, after, result));
     assert(result.values.stage_days == 4 && result.values.customStats[9] == 0);
 
-    uint16_t animationId = 0;
-    uint16_t durationMs = 0;
-    assert(readStatEventPage(&sd, events, result.pages[1], animationId, durationMs));
-    assert(animationId == 46 && durationMs == 256);
-    assert(!readStatEventPage(&sd, events, events.statEventPageCount, animationId, durationMs));
+    StatEventPage page;
+    assert(readStatEventPage(&sd, events, result.pages[1], page));
+    assert(page.animationId() == 46 && page.frameIndex() == 0 && page.durationMs == 256);
+    assert(readStatEventPage(&sd, events, 2, page));
+    assert(page.animationId() == 46 && page.frameIndex() == 1 && page.durationMs == 5);
+    assert(!readStatEventPage(&sd, events, events.statEventPageCount, page));
 
     before.stage_days = 1;
     assert(settleStatEvents(&sd, events, config, before, after, result));
